@@ -5,6 +5,7 @@ import { publicUrl } from "@/lib/public-url";
 import appCss from "../styles.css?url";
 
 const APP_NAME = "HK Life Money";
+const spa = import.meta.env.VITE_GITHUB_PAGES === "1";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -42,6 +43,17 @@ export const Route = createRootRoute({
 });
 
 function RootDocument() {
+  if (spa) {
+    return (
+      <>
+        <HeadContent />
+        <PreviewHostBridge />
+        <AuthProvider>
+          <Outlet />
+        </AuthProvider>
+      </>
+    );
+  }
   return (
     <html lang="zh-HK" className="antialiased">
       <head>
