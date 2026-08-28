@@ -18,6 +18,7 @@ export const accounts: Account[] = [
   { id: "bochk", name: "BOCHK payroll", nameZh: "中銀出糧戶口", type: "current", currency: "HKD", balance: 128400, includeInNetWorth: true, group: "cash", sortOrder: 0 },
   { id: "hsb-save", name: "Hang Seng savings", nameZh: "恒生儲蓄", type: "savings", currency: "HKD", balance: 220000, includeInNetWorth: true, group: "cash", sortOrder: 1 },
   { id: "cash-hkd", name: "Cash", nameZh: "現金", type: "cash", currency: "HKD", balance: 2400, includeInNetWorth: true, group: "cash", sortOrder: 2 },
+  { id: "yen-cash", name: "Yen", nameZh: "Yen", type: "fx", currency: "JPY", balance: 85000, includeInNetWorth: true, group: "cash", sortOrder: 2 },
   { id: "octopus", name: "Octopus", nameZh: "八達通", type: "ewallet", currency: "HKD", balance: 186, includeInNetWorth: true, group: "cash", sortOrder: 3 },
   { id: "hsbc-visa", name: "HSBC Visa", nameZh: "匯豐 Visa", type: "credit", currency: "HKD", balance: -12480, includeInNetWorth: true, group: "credit", sortOrder: 0 },
   { id: "mpf", name: "MPF", nameZh: "強積金", type: "mpf", currency: "HKD", balance: 980000, includeInNetWorth: true, group: "assets", sortOrder: 0 },
@@ -46,6 +47,7 @@ export const categories: Category[] = [
   { id: "p-travel", name: "Travel", nameZh: "旅遊", theme: "travel", kind: "expense", icon: "plane" },
   { id: "flights", name: "Flights", nameZh: "機票", theme: "travel", kind: "expense", icon: "plane", parentId: "p-travel" },
   { id: "hotels", name: "Hotels", nameZh: "酒店", theme: "travel", kind: "expense", icon: "building", parentId: "p-travel" },
+  { id: "souvenirs", name: "Souvenirs", nameZh: "手信", theme: "travel", kind: "expense", icon: "gift", parentId: "p-travel" },
   { id: "p-income", name: "Income", nameZh: "收入", theme: "other", kind: "income", icon: "briefcase" },
   { id: "salary", name: "Salary", nameZh: "薪金", theme: "other", kind: "income", icon: "briefcase", parentId: "p-income" },
   { id: "interest-inc", name: "Interest income", nameZh: "利息收入", theme: "other", kind: "income", icon: "coins", parentId: "p-income" },
@@ -96,6 +98,8 @@ export const mortgage: Mortgage = {
   remainingMonths: 216,
   paymentDay: 1,
   type: "p",
+  livingMode: "own-mortgage",
+  propertyAccountId: "tsuen-wan",
 };
 
 export const retirement: RetirementInputs = {
@@ -122,6 +126,8 @@ export const goals: Goal[] = [
 ];
 
 export const trips: Trip[] = [
+  { id: "tokyo-aug", name: "Tokyo August", nameZh: "東京八月", destination: "東京", start: "2026-08-07", end: "2026-08-09", status: "booked", cashBudget: 9000, cashSaved: 0, milesTarget: 0, milesSaved: 0, monthlyCash: 0 },
+  { id: "fukuoka-xmas", name: "Christmas trip", nameZh: "聖誕trip", destination: "福岡", start: "2026-12-18", end: "2026-12-24", status: "planning", cashBudget: 20000, cashSaved: 0, milesTarget: 0, milesSaved: 0, monthlyCash: 2000 },
   { id: "taipei-2026", name: "Taipei", nameZh: "台北", destination: "Taipei", start: "2026-10-12", end: "2026-10-16", status: "booked", cashBudget: 12000, cashSaved: 8000, milesTarget: 25000, milesSaved: 15000, monthlyCash: 2000 },
   { id: "japan-2027", name: "Japan 2027", nameZh: "日本 2027", destination: "Tokyo", start: "2027-03-20", end: "2027-03-28", status: "planning", cashBudget: 28000, cashSaved: 9000, milesTarget: 80000, milesSaved: 20000, monthlyCash: 3500 },
 ];
@@ -154,5 +160,7 @@ export const transactions: Transaction[] = [
   t({ id: "tx-mtr2", type: "expense", amount: 18, currency: "HKD", accountId: "octopus", categoryId: "mtr", date: "2026-08-21", payee: "MTR", payeeZh: "港鐵" }),
   t({ id: "tx-ent", type: "expense", amount: 320, currency: "HKD", accountId: "hsbc-visa", categoryId: "entertainment", date: "2026-08-16", payee: "Cinema", payeeZh: "戲院" }),
   t({ id: "tx-tpe", type: "expense", amount: 2100, currency: "HKD", accountId: "hsbc-visa", categoryId: "hotels", date: "2026-07-12", payee: "Taipei hotel", payeeZh: "台北酒店訂金", tripId: "taipei-2026" }),
+  t({ id: "tx-tokyo-air", type: "expense", amount: 2484, currency: "HKD", accountId: "bochk", categoryId: "flights", date: "2026-08-26", payee: "Air travel", payeeZh: "空中交通", tripId: "tokyo-aug" }),
+  t({ id: "tx-tokyo-gift", type: "expense", amount: 1645, currency: "JPY", accountId: "yen-cash", categoryId: "souvenirs", date: "2026-08-07", payee: "Souvenirs", payeeZh: "手信", tripId: "tokyo-aug" }),
   t({ id: "tx-salary-jul", type: "income", amount: 72000, currency: "HKD", accountId: "bochk", categoryId: "salary", date: "2026-07-28", payee: "Employer", payeeZh: "公司薪金" }),
 ];

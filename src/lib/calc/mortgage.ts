@@ -34,9 +34,13 @@ export function monthsUntil(fromIso: string, months: number): number {
 }
 
 export function endMonthFromRemaining(fromIso: string, remainingMonths: number, paymentDay: number): string {
+  return endDateFromRemaining(fromIso, remainingMonths, paymentDay).slice(0, 7);
+}
+
+export function endDateFromRemaining(fromIso: string, remainingMonths: number, paymentDay: number): string {
   const [y, m] = fromIso.split("-").map(Number);
   const d = new Date(y, m - 1 + Math.max(0, remainingMonths - 1), Math.min(28, paymentDay || 1));
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export function nextPaymentIso(fromIso: string, paymentDay: number): string {

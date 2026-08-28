@@ -17,8 +17,18 @@
   --color-expense: #d70015;
   --color-watch: #c93400;
   --color-success-soft: #e4f8e9;
+  --color-watch-soft: #fff1e6;
+  --color-expense-soft: #ffecec;
   --color-ring-track: #e5e5ea;
   --color-scrim: rgb(0 0 0 / 0.32);
+  --color-chart-1: #30d158;
+  --color-chart-2: #64d2ff;
+  --color-chart-3: #ffd60a;
+  --color-chart-4: #ff3b30;
+  --color-chart-5: #ff9f0a;
+  --color-chart-6: #5ac8fa;
+  --color-chart-7: #bf5af2;
+  --color-chart-8: #ff375f;
 
   --radius-sm: 8px;
   --radius-md: 12px;

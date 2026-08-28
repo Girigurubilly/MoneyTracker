@@ -1,6 +1,6 @@
-import type { Allowance, OneOff, Transaction, FxRate } from "../types";
-import { cashflowSide, inMonth } from "./ledger";
-import { toHkd } from "./fx";
+import type { Allowance, OneOff, Transaction, FxRate } from "../types.ts";
+import { cashflowSide, inMonth } from "./ledger.ts";
+import { toHkd } from "./fx.ts";
 
 export type RetirementInputs = {
   currentAge: number;
@@ -15,11 +15,21 @@ export type RetirementInputs = {
   travelInRetirement: number;
 };
 
+export type RetirementCtx = {
+  investableNow: number;
+  mortgageMonthly: number;
+  mortgagePayoffAge: number;
+  housingAfterPayoff: number;
+  oneOffs: OneOff[];
+  allowances?: Allowance[];
+};
+
 export function savingsLast12Months(txs: Transaction[], rates: FxRate[], asOfMonth: string): {
   income: number;
   expense: number;
   monthlyIncome: number;
   monthlySpend: number;
+  monthlySave: number;
 } {
   const [y, m] = asOfMonth.split("-").map(Number);
   let income = 0;
@@ -35,40 +45,37 @@ export function savingsLast12Months(txs: Transaction[], rates: FxRate[], asOfMon
       if (side === "expense") expense += hkd;
     }
   }
-  return { income, expense, monthlyIncome: income / 12, monthlySpend: expense / 12 };
+  const monthlyIncome = income / 12;
+  const monthlySpend = expense / 12;
+  return { income, expense, monthlyIncome, monthlySpend, monthlySave: monthlyIncome - monthlySpend };
 }
 
-export function runRetirement(
-  inputs: RetirementInputs,
-  ctx: {
-    investableNow: number;
-    mortgageMonthly: number;
-    mortgagePayoffAge: number;
-    housingAfterPayoff: number;
-    oneOffs: OneOff[];
-    allowances?: Allowance[];
-  },
-) {
+export function runRetirement(inputs: RetirementInputs, ctx: RetirementCtx) {
   const years = Math.max(1, inputs.deathAge - inputs.currentAge);
-  const preYears = Math.max(0, inputs.retireAge - inputs.currentAge);
   let corpus = ctx.investableNow;
   const series: { age: number; corpus: number }[] = [];
   let depletes = false;
-  let extraMonthly = 0;
+  let depletionAge: number | undefined;
+  let corpusAtRetire = corpus;
 
-  function yearSpend(age: number, yearsFromNow: number) {
-    const inf = (1 + inputs.inflation) ** yearsFromNow;
-    let spend = inputs.targetMonthly * 12 * inf;
-    spend += inputs.travelInRetirement * inf;
-    if (age < ctx.mortgagePayoffAge) spend += ctx.mortgageMonthly * 12;
-    else spend += ctx.housingAfterPayoff * 12;
-    return spend;
-  }
+  for (let i = 0; i <= years; i++) {
+    const age = inputs.currentAge + i;
+    const inf = (1 + inputs.inflation) ** i;
+    const retired = age >= inputs.retireAge;
+    const r = retired ? inputs.postReturn : inputs.preReturn;
+    corpus = corpus * (1 + r);
 
-  function yearIncome(age: number, yearsFromNow: number) {
-    const inf = (1 + inputs.inflation) ** yearsFromNow;
     let inc = 0;
-    if (age < inputs.retireAge) inc += inputs.monthlyIncomeNow * 12 * inf;
+    let spend = 0;
+    if (!retired) {
+      inc += inputs.monthlyIncomeNow * 12 * inf;
+      spend += inputs.monthlySpendNow * 12 * inf;
+    } else {
+      spend += inputs.targetMonthly * 12 * inf;
+      spend += inputs.travelInRetirement * inf;
+      if (age < ctx.mortgagePayoffAge) spend += ctx.mortgageMonthly * 12;
+      else spend += ctx.housingAfterPayoff * 12;
+    }
     for (const a of ctx.allowances ?? []) {
       if (age < a.startAge) continue;
       if (a.endAge && age >= a.endAge) continue;
@@ -77,30 +84,56 @@ export function runRetirement(
     for (const o of ctx.oneOffs) {
       if (o.age === age) inc += o.amount;
     }
-    return inc;
-  }
-
-  for (let i = 0; i <= years; i++) {
-    const age = inputs.currentAge + i;
-    const ret = age >= inputs.retireAge;
-    const r = ret ? inputs.postReturn : inputs.preReturn;
-    const spend = yearSpend(age, i);
-    const inc = yearIncome(age, i);
-    corpus = corpus * (1 + r) + inc - spend;
-    if (age < inputs.retireAge) {
-      const save = Math.max(0, inputs.monthlyIncomeNow * 12 - inputs.monthlySpendNow * 12);
-      extraMonthly = save / 12;
-    }
+    corpus += inc - spend;
+    if (age === inputs.retireAge) corpusAtRetire = corpus;
     series.push({ age, corpus });
-    if (corpus < 0) depletes = true;
+    if (corpus < 0 && !depletes) {
+      depletes = true;
+      depletionAge = age;
+    }
   }
 
-  const requiredCorpus = series.find((s) => s.age === inputs.retireAge)?.corpus ?? corpus;
+  const extraMonthly = Math.max(0, inputs.monthlyIncomeNow - inputs.monthlySpendNow);
   return {
     series,
     depletes,
-    corpusAtRetire: requiredCorpus,
+    corpusAtRetire,
     extraMonthly,
-    requiredCorpus,
+    requiredCorpus: corpusAtRetire,
+    depletionAge,
   };
+}
+
+export function sustainableMonthly(inputs: RetirementInputs, ctx: RetirementCtx): number {
+  let lo = 0;
+  let hi = Math.max(inputs.targetMonthly * 2, 10_000);
+  for (let i = 0; i < 14; i++) {
+    const trial = runRetirement({ ...inputs, targetMonthly: hi }, ctx);
+    const last = trial.series[trial.series.length - 1]?.corpus ?? 0;
+    if (last < 0 || trial.depletes) break;
+    hi *= 2;
+    if (hi > 5_000_000) break;
+  }
+  for (let i = 0; i < 36; i++) {
+    const mid = (lo + hi) / 2;
+    const trial = runRetirement({ ...inputs, targetMonthly: mid }, ctx);
+    const last = trial.series[trial.series.length - 1]?.corpus ?? 0;
+    if (!trial.depletes && last >= 0) lo = mid;
+    else hi = mid;
+  }
+  return Math.max(0, lo);
+}
+
+export function retirementStatus(
+  depletes: boolean,
+  sustainable: number,
+  target: number,
+  series: { corpus: number }[],
+): "on-track" | "watch" | "at-risk" {
+  if (depletes) return "at-risk";
+  if (target > 0 && sustainable < 0.95 * target) return "watch";
+  const last = series[series.length - 1]?.corpus ?? 0;
+  const peak = series.reduce((m, s) => Math.max(m, s.corpus), 0);
+  if (peak > 0 && last < 0.08 * peak) return "watch";
+  return "on-track";
 }

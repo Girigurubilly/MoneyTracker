@@ -288,6 +288,9 @@ export type Mortgage = {
   remainingMonths: number;
   paymentDay: number;
   type: "p" | "h" | "fixed";
+  livingMode?: "own-mortgage" | "own-outright" | "rent" | "other";
+  propertyAccountId?: string;
+  paymentOverride?: number;
 };
 
 export type Allowance = {

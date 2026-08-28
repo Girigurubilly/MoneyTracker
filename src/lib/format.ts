@@ -36,6 +36,31 @@ export function pct(n: number): string {
   return `${Math.round(n * 100)}%`;
 }
 
+export function compactHkd(amount: number): string {
+  const abs = Math.abs(amount);
+  const sign = amount < 0 ? "−" : "";
+  if (abs >= 1_000_000) return `${sign}HK$${(abs / 1_000_000).toFixed(2)}M`;
+  return money(amount, "HKD");
+}
+
+export function shortDate(iso: string, locale: Locale): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  if (locale === "zh-HK") return `${y}年${m}月${d}日`;
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+export function mdLabel(iso: string, locale: Locale): string {
+  const [, m, d] = iso.split("-").map(Number);
+  if (locale === "zh-HK") return `${m}月 ${d}`;
+  return `${m}/${d}`;
+}
+
+export function milesLabel(n: number, locale: Locale): string {
+  const v = Math.round(n).toLocaleString("en-HK");
+  return locale === "zh-HK" ? `${v} 里` : `${v} miles`;
+}
+
 export function monthTitle(iso: string, locale: Locale): string {
   const [y, m] = iso.split("-").map(Number);
   if (locale === "zh-HK") return `${m}月 ${y}`;

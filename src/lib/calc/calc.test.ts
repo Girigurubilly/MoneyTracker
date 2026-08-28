@@ -10,7 +10,11 @@ import {
   monthCashflowForecast,
 } from "./budget.ts";
 import { MONTH_TOTAL_BUDGET_ID } from "../types.ts";
-import type { AdhocBudget, Budget, Recurring, Transaction } from "../types.ts";
+import type { AdhocBudget, Budget, Category, Mortgage, Recurring, Transaction } from "../types.ts";
+import { monthlyLivingEssentials, monthlyHousingCost, isPrincipalRegular } from "./housing.ts";
+import { periodCategoryTotals, periodRange } from "./period.ts";
+import { runRetirement, sustainableMonthly } from "./retirement.ts";
+import { monthlyPayment } from "./mortgage.ts";
 
 function rec(partial: Partial<Recurring> & Pick<Recurring, "id" | "type" | "amount" | "chargedDay">): Recurring {
   return {
@@ -133,5 +137,107 @@ describe("monthCashflowForecast", () => {
     const past = monthCashflowForecast(txs, recurring, adhoc, "2026-07", [], today);
     assert.equal(past.income, 18_000);
     assert.equal(past.expense, 9_000);
+  });
+});
+
+describe("housing monthly cost", () => {
+  const cats: Category[] = [
+    { id: "p-housing", name: "Housing", nameZh: "房屋", theme: "living", kind: "expense", icon: "home" },
+    { id: "mortgage-p", name: "Mortgage principal", nameZh: "按揭本金", theme: "living", kind: "expense", icon: "home", parentId: "p-housing" },
+    { id: "mortgage-i", name: "Mortgage interest", nameZh: "按揭利息", theme: "living", kind: "expense", icon: "home", parentId: "p-housing" },
+    { id: "mgmt", name: "Management fee", nameZh: "管理費", theme: "living", kind: "expense", icon: "building", parentId: "p-housing" },
+  ];
+  const recurring: Recurring[] = [
+    rec({ id: "r-mgmt", type: "expense", amount: 1590, chargedDay: 1, living: true, categoryId: "mgmt", label: "Mgmt" }),
+    rec({
+      id: "r-p",
+      type: "transfer",
+      amount: 8800,
+      chargedDay: 1,
+      living: true,
+      categoryId: "mortgage-p",
+      countsAsExpense: true,
+      label: "Principal",
+    }),
+    rec({ id: "r-i", type: "expense", amount: 5319, chargedDay: 1, living: true, categoryId: "mortgage-i", label: "Interest" }),
+  ];
+  it("必要開支 excludes mortgage principal", () => {
+    assert.equal(isPrincipalRegular(recurring[1], cats), true);
+    assert.equal(monthlyLivingEssentials(recurring, cats, []), 1590 + 5319);
+  });
+  it("住房成本 is the mortgage instalment", () => {
+    const m: Mortgage = {
+      id: "m",
+      name: "m",
+      nameZh: "m",
+      accountId: "mortgage",
+      original: 4_000_000,
+      outstanding: 2_913_000,
+      rate: 0.0215,
+      pRate: 0.0525,
+      spread: -0.031,
+      remainingMonths: 256,
+      paymentDay: 28,
+      type: "p",
+      livingMode: "own-mortgage",
+    };
+    const pmt = monthlyPayment(m.outstanding, 0.0215, 256);
+    assert.equal(monthlyHousingCost(m, recurring, cats, []), pmt);
+  });
+});
+
+describe("period merge", () => {
+  const cats: Category[] = [
+    { id: "p-food", name: "Food", nameZh: "飲食", theme: "living", kind: "expense", icon: "utensils" },
+    { id: "dining", name: "Dining", nameZh: "外出就餐", theme: "living", kind: "expense", icon: "utensils", parentId: "p-food" },
+    { id: "groc", name: "Groceries", nameZh: "超市", theme: "living", kind: "expense", icon: "shopping", parentId: "p-food" },
+  ];
+  const txs: Transaction[] = [
+    tx({ id: "a", type: "expense", amount: 100, date: "2026-08-02", categoryId: "dining" }),
+    tx({ id: "b", type: "expense", amount: 40, date: "2026-08-03", categoryId: "groc" }),
+    tx({ id: "c", type: "income", amount: 200, date: "2026-08-04", categoryId: "dining" }),
+  ];
+  it("rolls children into the parent when merging", () => {
+    const merged = periodCategoryTotals(txs, cats, [], "2026-08-01", "2026-08-31", "expense", true);
+    assert.equal(merged.rows.length, 1);
+    assert.equal(merged.rows[0].id, "p-food");
+    assert.equal(merged.rows[0].value, 140);
+    const split = periodCategoryTotals(txs, cats, [], "2026-08-01", "2026-08-31", "expense", false);
+    assert.equal(split.rows.length, 2);
+  });
+  it("this-year range is inclusive calendar year", () => {
+    const r = periodRange("this-year", "2026-08-28");
+    assert.equal(r.from, "2026-01-01");
+    assert.equal(r.to, "2026-12-31");
+  });
+});
+
+describe("sustainable monthly", () => {
+  it("finds a withdrawal that lasts to death age", () => {
+    const inputs = {
+      currentAge: 60,
+      retireAge: 60,
+      deathAge: 70,
+      monthlyIncomeNow: 0,
+      monthlySpendNow: 0,
+      targetMonthly: 10_000,
+      preReturn: 0,
+      postReturn: 0,
+      inflation: 0,
+      travelInRetirement: 0,
+    };
+    const ctx = {
+      investableNow: 120_000,
+      mortgageMonthly: 0,
+      mortgagePayoffAge: 60,
+      housingAfterPayoff: 0,
+      oneOffs: [] as { id: string; label: string; labelZh: string; amount: number; age: number }[],
+    };
+    const sustain = sustainableMonthly(inputs, ctx);
+    assert.ok(sustain > 900 && sustain < 1100, String(sustain));
+    const trial = runRetirement({ ...inputs, targetMonthly: sustain }, ctx);
+    assert.equal(trial.depletes, false);
+    const last = trial.series[trial.series.length - 1]?.corpus ?? 0;
+    assert.ok(last >= 0);
   });
 });

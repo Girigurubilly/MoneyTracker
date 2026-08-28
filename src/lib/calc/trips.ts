@@ -1,5 +1,5 @@
-import type { Transaction, FxRate, Trip } from "../types";
-import { toHkd } from "./fx";
+import type { Account, Transaction, FxRate, Trip } from "../types.ts";
+import { toHkd } from "./fx.ts";
 
 export function isTripExpired(t: Trip, today: string): boolean {
   if (!t.end) return false;
@@ -51,6 +51,36 @@ export function tripProgress(t: Trip, spent: number) {
   const required = remain / months;
   const onTrack = t.monthlyCash >= required || remain === 0;
   return { remain, months, required, onTrack };
+}
+
+export function tripBudgetUsed(spent: number, budget: number): { remaining: number; pct: number } {
+  const remaining = budget - spent;
+  return { remaining, pct: budget > 0 ? spent / budget : 0 };
+}
+
+export function spendStatus(spent: number, budget: number): "on-track" | "watch" | "at-risk" {
+  if (budget <= 0) return spent > 0 ? "watch" : "on-track";
+  const r = spent / budget;
+  if (r > 1) return "at-risk";
+  if (r > 0.9) return "watch";
+  return "on-track";
+}
+
+export function nextTrip(trips: Trip[], today: string): Trip | undefined {
+  const active = trips.filter((t) => isTripActive(t, today));
+  const upcoming = active.filter((t) => t.end >= today).sort((a, b) => a.start.localeCompare(b.start));
+  if (upcoming[0]) return upcoming[0];
+  return [...active].sort((a, b) => a.start.localeCompare(b.start))[0];
+}
+
+export function asiaMilesBalance(accounts: Account[]): number {
+  return accounts.filter((a) => a.currency === "MILES").reduce((s, a) => s + a.balance, 0);
+}
+
+export function tripLinkedTxs(txs: Transaction[], tripId: string): Transaction[] {
+  return txs
+    .filter((tx) => tx.tripId === tripId && !tx.planned)
+    .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
 }
 
 function monthDiff(from: string, to: string): number {

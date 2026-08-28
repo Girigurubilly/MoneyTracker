@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
-import { ChevronRight, Info } from "lucide-react";
+import { ChevronLeft, ChevronRight, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { money } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
@@ -10,7 +10,30 @@ import type { Transaction } from "@/lib/types";
 import { useT, useUi } from "@/store/ui";
 import { useApp } from "@/store/app";
 
-export function ScreenHeader({ title, large, right }: { title: string; large?: boolean; right?: ReactNode }) {
+export function ScreenHeader({
+  title,
+  large,
+  backTo,
+  right,
+}: {
+  title: string;
+  large?: boolean;
+  backTo?: string;
+  right?: ReactNode;
+}) {
+  if (backTo) {
+    return (
+      <header className="relative flex items-center justify-between px-2 pb-2 pt-[max(0.4rem,env(safe-area-inset-top))]">
+        <Link to={backTo as never} aria-label="Back" className="grid size-11 shrink-0 place-items-center text-accent">
+          <ChevronLeft className="size-6" />
+        </Link>
+        <h1 className="absolute left-1/2 max-w-[58%] -translate-x-1/2 truncate text-center text-lg font-semibold tracking-tight">
+          {title}
+        </h1>
+        <div className="flex min-h-11 min-w-11 items-center justify-end pr-2">{right}</div>
+      </header>
+    );
+  }
   return (
     <header className="flex items-end justify-between px-5 pb-3 pt-[max(0.9rem,env(safe-area-inset-top))]">
       <h1 className={cn("font-semibold tracking-tight", large ? "text-3xl" : "text-xl")}>{title}</h1>
@@ -178,19 +201,44 @@ export function StatusChip({ status }: { status: "on-track" | "watch" | "at-risk
           ? "需留意"
           : "Watch"
         : locale === "zh-HK"
-          ? "超支"
-          : "Over";
+          ? "有風險"
+          : "At risk";
   return (
     <span
       className={cn(
-        "rounded-full px-2 py-0.5 text-xs font-medium",
+        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
         status === "on-track" && "bg-success-soft text-income",
-        status === "watch" && "bg-accent-soft text-watch",
-        status === "at-risk" && "bg-accent-soft text-expense",
+        status === "watch" && "bg-watch-soft text-watch",
+        status === "at-risk" && "bg-expense-soft text-expense",
       )}
     >
+      <span
+        className={cn(
+          "size-1.5 rounded-full",
+          status === "on-track" && "bg-income",
+          status === "watch" && "bg-watch",
+          status === "at-risk" && "bg-expense",
+        )}
+      />
       {label}
     </span>
+  );
+}
+
+export function ProgressBar({ value, tone = "income" }: { value: number; tone?: "income" | "watch" | "expense" }) {
+  const pct = Math.max(0, Math.min(1, value));
+  return (
+    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-ring-track">
+      <div
+        className={cn(
+          "h-full rounded-full",
+          tone === "expense" && "bg-expense",
+          tone === "watch" && "bg-watch",
+          tone === "income" && "bg-income",
+        )}
+        style={{ width: `${pct * 100}%` }}
+      />
+    </div>
   );
 }
 

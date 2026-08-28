@@ -6,6 +6,7 @@ import { todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { defaultMortgageAccountId } from "@/lib/accounts";
 import { isMortgageInterestCategory, isMortgagePrincipalCategory, isMortgageSplitCategory, categoryPath } from "@/lib/categories";
+import { isTripActive } from "@/lib/calc/trips";
 import type { TxType } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -43,6 +44,7 @@ function AddBody({ type, onClose }: { type: TxType; onClose: () => void }) {
   const selectedDate = useUi((s) => s.selectedDate);
   const accounts = useApp((s) => s.accounts);
   const categories = useApp((s) => s.categories);
+  const trips = useApp((s) => s.trips);
   const addTransaction = useApp((s) => s.addTransaction);
   const moneyAccounts = accounts.filter((a) => a.currency !== "MILES" && !a.hidden);
   const [amount, setAmount] = useState("");
@@ -50,6 +52,7 @@ function AddBody({ type, onClose }: { type: TxType; onClose: () => void }) {
   const [accountId, setAccountId] = useState(moneyAccounts[0]?.id ?? "");
   const [toAccountId, setToAccountId] = useState(moneyAccounts[1]?.id ?? "");
   const [categoryId, setCategoryId] = useState("");
+  const [tripId, setTripId] = useState("");
   const [payee, setPayee] = useState("");
   const [pickCat, setPickCat] = useState(false);
   const [principal, setPrincipal] = useState("");
@@ -94,6 +97,19 @@ function AddBody({ type, onClose }: { type: TxType; onClose: () => void }) {
           <button type="button" className="mt-1 flex h-11 w-full items-center rounded-lg bg-elevated px-3 text-left" onClick={() => setPickCat(true)}>
             {cat ? categoryPath(cat, categories, locale) : t.add.pickCategory}
           </button>
+        </label>
+      ) : null}
+      {type === "expense" ? (
+        <label className="block py-2">
+          <span className="text-xs text-muted">{t.add.trip}</span>
+          <select value={tripId} onChange={(e) => setTripId(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3">
+            <option value="">{t.reports.noneTrip}</option>
+            {trips.filter((tr) => isTripActive(tr, todayISO())).map((tr) => (
+              <option key={tr.id} value={tr.id}>
+                {pickName(locale, tr.name, tr.nameZh)}
+              </option>
+            ))}
+          </select>
         </label>
       ) : null}
       {split ? (
@@ -176,6 +192,7 @@ function AddBody({ type, onClose }: { type: TxType; onClose: () => void }) {
               payeeZh: payee || t.add[type],
               planned,
               milesType: type === "miles" ? "earn" : undefined,
+              tripId: type === "expense" && tripId ? tripId : undefined,
             });
           }
           toast(t.add.savedToast);
