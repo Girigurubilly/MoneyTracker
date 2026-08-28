@@ -53,8 +53,13 @@ export const messages = {
       scheduled: "Scheduled",
       scheduledHint: "Won’t change any account balance until this date arrives.",
       splitMortgage: "Split principal / interest",
+      splitMortgageHint:
+        "Principal is a transfer to the mortgage account. It still counts as spend on Today and Budget.",
       principal: "Principal",
       interest: "Interest",
+      mortgageAccount: "Mortgage account",
+      needMortgageAccount: "Choose a mortgage account for the principal transfer.",
+      countsAsSpend: "Counts as spend",
     },
     today: {
       goals: "Monthly target",
@@ -525,8 +530,12 @@ export const messages = {
       scheduled: "預定",
       scheduledHint: "到期日前不會從任何資產帳戶扣帳。",
       splitMortgage: "分拆本金 / 利息",
+      splitMortgageHint: "本金以轉帳記入按揭帳戶，同時計入今日與預算的支出。",
       principal: "本金",
       interest: "利息",
+      mortgageAccount: "按揭帳戶",
+      needMortgageAccount: "請選擇本金轉入的按揭帳戶。",
+      countsAsSpend: "計入支出",
     },
     today: {
       goals: "本月目標",

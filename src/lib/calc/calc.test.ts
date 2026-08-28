@@ -4,7 +4,7 @@ import { cashflowSide, applyDeltas, balanceDeltas } from "./ledger.ts";
 import { toHkd, parseFrankfurter, parseEurCross, mergeRates } from "./fx.ts";
 import { monthlyPayment, remainingInterest, effectiveRate, amortize, monthsUntil, endMonthFromRemaining, nextPaymentIso, remainingPayments, paymentDayOf } from "./mortgage.ts";
 import { tripProgress, travelSpendYtd, tripCashSpent, isTripActive, isTripExpired } from "./trips.ts";
-import { monthFlow, spentInMonth, dailySpendable, budgetActuals, reservedRegulars, projectedNonRegular, livingEssentials, upcomingExpenseRegulars, forecastTone } from "./budget.ts";
+import { monthFlow, spentInMonth, dailySpendable, budgetActuals, reservedRegulars, projectedNonRegular, livingEssentials, upcomingExpenseRegulars, forecastTone, plannedAdhocSpend, isExpenseRegular } from "./budget.ts";
 import { runRetirement, savingsLast12Months } from "./retirement.ts";
 import { MONTH_TOTAL_BUDGET_ID } from "../types.ts";
 import type { Account, FxRate, Recurring, Transaction } from "../types.ts";
@@ -474,5 +474,126 @@ test("FX from-HKD quotes invert to HKD per unit", () => {
     rows,
   );
   assert.equal(merged.find((r) => r.currency === "TWD")?.perHkd, 0.244);
+});
+
+test("posted mortgage principal transfer counts as spend; ordinary transfer does not", () => {
+  const ordinary: Transaction = {
+    id: "t",
+    type: "transfer",
+    amount: 25,
+    currency: "HKD",
+    accountId: "a",
+    toAccountId: "b",
+    date: "2026-08-03",
+    payee: "move",
+    payeeZh: "轉帳",
+  };
+  const principal: Transaction = {
+    id: "p",
+    type: "transfer",
+    amount: 9600,
+    currency: "HKD",
+    accountId: "a",
+    toAccountId: "m",
+    destAmount: 9600,
+    categoryId: "mortgage-p",
+    date: "2026-08-01",
+    payee: "Mortgage principal",
+    payeeZh: "按揭本金",
+    countsAsExpense: true,
+  };
+  const interest: Transaction = {
+    id: "i",
+    type: "expense",
+    amount: 4980,
+    currency: "HKD",
+    accountId: "a",
+    categoryId: "mortgage-i",
+    date: "2026-08-01",
+    payee: "Mortgage interest",
+    payeeZh: "按揭利息",
+  };
+  assert.equal(cashflowSide(ordinary), "none");
+  assert.equal(cashflowSide(principal), "expense");
+  assert.equal(cashflowSide(interest), "expense");
+  const flow = monthFlow([ordinary, principal, interest], "2026-08", rates);
+  assert.equal(flow.expense, 14580);
+  assert.equal(spentInMonth([ordinary, principal, interest], "2026-08", rates), 14580);
+  const accounts: Account[] = [
+    { id: "a", name: "A", nameZh: "A", type: "current", currency: "HKD", balance: 20000, includeInNetWorth: true, group: "cash" },
+    { id: "m", name: "M", nameZh: "M", type: "mortgage", currency: "HKD", balance: -500000, includeInNetWorth: true, group: "housing" },
+  ];
+  const next = applyDeltas(accounts, balanceDeltas(principal));
+  assert.equal(next[0].balance, 10400);
+  assert.equal(next[1].balance, -490400);
+});
+
+test("planned principal transfer does not hit cashflow; the regular still reserves remaining", () => {
+  const planned: Transaction = {
+    id: "p",
+    type: "transfer",
+    amount: 9600,
+    currency: "HKD",
+    accountId: "a",
+    toAccountId: "m",
+    destAmount: 9600,
+    date: "2026-08-20",
+    payee: "Mortgage principal",
+    payeeZh: "按揭本金",
+    planned: true,
+    countsAsExpense: true,
+    recurringId: "r-p",
+  };
+  assert.equal(cashflowSide(planned), "none");
+  assert.deepEqual(balanceDeltas(planned), []);
+  const flow = monthFlow([planned], "2026-08", rates);
+  assert.equal(flow.expense, 0);
+  const regular: Recurring = {
+    id: "r-p",
+    type: "transfer",
+    label: "Principal",
+    labelZh: "本金",
+    amount: 9600,
+    currency: "HKD",
+    accountId: "a",
+    toAccountId: "m",
+    categoryId: "mortgage-p",
+    frequency: "monthly",
+    nextDate: "2026-08-20",
+    chargedDay: 20,
+    countsAsExpense: true,
+  };
+  assert.equal(isExpenseRegular(regular), true);
+  assert.equal(reservedRegulars([regular], rates, "2026-08-10"), 9600);
+  assert.equal(reservedRegulars([regular], rates, "2026-08-20"), 0);
+  const upcoming = upcomingExpenseRegulars([regular], "2026-08-10");
+  assert.equal(upcoming[0]?.id, "r-p");
+  const travelFund: Recurring = {
+    ...regular,
+    id: "r-t",
+    countsAsExpense: false,
+    label: "Travel fund",
+  };
+  assert.equal(isExpenseRegular(travelFund), false);
+  assert.equal(reservedRegulars([travelFund], rates, "2026-08-10"), 0);
+});
+
+test("planned ad-hoc principal transfer is reserved as this-month spend", () => {
+  const tx: Transaction = {
+    id: "p",
+    type: "transfer",
+    amount: 5000,
+    currency: "HKD",
+    accountId: "a",
+    toAccountId: "m",
+    date: "2026-08-25",
+    payee: "Principal",
+    payeeZh: "本金",
+    planned: true,
+    countsAsExpense: true,
+  };
+  assert.equal(plannedAdhocSpend([tx], "2026-08", rates), 5000);
+  const ordinary: Transaction = { ...tx, id: "o", countsAsExpense: false };
+  assert.equal(plannedAdhocSpend([ordinary], "2026-08", rates), 0);
 });
 

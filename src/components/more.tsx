@@ -42,6 +42,11 @@ import type {
   TxType,
 } from "@/lib/types";
 import { CATEGORY_ICONS } from "@/lib/types";
+import {
+  housingParentId,
+  isMortgageInterestCategory,
+  isMortgagePrincipalCategory,
+} from "@/lib/categories";
 
 export function MoreScreen() {
   const t = useT();
@@ -382,6 +387,15 @@ function CategoryEditorBody({
         onClick={async () => {
           const n = name.trim();
           if (!n) return;
+          const draft = { id: initial?.id ?? "tmp", name: n, nameZh: n };
+          let parent = parentId;
+          if (
+            !parent &&
+            kind === "expense" &&
+            (isMortgagePrincipalCategory(draft) || isMortgageInterestCategory(draft))
+          ) {
+            parent = housingParentId(categories) ?? "";
+          }
           await onSave({
             id: initial?.id ?? `cat-${newId().slice(0, 8)}`,
             name: n,
@@ -391,7 +405,7 @@ function CategoryEditorBody({
             icon,
             essential: initial?.essential,
             defaultAccountId: accountId || undefined,
-            parentId: parentId || undefined,
+            parentId: parent || undefined,
           });
         }}
       >

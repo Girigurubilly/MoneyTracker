@@ -51,6 +51,11 @@ test("mortgage split matches user-added 按揭 categories, not only seed ids", (
   assert.equal(isMortgageSplitCategory(interest), true);
   const dining = { id: "dining", name: "Dining", nameZh: "外出就餐" };
   assert.equal(isMortgageSplitCategory(dining), false);
+  assert.equal(isMortgageSplitCategory(parent), false);
+  const principalLeaf = { id: "u-p", name: "Principal", nameZh: "本金", parentId: "housing-custom" };
+  assert.equal(isMortgageSplitCategory(principalLeaf, [parent, principalLeaf]), true);
+  const mgmt = { id: "u-m", name: "Management", nameZh: "管理費", parentId: "housing-custom" };
+  assert.equal(isMortgageSplitCategory(mgmt, [parent, mgmt]), false);
 });
 
 

@@ -8,8 +8,8 @@ import type {
   Recurring,
   Transaction,
 } from "@/lib/types";
-import { budgetActuals, dailySpendable, monthFlow, asOfForMonth } from "@/lib/calc/budget";
-import { cashflowSide, inMonth } from "@/lib/calc/ledger";
+import { budgetActuals, dailySpendable, monthFlow, asOfForMonth, isExpenseRegular } from "@/lib/calc/budget";
+import { cashflowSide, inMonth, isSpendLike } from "@/lib/calc/ledger";
 import { toHkd } from "@/lib/calc/fx";
 import { netWorthNow } from "@/lib/calc/networth";
 import type { SnapshotRow as Snap } from "@/lib/idb";
@@ -137,10 +137,11 @@ export function forecastFromRecurring(
     const counted = new Set<string>();
     for (const tx of txs) {
       if (!inMonth(tx.date, key)) continue;
-      if (tx.type === "transfer" || tx.type === "miles") continue;
+      if (tx.type === "miles") continue;
+      if (tx.type === "transfer" && !isSpendLike(tx)) continue;
       const hkd = Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
       if (tx.type === "income") inflow += hkd;
-      else if (tx.type === "expense") outflow += hkd;
+      else outflow += hkd;
       if (tx.recurringId) counted.add(tx.recurringId);
     }
     for (const r of recurring) {
@@ -149,7 +150,7 @@ export function forecastFromRecurring(
       if (!amt) continue;
       const hkd = Math.abs(toHkd(amt, r.currency, rates));
       if (r.type === "income") inflow += hkd;
-      else if (r.type === "expense") outflow += hkd;
+      else if (isExpenseRegular(r)) outflow += hkd;
     }
     return { month: monthLabel(key, locale), inflow, outflow };
   });

@@ -9,7 +9,7 @@ import { rateToHkd } from "@/lib/calc/fx";
 import { categoryPath, isMortgageInterestCategory, isMortgagePrincipalCategory, isMortgageSplitCategory } from "@/lib/categories";
 import { spentInMonth } from "@/lib/calc/budget";
 import { activeTrips } from "@/lib/calc/trips";
-import { ACCOUNT_GROUPS, accountsInGroup, iconForAccountType } from "@/lib/accounts";
+import { ACCOUNT_GROUPS, accountsInGroup, iconForAccountType, defaultMortgageAccountId } from "@/lib/accounts";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -245,7 +245,7 @@ function AddForm({
   const [milesType, setMilesType] = useState<NonNullable<Transaction["milesType"]>>(
     editing?.milesType ?? "earn",
   );
-  const [pick, setPick] = useState<null | "from" | "to" | "cat" | "trip" | "miles">(null);
+  const [pick, setPick] = useState<null | "from" | "to" | "cat" | "trip" | "miles" | "mortgage">(null);
   const [scheduled, setScheduled] = useState(
     Boolean(editing?.planned) || (editing?.date ?? selectedDate ?? todayISO()) > todayISO(),
   );
@@ -254,6 +254,9 @@ function AddForm({
   );
   const [principalDigits, setPrincipalDigits] = useState("0");
   const [interestDigits, setInterestDigits] = useState("0");
+  const [mortgageToId, setMortgageToId] = useState(
+    defaultMortgageAccountId(accounts, undefined, mortgage?.accountId) ?? "",
+  );
 
   useEffect(() => {
     setDigits(editing ? String(editing.amount) : "0");
@@ -273,6 +276,7 @@ function AddForm({
     setSplitMortgage(Boolean(!editing && isMortgageSplitCategory(presetCategory, categories)));
     setPrincipalDigits("0");
     setInterestDigits("0");
+    setMortgageToId(defaultMortgageAccountId(accounts, undefined, mortgage?.accountId) ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing?.id, kind]);
 
@@ -340,16 +344,21 @@ function AddForm({
     const payeeZh = payee.trim() || cat?.nameZh || t.add.note;
 
     if (useSplit) {
-      const mortgageAccId =
-        mortgage?.accountId ?? accounts.find((a) => a.type === "mortgage" && !a.hidden)?.id;
+      const destId =
+        mortgageToId ||
+        defaultMortgageAccountId(accounts, undefined, mortgage?.accountId);
+      if (principal > 0 && !destId) {
+        toast(t.add.needMortgageAccount);
+        return;
+      }
       if (principal > 0) {
         await addTransaction({
-          type: mortgageAccId ? "transfer" : "expense",
+          type: "transfer",
           amount: principal,
           currency,
           accountId,
-          toAccountId: mortgageAccId,
-          destAmount: mortgageAccId ? principal : undefined,
+          toAccountId: destId,
+          destAmount: principal,
           categoryId:
             categories.find((c) => isMortgagePrincipalCategory(c))?.id ?? "mortgage-p",
           date,
@@ -359,6 +368,7 @@ function AddForm({
           tripId: tripId || undefined,
           planned,
           fxToHkd: fx,
+          countsAsExpense: true,
         });
       }
       if (interest > 0) {
@@ -438,6 +448,21 @@ function AddForm({
           {to ? pickName(locale, to.name, to.nameZh) : "—"}
         </Field>
       ) : null}
+      {kind === "expense" && mortgageSplitCat && splitMortgage ? (
+        <Field
+          label={t.add.mortgageAccount}
+          onClick={() => setPick("mortgage")}
+          muted={!mortgageToId}
+        >
+          {mortgageToId
+            ? pickName(
+                locale,
+                accounts.find((a) => a.id === mortgageToId)?.name ?? "",
+                accounts.find((a) => a.id === mortgageToId)?.nameZh ?? "",
+              )
+            : t.add.none}
+        </Field>
+      ) : null}
       {kind === "expense" || kind === "income" ? (
         <Field label={t.add.category} onClick={() => setPick("cat")}>
         {cat ? categoryPath(categories, cat, locale) : "—"}
@@ -515,6 +540,7 @@ function AddForm({
               {splitMortgage ? "✓" : ""}
             </span>
             <span className="block text-sm font-medium">{t.add.splitMortgage}</span>
+            <span className="mt-0.5 block text-xs text-muted">{t.add.splitMortgageHint}</span>
           </button>
           {splitMortgage ? (
             <div className="grid grid-cols-2 gap-3 border-b border-line py-3">
@@ -597,16 +623,23 @@ function AddForm({
       </button>
 
       <Overlay
-        open={pick === "from" || pick === "to"}
+        open={pick === "from" || pick === "to" || pick === "mortgage"}
         onClose={() => setPick(null)}
-        title={pick === "to" ? t.add.to : t.add.account}
+        title={pick === "to" || pick === "mortgage" ? (pick === "mortgage" ? t.add.mortgageAccount : t.add.to) : t.add.account}
         variant="page"
       >
         <AccountPickList
-          accounts={fromAccounts}
-          selectedId={pick === "to" ? toAccountId : accountId}
+          accounts={
+            pick === "mortgage"
+              ? fromAccounts.filter((a) => a.id !== accountId)
+              : fromAccounts
+          }
+          selectedId={
+            pick === "to" ? toAccountId : pick === "mortgage" ? mortgageToId : accountId
+          }
           onSelect={(id) => {
             if (pick === "from") setAccountId(id);
+            else if (pick === "mortgage") setMortgageToId(id);
             else setToAccountId(id);
             setPick(null);
           }}
@@ -686,6 +719,9 @@ function AddForm({
               setSplitMortgage(true);
               setPrincipalDigits(digits);
               setInterestDigits("0");
+              if (!mortgageToId) {
+                setMortgageToId(defaultMortgageAccountId(accounts, undefined, mortgage?.accountId) ?? "");
+              }
             } else {
               setSplitMortgage(false);
             }

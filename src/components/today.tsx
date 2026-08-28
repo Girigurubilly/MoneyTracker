@@ -275,7 +275,11 @@ function TodayBody() {
                 <div
                   className={cn("text-[15px] tabular-nums", r.type === "income" ? "text-income" : "text-foreground")}
                 >
-                  {money(r.type === "expense" ? -r.amount : r.amount, r.currency, { sign: true })}
+                  {money(
+                    r.type === "expense" || r.countsAsExpense ? -r.amount : r.amount,
+                    r.currency,
+                    { sign: true },
+                  )}
                 </div>
               </div>
             </div>

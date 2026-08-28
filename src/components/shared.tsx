@@ -290,7 +290,9 @@ export function TransactionRow({
         : milesType === "burn" || milesType === "expiry"
           ? "expense"
           : "miles"
-      : tx.type;
+      : tx.type === "transfer" && tx.countsAsExpense
+        ? "expense"
+        : tx.type;
   const iconName: CategoryIconName | undefined =
     tx.type === "miles" ? "plane" : tx.type === "transfer" ? "repeat" : cat?.icon;
   return (
