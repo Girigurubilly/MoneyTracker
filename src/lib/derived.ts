@@ -1,5 +1,6 @@
 import type {
   Account,
+  AdhocBudget,
   Budget,
   Category,
   FxRate,
@@ -275,11 +276,12 @@ export function monthStats(
   rates: FxRate[],
   isoDate: string,
   recurring: Recurring[] = [],
+  adhoc: AdhocBudget[] = [],
 ) {
   const month = isoDate.slice(0, 7);
   const flow = monthFlow(txs, month, rates);
   const asOf = asOfForMonth(month, todayISO());
-  const actuals = budgetActuals(budgets, txs, month, rates, categories, recurring, asOf);
+  const actuals = budgetActuals(budgets, txs, month, rates, categories, recurring, asOf, adhoc);
   const total = actuals.find((b) => !b.categoryId && !b.theme && b.monthly > 0);
   const remainingBudget = total ? total.remaining : actuals.reduce((s, b) => s + b.remaining, 0);
   const remainingDisc =

@@ -131,11 +131,14 @@ function TodayBody() {
   const categories = useApp((s) => s.categories);
   const rates = useApp((s) => s.fxRates);
   const recurring = useApp((s) => s.recurring);
-  const stats = monthStats(transactions, budgets, categories, rates, selected, recurring);
+  const adhocBudgets = useApp((s) => s.adhocBudgets);
+  const stats = monthStats(transactions, budgets, categories, rates, selected, recurring, adhocBudgets);
   const cap =
     stats.actuals.find((b) => b.id === MONTH_TOTAL_BUDGET_ID) ??
     stats.actuals.find((b) => !b.categoryId && !b.theme);
-  const used = cap ? cap.spent + (cap.reserved ?? 0) + (cap.projected ?? 0) : stats.flow.expense;
+  const used = cap
+    ? cap.spent + (cap.reserved ?? 0) + (cap.adhoc ?? 0) + (cap.projected ?? 0)
+    : stats.flow.expense;
   const target = cap?.monthly ?? 0;
   const today = todayISO();
   const asOf = asOfForMonth(selected.slice(0, 7), today);
@@ -249,6 +252,7 @@ function TodayBody() {
           <span className="block text-[15px] font-medium">{t.budget.monthlyTotal}</span>
           <span className="text-xs text-muted">
             {t.today.reservedRegulars}: {money(cap?.reserved ?? 0, "HKD")}
+            {(cap?.adhoc ?? 0) > 0 ? ` · ${t.budget.adhoc}: ${money(cap?.adhoc ?? 0, "HKD")}` : ""}
           </span>
         </span>
         <span className="text-right">

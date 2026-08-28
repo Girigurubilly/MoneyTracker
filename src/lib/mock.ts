@@ -474,7 +474,7 @@ export const transactions: Transaction[] = [
   t({ id: "tx-travel-fund", type: "transfer", amount: 3500, currency: "HKD", accountId: "bochk", toAccountId: "hsb-save", date: "2026-07-29", payee: "Travel fund", payeeZh: "旅遊儲蓄" }),
   t({ id: "tx-tpe-hotel", type: "expense", amount: 2100, currency: "HKD", accountId: "hsbc-visa", categoryId: "hotels", date: "2026-07-12", payee: "Taipei hotel deposit", payeeZh: "台北酒店訂金", tripId: "taipei-2026" }),
   t({ id: "tx-miles-burn", type: "miles", amount: 15000, currency: "MILES", accountId: "asia-miles", date: "2026-07-12", payee: "Award hold", payeeZh: "兌換預留", milesType: "burn", tripId: "taipei-2026" }),
-  t({ id: "tx-plan-mobile", type: "expense", amount: 198, currency: "HKD", accountId: "hsbc-visa", categoryId: "internet", date: "2026-08-26", payee: "CSL mobile", payeeZh: "流動電話", planned: true }),
+  t({ id: "tx-plan-mobile", type: "expense", amount: 198, currency: "HKD", accountId: "hsbc-visa", categoryId: "internet", date: "2026-08-26", payee: "CSL mobile", payeeZh: "流動電話", planned: true, recurringId: "r-mobile" }),
   t({ id: "tx-plan-salary", type: "income", amount: 72000, currency: "HKD", accountId: "bochk", categoryId: "salary", date: "2026-08-28", payee: "Employer", payeeZh: "公司薪金", planned: true }),
 ];
 

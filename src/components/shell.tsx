@@ -160,12 +160,12 @@ function InfoDialog() {
   const setInfoKey = useUi((s) => s.setInfoKey);
   const copy: Record<string, { en: string; zh: string }> = {
     daily: {
-      en: "Remaining budget = spending cap − spending so far − monthly regulars not yet charged − this-month planned items. Daily spendable divides that by remaining calendar days this month, including today. Guidance only — not a cash-balance guarantee.",
-      zh: "剩餘預算 = 開支上限 − 本月已花費 − 尚未扣帳的每月定期 − 本月臨時預定。每日可花費把該金額除以本月剩餘日數（含今天）。僅供參考，並非現金結餘保證。",
+      en: "Remaining budget = spending cap − spending so far − monthly regulars not yet charged − this-month-only holds. Daily spendable divides that by remaining calendar days this month, including today. This-month-only items are budget holds, not transactions. Guidance only — not a cash-balance guarantee.",
+      zh: "剩餘預算 = 開支上限 − 本月已花費 − 尚未扣帳的每月定期 − 本月臨時預算。每日可花費把該金額除以本月剩餘日數（含今天）。本月臨時只佔預算，不會建立交易。僅供參考，並非現金結餘保證。",
     },
     disc: {
-      en: "Projected remaining spend this month = uncharged monthly regulars + this-month planned items + paced leftover non-regular spend. It is expected outflow still ahead, not leftover budget.",
-      zh: "預計本月尚餘開支 = 尚未扣帳的每月定期 + 本月臨時預定 + 按其速度推算的其餘非定期。這是本月仍預計會花的金額，不是剩餘預算。",
+      en: "Projected remaining spend this month = uncharged monthly regulars + this-month-only holds + paced leftover non-regular spend. Non-regular so far = spending so far − realized monthly regulars. Expected month spend = that non-regular + monthly regulars + this-month-only holds. Not leftover budget.",
+      zh: "預計本月尚餘開支 = 尚未扣帳的每月定期 + 本月臨時預算 + 按其速度推算的其餘非定期。已實現非定期 = 本月已花費 − 已實現每月定期。本月預計開支 = 已實現非定期 + 每月定期 + 本月臨時。這不是剩餘預算。",
     },
     mortgage: {
       en: "Constant-rate amortisation using the current effective rate. Remaining payments include this month when the charged day has not yet arrived. End date is the last payment day. Not a lender quote.",
@@ -180,8 +180,8 @@ function InfoDialog() {
       zh: "全年旅遊 = 本年旅遊分類及已連結旅程的開支 ÷ 你設定的全年旅遊預算。旅程結束後仍可使用一年。已過期的旅程可以移除，已連結的開支會保留。",
     },
     cap: {
-      en: "Remaining = cap − spending so far − monthly regulars whose charged day has not yet arrived. Forecast used also adds projected remaining non-regular spend: (spending − realized regulars) ÷ day of month × remaining days after today. The ring is green if forecast used is within the cap, amber if over by up to 10%, red if over by more.",
-      zh: "剩餘 = 上限 − 本月已花費 − 扣帳日尚未到的每月定期。預測已用會再加上預計其餘非定期：（已花費 − 已實現定期）÷ 本月已過日數 × 餘下日數（不含今天）。預測未超出上限為綠，超出 10% 以內為黃，再高為紅。",
+      en: "Remaining = cap − spending so far − monthly regulars whose charged day has not yet arrived − this-month-only holds. Forecast used also adds projected remaining non-regular spend: (spending − realized regulars) ÷ day of month × remaining days after today. The ring is green if forecast used is within the cap, amber if over by up to 10%, red if over by more. This-month-only items do not create transactions.",
+      zh: "剩餘 = 上限 − 本月已花費 − 扣帳日尚未到的每月定期 − 本月臨時預算。預測已用會再加上預計其餘非定期：（已花費 − 已實現定期）÷ 本月已過日數 × 餘下日數（不含今天）。預測未超出上限為綠，超出 10% 以內為黃，再高為紅。本月臨時不會建立交易。",
     },
   };
   const locale = useUi((s) => s.locale);

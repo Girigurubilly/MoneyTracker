@@ -11,9 +11,9 @@ import {
   spentInMonth,
 } from "@/lib/calc/budget";
 import { travelSpendYtd } from "@/lib/calc/trips";
-import { inMonth, monthKey } from "@/lib/calc/ledger";
+import { monthKey } from "@/lib/calc/ledger";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
-import type { Category, Recurring, Transaction, TxType } from "@/lib/types";
+import type { AdhocBudget, Category, Recurring, TxType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -35,19 +35,21 @@ export function BudgetScreen() {
   const rates = useApp((s) => s.fxRates);
   const categories = useApp((s) => s.categories);
   const recurring = useApp((s) => s.recurring);
+  const adhocBudgets = useApp((s) => s.adhocBudgets);
   const annual = useApp((s) => s.annualTravelBudget);
   const setAnnual = useApp((s) => s.setAnnualTravel);
   const updateBudget = useApp((s) => s.updateBudget);
   const month = monthKey();
   const asOf = asOfForMonth(month, todayISO());
-  const actuals = budgetActuals(budgets, txs, month, rates, categories, recurring, asOf);
+  const actuals = budgetActuals(budgets, txs, month, rates, categories, recurring, asOf, adhocBudgets);
   const storedTotal = actuals.find((b) => b.id === MONTH_TOTAL_BUDGET_ID);
   const monthSpent = storedTotal?.spent ?? 0;
   const reserved = storedTotal?.reserved ?? 0;
+  const adhocAmt = storedTotal?.adhoc ?? 0;
   const projected = storedTotal?.projected ?? 0;
   const monthCap = storedTotal?.monthly ?? 0;
-  const monthUsed = monthSpent + reserved + projected;
-  const monthRemain = monthCap - monthSpent - reserved;
+  const monthUsed = monthSpent + reserved + adhocAmt + projected;
+  const monthRemain = monthCap - monthSpent - reserved - adhocAmt;
   const monthRatio = storedTotal?.ratio ?? (monthCap > 0 ? monthUsed / monthCap : 0);
   const daysLeft = dailySpendable(monthRemain, asOf).daysLeft;
   const forecastRemain = monthRemain - projected;
@@ -70,7 +72,7 @@ export function BudgetScreen() {
   const [regOpen, setRegOpen] = useState(false);
   const [editingReg, setEditingReg] = useState<Recurring | null>(null);
   const [adhocOpen, setAdhocOpen] = useState(false);
-  const [editingAdhoc, setEditingAdhoc] = useState<Transaction | null>(null);
+  const [editingAdhoc, setEditingAdhoc] = useState<AdhocBudget | null>(null);
   const editing = categoryActuals.find((b) => b.id === editId);
   const usedCatIds = new Set(budgets.map((b) => b.categoryId).filter(Boolean));
   const freeCats = categories.filter((c) => c.kind === "expense" && !usedCatIds.has(c.id));
@@ -171,8 +173,8 @@ export function BudgetScreen() {
           setEditingAdhoc(null);
           setAdhocOpen(true);
         }}
-        onEdit={(tx) => {
-          setEditingAdhoc(tx);
+        onEdit={(row) => {
+          setEditingAdhoc(row);
           setAdhocOpen(true);
         }}
       />
@@ -545,14 +547,13 @@ function AdhocBlock({
 }: {
   month: string;
   onAdd: () => void;
-  onEdit: (tx: Transaction) => void;
+  onEdit: (row: AdhocBudget) => void;
 }) {
   const t = useT();
   const locale = useUi((s) => s.locale);
-  const txs = useApp((s) => s.transactions);
-  const rows = txs
-    .filter((tx) => tx.planned && !tx.recurringId && inMonth(tx.date, month) && tx.type !== "miles")
-    .sort((a, b) => a.date.localeCompare(b.date) || a.payee.localeCompare(b.payee));
+  const rows = useApp((s) => s.adhocBudgets)
+    .filter((a) => a.month === month || a.date.startsWith(month))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label));
 
   return (
     <div className="pt-4">
@@ -567,37 +568,19 @@ function AdhocBlock({
         <p className="px-5 py-4 text-sm text-muted">{t.budget.addAdhoc}</p>
       ) : (
         <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
-          {rows.map((tx) => (
+          {rows.map((row) => (
             <button
-              key={tx.id}
+              key={row.id}
               type="button"
               className="flex w-full items-center gap-3 border-t border-line px-4 py-3 text-left first:border-0"
-              onClick={() => onEdit(tx)}
+              onClick={() => onEdit(row)}
             >
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[15px] font-medium">{pickName(locale, tx.payee, tx.payeeZh)}</div>
-                <div className="mt-0.5 text-xs text-muted">
-                  {tx.date.slice(8)} ·{" "}
-                  {tx.type === "income"
-                    ? t.add.income
-                    : tx.type === "transfer"
-                      ? tx.countsAsExpense
-                        ? `${t.add.transfer} · ${t.add.countsAsSpend}`
-                        : t.add.transfer
-                      : t.add.expense}
-                </div>
+                <div className="truncate text-[15px] font-medium">{pickName(locale, row.label, row.labelZh)}</div>
+                <div className="mt-0.5 text-xs text-muted tabular-nums">{row.date.slice(8)}</div>
               </div>
-              <span
-                className={cn(
-                  "text-[15px] font-semibold tabular-nums",
-                  tx.type === "income" ? "text-income" : "text-foreground",
-                )}
-              >
-                {money(
-                  tx.type === "expense" || tx.countsAsExpense ? -tx.amount : tx.amount,
-                  tx.currency,
-                  { sign: true },
-                )}
+              <span className="text-[15px] font-semibold tabular-nums text-foreground">
+                {money(-row.amount, row.currency, { sign: true })}
               </span>
               <ChevronRight className="size-4 shrink-0 text-faint" />
             </button>
@@ -1114,7 +1097,7 @@ function AdhocEditor({
   onClose,
 }: {
   open: boolean;
-  initial: Transaction | null;
+  initial: AdhocBudget | null;
   month: string;
   onClose: () => void;
 }) {
@@ -1133,44 +1116,23 @@ function AdhocEditorBody({
   month,
   onClose,
 }: {
-  initial: Transaction | null;
+  initial: AdhocBudget | null;
   month: string;
   onClose: () => void;
 }) {
   const t = useT();
   const locale = useUi((s) => s.locale);
-  const accounts = useApp((s) => s.accounts);
-  const categories = useApp((s) => s.categories);
-  const addTransaction = useApp((s) => s.addTransaction);
-  const updateTransaction = useApp((s) => s.updateTransaction);
-  const deleteTransaction = useApp((s) => s.deleteTransaction);
-  const moneyAccounts = accounts.filter((a) => a.currency !== "MILES" && !a.hidden);
-  const [kind, setKind] = useState<TxType>(initial?.type ?? "expense");
-  const [name, setName] = useState(initial ? pickName(locale, initial.payee, initial.payeeZh) : "");
+  const addAdhocBudget = useApp((s) => s.addAdhocBudget);
+  const updateAdhocBudget = useApp((s) => s.updateAdhocBudget);
+  const deleteAdhocBudget = useApp((s) => s.deleteAdhocBudget);
+  const [name, setName] = useState(initial ? pickName(locale, initial.label, initial.labelZh) : "");
   const [amount, setAmount] = useState(initial ? String(initial.amount) : "");
-  const [date, setDate] = useState(initial?.date ?? `${month}-28`);
-  const [accountId, setAccountId] = useState(initial?.accountId ?? moneyAccounts[0]?.id ?? "");
-  const [toAccountId, setToAccountId] = useState(
-    initial?.toAccountId ?? moneyAccounts.find((a) => a.id !== (initial?.accountId ?? moneyAccounts[0]?.id))?.id ?? "",
-  );
-  const [categoryId, setCategoryId] = useState(initial?.categoryId ?? "");
   const today = todayISO();
+  const [date, setDate] = useState(initial?.date ?? (today.startsWith(month) ? today : `${month}-15`));
 
   return (
     <div className="px-5 pb-8">
       <p className="text-xs text-muted">{t.budget.adhocHint}</p>
-      <label className="block py-2">
-        <span className="text-xs text-muted">{t.more.kind}</span>
-        <select
-          value={kind}
-          onChange={(e) => setKind(e.target.value as TxType)}
-          className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none"
-        >
-          <option value="expense">{t.add.expense}</option>
-          <option value="income">{t.add.income}</option>
-          <option value="transfer">{t.add.transfer}</option>
-        </select>
-      </label>
       <label className="block py-2">
         <span className="text-xs text-muted">{t.budget.regularName}</span>
         <input
@@ -1199,82 +1161,25 @@ function AdhocEditorBody({
           className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none"
         />
       </label>
-      <label className="block py-2">
-        <span className="text-xs text-muted">{kind === "transfer" ? t.add.from : t.add.account}</span>
-        <select
-          value={accountId}
-          onChange={(e) => setAccountId(e.target.value)}
-          className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none"
-        >
-          {moneyAccounts.map((a) => (
-            <option key={a.id} value={a.id}>
-              {pickName(locale, a.name, a.nameZh)}
-            </option>
-          ))}
-        </select>
-      </label>
-      {kind === "transfer" ? (
-        <label className="block py-2">
-          <span className="text-xs text-muted">{t.add.to}</span>
-          <select
-            value={toAccountId}
-            onChange={(e) => setToAccountId(e.target.value)}
-            className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none"
-          >
-            {moneyAccounts
-              .filter((a) => a.id !== accountId)
-              .map((a) => (
-                <option key={a.id} value={a.id}>
-                  {pickName(locale, a.name, a.nameZh)}
-                </option>
-              ))}
-          </select>
-        </label>
-      ) : (
-        <label className="block py-2">
-          <span className="text-xs text-muted">{t.budget.pickCategory}</span>
-          <select
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none"
-          >
-            <option value="">{t.common.none}</option>
-            {categories
-              .filter((c) => (kind === "income" ? c.kind === "income" : c.kind === "expense"))
-              .map((c) => (
-                <option key={c.id} value={c.id}>
-                  {pickName(locale, c.name, c.nameZh)}
-                </option>
-              ))}
-          </select>
-        </label>
-      )}
       <button
         type="button"
         className="mt-4 h-12 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent"
         onClick={async () => {
           const n = name.trim();
           const amt = Number(amount) || 0;
-          if (!n || !accountId || amt <= 0) return;
-          const iso = date.startsWith(month) ? date : `${month}-28`;
-          const planned = iso > today;
-          const acc = moneyAccounts.find((a) => a.id === accountId);
-          const tx: Transaction = {
+          if (!n || amt <= 0) return;
+          const iso = date.startsWith(month) ? date : `${month}-15`;
+          const row: AdhocBudget = {
             id: initial?.id ?? newId(),
-            type: kind,
+            label: n,
+            labelZh: n,
             amount: amt,
-            currency: acc?.currency === "MILES" ? "HKD" : (acc?.currency ?? "HKD"),
-            accountId,
-            toAccountId: kind === "transfer" ? toAccountId : undefined,
-            destAmount: kind === "transfer" ? amt : undefined,
-            categoryId: kind === "transfer" ? undefined : categoryId || undefined,
+            currency: "HKD",
+            month,
             date: iso,
-            payee: n,
-            payeeZh: n,
-            planned,
           };
-          if (initial) await updateTransaction(tx, initial);
-          else await addTransaction(tx);
+          if (initial) await updateAdhocBudget(row);
+          else await addAdhocBudget(row);
           toast(t.add.savedToast);
           onClose();
         }}
@@ -1286,7 +1191,7 @@ function AdhocEditorBody({
           type="button"
           className="mt-3 h-12 w-full rounded-xl text-sm font-medium text-expense"
           onClick={async () => {
-            await deleteTransaction(initial.id);
+            await deleteAdhocBudget(initial.id);
             onClose();
           }}
         >

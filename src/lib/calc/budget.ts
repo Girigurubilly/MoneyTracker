@@ -1,4 +1,4 @@
-import type { Budget, Category, Recurring, Transaction, FxRate } from "../types.ts";
+import type { AdhocBudget, Budget, Category, Recurring, Transaction, FxRate } from "../types.ts";
 import { MONTH_TOTAL_BUDGET_ID } from "../types.ts";
 import { cashflowSide, inMonth, isSpendLike } from "./ledger.ts";
 import { toHkd } from "./fx.ts";
@@ -123,6 +123,59 @@ export function plannedAdhocSpend(
   return sum;
 }
 
+export function adhocForMonth(rows: AdhocBudget[], month: string): AdhocBudget[] {
+  return rows.filter((a) => a.month === month || a.date.startsWith(month));
+}
+
+export function adhocChargedBy(a: AdhocBudget, asOfIso: string): boolean {
+  return a.date <= asOfIso;
+}
+
+export function adhocTotal(
+  rows: AdhocBudget[],
+  month: string,
+  rates: FxRate[],
+): number {
+  let sum = 0;
+  for (const a of adhocForMonth(rows, month)) {
+    sum += Math.abs(toHkd(a.amount, a.currency, rates));
+  }
+  return sum;
+}
+
+export function reservedAdhoc(
+  rows: AdhocBudget[],
+  month: string,
+  rates: FxRate[],
+  asOfIso: string,
+): number {
+  let sum = 0;
+  for (const a of adhocForMonth(rows, month)) {
+    if (adhocChargedBy(a, asOfIso)) continue;
+    sum += Math.abs(toHkd(a.amount, a.currency, rates));
+  }
+  return sum;
+}
+
+export function realizedAdhoc(
+  rows: AdhocBudget[],
+  month: string,
+  rates: FxRate[],
+  asOfIso: string,
+): number {
+  let sum = 0;
+  for (const a of adhocForMonth(rows, month)) {
+    if (!adhocChargedBy(a, asOfIso)) continue;
+    sum += Math.abs(toHkd(a.amount, a.currency, rates));
+  }
+  return sum;
+}
+
+/** Posted spend minus realized monthly regulars. 本月臨時 is never a txn, so it is not in spent. */
+export function realizedNonRegularSpend(spent: number, realizedRegularsAmt: number): number {
+  return Math.max(0, spent - realizedRegularsAmt);
+}
+
 /** Use today when `month` is the current month; last day if past; 1st if future. */
 export function asOfForMonth(month: string, today: string): string {
   const tm = today.slice(0, 7);
@@ -134,6 +187,7 @@ export function asOfForMonth(month: string, today: string): string {
 /**
  * Pace of non-regular spend so far, applied to the remaining days of the month.
  * (spent − realized regulars) / day-of-month × remaining days.
+ * 本月臨時 is a budget hold, not a txn, so it is not subtracted from spent.
  */
 export function projectedNonRegular(spent: number, realized: number, asOfIso: string): number {
   const day = Number(asOfIso.slice(8, 10));
@@ -182,6 +236,7 @@ export function budgetActuals(
   categories: Category[],
   recurring: Recurring[] = [],
   asOfIso?: string,
+  adhocRows: AdhocBudget[] = [],
 ): (Budget & {
   spent: number;
   remaining: number;
@@ -190,11 +245,13 @@ export function budgetActuals(
   realized: number;
   projected: number;
   adhoc: number;
+  expected: number;
 })[] {
   const asOf = asOfIso ?? monthEndIso(month);
   const reserved = reservedRegulars(recurring, rates, asOf);
   const realized = realizedRegulars(recurring, rates, asOf);
-  const adhoc = plannedAdhocSpend(txs, month, rates);
+  const adhoc = adhocTotal(adhocRows, month, rates);
+  const allRegulars = reserved + realized;
   return budgets.map((b) => {
     const unscoped = !b.categoryId && !b.theme;
     const spent = unscoped
@@ -208,8 +265,12 @@ export function budgetActuals(
         });
     const hold = unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? reserved + adhoc : 0;
     const realizedAmt = unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? realized : 0;
+    const nonRegular =
+      unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? realizedNonRegularSpend(spent, realizedAmt) : 0;
     const projected =
       unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? projectedNonRegular(spent, realizedAmt, asOf) : 0;
+    const expected =
+      unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? nonRegular + allRegulars + adhoc : spent;
     const remaining = b.monthly - spent - hold;
     return {
       ...b,
@@ -219,6 +280,7 @@ export function budgetActuals(
       realized: realizedAmt,
       projected,
       remaining,
+      expected,
       ratio: b.monthly > 0 ? (spent + hold + projected) / b.monthly : 0,
     };
   });

@@ -242,6 +242,17 @@ export type Recurring = {
   splitWithId?: string;
 };
 
+/** This-month budget hold — does not create a transaction or change balances. */
+export type AdhocBudget = {
+  id: string;
+  label: string;
+  labelZh: string;
+  amount: number;
+  currency: MoneyUnit;
+  month: string;
+  date: string;
+};
+
 export type Budget = {
   id: string;
   categoryId?: string;

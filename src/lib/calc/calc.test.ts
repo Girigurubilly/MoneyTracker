@@ -4,10 +4,10 @@ import { cashflowSide, applyDeltas, balanceDeltas } from "./ledger.ts";
 import { toHkd, parseFrankfurter, parseEurCross, mergeRates } from "./fx.ts";
 import { monthlyPayment, remainingInterest, effectiveRate, amortize, monthsUntil, endMonthFromRemaining, nextPaymentIso, remainingPayments, paymentDayOf } from "./mortgage.ts";
 import { tripProgress, travelSpendYtd, tripCashSpent, isTripActive, isTripExpired } from "./trips.ts";
-import { monthFlow, spentInMonth, dailySpendable, budgetActuals, reservedRegulars, projectedNonRegular, livingEssentials, upcomingExpenseRegulars, forecastTone, plannedAdhocSpend, isExpenseRegular } from "./budget.ts";
+import { monthFlow, spentInMonth, dailySpendable, budgetActuals, reservedRegulars, projectedNonRegular, livingEssentials, upcomingExpenseRegulars, forecastTone, plannedAdhocSpend, isExpenseRegular, realizedNonRegularSpend, adhocTotal } from "./budget.ts";
 import { runRetirement, savingsLast12Months } from "./retirement.ts";
 import { MONTH_TOTAL_BUDGET_ID } from "../types.ts";
-import type { Account, FxRate, Recurring, Transaction } from "../types.ts";
+import type { Account, AdhocBudget, FxRate, Recurring, Transaction } from "../types.ts";
 
 const rates: FxRate[] = [
   { currency: "HKD", perHkd: 1, asOf: "2026-08-23", source: "Base" },
@@ -595,5 +595,62 @@ test("planned ad-hoc principal transfer is reserved as this-month spend", () => 
   assert.equal(plannedAdhocSpend([tx], "2026-08", rates), 5000);
   const ordinary: Transaction = { ...tx, id: "o", countsAsExpense: false };
   assert.equal(plannedAdhocSpend([ordinary], "2026-08", rates), 0);
+});
+
+test("this-month-only holds are not cashflow; remaining subtracts the full hold", () => {
+  const txs: Transaction[] = [
+    {
+      id: "1",
+      type: "expense",
+      amount: 3000,
+      currency: "HKD",
+      accountId: "a",
+      date: "2026-08-05",
+      payee: "x",
+      payeeZh: "x",
+    },
+  ];
+  const regulars: Recurring[] = [
+    { ...netflix, id: "r1", amount: 1000, chargedDay: 5, nextDate: "2026-08-05" },
+    { ...netflix, id: "r2", amount: 2000, chargedDay: 25, nextDate: "2026-08-25" },
+  ];
+  const adhoc: AdhocBudget[] = [
+    { id: "a1", label: "Gift", labelZh: "禮物", amount: 500, currency: "HKD", month: "2026-08", date: "2026-08-10" },
+    { id: "a2", label: "Trip", labelZh: "旅行", amount: 800, currency: "HKD", month: "2026-08", date: "2026-08-28" },
+  ];
+  assert.equal(monthFlow(txs, "2026-08", rates).expense, 3000);
+  assert.equal(adhocTotal(adhoc, "2026-08", rates), 1300);
+  const rows = budgetActuals(
+    [{ id: MONTH_TOTAL_BUDGET_ID, label: "t", labelZh: "t", monthly: 10000, spent: 0 }],
+    txs,
+    "2026-08",
+    rates,
+    [],
+    regulars,
+    "2026-08-15",
+    adhoc,
+  );
+  const b = rows[0];
+  assert.equal(b.spent, 3000);
+  assert.equal(b.realized, 1000);
+  assert.equal(b.reserved, 2000);
+  assert.equal(b.adhoc, 1300);
+  assert.equal(b.remaining, 10000 - 3000 - 2000 - 1300);
+  assert.equal(realizedNonRegularSpend(3000, 1000), 2000);
+  assert.equal(b.projected, projectedNonRegular(3000, 1000, "2026-08-15"));
+  assert.equal(b.expected, 2000 + 3000 + 1300);
+  const later = budgetActuals(
+    [{ id: MONTH_TOTAL_BUDGET_ID, label: "t", labelZh: "t", monthly: 10000, spent: 0 }],
+    txs,
+    "2026-08",
+    rates,
+    [],
+    regulars,
+    "2026-08-28",
+    adhoc,
+  );
+  assert.equal(later[0].remaining, 10000 - 3000 - 0 - 1300);
+  assert.equal(later[0].reserved, 0);
+  assert.equal(later[0].adhoc, 1300);
 });
 

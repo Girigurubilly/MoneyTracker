@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { getDb } from "@/lib/idb";
 import type {
   Account,
+  AdhocBudget,
   Allowance,
   Budget,
   Category,
@@ -57,6 +58,7 @@ export type AppSnapshot = {
   fxRates: FxRate[];
   snapshots: SnapshotRow[];
   annualTravelBudget: number;
+  adhocBudgets?: AdhocBudget[];
 };
 
 function idb() {
@@ -95,6 +97,7 @@ type AppState = {
   retirement: (RetirementInputs & { id: string }) | null;
   allowances: Allowance[];
   oneOffs: OneOff[];
+  adhocBudgets: AdhocBudget[];
   fxRates: FxRate[];
   snapshots: SnapshotRow[];
   annualTravelBudget: number;
@@ -122,6 +125,9 @@ type AppState = {
   addAllowance: (a: Allowance) => Promise<void>;
   updateAllowance: (a: Allowance) => Promise<void>;
   deleteAllowance: (id: string) => Promise<void>;
+  addAdhocBudget: (a: AdhocBudget) => Promise<void>;
+  updateAdhocBudget: (a: AdhocBudget) => Promise<void>;
+  deleteAdhocBudget: (id: string) => Promise<void>;
   replaceAll: (snap: AppSnapshot) => Promise<void>;
   exportSnapshot: () => AppSnapshot;
   resetSample: () => Promise<void>;
@@ -141,6 +147,7 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     retirementRows,
     allowances,
     oneOffs,
+    adhocBudgets,
     fxRates,
     snapshots,
     meta,
@@ -156,6 +163,7 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     idb().retirement.toArray(),
     idb().allowances.toArray(),
     idb().oneOffs.toArray(),
+    idb().adhocBudgets.toArray(),
     idb().fxRates.toArray(),
     idb().snapshots.toArray(),
     idb().meta.get("settings"),
@@ -172,6 +180,7 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     retirement: retirementRows[0] ?? null,
     allowances,
     oneOffs,
+    adhocBudgets,
     fxRates,
     snapshots,
     annualTravelBudget: meta?.annualTravelBudget ?? seedTravelBudget,
@@ -202,6 +211,9 @@ type Dispatchers = {
   addAllowance: AppState["addAllowance"];
   updateAllowance: AppState["updateAllowance"];
   deleteAllowance: AppState["deleteAllowance"];
+  addAdhocBudget: AppState["addAdhocBudget"];
+  updateAdhocBudget: AppState["updateAdhocBudget"];
+  deleteAdhocBudget: AppState["deleteAdhocBudget"];
   replaceAll: AppState["replaceAll"];
   exportSnapshot: AppState["exportSnapshot"];
   resetSample: AppState["resetSample"];
@@ -384,6 +396,58 @@ async function postDuePlanned() {
   });
 }
 
+/** Turn leftover this-month planned spend into budget holds so they never post as txns. */
+async function migrateAdhocFromPlannedTxs() {
+  const txs = await idb().transactions.toArray();
+  const regulars = await idb().recurring.toArray();
+  const existing = await idb().adhocBudgets.toArray();
+  const seen = new Set(existing.map((a) => `${a.date}|${a.amount}|${a.label}`));
+  const candidates = txs.filter((t) => {
+    if (!t.planned || t.recurringId || t.type === "miles" || t.type === "income") return false;
+    const day = Number(t.date.slice(8, 10));
+    return !regulars.some(
+      (r) =>
+        r.frequency === "monthly" &&
+        r.type === t.type &&
+        r.accountId === t.accountId &&
+        Math.abs(r.amount - t.amount) < 0.01 &&
+        chargedDayOf(r) === day,
+    );
+  });
+  if (candidates.length) {
+    await idb().transaction("rw", [idb().transactions, idb().adhocBudgets], async () => {
+      for (const tx of candidates) {
+        const key = `${tx.date}|${tx.amount}|${tx.payee}`;
+        if (!seen.has(key)) {
+          await idb().adhocBudgets.put({
+            id: tx.id,
+            label: tx.payee,
+            labelZh: tx.payeeZh,
+            amount: Math.abs(tx.amount),
+            currency: tx.currency,
+            month: tx.date.slice(0, 7),
+            date: tx.date,
+          });
+          seen.add(key);
+        }
+        await idb().transactions.delete(tx.id);
+      }
+    });
+  }
+  const leftover = await idb().adhocBudgets.toArray();
+  for (const a of leftover) {
+    const day = Number(a.date.slice(8, 10));
+    const match = regulars.some(
+      (r) =>
+        r.frequency === "monthly" &&
+        Math.abs(r.amount - a.amount) < 0.01 &&
+        chargedDayOf(r) === day &&
+        (r.label === a.label || r.labelZh === a.labelZh || r.labelZh === a.label || r.label === a.labelZh),
+    );
+    if (match) await idb().adhocBudgets.delete(a.id);
+  }
+}
+
 async function syncRegularSchedules() {
   const rows = await idb().recurring.toArray();
   for (const r of rows) await upsertScheduledFor(r);
@@ -461,6 +525,7 @@ export const useApp = create<AppState>((set, get) => ({
   retirement: null,
   allowances: [],
   oneOffs: [],
+  adhocBudgets: [],
   fxRates: seedFx,
   snapshots: [],
   annualTravelBudget: seedTravelBudget,
@@ -483,6 +548,7 @@ export const useApp = create<AppState>((set, get) => ({
         await ensureCategoryParents();
         await ensureMortgageCategories();
         await ensureRegularLiving();
+        await migrateAdhocFromPlannedTxs();
         await postDuePlanned();
         await syncRegularSchedules();
       }
@@ -724,6 +790,29 @@ export const useApp = create<AppState>((set, get) => ({
     set({ allowances: get().allowances.filter((x) => x.id !== id) });
   },
 
+  addAdhocBudget: async (a) => {
+    await idb().adhocBudgets.put(a);
+    set({
+      adhocBudgets: get().adhocBudgets.some((x) => x.id === a.id)
+        ? get().adhocBudgets.map((x) => (x.id === a.id ? a : x))
+        : [...get().adhocBudgets, a],
+    });
+  },
+
+  updateAdhocBudget: async (a) => {
+    await idb().adhocBudgets.put(a);
+    set({
+      adhocBudgets: get().adhocBudgets.some((x) => x.id === a.id)
+        ? get().adhocBudgets.map((x) => (x.id === a.id ? a : x))
+        : [...get().adhocBudgets, a],
+    });
+  },
+
+  deleteAdhocBudget: async (id) => {
+    await idb().adhocBudgets.delete(id);
+    set({ adhocBudgets: get().adhocBudgets.filter((x) => x.id !== id) });
+  },
+
   replaceAll: async (snap) => {
     await idb().transaction("rw", idb().tables, async () => {
       await Promise.all(idb().tables.map((t) => t.clear()));
@@ -738,15 +827,17 @@ export const useApp = create<AppState>((set, get) => ({
       if (snap.retirement.length) await idb().retirement.bulkAdd(snap.retirement);
       await bulkChunk((rows) => idb().allowances.bulkAdd(rows), snap.allowances);
       await bulkChunk((rows) => idb().oneOffs.bulkAdd(rows), snap.oneOffs);
+      await bulkChunk((rows) => idb().adhocBudgets.bulkAdd(rows), snap.adhocBudgets ?? []);
       if (snap.fxRates.length) await idb().fxRates.bulkPut(snap.fxRates);
       if (snap.snapshots.length) await idb().snapshots.bulkPut(snap.snapshots);
       await idb().meta.put({
         key: "settings",
         annualTravelBudget: snap.annualTravelBudget,
-        schemaVersion: snap.schemaVersion || 1,
+        schemaVersion: snap.schemaVersion || 2,
         seededAt: snap.exportedAt,
       });
     });
+    await migrateAdhocFromPlannedTxs();
     const data = await loadAll();
     set({ ...data, ready: true });
   },
@@ -754,7 +845,7 @@ export const useApp = create<AppState>((set, get) => ({
   exportSnapshot: () => {
     const s = get();
     return {
-      schemaVersion: 1,
+      schemaVersion: 2,
       exportedAt: new Date().toISOString(),
       accounts: s.accounts,
       categories: s.categories,
@@ -767,6 +858,7 @@ export const useApp = create<AppState>((set, get) => ({
       retirement: s.retirement ? [s.retirement] : [],
       allowances: s.allowances,
       oneOffs: s.oneOffs,
+      adhocBudgets: s.adhocBudgets,
       fxRates: s.fxRates,
       snapshots: s.snapshots,
       annualTravelBudget: s.annualTravelBudget,
@@ -775,6 +867,7 @@ export const useApp = create<AppState>((set, get) => ({
 
   resetSample: async () => {
     await seedDb();
+    await migrateAdhocFromPlannedTxs();
     await postDuePlanned();
     await syncRegularSchedules();
     const data = await loadAll();

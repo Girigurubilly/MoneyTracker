@@ -162,7 +162,8 @@ export const messages = {
         "These repeat every month. Each one creates a scheduled transaction on the charged day — balances change only when that date arrives.",
       monthlyRegulars: "Monthly regulars",
       adhoc: "This month only",
-      adhocHint: "One-off planned items for this month. Not a repeating regular.",
+      adhocHint:
+        "A this-month budget hold only. It does not create an expense, transfer, or income, and does not change any account. Counts toward remaining budget, still-to-spend, and daily spendable.",
       addAdhoc: "Add this-month item",
       addRegular: "Add regular item",
       chargedDay: "Charged day",
@@ -637,7 +638,8 @@ export const messages = {
       regularsHint: "每月重複。每項會在扣帳日建立一筆預定交易，到期日前不會扣帳。",
       monthlyRegulars: "每月定期",
       adhoc: "本月臨時",
-      adhocHint: "只限本月的一次過預定項目，不會每月重複。",
+      adhocHint:
+        "只計入本月預算，不會建立費用、轉帳或收入，也不會改動任何帳戶。會反映在剩餘預算、本月尚餘開支和每日可花費。",
       addAdhoc: "新增本月臨時項目",
       addRegular: "新增定期項目",
       chargedDay: "扣帳日",

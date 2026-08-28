@@ -1,6 +1,7 @@
 import Dexie, { type EntityTable } from "dexie";
 import type {
   Account,
+  AdhocBudget,
   Allowance,
   Budget,
   Category,
@@ -37,6 +38,7 @@ export class HKLifeDB extends Dexie {
   retirement!: EntityTable<RetirementRow, "id">;
   allowances!: EntityTable<Allowance, "id">;
   oneOffs!: EntityTable<OneOff, "id">;
+  adhocBudgets!: EntityTable<AdhocBudget, "id">;
   fxRates!: EntityTable<FxRate, "currency">;
   meta!: EntityTable<MetaRow, "key">;
   snapshots!: EntityTable<SnapshotRow, "month">;
@@ -58,6 +60,9 @@ export class HKLifeDB extends Dexie {
       fxRates: "currency",
       meta: "key",
       snapshots: "month",
+    });
+    this.version(2).stores({
+      adhocBudgets: "id, month, date",
     });
   }
 }
