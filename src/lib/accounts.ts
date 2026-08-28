@@ -38,3 +38,25 @@ export function nextSortOrder(accounts: Account[], group: AccountGroup): number 
   });
   return max + 1;
 }
+
+/** Prefer an existing mortgage / loan account as the 本金 transfer destination. */
+export function defaultMortgageAccountId(
+  accounts: Account[],
+  preferred?: string,
+  linkedMortgageId?: string,
+): string | undefined {
+  const isLoanLike = (id?: string) => {
+    if (!id) return false;
+    const a = accounts.find((x) => x.id === id);
+    return Boolean(a && (a.type === "mortgage" || a.type === "loan"));
+  };
+  if (isLoanLike(linkedMortgageId)) return linkedMortgageId;
+  if (isLoanLike(preferred)) return preferred;
+  const vis = accounts.filter((a) => !a.hidden);
+  return (
+    vis.find((a) => a.type === "mortgage")?.id ??
+    accounts.find((a) => a.type === "mortgage")?.id ??
+    vis.find((a) => a.type === "loan")?.id ??
+    (preferred && accounts.some((a) => a.id === preferred) ? preferred : undefined)
+  );
+}

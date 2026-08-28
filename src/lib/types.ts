@@ -208,6 +208,11 @@ export type Transaction = {
   planned?: boolean;
   /** Links a scheduled occurrence to a monthly regular. */
   recurringId?: string;
+  /**
+   * Mortgage principal (and similar): stored as a transfer so cash falls and
+   * the loan account is reduced, but still counted as spend on Today / Budget.
+   */
+  countsAsExpense?: boolean;
   fxToHkd?: number;
 };
 
@@ -228,6 +233,13 @@ export type Recurring = {
   variable?: boolean;
   /** Counts toward Living / Home essential spend when true. */
   living?: boolean;
+  /**
+   * Transfer that still counts as spend (mortgage principal). Cash leaves the
+   * payment account and the destination (loan) balance is reduced.
+   */
+  countsAsExpense?: boolean;
+  /** Partner regular when this item is one half of a 本金 / 利息 split. */
+  splitWithId?: string;
 };
 
 export type Budget = {

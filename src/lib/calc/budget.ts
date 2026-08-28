@@ -1,6 +1,6 @@
 import type { Budget, Category, Recurring, Transaction, FxRate } from "../types.ts";
 import { MONTH_TOTAL_BUDGET_ID } from "../types.ts";
-import { cashflowSide, inMonth } from "./ledger.ts";
+import { cashflowSide, inMonth, isSpendLike } from "./ledger.ts";
 import { toHkd } from "./fx.ts";
 
 export function spentInMonth(
@@ -49,7 +49,12 @@ export function chargedDayOf(r: Recurring): number {
 }
 
 export function monthlyExpenseRegulars(recurring: Recurring[]): Recurring[] {
-  return recurring.filter((r) => r.type === "expense" && r.frequency === "monthly");
+  return recurring.filter((r) => isExpenseRegular(r) && r.frequency === "monthly");
+}
+
+/** Expense regulars, plus transfers that count as spend (mortgage principal). */
+export function isExpenseRegular(r: Recurring): boolean {
+  return r.type === "expense" || (r.type === "transfer" && Boolean(r.countsAsExpense));
 }
 
 /** True when this regular’s charged day has arrived as of `asOfIso` (passed or today). */
@@ -110,7 +115,7 @@ export function plannedAdhocSpend(
 ): number {
   let sum = 0;
   for (const tx of txs) {
-    if (!tx.planned || tx.type !== "expense") continue;
+    if (!tx.planned || !isSpendLike(tx)) continue;
     if (tx.recurringId) continue;
     if (!inMonth(tx.date, month)) continue;
     sum += Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
@@ -236,7 +241,7 @@ export function essentialCommitments(
   categories: Category[],
 ): number {
   const rec = recurring
-    .filter((r) => r.essential && r.type === "expense")
+    .filter((r) => r.essential && isExpenseRegular(r))
     .reduce((s, r) => s + r.amount, 0);
   const catEssential = new Set(categories.filter((c) => c.essential).map((c) => c.id));
   const bud = budgets

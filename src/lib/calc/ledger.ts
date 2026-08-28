@@ -4,13 +4,18 @@ export function isPosted(tx: Transaction): boolean {
   return !tx.planned;
 }
 
+/** Expense, or a transfer flagged to count as spend (mortgage principal). */
+export function isSpendLike(tx: Pick<Transaction, "type" | "countsAsExpense">): boolean {
+  return tx.type === "expense" || (tx.type === "transfer" && Boolean(tx.countsAsExpense));
+}
+
 export function cashflowSide(
   tx: Transaction,
 ): "income" | "expense" | "none" {
   if (tx.planned) return "none";
-  if (tx.type === "transfer" || tx.type === "miles") return "none";
   if (tx.type === "income") return "income";
-  return "expense";
+  if (isSpendLike(tx)) return "expense";
+  return "none";
 }
 
 export function balanceDeltas(tx: Transaction): { accountId: string; delta: number }[] {

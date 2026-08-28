@@ -328,6 +328,7 @@ function scheduledFromRegular(r: Recurring, month: string, today: string, existi
     payeeZh: r.labelZh,
     planned: iso > today,
     recurringId: r.id,
+    countsAsExpense: r.countsAsExpense,
   };
 }
 
@@ -402,7 +403,9 @@ async function ensureCategoryParents() {
 
 async function ensureMortgageCategories() {
   const cats = await idb().categories.toArray();
-  let housing = cats.find((c) => c.id === "p-housing") ?? cats.find((c) => !c.parentId && /房屋|housing/i.test(`${c.name} ${c.nameZh}`));
+  let housing =
+    cats.find((c) => c.id === "p-housing") ??
+    cats.find((c) => !c.parentId && /房屋|housing|居住/i.test(`${c.name} ${c.nameZh}`));
   if (!housing) {
     const row = seedCategories.find((c) => c.id === "p-housing");
     if (row) {
@@ -418,6 +421,14 @@ async function ensureMortgageCategories() {
   if (!cats.some((c) => isMortgageInterestCategory(c))) {
     const row = seedCategories.find((c) => c.id === "mortgage-i");
     if (row) await idb().categories.add({ ...row, parentId: parentId ?? row.parentId });
+  }
+  if (parentId) {
+    const latest = await idb().categories.toArray();
+    for (const c of latest) {
+      if (c.parentId === parentId) continue;
+      if (!isMortgagePrincipalCategory(c) && !isMortgageInterestCategory(c)) continue;
+      await idb().categories.put({ ...c, parentId });
+    }
   }
 }
 

@@ -100,6 +100,16 @@ export function pickerGroups(categories: Category[], kind?: Category["kind"]): P
   }
 
   for (const c of rows) {
+    if (isMortgagePrincipalCategory(c) || isMortgageInterestCategory(c)) {
+      const housing = rows.find((x) => isHousingGroup(x));
+      const g = bucket(housing ? housing.nameZh || housing.name : "房屋");
+      if (housing && !g.parent) g.parent = housing;
+      const leaf = leafName(c);
+      if (!g.children.some((x) => x.id === c.id)) {
+        g.children.push({ ...c, name: leaf, nameZh: leaf });
+      }
+      continue;
+    }
     const split = splitCategoryLabel(c.nameZh || c.name);
     const linked = c.parentId ? byId.get(c.parentId) : undefined;
     if (linked) {
@@ -200,28 +210,60 @@ export function categoryTint(icon?: CategoryIconName): { fg: string; bg: string 
   return (icon && TINTS[icon]) || TINTS.wallet;
 }
 
-function categorySearchHay(c: { id: string; name: string; nameZh: string }): string {
-  return `${c.id} ${c.name} ${c.nameZh}`.toLowerCase();
+function compactHay(c: { id?: string; name: string; nameZh: string }): string {
+  return `${c.id ?? ""} ${c.name} ${c.nameZh}`.toLowerCase().replace(/[\s_\-·•]/g, "");
 }
 
-/** True for 按揭本金 / 按揭利息 / any 按揭 or mortgage row — including user-added ids. */
+function mortgageLeaf(cat: { name: string; nameZh: string }): string {
+  return collapseRepeatedLabel(cat.nameZh || cat.name)
+    .replace(/[\s_\-·•]/g, "")
+    .trim();
+}
+
+export function isHousingGroup(
+  cat: { id: string; name: string; nameZh: string; parentId?: string } | null | undefined,
+): boolean {
+  if (!cat || cat.parentId) return false;
+  if (cat.id === "p-housing") return true;
+  return /房屋|housing|居住/.test(`${cat.name} ${cat.nameZh}`.toLowerCase());
+}
+
+export function housingParentId(
+  all: { id: string; name: string; nameZh: string; parentId?: string }[],
+): string | undefined {
+  return all.find((c) => isHousingGroup(c))?.id;
+}
+
+export function isMortgagePrincipalCategory(cat: { id: string; name: string; nameZh: string }): boolean {
+  if (cat.id === "mortgage-p") return true;
+  const h = compactHay(cat);
+  if (h.includes("按揭本金") || h.includes("mortgageprincipal")) return true;
+  const leaf = mortgageLeaf(cat);
+  return leaf === "本金" || leaf.toLowerCase() === "principal";
+}
+
+export function isMortgageInterestCategory(cat: { id: string; name: string; nameZh: string }): boolean {
+  if (cat.id === "mortgage-i") return true;
+  const h = compactHay(cat);
+  if (h.includes("按揭利息") || h.includes("mortgageinterest")) return true;
+  const leaf = mortgageLeaf(cat);
+  if (/收入|income/.test(leaf)) return false;
+  return leaf === "利息" || leaf.toLowerCase() === "interest";
+}
+
+/** True for 按揭本金 / 按揭利息 — including user-added ids, spaces, and 房屋 children named 本金/利息. */
 export function isMortgageSplitCategory(
   cat: { id: string; name: string; nameZh: string; parentId?: string } | null | undefined,
   all: { id: string; name: string; nameZh: string; parentId?: string }[] = [],
 ): boolean {
   if (!cat) return false;
-  if (cat.id === "mortgage-p" || cat.id === "mortgage-i" || cat.id === "p-housing") return true;
+  if (isMortgagePrincipalCategory(cat) || isMortgageInterestCategory(cat)) return true;
   const parent = cat.parentId ? all.find((c) => c.id === cat.parentId) : undefined;
-  const hay = `${categorySearchHay(cat)} ${parent ? categorySearchHay(parent) : ""}`;
-  return /mortgage|按揭/.test(hay);
+  const hay = compactHay(cat) + compactHay(parent ?? { id: "", name: "", nameZh: "" });
+  if (hay.includes("按揭") || hay.includes("mortgage")) return true;
+  const leaf = mortgageLeaf(cat);
+  if (parent && isHousingGroup(parent) && /^(本金|利息|principal|interest)$/i.test(leaf)) return true;
+  return false;
 }
 
-export function isMortgagePrincipalCategory(cat: { id: string; name: string; nameZh: string }): boolean {
-  if (cat.id === "mortgage-p") return true;
-  return /mortgage\s*principal|按揭本金/.test(categorySearchHay(cat));
-}
 
-export function isMortgageInterestCategory(cat: { id: string; name: string; nameZh: string }): boolean {
-  if (cat.id === "mortgage-i") return true;
-  return /mortgage\s*interest|按揭利息/.test(categorySearchHay(cat));
-}
