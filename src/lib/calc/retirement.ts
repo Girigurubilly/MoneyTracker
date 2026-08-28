@@ -1,6 +1,6 @@
-import { roundMoney } from "./ledger";
-import { monthFlow } from "./budget";
-import type { Allowance, FxRate, OneOff, Transaction } from "@/lib/types";
+import { roundMoney } from "./ledger.ts";
+import { monthFlow } from "./budget.ts";
+import type { Allowance, FxRate, OneOff, Transaction } from "../types.ts";
 
 export type RetirementInputs = {
   currentAge: number;
@@ -55,7 +55,7 @@ function oneOffAt(age: number, items: OneOff[]): number {
 
 function allowanceAt(age: number, items: Allowance[]): number {
   return items
-    .filter((a) => age >= a.startAge)
+    .filter((a) => age >= a.startAge && (a.endAge == null || age <= a.endAge))
     .reduce((s, a) => s + a.monthly * 12, 0);
 }
 

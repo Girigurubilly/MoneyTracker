@@ -1,4 +1,4 @@
-import type { Category, CategoryIconName } from "@/lib/types";
+import type { Category, CategoryIconName, Locale } from "@/lib/types";
 
 export function parentCategoryName(name: string): string {
   return splitCategoryLabel(name).group;
@@ -125,43 +125,39 @@ export function pickerGroups(categories: Category[], kind?: Category["kind"]): P
       };
     }
   }
-
   const out: PickerGroup[] = [];
-  for (const [key, b] of buckets) {
-    const children = uniqueByName(b.children);
+  for (const [key, t] of buckets) {
+    const children = uniqueByName(t.children);
     const parent =
-      b.parent ??
+      t.parent ??
       (children[0]
         ? {
             ...children[0],
             id: children[0].parentId || children[0].id,
-            name: b.label,
-            nameZh: b.label,
+            name: t.label,
+            nameZh: t.label,
             parentId: undefined,
           }
         : undefined);
-    if (!parent) continue;
-    out.push({ key, parent, children });
+    if (parent) out.push({ key, parent, children });
   }
   return out;
 }
 
-export function displayCategoryName(cat: Category, locale: "en" | "zh-HK"): string {
-  return locale === "zh-HK" ? cat.nameZh : cat.name;
+export function displayCategoryName(c: Category, locale: Locale): string {
+  return locale === "zh-HK" ? c.nameZh : c.name;
 }
 
-export function categoryPath(categories: Category[], cat: Category, locale: "en" | "zh-HK"): string {
-  const self = displayCategoryName(cat, locale);
-  const split = splitCategoryLabel(self);
+export function categoryPath(categories: Category[], cat: Category, locale: Locale): string {
+  const split = splitCategoryLabel(displayCategoryName(cat, locale));
   if (cat.parentId) {
     const parent = categories.find((c) => c.id === cat.parentId);
     if (parent) return `${displayCategoryName(parent, locale)} · ${split.sub ?? split.group}`;
   }
-  if (split.sub) return `${split.group} · ${split.sub}`;
-  return split.group;
+  return split.sub ? `${split.group} · ${split.sub}` : split.group;
 }
 
-const ICON_TINT: Record<CategoryIconName, { fg: string; bg: string }> = {
+const TINTS: Record<CategoryIconName, { fg: string; bg: string }> = {
   utensils: { fg: "var(--cat-orange)", bg: "var(--cat-orange-soft)" },
   shopping: { fg: "var(--cat-rose)", bg: "var(--cat-rose-soft)" },
   train: { fg: "var(--cat-teal)", bg: "var(--cat-teal-soft)" },
@@ -201,5 +197,31 @@ const ICON_TINT: Record<CategoryIconName, { fg: string; bg: string }> = {
 };
 
 export function categoryTint(icon?: CategoryIconName): { fg: string; bg: string } {
-  return (icon && ICON_TINT[icon]) || ICON_TINT.wallet;
+  return (icon && TINTS[icon]) || TINTS.wallet;
+}
+
+function categorySearchHay(c: { id: string; name: string; nameZh: string }): string {
+  return `${c.id} ${c.name} ${c.nameZh}`.toLowerCase();
+}
+
+/** True for 按揭本金 / 按揭利息 / any 按揭 or mortgage row — including user-added ids. */
+export function isMortgageSplitCategory(
+  cat: { id: string; name: string; nameZh: string; parentId?: string } | null | undefined,
+  all: { id: string; name: string; nameZh: string; parentId?: string }[] = [],
+): boolean {
+  if (!cat) return false;
+  if (cat.id === "mortgage-p" || cat.id === "mortgage-i" || cat.id === "p-housing") return true;
+  const parent = cat.parentId ? all.find((c) => c.id === cat.parentId) : undefined;
+  const hay = `${categorySearchHay(cat)} ${parent ? categorySearchHay(parent) : ""}`;
+  return /mortgage|按揭/.test(hay);
+}
+
+export function isMortgagePrincipalCategory(cat: { id: string; name: string; nameZh: string }): boolean {
+  if (cat.id === "mortgage-p") return true;
+  return /mortgage\s*principal|按揭本金/.test(categorySearchHay(cat));
+}
+
+export function isMortgageInterestCategory(cat: { id: string; name: string; nameZh: string }): boolean {
+  if (cat.id === "mortgage-i") return true;
+  return /mortgage\s*interest|按揭利息/.test(categorySearchHay(cat));
 }

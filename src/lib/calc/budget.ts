@@ -1,8 +1,7 @@
-import type { Budget, Category, Recurring, Transaction } from "@/lib/types";
-import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
-import { cashflowSide, inMonth } from "./ledger";
-import { toHkd } from "./fx";
-import type { FxRate } from "@/lib/types";
+import type { Budget, Category, Recurring, Transaction, FxRate } from "../types.ts";
+import { MONTH_TOTAL_BUDGET_ID } from "../types.ts";
+import { cashflowSide, inMonth } from "./ledger.ts";
+import { toHkd } from "./fx.ts";
 
 export function spentInMonth(
   txs: Transaction[],
@@ -97,6 +96,28 @@ export function monthEndIso(month: string): string {
   return `${month}-${String(daysInMonth(month)).padStart(2, "0")}`;
 }
 
+export function chargedIso(month: string, day: number): string {
+  const last = daysInMonth(month);
+  const d = Math.min(Math.max(1, day), last);
+  return `${month}-${String(d).padStart(2, "0")}`;
+}
+
+/** This-month planned expenses that are not linked to a monthly regular. */
+export function plannedAdhocSpend(
+  txs: Transaction[],
+  month: string,
+  rates: FxRate[],
+): number {
+  let sum = 0;
+  for (const tx of txs) {
+    if (!tx.planned || tx.type !== "expense") continue;
+    if (tx.recurringId) continue;
+    if (!inMonth(tx.date, month)) continue;
+    sum += Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
+  }
+  return sum;
+}
+
 /** Use today when `month` is the current month; last day if past; 1st if future. */
 export function asOfForMonth(month: string, today: string): string {
   const tm = today.slice(0, 7);
@@ -163,10 +184,12 @@ export function budgetActuals(
   reserved: number;
   realized: number;
   projected: number;
+  adhoc: number;
 })[] {
   const asOf = asOfIso ?? monthEndIso(month);
   const reserved = reservedRegulars(recurring, rates, asOf);
   const realized = realizedRegulars(recurring, rates, asOf);
+  const adhoc = plannedAdhocSpend(txs, month, rates);
   return budgets.map((b) => {
     const unscoped = !b.categoryId && !b.theme;
     const spent = unscoped
@@ -178,7 +201,7 @@ export function budgetActuals(
           theme: b.theme,
           categories,
         });
-    const hold = unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? reserved : 0;
+    const hold = unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? reserved + adhoc : 0;
     const realizedAmt = unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? realized : 0;
     const projected =
       unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? projectedNonRegular(spent, realizedAmt, asOf) : 0;
@@ -186,7 +209,8 @@ export function budgetActuals(
     return {
       ...b,
       spent,
-      reserved: hold,
+      reserved: unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? reserved : 0,
+      adhoc: unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? adhoc : 0,
       realized: realizedAmt,
       projected,
       remaining,

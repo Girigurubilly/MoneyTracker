@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
   BarChart3,
   Building2,
@@ -54,7 +54,7 @@ import {
   remainingPayments,
   stress,
 } from "@/lib/calc/mortgage";
-import { tripCashSpent, tripProgress, travelSpendYtd } from "@/lib/calc/trips";
+import { isTripActive, isTripExpired, tripCashSpent, tripProgress, travelSpendYtd } from "@/lib/calc/trips";
 import {
   categorySpend,
   forecastFromRecurring,
@@ -69,7 +69,7 @@ import {
 import { miles, money, pct, ratePct, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { monthKey } from "@/lib/calc/ledger";
-import type { Mortgage, Trip } from "@/lib/types";
+import type { Allowance, Mortgage, Trip } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { newId, useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -136,7 +136,7 @@ function usePlanning() {
     recurring.filter((r) => r.categoryId === "mgmt" || r.categoryId === "rates").reduce((s, r) => s + r.amount, 0);
   const essential = livingEssentials(recurring);
   const travelIds = new Set(categories.filter((c) => c.theme === "travel").map((c) => c.id));
-  const ytd = travelSpendYtd(txs, new Date().getFullYear(), travelIds);
+  const ytd = travelSpendYtd(txs, new Date().getFullYear(), travelIds, rates);
   const milesAcc = accounts.find((a) => a.type === "miles");
   const next = [...trips].sort((a, b) => a.start.localeCompare(b.start))[0];
   const retInputs = retirement ?? {
@@ -157,6 +157,8 @@ function usePlanning() {
       ? Math.round(retirement.currentAge + mortgage.remainingMonths / 12)
       : retInputs.currentAge;
   const saving12 = savingsLast12Months(txs, rates, todayISO());
+  const incomeMonthly = saving12.income / 12;
+  const expenseMonthly = saving12.expense / 12;
   const monthlySaving = Math.max(0, saving12.monthly);
   const ctx = {
     investableNow: investableNow(accounts, rates),
@@ -167,17 +169,20 @@ function usePlanning() {
     oneOffs,
     monthlySaving,
   };
-  const probed = runRetirement(retInputs, ctx);
-  const targetMonthly = Math.max(0, probed.sustainableMonthly - 50);
-  const result = runRetirement({ ...retInputs, targetMonthly }, ctx);
+  const probed = runRetirement(
+    { ...retInputs, monthlyIncomeNow: incomeMonthly, monthlySpendNow: expenseMonthly },
+    ctx,
+  );
   return {
     accounts,
     rates,
     mortgage,
-    retirement: { ...retInputs, targetMonthly },
-    result,
+    retirement: { ...retInputs, monthlyIncomeNow: incomeMonthly, monthlySpendNow: expenseMonthly },
+    result: probed,
     saving12,
     monthlySaving,
+    incomeMonthly,
+    expenseMonthly,
     allowances,
     oneOffs,
     recurring,
@@ -928,61 +933,99 @@ export function TravelScreen() {
           {t.travel.miles}: {miles(p.milesAcc?.balance ?? 0, locale)}
         </div>
         <p className="mt-2 text-xs text-faint">{t.travel.noValue}</p>
+        <p className="mt-1 text-xs text-faint">{t.travel.validUntil}</p>
       </div>
       <h2 className="px-5 pb-1 pt-6 text-sm font-medium text-muted">{t.travel.trips}</h2>
       {p.trips.length === 0 ? (
         <p className="px-5 py-6 text-sm text-muted">{t.travel.addTrip}</p>
       ) : null}
-      {p.trips.map((trip) => {
-        const spent = tripCashSpent(p.txs, p.rates, trip.id);
-        const prog = tripProgress(trip, todayISO(), spent);
-        return (
-          <Link
-            key={trip.id}
-            to="/reports/travel/$id"
-            params={{ id: trip.id }}
-            className="mx-4 mb-3 block rounded-xl bg-elevated p-4"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="font-medium">{pickName(locale, trip.name, trip.nameZh)}</div>
-                <div className="text-xs text-muted">
-                  {pickName(locale, trip.destinations, trip.destinationsZh)}
-                  {" · "}
-                  {trip.start}
-                  {trip.end ? ` → ${trip.end}` : ""}
-                </div>
-              </div>
-              <StatusChip status={prog.cashStatus} />
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <div className="text-xs text-muted">{t.travel.spent}</div>
-                <div className="tabular-nums">
-                  {money(prog.spent, "HKD")} / {money(trip.cashBudget, "HKD")}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs text-muted">{t.travel.usedPct}</div>
-                <div className="tabular-nums">{pct(prog.usedRatio)}</div>
-              </div>
-            </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ring-track">
-              <div
-                className={cn(
-                  "h-full rounded-full",
-                  prog.usedRatio >= 1.1 ? "bg-expense" : prog.usedRatio >= 1 ? "bg-watch" : "bg-income",
-                )}
-                style={{ width: `${Math.min(100, prog.usedRatio * 100)}%` }}
-              />
-            </div>
-            <div className="mt-2 text-xs text-muted">
-              {t.travel.miles}: {miles(trip.milesSaved, locale)} / {miles(trip.milesTarget, locale)}
-            </div>
-          </Link>
-        );
-      })}
+      {p.trips
+        .filter((trip) => isTripActive(trip, todayISO()))
+        .map((trip) => (
+          <TripCard key={trip.id} trip={trip} />
+        ))}
+      {p.trips.some((trip) => isTripExpired(trip, todayISO())) ? (
+        <>
+          <h2 className="px-5 pb-1 pt-6 text-sm font-medium text-muted">{t.travel.expired}</h2>
+          {p.trips
+            .filter((trip) => isTripExpired(trip, todayISO()))
+            .map((trip) => (
+              <TripCard key={trip.id} trip={trip} expired />
+            ))}
+        </>
+      ) : null}
       <AddTripOverlay />
+    </div>
+  );
+}
+
+function TripCard({ trip, expired }: { trip: Trip; expired?: boolean }) {
+  const t = useT();
+  const locale = useUi((s) => s.locale);
+  const p = usePlanning();
+  const remove = useApp((s) => s.deleteTrip);
+  const spent = tripCashSpent(p.txs, p.rates, trip.id);
+  const prog = tripProgress(trip, todayISO(), spent);
+  const ended = Boolean(trip.end && trip.end < todayISO());
+  return (
+    <div className="mx-4 mb-3 overflow-hidden rounded-xl bg-elevated">
+      <Link to="/reports/travel/$id" params={{ id: trip.id }} className="block p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="font-medium">{pickName(locale, trip.name, trip.nameZh)}</div>
+            <div className="text-xs text-muted">
+              {pickName(locale, trip.destinations, trip.destinationsZh)}
+              {" · "}
+              {trip.start}
+              {trip.end ? ` → ${trip.end}` : ""}
+            </div>
+          </div>
+          {expired ? (
+            <span className="shrink-0 rounded-full bg-pill-expense px-2 py-1 text-xs font-medium text-expense">
+              {t.travel.expired}
+            </span>
+          ) : ended ? (
+            <span className="shrink-0 rounded-full bg-elevated px-2 py-1 text-xs font-medium text-muted ring-1 ring-line">
+              {t.travel.ended}
+            </span>
+          ) : (
+            <StatusChip status={prog.cashStatus} />
+          )}
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <div className="text-xs text-muted">{t.travel.spent}</div>
+            <div className="tabular-nums">
+              {money(prog.spent, "HKD")} / {money(trip.cashBudget, "HKD")}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-muted">{t.travel.usedPct}</div>
+            <div className="tabular-nums">{pct(prog.usedRatio)}</div>
+          </div>
+        </div>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ring-track">
+          <div
+            className={cn(
+              "h-full rounded-full",
+              prog.usedRatio >= 1.1 ? "bg-expense" : prog.usedRatio >= 1 ? "bg-watch" : "bg-income",
+            )}
+            style={{ width: `${Math.min(100, prog.usedRatio * 100)}%` }}
+          />
+        </div>
+        <div className="mt-2 text-xs text-muted">
+          {t.travel.miles}: {miles(trip.milesSaved, locale)} / {miles(trip.milesTarget, locale)}
+        </div>
+      </Link>
+      {expired ? (
+        <button
+          type="button"
+          className="w-full border-t border-line py-3 text-sm font-medium text-expense"
+          onClick={() => void remove(trip.id).then(() => toast(t.travel.removeTrip))}
+        >
+          {t.travel.removeTrip}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -1099,17 +1142,21 @@ function AddTripOverlay() {
 export function TripDetail({ id }: { id: string }) {
   const t = useT();
   const locale = useUi((s) => s.locale);
+  const nav = useNavigate();
   const setTx = useUi((s) => s.setTxDetailId);
   const trips = useApp((s) => s.trips);
   const txs = useApp((s) => s.transactions);
   const rates = useApp((s) => s.fxRates);
   const updateTrip = useApp((s) => s.updateTrip);
+  const deleteTrip = useApp((s) => s.deleteTrip);
   const [edit, setEdit] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const trip = trips.find((x) => x.id === id);
   if (!trip) return <ScreenHeader title={t.travel.title} backTo="/reports/travel" />;
   const spent = tripCashSpent(txs, rates, trip.id);
   const prog = tripProgress(trip, todayISO(), spent);
   const linked = txs.filter((x) => x.tripId === trip.id && x.type === "expense");
+  const expired = isTripExpired(trip, todayISO());
   return (
     <div className="pb-10">
       <ScreenHeader
@@ -1121,6 +1168,9 @@ export function TripDetail({ id }: { id: string }) {
           </button>
         }
       />
+      {expired ? (
+        <p className="px-5 pb-2 text-xs text-muted">{t.travel.expired}</p>
+      ) : null}
       <div className="mx-4 rounded-xl bg-elevated p-4">
         <div className="text-sm text-muted">{pickName(locale, trip.destinations, trip.destinationsZh)}</div>
         <div className="mt-1 text-sm">
@@ -1156,6 +1206,31 @@ export function TripDetail({ id }: { id: string }) {
         ))
       )}
       <Disclaimer>{t.travel.noValue}</Disclaimer>
+      <div className="px-5 pt-2">
+        <button
+          type="button"
+          className="h-12 w-full rounded-xl text-sm font-medium text-expense"
+          onClick={() => setConfirmRemove(true)}
+        >
+          {t.travel.removeTrip}
+        </button>
+      </div>
+      <Overlay open={confirmRemove} onClose={() => setConfirmRemove(false)} title={t.travel.removeTrip}>
+        <div className="px-5 pb-8">
+          <p className="text-sm text-muted">{t.travel.confirmRemove}</p>
+          <button
+            type="button"
+            className="mt-4 h-12 w-full rounded-xl bg-expense text-sm font-semibold text-on-accent"
+            onClick={async () => {
+              await deleteTrip(trip.id);
+              toast(t.travel.removeTrip);
+              void nav({ to: "/reports/travel" });
+            }}
+          >
+            {t.travel.removeTrip}
+          </button>
+        </div>
+      </Overlay>
       <Overlay open={edit} onClose={() => setEdit(false)} title={t.travel.editTrip}>
         <TripEditBody
           trip={trip}
@@ -1246,7 +1321,9 @@ export function CashflowScreen() {
   const t = useT();
   const locale = useUi((s) => s.locale);
   const recurring = useApp((s) => s.recurring);
-  const data = forecastFromRecurring(recurring, monthKey(), 6, locale);
+  const txs = useApp((s) => s.transactions);
+  const rates = useApp((s) => s.fxRates);
+  const data = forecastFromRecurring(recurring, monthKey(), 6, locale, txs, rates);
   const tooltip = {
     background: "var(--elevated)",
     border: "1px solid var(--border)",
@@ -1285,13 +1362,35 @@ export function CashflowScreen() {
 
 export function RetirementScreen() {
   const t = useT();
+  const locale = useUi((s) => s.locale);
   const p = usePlanning();
   const update = useApp((s) => s.updateRetirement);
+  const addAllowance = useApp((s) => s.addAllowance);
+  const updateAllowance = useApp((s) => s.updateAllowance);
+  const deleteAllowance = useApp((s) => s.deleteAllowance);
   const r = p.retirement;
   const result = p.result;
   const series = result.series.map((pt) => ({ age: pt.age, assets: pt.assets / 1e6 }));
+  const oaa = p.allowances.find((a) => a.id === "oaa" || a.kind === "oaa");
+  const annuities = p.allowances.filter((a) => a.id !== "oaa" && a.kind !== "oaa");
+  const [annuityOpen, setAnnuityOpen] = useState(false);
+  const [editingAnnuity, setEditingAnnuity] = useState<Allowance | null>(null);
   async function patch(partial: Partial<typeof r>) {
     await update({ ...r, ...partial });
+  }
+  async function toggleOaa() {
+    if (oaa) await deleteAllowance(oaa.id);
+    else {
+      await addAllowance({
+        id: "oaa",
+        label: "Old Age Allowance",
+        labelZh: "生果金",
+        monthly: 1620,
+        startAge: 70,
+        kind: "oaa",
+        inflationAdjusted: true,
+      });
+    }
   }
   const tooltip = {
     background: "var(--elevated)",
@@ -1308,15 +1407,22 @@ export function RetirementScreen() {
         </div>
         <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Metric label={t.retirement.corpus} value={money(result.corpusAtRetire, "HKD")} />
-          <Metric label={t.retirement.saving12m} value={money(p.monthlySaving, "HKD")} />
-          <Metric label={t.retirement.target} value={money(r.targetMonthly, "HKD")} />
+          <Metric label={t.retirement.required} value={money(result.requiredCorpus, "HKD")} />
+          <Metric label={t.retirement.spendAfter} value={money(r.targetMonthly, "HKD")} />
+          <Metric
+            label={t.retirement.saveNeeded}
+            value={money(result.extraMonthlySaving, "HKD")}
+            tone={result.extraMonthlySaving > 0 ? "expense" : "income"}
+          />
           <Metric
             label={t.retirement.gap}
             value={money(result.gap, "HKD", { sign: true })}
             tone={result.gap >= 0 ? "income" : "expense"}
           />
+          <Metric label={t.retirement.saving12m} value={money(p.monthlySaving, "HKD")} />
         </div>
-        <p className="mt-3 text-xs text-muted">{t.retirement.targetHint}</p>
+        <p className="mt-3 text-xs text-muted">{t.retirement.noSalary}</p>
+        <p className="mt-1 text-xs text-muted">{t.retirement.saveNeededHint}</p>
       </div>
       <h2 className="px-5 pb-1 pt-6 text-sm font-medium text-muted">{t.retirement.chart}</h2>
       <div className="h-52 px-2">
@@ -1341,7 +1447,244 @@ export function RetirementScreen() {
         <NumLine k={t.retirement.retire} v={r.retireAge} onChange={(n) => void patch({ retireAge: n })} />
         <NumLine k={t.retirement.death} v={r.deathAge} onChange={(n) => void patch({ deathAge: n })} />
       </div>
+      <h2 className="px-5 pb-1 pt-4 text-sm font-medium text-muted">{t.retirement.lifestyle}</h2>
+      <div className="mx-4 rounded-xl bg-elevated p-4 text-sm">
+        <ReadOnlyMoney k={t.retirement.incomeNow} v={p.incomeMonthly} hint={t.retirement.from12m} />
+        <ReadOnlyMoney k={t.retirement.spendNow} v={p.expenseMonthly} hint={t.retirement.from12m} />
+        <NumLine k={t.retirement.spendAfter} v={r.targetMonthly} onChange={(n) => void patch({ targetMonthly: n })} />
+      </div>
+      <p className="px-5 pt-2 text-xs text-muted">{t.retirement.targetHint}</p>
+
+      <h2 className="px-5 pb-1 pt-4 text-sm font-medium text-muted">{t.retirement.hkIncome}</h2>
+      <div className="mx-4 rounded-xl bg-elevated">
+        <button type="button" onClick={() => void toggleOaa()} className="flex w-full items-start gap-3 px-4 py-3 text-left">
+          <span
+            className={cn(
+              "mt-0.5 grid size-5 shrink-0 place-items-center rounded border",
+              oaa ? "border-accent bg-accent text-on-accent" : "border-line bg-background",
+            )}
+            aria-hidden
+          >
+            {oaa ? "✓" : ""}
+          </span>
+          <span>
+            <span className="block text-sm font-medium">{t.retirement.oaa}</span>
+            <span className="mt-0.5 block text-xs text-muted">{t.retirement.oaaHint}</span>
+            {oaa ? (
+              <span className="mt-1 block text-xs tabular-nums text-foreground">
+                {money(oaa.monthly, "HKD")} · {t.retirement.startAge} {oaa.startAge}
+              </span>
+            ) : null}
+          </span>
+        </button>
+        {oaa ? (
+          <div className="border-t border-line px-4 py-2 text-sm">
+            <NumLine
+              k={t.retirement.monthlyAmt}
+              v={oaa.monthly}
+              onChange={(n) => void updateAllowance({ ...oaa, monthly: n })}
+            />
+            <NumLine
+              k={t.retirement.startAge}
+              v={oaa.startAge}
+              onChange={(n) => void updateAllowance({ ...oaa, startAge: n })}
+            />
+          </div>
+        ) : null}
+      </div>
+
+      <div className="flex items-center justify-between px-5 pb-1 pt-4">
+        <h2 className="text-sm font-medium text-muted">{t.retirement.annuities}</h2>
+        <button
+          type="button"
+          className="text-sm font-medium text-accent"
+          onClick={() => {
+            setEditingAnnuity(null);
+            setAnnuityOpen(true);
+          }}
+        >
+          {t.retirement.addAnnuity}
+        </button>
+      </div>
+      <p className="px-5 pb-2 text-xs text-faint">{t.retirement.annuityHint}</p>
+      {annuities.length === 0 ? (
+        <p className="px-5 py-3 text-sm text-muted">{t.retirement.addAnnuity}</p>
+      ) : (
+        <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
+          {annuities.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              className="flex w-full items-center justify-between border-t border-line px-4 py-3 text-left first:border-0"
+              onClick={() => {
+                setEditingAnnuity(a);
+                setAnnuityOpen(true);
+              }}
+            >
+              <span>
+                <span className="block text-[15px] font-medium">{pickName(locale, a.label, a.labelZh)}</span>
+                <span className="text-xs text-muted">
+                  {money(a.monthly, "HKD")} · {a.startAge}
+                  {a.endAge ? `–${a.endAge}` : "+"}
+                </span>
+              </span>
+              <ChevronRight className="size-4 text-faint" />
+            </button>
+          ))}
+        </div>
+      )}
+
       <Disclaimer>{t.retirement.disclaimer}</Disclaimer>
+      <AnnuityEditor
+        open={annuityOpen}
+        initial={editingAnnuity}
+        retireAge={r.retireAge}
+        deathAge={r.deathAge}
+        onClose={() => {
+          setAnnuityOpen(false);
+          setEditingAnnuity(null);
+        }}
+        onSave={async (row) => {
+          if (editingAnnuity) await updateAllowance(row);
+          else await addAllowance(row);
+          setAnnuityOpen(false);
+          setEditingAnnuity(null);
+          toast(t.add.savedToast);
+        }}
+        onDelete={
+          editingAnnuity
+            ? async () => {
+                await deleteAllowance(editingAnnuity.id);
+                setAnnuityOpen(false);
+                setEditingAnnuity(null);
+              }
+            : undefined
+        }
+      />
+    </div>
+  );
+}
+
+function AnnuityEditor({
+  open,
+  initial,
+  retireAge,
+  deathAge,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  open: boolean;
+  initial: Allowance | null;
+  retireAge: number;
+  deathAge: number;
+  onClose: () => void;
+  onSave: (a: Allowance) => Promise<void>;
+  onDelete?: () => Promise<void>;
+}) {
+  const t = useT();
+  return (
+    <Overlay open={open} onClose={onClose} title={initial ? t.common.edit : t.retirement.addAnnuity}>
+      {open ? (
+        <AnnuityEditorBody
+          key={initial?.id ?? "new"}
+          initial={initial}
+          retireAge={retireAge}
+          deathAge={deathAge}
+          onSave={onSave}
+          onDelete={onDelete}
+        />
+      ) : null}
+    </Overlay>
+  );
+}
+
+function AnnuityEditorBody({
+  initial,
+  retireAge,
+  deathAge,
+  onSave,
+  onDelete,
+}: {
+  initial: Allowance | null;
+  retireAge: number;
+  deathAge: number;
+  onSave: (a: Allowance) => Promise<void>;
+  onDelete?: () => Promise<void>;
+}) {
+  const t = useT();
+  const locale = useUi((s) => s.locale);
+  const [name, setName] = useState(initial ? pickName(locale, initial.label, initial.labelZh) : "");
+  const [monthly, setMonthly] = useState(initial ? String(initial.monthly) : "");
+  const [startAge, setStartAge] = useState(String(initial?.startAge ?? retireAge));
+  const [endAge, setEndAge] = useState(String(initial?.endAge ?? deathAge));
+  return (
+    <div className="px-5 pb-8">
+      <p className="text-xs text-muted">{t.retirement.annuityHint}</p>
+      <label className="block py-2">
+        <span className="text-xs text-muted">{t.budget.regularName}</span>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none"
+        />
+      </label>
+      <label className="block py-2">
+        <span className="text-xs text-muted">{t.retirement.monthlyAmt}</span>
+        <input
+          inputMode="decimal"
+          value={monthly}
+          onChange={(e) => setMonthly(e.target.value)}
+          className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none"
+        />
+      </label>
+      <label className="block py-2">
+        <span className="text-xs text-muted">{t.retirement.startAge}</span>
+        <input
+          inputMode="numeric"
+          value={startAge}
+          onChange={(e) => setStartAge(e.target.value)}
+          className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none"
+        />
+      </label>
+      <label className="block py-2">
+        <span className="text-xs text-muted">{t.retirement.endAge}</span>
+        <input
+          inputMode="numeric"
+          value={endAge}
+          onChange={(e) => setEndAge(e.target.value)}
+          className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none"
+        />
+      </label>
+      <button
+        type="button"
+        className="mt-4 h-12 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent"
+        onClick={async () => {
+          const n = name.trim();
+          if (!n) return;
+          await onSave({
+            id: initial?.id ?? `ann-${newId().slice(0, 8)}`,
+            label: n,
+            labelZh: n,
+            monthly: Number(monthly) || 0,
+            startAge: Number(startAge) || retireAge,
+            endAge: Number(endAge) || undefined,
+            kind: "annuity",
+            inflationAdjusted: false,
+          });
+        }}
+      >
+        {t.add.save}
+      </button>
+      {initial && onDelete ? (
+        <button
+          type="button"
+          className="mt-3 h-12 w-full rounded-xl text-sm font-medium text-expense"
+          onClick={() => void onDelete()}
+        >
+          {t.tx.delete}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -1359,3 +1702,17 @@ function NumLine({ k, v, onChange }: { k: string; v: number; onChange: (n: numbe
     </label>
   );
 }
+
+function ReadOnlyMoney({ k, v, hint }: { k: string; v: number; hint?: string }) {
+  return (
+    <div className="flex items-center justify-between border-b border-line py-2 last:border-0">
+      <span>
+        <span className="block text-muted">{k}</span>
+        {hint ? <span className="mt-0.5 block text-[11px] text-faint">{hint}</span> : null}
+      </span>
+      <span className="tabular-nums">{money(v, "HKD")}</span>
+    </div>
+  );
+}
+
+

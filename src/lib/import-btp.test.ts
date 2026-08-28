@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { categoryIdFromLabel, cleanCategoryLabel, convertBtp, isBtpFile } from "./import-btp.ts";
-import { collapseRepeatedLabel, pickerGroups } from "./categories.ts";
+import { collapseRepeatedLabel, isMortgageSplitCategory, pickerGroups } from "./categories.ts";
 import { groupSpendByParent, parentCategoryName, presetRange, rangeFlow } from "./derived.ts";
 import type { Category, Transaction } from "./types.ts";
 
@@ -37,6 +37,22 @@ test("pickerGroups hides colon children from the main list", () => {
   assert.equal(ent?.children.length, 0);
   assert.equal(collapseRepeatedLabel("旅遊: 入場費 旅遊: 購物"), "旅遊: 入場費");
 });
+
+test("mortgage split matches user-added 按揭 categories, not only seed ids", () => {
+  const custom = {
+    id: "cat-user-1",
+    name: "Mortgage principal",
+    nameZh: "按揭本金",
+    parentId: "housing-custom",
+  };
+  const parent = { id: "housing-custom", name: "Housing", nameZh: "房屋" };
+  assert.equal(isMortgageSplitCategory(custom, [parent, custom]), true);
+  const interest = { id: "xyz", name: "Interest", nameZh: "按揭利息" };
+  assert.equal(isMortgageSplitCategory(interest), true);
+  const dining = { id: "dining", name: "Dining", nameZh: "外出就餐" };
+  assert.equal(isMortgageSplitCategory(dining), false);
+});
+
 
 test("categoryIdFromLabel is stable", () => {
   assert.equal(categoryIdFromLabel("外出就餐"), categoryIdFromLabel("外出就餐"));

@@ -331,7 +331,15 @@ export const retirement: RetirementScenario = {
 };
 
 export const allowances: Allowance[] = [
-  { id: "oaa", label: "Old Age Allowance", labelZh: "高齡津貼", monthly: 1620, startAge: 70, inflationAdjusted: true },
+  {
+    id: "oaa",
+    label: "Old Age Allowance",
+    labelZh: "生果金",
+    monthly: 1620,
+    startAge: 70,
+    kind: "oaa",
+    inflationAdjusted: true,
+  },
 ];
 
 export const oneOffs: OneOff[] = [

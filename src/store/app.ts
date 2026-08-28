@@ -33,9 +33,12 @@ import {
 } from "@/lib/mock";
 import { applyDeltas, balanceDeltas, monthKey } from "@/lib/calc/ledger";
 import { netWorthNow } from "@/lib/calc/networth";
-import { parseFrankfurter } from "@/lib/calc/fx";
-import { inferLivingRegular } from "@/lib/calc/budget";
+import { fetchLiveFx } from "@/lib/calc/fx";
+import { chargedDayOf, chargedIso, inferLivingRegular } from "@/lib/calc/budget";
+import { isMortgageInterestCategory, isMortgagePrincipalCategory } from "@/lib/categories";
 import { accountsInGroup, nextSortOrder } from "@/lib/accounts";
+import { todayISO } from "@/lib/format";
+import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
 
 export type AppSnapshot = {
   schemaVersion: number;
@@ -109,12 +112,16 @@ type AppState = {
   updateBudget: (b: Budget) => Promise<void>;
   addTrip: (t: Trip) => Promise<void>;
   updateTrip: (t: Trip) => Promise<void>;
+  deleteTrip: (id: string) => Promise<void>;
   addRecurring: (r: Recurring) => Promise<void>;
   updateRecurring: (r: Recurring) => Promise<void>;
   deleteRecurring: (id: string) => Promise<void>;
   setFxRates: (rows: FxRate[]) => Promise<void>;
   refreshFx: () => Promise<void>;
   setAnnualTravel: (n: number) => Promise<void>;
+  addAllowance: (a: Allowance) => Promise<void>;
+  updateAllowance: (a: Allowance) => Promise<void>;
+  deleteAllowance: (id: string) => Promise<void>;
   replaceAll: (snap: AppSnapshot) => Promise<void>;
   exportSnapshot: () => AppSnapshot;
   resetSample: () => Promise<void>;
@@ -185,12 +192,16 @@ type Dispatchers = {
   updateBudget: AppState["updateBudget"];
   addTrip: AppState["addTrip"];
   updateTrip: AppState["updateTrip"];
+  deleteTrip: AppState["deleteTrip"];
   addRecurring: AppState["addRecurring"];
   updateRecurring: AppState["updateRecurring"];
   deleteRecurring: AppState["deleteRecurring"];
   setFxRates: AppState["setFxRates"];
   refreshFx: AppState["refreshFx"];
   setAnnualTravel: AppState["setAnnualTravel"];
+  addAllowance: AppState["addAllowance"];
+  updateAllowance: AppState["updateAllowance"];
+  deleteAllowance: AppState["deleteAllowance"];
   replaceAll: AppState["replaceAll"];
   exportSnapshot: AppState["exportSnapshot"];
   resetSample: AppState["resetSample"];
@@ -242,6 +253,141 @@ async function seedDb() {
   });
 }
 
+const emptyRetirement = {
+  id: "base",
+  currentAge: 40,
+  retireAge: 65,
+  deathAge: 90,
+  monthlyIncomeNow: 0,
+  monthlySpendNow: 0,
+  targetMonthly: 25000,
+  preReturn: 0.05,
+  postReturn: 0.035,
+  inflation: 0.025,
+  travelInRetirement: 0,
+};
+
+const defaultOaa: Allowance = {
+  id: "oaa",
+  label: "Old Age Allowance",
+  labelZh: "生果金",
+  monthly: 1620,
+  startAge: 70,
+  kind: "oaa",
+  inflationAdjusted: true,
+};
+
+const defaultCash: Account = {
+  id: "cash-hkd",
+  name: "Cash",
+  nameZh: "現金",
+  type: "cash",
+  currency: "HKD",
+  balance: 0,
+  includeInNetWorth: true,
+  group: "cash",
+};
+
+async function seedSkeleton() {
+  await idb().transaction("rw", idb().tables, async () => {
+    await Promise.all(idb().tables.map((t) => t.clear()));
+    await idb().accounts.bulkAdd([defaultCash]);
+    await idb().categories.bulkAdd(seedCategories);
+    await idb().fxRates.bulkAdd(seedFx);
+    await idb().allowances.bulkAdd([defaultOaa]);
+    await idb().retirement.add(emptyRetirement);
+    await idb().budgets.add({
+      id: MONTH_TOTAL_BUDGET_ID,
+      label: "Monthly total",
+      labelZh: "本月總額",
+      monthly: 0,
+      spent: 0,
+    });
+    await idb().meta.put({
+      key: "settings",
+      annualTravelBudget: 0,
+      schemaVersion: 1,
+      seededAt: new Date().toISOString(),
+    });
+  });
+}
+
+function scheduledFromRegular(r: Recurring, month: string, today: string, existingId?: string): Transaction {
+  const iso = chargedIso(month, chargedDayOf(r));
+  return {
+    id: existingId ?? nid(),
+    type: r.type,
+    amount: r.amount,
+    currency: r.currency,
+    accountId: r.accountId,
+    toAccountId: r.toAccountId,
+    destAmount: r.type === "transfer" ? r.amount : undefined,
+    categoryId: r.categoryId,
+    date: iso,
+    payee: r.label,
+    payeeZh: r.labelZh,
+    planned: iso > today,
+    recurringId: r.id,
+  };
+}
+
+async function upsertScheduledFor(r: Recurring) {
+  if (r.frequency !== "monthly") return;
+  const today = todayISO();
+  const month = today.slice(0, 7);
+  const iso = chargedIso(month, chargedDayOf(r));
+  if (iso < today) return;
+  const txs = await idb().transactions.toArray();
+  const existing = txs.find((t) => t.recurringId === r.id && t.date.startsWith(month));
+  if (existing && !existing.planned) return;
+  const adopt =
+    existing ??
+    txs.find(
+      (t) =>
+        t.planned &&
+        !t.recurringId &&
+        t.type === r.type &&
+        t.date === iso &&
+        t.accountId === r.accountId &&
+        Math.abs(t.amount - r.amount) < 0.01,
+    );
+  const tx = scheduledFromRegular(r, month, today, adopt?.id);
+  if (adopt) await idb().transactions.put({ ...adopt, ...tx, id: adopt.id });
+  else await idb().transactions.add(tx);
+  const dupes = txs.filter(
+    (t) =>
+      t.id !== tx.id &&
+      t.planned &&
+      !t.recurringId &&
+      t.type === r.type &&
+      t.date === iso &&
+      t.accountId === r.accountId &&
+      Math.abs(t.amount - r.amount) < 0.01,
+  );
+  for (const d of dupes) await idb().transactions.delete(d.id);
+}
+
+async function postDuePlanned() {
+  const today = todayISO();
+  const txs = await idb().transactions.toArray();
+  const due = txs.filter((t) => t.planned && t.date <= today);
+  if (!due.length) return;
+  let accounts = await idb().accounts.toArray();
+  await idb().transaction("rw", [idb().transactions, idb().accounts], async () => {
+    for (const tx of due) {
+      const posted = { ...tx, planned: false };
+      accounts = applyDeltas(accounts, balanceDeltas(posted));
+      await idb().transactions.put(posted);
+    }
+    for (const a of accounts) await idb().accounts.put(a);
+  });
+}
+
+async function syncRegularSchedules() {
+  const rows = await idb().recurring.toArray();
+  for (const r of rows) await upsertScheduledFor(r);
+}
+
 async function ensureCategoryParents() {
   const existing = await idb().categories.toArray();
   const byId = new Map(existing.map((c) => [c.id, c]));
@@ -251,6 +397,27 @@ async function ensureCategoryParents() {
     if (cur && cur.parentId !== s.parentId) {
       await idb().categories.put({ ...cur, parentId: s.parentId });
     }
+  }
+}
+
+async function ensureMortgageCategories() {
+  const cats = await idb().categories.toArray();
+  let housing = cats.find((c) => c.id === "p-housing") ?? cats.find((c) => !c.parentId && /房屋|housing/i.test(`${c.name} ${c.nameZh}`));
+  if (!housing) {
+    const row = seedCategories.find((c) => c.id === "p-housing");
+    if (row) {
+      await idb().categories.add(row);
+      housing = row;
+    }
+  }
+  const parentId = housing?.id;
+  if (!cats.some((c) => isMortgagePrincipalCategory(c))) {
+    const row = seedCategories.find((c) => c.id === "mortgage-p");
+    if (row) await idb().categories.add({ ...row, parentId: parentId ?? row.parentId });
+  }
+  if (!cats.some((c) => isMortgageInterestCategory(c))) {
+    const row = seedCategories.find((c) => c.id === "mortgage-i");
+    if (row) await idb().categories.add({ ...row, parentId: parentId ?? row.parentId });
   }
 }
 
@@ -297,10 +464,16 @@ export const useApp = create<AppState>((set, get) => ({
         return;
       }
       const n = await idb().accounts.count();
-      if (n === 0) await seedDb();
+      const catN = await idb().categories.count();
+      if (n === 0 && catN === 0) await seedSkeleton();
       else {
+        if (n === 0) await idb().accounts.add(defaultCash);
+        if (catN === 0) await idb().categories.bulkAdd(seedCategories);
         await ensureCategoryParents();
+        await ensureMortgageCategories();
         await ensureRegularLiving();
+        await postDuePlanned();
+        await syncRegularSchedules();
       }
       const data = await loadAll();
       const nw = netWorthNow(data.accounts, data.fxRates);
@@ -439,27 +612,61 @@ export const useApp = create<AppState>((set, get) => ({
     set({ trips: get().trips.map((x) => (x.id === t.id ? t : x)) });
   },
 
+  deleteTrip: async (id) => {
+    const linked = get().transactions.filter((t) => t.tripId === id);
+    await idb().transaction("rw", [idb().trips, idb().transactions], async () => {
+      await idb().trips.delete(id);
+      for (const tx of linked) {
+        const next = { ...tx };
+        delete next.tripId;
+        await idb().transactions.put(next);
+      }
+    });
+    set({
+      trips: get().trips.filter((t) => t.id !== id),
+      transactions: get().transactions.map((t) => {
+        if (t.tripId !== id) return t;
+        const next = { ...t };
+        delete next.tripId;
+        return next;
+      }),
+    });
+  },
+
   addRecurring: async (r) => {
     await idb().recurring.put(r);
+    await upsertScheduledFor(r);
+    const data = await loadAll();
     set({
-      recurring: get().recurring.some((x) => x.id === r.id)
-        ? get().recurring.map((x) => (x.id === r.id ? r : x))
-        : [...get().recurring, r],
+      recurring: data.recurring,
+      transactions: data.transactions,
     });
   },
 
   updateRecurring: async (r) => {
     await idb().recurring.put(r);
+    await upsertScheduledFor(r);
+    const data = await loadAll();
     set({
-      recurring: get()
-        .recurring.map((x) => (x.id === r.id ? r : x))
-        .concat(get().recurring.some((x) => x.id === r.id) ? [] : [r]),
+      recurring: data.recurring,
+      transactions: data.transactions,
     });
   },
 
   deleteRecurring: async (id) => {
-    await idb().recurring.delete(id);
-    set({ recurring: get().recurring.filter((x) => x.id !== id) });
+    const today = todayISO();
+    const month = today.slice(0, 7);
+    const linked = get().transactions.filter(
+      (t) => t.recurringId === id && t.planned && t.date.startsWith(month),
+    );
+    await idb().transaction("rw", [idb().recurring, idb().transactions], async () => {
+      await idb().recurring.delete(id);
+      for (const tx of linked) await idb().transactions.delete(tx.id);
+    });
+    set({
+      recurring: get().recurring.filter((x) => x.id !== id),
+      transactions: get().transactions.filter((t) => !linked.some((x) => x.id === t.id)),
+    });
   },
 
   setFxRates: async (rows) => {
@@ -468,9 +675,7 @@ export const useApp = create<AppState>((set, get) => ({
   },
 
   refreshFx: async () => {
-    const res = await fetch("https://api.frankfurter.app/latest?from=HKD");
-    if (!res.ok) throw new Error("fx");
-    const rows = parseFrankfurter(await res.json());
+    const rows = await fetchLiveFx(get().fxRates);
     await get().setFxRates(rows);
   },
 
@@ -483,6 +688,29 @@ export const useApp = create<AppState>((set, get) => ({
       seededAt: prev?.seededAt,
     });
     set({ annualTravelBudget: n });
+  },
+
+  addAllowance: async (a) => {
+    await idb().allowances.put(a);
+    set({
+      allowances: get().allowances.some((x) => x.id === a.id)
+        ? get().allowances.map((x) => (x.id === a.id ? a : x))
+        : [...get().allowances, a],
+    });
+  },
+
+  updateAllowance: async (a) => {
+    await idb().allowances.put(a);
+    set({
+      allowances: get().allowances.some((x) => x.id === a.id)
+        ? get().allowances.map((x) => (x.id === a.id ? a : x))
+        : [...get().allowances, a],
+    });
+  },
+
+  deleteAllowance: async (id) => {
+    await idb().allowances.delete(id);
+    set({ allowances: get().allowances.filter((x) => x.id !== id) });
   },
 
   replaceAll: async (snap) => {
@@ -536,30 +764,15 @@ export const useApp = create<AppState>((set, get) => ({
 
   resetSample: async () => {
     await seedDb();
+    await postDuePlanned();
+    await syncRegularSchedules();
     const data = await loadAll();
     set({ ...data, ready: true });
   },
 
   clearAll: async () => {
-    await idb().transaction("rw", idb().tables, async () => {
-      await Promise.all(idb().tables.map((t) => t.clear()));
-    });
-    set({
-      accounts: [],
-      categories: [],
-      transactions: [],
-      recurring: [],
-      budgets: [],
-      trips: [],
-      goals: [],
-      mortgage: null,
-      retirement: null,
-      allowances: [],
-      oneOffs: [],
-      fxRates: seedFx,
-      snapshots: [],
-      annualTravelBudget: seedTravelBudget,
-      ready: true,
-    });
+    await seedSkeleton();
+    const data = await loadAll();
+    set({ ...data, ready: true });
   },
 }));

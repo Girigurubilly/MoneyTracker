@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { cashflowSide, applyDeltas, balanceDeltas } from "./ledger.ts";
-import { toHkd } from "./fx.ts";
+import { toHkd, parseFrankfurter, parseEurCross, mergeRates } from "./fx.ts";
 import { monthlyPayment, remainingInterest, effectiveRate, amortize, monthsUntil, endMonthFromRemaining, nextPaymentIso, remainingPayments, paymentDayOf } from "./mortgage.ts";
-import { tripProgress, travelSpendYtd, tripCashSpent, isTripActive } from "./trips.ts";
+import { tripProgress, travelSpendYtd, tripCashSpent, isTripActive, isTripExpired } from "./trips.ts";
 import { monthFlow, spentInMonth, dailySpendable, budgetActuals, reservedRegulars, projectedNonRegular, livingEssentials, upcomingExpenseRegulars, forecastTone } from "./budget.ts";
 import { runRetirement, savingsLast12Months } from "./retirement.ts";
 import { MONTH_TOTAL_BUDGET_ID } from "../types.ts";
@@ -366,8 +366,12 @@ test("trip spend and active window", () => {
     monthlyMiles: 0,
   };
   assert.equal(isTripActive(trip, "2026-08-24"), true);
-  assert.equal(isTripActive({ ...trip, status: "completed" }, "2026-08-24"), false);
-  assert.equal(isTripActive({ ...trip, end: "2026-08-01" }, "2026-08-24"), false);
+  assert.equal(isTripActive({ ...trip, status: "cancelled" }, "2026-08-24"), false);
+  assert.equal(isTripActive({ ...trip, end: "2026-08-01" }, "2026-08-24"), true);
+  assert.equal(isTripExpired({ ...trip, end: "2026-08-01" }, "2026-08-24"), false);
+  assert.equal(isTripExpired({ ...trip, end: "2025-07-01" }, "2026-08-24"), true);
+  assert.equal(isTripExpired({ ...trip, status: "cancelled" }, "2026-08-24"), true);
+  assert.equal(isTripActive({ ...trip, end: "2025-08-01" }, "2026-08-24"), false);
   const txs: Transaction[] = [
     { id: "1", type: "expense", amount: 3000, currency: "HKD", accountId: "a", date: "2026-08-02", payee: "x", payeeZh: "x", tripId: "t1" },
     { id: "2", type: "expense", amount: 500, currency: "USD", accountId: "a", date: "2026-08-03", payee: "y", payeeZh: "y", tripId: "t1" },
@@ -390,3 +394,85 @@ test("last 12 months saving averages income minus expense", () => {
   assert.equal(s.expense, 3000);
   assert.equal(s.monthly, (12000 - 3000) / 12);
 });
+
+test("planned transactions do not change balances or cashflow", () => {
+  const accounts: Account[] = [
+    { id: "a", name: "A", nameZh: "A", type: "current", currency: "HKD", balance: 1000, includeInNetWorth: true, group: "cash" },
+  ];
+  const tx: Transaction = {
+    id: "p",
+    type: "expense",
+    amount: 200,
+    currency: "HKD",
+    accountId: "a",
+    date: "2026-09-01",
+    payee: "future",
+    payeeZh: "未來",
+    planned: true,
+  };
+  assert.equal(cashflowSide(tx), "none");
+  assert.deepEqual(balanceDeltas(tx), []);
+  const next = applyDeltas(accounts, balanceDeltas(tx));
+  assert.equal(next[0].balance, 1000);
+  const posted = applyDeltas(accounts, balanceDeltas({ ...tx, planned: false }));
+  assert.equal(posted[0].balance, 800);
+});
+
+test("travel YTD converts foreign currency and skips planned", () => {
+  const txs: Transaction[] = [
+    { id: "1", type: "expense", amount: 100, currency: "USD", accountId: "a", categoryId: "flights", date: "2026-03-01", payee: "f", payeeZh: "f" },
+    { id: "2", type: "expense", amount: 50, currency: "USD", accountId: "a", categoryId: "flights", date: "2026-03-02", payee: "p", payeeZh: "p", planned: true },
+    { id: "3", type: "expense", amount: 20, currency: "HKD", accountId: "a", date: "2026-03-03", payee: "t", payeeZh: "t", tripId: "t1" },
+  ];
+  assert.equal(travelSpendYtd(txs, 2026, new Set(["flights"]), rates), 100 * 7.8 + 20);
+});
+
+test("annuity with end age stops after that age", () => {
+  const inputs = {
+    currentAge: 64,
+    retireAge: 65,
+    deathAge: 90,
+    monthlyIncomeNow: 0,
+    monthlySpendNow: 0,
+    targetMonthly: 10000,
+    preReturn: 0.02,
+    postReturn: 0.02,
+    inflation: 0.02,
+    travelInRetirement: 0,
+  };
+  const ctx = {
+    investableNow: 2_000_000,
+    mortgageMonthly: 0,
+    mortgagePayoffAge: 50,
+    housingAfterPayoff: 0,
+    oneOffs: [],
+  };
+  const limited = runRetirement(inputs, {
+    ...ctx,
+    allowances: [
+      { id: "ann", label: "A", labelZh: "A", monthly: 5000, startAge: 65, endAge: 70, inflationAdjusted: false, kind: "annuity" },
+    ],
+  });
+  const lifetime = runRetirement(inputs, {
+    ...ctx,
+    allowances: [
+      { id: "ann", label: "A", labelZh: "A", monthly: 5000, startAge: 65, inflationAdjusted: false, kind: "annuity" },
+    ],
+  });
+  assert.ok(lifetime.requiredCorpus < limited.requiredCorpus);
+});
+
+test("FX from-HKD quotes invert to HKD per unit", () => {
+  const rows = parseFrankfurter({ date: "2026-08-26", rates: { USD: 0.1282 } });
+  const usd = rows.find((r) => r.currency === "USD");
+  assert.ok(usd && Math.abs(usd.perHkd - 1 / 0.1282) < 1e-9);
+  const cross = parseEurCross({ date: "2026-08-26", rates: { HKD: 9.16, USD: 1.17 } });
+  const usd2 = cross.find((r) => r.currency === "USD");
+  assert.ok(usd2 && Math.abs(usd2.perHkd - 9.16 / 1.17) < 1e-9);
+  const merged = mergeRates(
+    [{ currency: "TWD", perHkd: 0.244, asOf: "2026-01-01", source: "old" }],
+    rows,
+  );
+  assert.equal(merged.find((r) => r.currency === "TWD")?.perHkd, 0.244);
+});
+

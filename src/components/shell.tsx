@@ -160,20 +160,24 @@ function InfoDialog() {
   const setInfoKey = useUi((s) => s.setInfoKey);
   const copy: Record<string, { en: string; zh: string }> = {
     daily: {
-      en: "Remaining spendable = spending cap − spending so far − monthly regulars not yet charged. Daily spendable divides that by remaining calendar days this month, including today. Guidance only — not a cash-balance guarantee.",
-      zh: "剩餘可動用 = 開支上限 − 本月已花費 − 尚未扣帳的每月定期。每日可花費把該金額除以本月剩餘日數（含今天）。僅供參考，並非現金結餘保證。",
+      en: "Remaining budget = spending cap − spending so far − monthly regulars not yet charged − this-month planned items. Daily spendable divides that by remaining calendar days this month, including today. Guidance only — not a cash-balance guarantee.",
+      zh: "剩餘預算 = 開支上限 − 本月已花費 − 尚未扣帳的每月定期 − 本月臨時預定。每日可花費把該金額除以本月剩餘日數（含今天）。僅供參考，並非現金結餘保證。",
+    },
+    disc: {
+      en: "Projected remaining spend this month = uncharged monthly regulars + this-month planned items + paced leftover non-regular spend. It is expected outflow still ahead, not leftover budget.",
+      zh: "預計本月尚餘開支 = 尚未扣帳的每月定期 + 本月臨時預定 + 按其速度推算的其餘非定期。這是本月仍預計會花的金額，不是剩餘預算。",
     },
     mortgage: {
       en: "Constant-rate amortisation using the current effective rate. Remaining payments include this month when the charged day has not yet arrived. End date is the last payment day. Not a lender quote.",
       zh: "以現行實際利率作固定利率攤還。若本月扣帳日尚未到，攤還表仍會列出本期供款。完結日為最後一期扣帳日。並非銀行報價。",
     },
     retirement: {
-      en: "Pre-retirement saving uses the last 12 months’ average (income − expense). Target monthly is the retirement spend that saving rate can support in today’s HKD. Property is excluded from spendable capital by default.",
-      zh: "退休前儲蓄取近 12 個月收入減開支的月均。目標每月是按此儲蓄推算至退休後可持續的每月開支（今日港元）。物業預設不計入可動用退休資金。",
+      en: "Current monthly income and spend are averages of the last 12 months. After retirement there is no salary. Spending uses the monthly amount you enter. Extra monthly saving is what you still need to set aside before retirement so that spend lasts, including 生果金 and annuities.",
+      zh: "現時每月收入與開支取近 12 個月平均。退休後不再有薪金。開支按你輸入的每月金額推算。額外每月儲蓄是退休前還要多儲的金額，才夠用到預期終年，並已計入生果金及年金。",
     },
     trip: {
-      en: "A trip is a date range. Spent is the sum of expenses linked to that trip. Budget used is spent ÷ cash budget. Link an expense from its detail screen or when adding it.",
-      zh: "旅程是一段日期。已花費是連結到該旅程的支出總和。預算已用 = 已花費 ÷ 現金預算。可在新增支出或支出詳情把紀錄連結到進行中的旅程。",
+      en: "Annual travel is travel-category and trip-linked spending this year ÷ the annual travel budget you set. A trip stays available for 1 year after it ends so later expenses can still be linked. Expired trips can be removed; linked expenses stay on the ledger.",
+      zh: "全年旅遊 = 本年旅遊分類及已連結旅程的開支 ÷ 你設定的全年旅遊預算。旅程結束後仍可使用一年。已過期的旅程可以移除，已連結的開支會保留。",
     },
     cap: {
       en: "Remaining = cap − spending so far − monthly regulars whose charged day has not yet arrived. Forecast used also adds projected remaining non-regular spend: (spending − realized regulars) ÷ day of month × remaining days after today. The ring is green if forecast used is within the cap, amber if over by up to 10%, red if over by more.",

@@ -1,6 +1,6 @@
-import type { FxRate, Transaction, Trip } from "@/lib/types";
-import { toHkd } from "./fx";
-import { cashflowSide } from "./ledger";
+import type { FxRate, Transaction, Trip } from "../types.ts";
+import { toHkd } from "./fx.ts";
+import { cashflowSide } from "./ledger.ts";
 
 export type TripProgress = {
   cashLeft: number;
@@ -20,11 +20,27 @@ export function monthsBetween(fromISO: string, toISO: string): number {
   return (ty - fy) * 12 + (tm - fm);
 }
 
-export function isTripActive(trip: Trip, todayISO: string): boolean {
-  if (trip.status === "cancelled" || trip.status === "completed") return false;
-  const end = trip.end || trip.start;
-  return end >= todayISO;
+export function addYearsIso(iso: string, years: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y + years, m - 1, d);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
 }
+
+/** A trip stays pickable for 1 year after its end (or start) date. Cancelled trips are inactive. */
+export function tripValidUntil(trip: Trip): string {
+  return addYearsIso(trip.end || trip.start, 1);
+}
+
+/** True when the 1-year post-trip window has ended, or the trip was cancelled. */
+export function isTripExpired(trip: Trip, todayISO: string): boolean {
+  if (trip.status === "cancelled") return true;
+  return tripValidUntil(trip) < todayISO;
+}
+
+export function isTripActive(trip: Trip, todayISO: string): boolean {
+  return !isTripExpired(trip, todayISO);
+}
+
 
 export function activeTrips(trips: Trip[], todayISO: string, keepId?: string): Trip[] {
   return trips
@@ -83,6 +99,7 @@ export function travelSpendYtd(
   txs: Transaction[],
   year: number,
   travelCategoryIds: Set<string>,
+  rates: FxRate[] = [],
 ): number {
   const prefix = `${year}-`;
   let sum = 0;
@@ -95,7 +112,7 @@ export function travelSpendYtd(
     if (!travelCat && !linked) continue;
     if (seen.has(tx.id)) continue;
     seen.add(tx.id);
-    sum += Math.abs(tx.amount);
+    sum += Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
   }
   return sum;
 }

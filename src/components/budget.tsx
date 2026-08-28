@@ -8,12 +8,11 @@ import {
   budgetActuals,
   chargedDayOf,
   dailySpendable,
-  monthlyExpenseRegulars,
 } from "@/lib/calc/budget";
 import { travelSpendYtd } from "@/lib/calc/trips";
-import { monthKey } from "@/lib/calc/ledger";
+import { inMonth, monthKey } from "@/lib/calc/ledger";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
-import type { Recurring } from "@/lib/types";
+import type { Recurring, Transaction, TxType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -50,7 +49,7 @@ export function BudgetScreen() {
   const forecastDailyGap = forecastRemain / daysLeft;
   const categoryActuals = actuals.filter((b) => b.id !== MONTH_TOTAL_BUDGET_ID);
   const travelIds = new Set(categories.filter((c) => c.theme === "travel").map((c) => c.id));
-  const spent = travelSpendYtd(txs, Number(month.slice(0, 4)), travelIds);
+  const spent = travelSpendYtd(txs, Number(month.slice(0, 4)), travelIds, rates);
   const travelPct = annual > 0 ? spent / annual : 0;
   const [editId, setEditId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -64,6 +63,8 @@ export function BudgetScreen() {
   const [addName, setAddName] = useState("");
   const [regOpen, setRegOpen] = useState(false);
   const [editingReg, setEditingReg] = useState<Recurring | null>(null);
+  const [adhocOpen, setAdhocOpen] = useState(false);
+  const [editingAdhoc, setEditingAdhoc] = useState<Transaction | null>(null);
   const editing = categoryActuals.find((b) => b.id === editId);
   const usedCatIds = new Set(budgets.map((b) => b.categoryId).filter(Boolean));
   const freeCats = categories.filter((c) => c.kind === "expense" && !usedCatIds.has(c.id));
@@ -120,6 +121,11 @@ export function BudgetScreen() {
           <span>
             {t.today.reservedRegulars}: {money(reserved, "HKD")}
           </span>
+          {(storedTotal?.adhoc ?? 0) > 0 ? (
+            <span>
+              {t.budget.adhoc}: {money(storedTotal?.adhoc ?? 0, "HKD")}
+            </span>
+          ) : null}
           {projected > 0 ? (
             <span className="col-span-2">
               {t.budget.projected}: {money(projected, "HKD")}
@@ -153,6 +159,17 @@ export function BudgetScreen() {
           setRegOpen(true);
         }}
         onDelete={(id) => void deleteRecurring(id)}
+      />
+      <AdhocBlock
+        month={month}
+        onAdd={() => {
+          setEditingAdhoc(null);
+          setAdhocOpen(true);
+        }}
+        onEdit={(tx) => {
+          setEditingAdhoc(tx);
+          setAdhocOpen(true);
+        }}
       />
 
       <div className="mx-4 mt-3 rounded-xl bg-elevated px-4 py-4">
@@ -398,6 +415,15 @@ export function BudgetScreen() {
             : undefined
         }
       />
+      <AdhocEditor
+        open={adhocOpen}
+        initial={editingAdhoc}
+        month={month}
+        onClose={() => {
+          setAdhocOpen(false);
+          setEditingAdhoc(null);
+        }}
+      />
     </div>
   );
 }
@@ -445,15 +471,17 @@ function RegularsBlock({
   const t = useT();
   const locale = useUi((s) => s.locale);
   const recurring = useApp((s) => s.recurring);
+  const txs = useApp((s) => s.transactions);
   const today = Number(todayISO().slice(8, 10));
-  const rows = [...monthlyExpenseRegulars(recurring)].sort(
-    (a, b) => chargedDayOf(a) - chargedDayOf(b) || a.label.localeCompare(b.label),
-  );
+  const rows = recurring
+    .filter((r) => r.frequency === "monthly" && r.type !== "miles")
+    .sort((a, b) => chargedDayOf(a) - chargedDayOf(b) || a.label.localeCompare(b.label));
+  const month = todayISO().slice(0, 7);
 
   return (
     <div className="pt-4">
       <div className="flex items-center justify-between px-5 pb-1">
-        <h2 className="text-sm font-medium text-muted">{t.budget.regulars}</h2>
+        <h2 className="text-sm font-medium text-muted">{t.budget.monthlyRegulars}</h2>
         <button type="button" onClick={onAdd} className="text-sm font-medium text-accent">
           {t.budget.addRegular}
         </button>
@@ -466,6 +494,7 @@ function RegularsBlock({
           {rows.map((r) => {
             const day = chargedDayOf(r);
             const charged = day <= today;
+            const linked = txs.find((tx) => tx.recurringId === r.id && tx.date.startsWith(month));
             return (
               <button
                 key={r.id}
@@ -479,6 +508,16 @@ function RegularsBlock({
                     <span className="tabular-nums">{money(r.amount, r.currency)}</span>
                     <span>·</span>
                     <span>{locale === "zh-HK" ? `${day}日` : `day ${day}`}</span>
+                    <span>·</span>
+                    <span>
+                      {r.type === "income" ? t.add.income : r.type === "transfer" ? t.add.transfer : t.add.expense}
+                    </span>
+                    {linked?.planned ? (
+                      <>
+                        <span>·</span>
+                        <span className="text-accent">{t.add.scheduled}</span>
+                      </>
+                    ) : null}
                     {r.living ? (
                       <>
                         <span>·</span>
@@ -499,6 +538,65 @@ function RegularsBlock({
               </button>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdhocBlock({
+  month,
+  onAdd,
+  onEdit,
+}: {
+  month: string;
+  onAdd: () => void;
+  onEdit: (tx: Transaction) => void;
+}) {
+  const t = useT();
+  const locale = useUi((s) => s.locale);
+  const txs = useApp((s) => s.transactions);
+  const rows = txs
+    .filter((tx) => tx.planned && !tx.recurringId && inMonth(tx.date, month) && tx.type !== "miles")
+    .sort((a, b) => a.date.localeCompare(b.date) || a.payee.localeCompare(b.payee));
+
+  return (
+    <div className="pt-4">
+      <div className="flex items-center justify-between px-5 pb-1">
+        <h2 className="text-sm font-medium text-muted">{t.budget.adhoc}</h2>
+        <button type="button" onClick={onAdd} className="text-sm font-medium text-accent">
+          {t.budget.addAdhoc}
+        </button>
+      </div>
+      <p className="px-5 pb-2 text-xs text-faint">{t.budget.adhocHint}</p>
+      {rows.length === 0 ? (
+        <p className="px-5 py-4 text-sm text-muted">{t.budget.addAdhoc}</p>
+      ) : (
+        <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
+          {rows.map((tx) => (
+            <button
+              key={tx.id}
+              type="button"
+              className="flex w-full items-center gap-3 border-t border-line px-4 py-3 text-left first:border-0"
+              onClick={() => onEdit(tx)}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[15px] font-medium">{pickName(locale, tx.payee, tx.payeeZh)}</div>
+                <div className="mt-0.5 text-xs text-muted">
+                  {tx.date.slice(8)} · {tx.type === "income" ? t.add.income : tx.type === "transfer" ? t.add.transfer : t.add.expense}
+                </div>
+              </div>
+              <span
+                className={cn(
+                  "text-[15px] font-semibold tabular-nums",
+                  tx.type === "income" ? "text-income" : "text-foreground",
+                )}
+              >
+                {money(tx.type === "expense" ? -tx.amount : tx.amount, tx.currency, { sign: true })}
+              </span>
+              <ChevronRight className="size-4 shrink-0 text-faint" />
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -542,15 +640,31 @@ function RegularEditorBody({
   const accounts = useApp((s) => s.accounts);
   const categories = useApp((s) => s.categories);
   const moneyAccounts = accounts.filter((a) => a.currency !== "MILES" && !a.hidden);
+  const [kind, setKind] = useState<TxType>(initial?.type ?? "expense");
   const [name, setName] = useState(initial ? pickName(locale, initial.label, initial.labelZh) : "");
   const [amount, setAmount] = useState(initial ? String(initial.amount) : "");
   const [day, setDay] = useState(String(initial ? chargedDayOf(initial) : 1));
   const [accountId, setAccountId] = useState(initial?.accountId ?? moneyAccounts[0]?.id ?? "");
+  const [toAccountId, setToAccountId] = useState(
+    initial?.toAccountId ?? moneyAccounts.find((a) => a.id !== (initial?.accountId ?? moneyAccounts[0]?.id))?.id ?? "",
+  );
   const [categoryId, setCategoryId] = useState(initial?.categoryId ?? "");
   const [living, setLiving] = useState(Boolean(initial?.living));
 
   return (
     <div className="px-5 pb-8">
+      <label className="block py-2">
+        <span className="text-xs text-muted">{t.more.kind}</span>
+        <select
+          value={kind}
+          onChange={(e) => setKind(e.target.value as TxType)}
+          className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none"
+        >
+          <option value="expense">{t.add.expense}</option>
+          <option value="income">{t.add.income}</option>
+          <option value="transfer">{t.add.transfer}</option>
+        </select>
+      </label>
       <label className="block py-2">
         <span className="text-xs text-muted">{t.budget.regularName}</span>
         <input
@@ -591,28 +705,49 @@ function RegularEditorBody({
           ))}
         </select>
       </label>
-      <label className="block py-2">
-        <span className="text-xs text-muted">{t.budget.pickCategory}</span>
-        <select
-          value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
-          className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none"
+      {kind === "transfer" ? (
+        <label className="block py-2">
+          <span className="text-xs text-muted">{t.add.to}</span>
+          <select
+            value={toAccountId}
+            onChange={(e) => setToAccountId(e.target.value)}
+            className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none"
+          >
+            {moneyAccounts
+              .filter((a) => a.id !== accountId)
+              .map((a) => (
+                <option key={a.id} value={a.id}>
+                  {pickName(locale, a.name, a.nameZh)}
+                </option>
+              ))}
+          </select>
+        </label>
+      ) : null}
+      {kind !== "transfer" ? (
+        <label className="block py-2">
+          <span className="text-xs text-muted">{t.budget.pickCategory}</span>
+          <select
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+            className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none"
+          >
+            <option value="">{t.common.none}</option>
+            {categories
+              .filter((c) => (kind === "income" ? c.kind === "income" : c.kind === "expense"))
+              .map((c) => (
+                <option key={c.id} value={c.id}>
+                  {pickName(locale, c.name, c.nameZh)}
+                </option>
+              ))}
+          </select>
+        </label>
+      ) : null}
+      {kind === "expense" ? (
+        <button
+          type="button"
+          onClick={() => setLiving((v) => !v)}
+          className="mt-2 flex w-full items-start gap-3 rounded-xl bg-elevated px-3 py-3 text-left"
         >
-          <option value="">{t.common.none}</option>
-          {categories
-            .filter((c) => c.kind === "expense")
-            .map((c) => (
-              <option key={c.id} value={c.id}>
-                {pickName(locale, c.name, c.nameZh)}
-              </option>
-            ))}
-        </select>
-      </label>
-      <button
-        type="button"
-        onClick={() => setLiving((v) => !v)}
-        className="mt-2 flex w-full items-start gap-3 rounded-xl bg-elevated px-3 py-3 text-left"
-      >
         <span
           className={cn(
             "mt-0.5 grid size-5 shrink-0 place-items-center rounded border",
@@ -627,6 +762,7 @@ function RegularEditorBody({
           <span className="mt-0.5 block text-xs text-muted">{t.budget.livingRegularHint}</span>
         </span>
       </button>
+      ) : null}
       <button
         type="button"
         className="mt-4 h-12 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent"
@@ -636,18 +772,19 @@ function RegularEditorBody({
           const charged = Math.min(28, Math.max(1, Number(day) || 1));
           await onSave({
             id: initial?.id ?? `r-${newId().slice(0, 8)}`,
-            type: "expense",
+            type: kind,
             label: n,
             labelZh: n,
             amount: Number(amount) || 0,
             currency: "HKD",
             accountId,
-            categoryId: categoryId || undefined,
+            toAccountId: kind === "transfer" ? toAccountId || undefined : undefined,
+            categoryId: kind === "transfer" ? undefined : categoryId || undefined,
             frequency: "monthly",
             nextDate: nextDateForDay(charged),
             chargedDay: charged,
-            essential: true,
-            living,
+            essential: kind === "expense",
+            living: kind === "expense" ? living : false,
           });
         }}
       >
@@ -658,6 +795,196 @@ function RegularEditorBody({
           type="button"
           className="mt-3 h-12 w-full rounded-xl text-sm font-medium text-expense"
           onClick={() => void onDelete()}
+        >
+          {t.tx.delete}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function AdhocEditor({
+  open,
+  initial,
+  month,
+  onClose,
+}: {
+  open: boolean;
+  initial: Transaction | null;
+  month: string;
+  onClose: () => void;
+}) {
+  const t = useT();
+  return (
+    <Overlay open={open} onClose={onClose} title={initial ? t.common.edit : t.budget.addAdhoc} variant="page">
+      {open ? (
+        <AdhocEditorBody key={initial?.id ?? "new"} initial={initial} month={month} onClose={onClose} />
+      ) : null}
+    </Overlay>
+  );
+}
+
+function AdhocEditorBody({
+  initial,
+  month,
+  onClose,
+}: {
+  initial: Transaction | null;
+  month: string;
+  onClose: () => void;
+}) {
+  const t = useT();
+  const locale = useUi((s) => s.locale);
+  const accounts = useApp((s) => s.accounts);
+  const categories = useApp((s) => s.categories);
+  const addTransaction = useApp((s) => s.addTransaction);
+  const updateTransaction = useApp((s) => s.updateTransaction);
+  const deleteTransaction = useApp((s) => s.deleteTransaction);
+  const moneyAccounts = accounts.filter((a) => a.currency !== "MILES" && !a.hidden);
+  const [kind, setKind] = useState<TxType>(initial?.type ?? "expense");
+  const [name, setName] = useState(initial ? pickName(locale, initial.payee, initial.payeeZh) : "");
+  const [amount, setAmount] = useState(initial ? String(initial.amount) : "");
+  const [date, setDate] = useState(initial?.date ?? `${month}-28`);
+  const [accountId, setAccountId] = useState(initial?.accountId ?? moneyAccounts[0]?.id ?? "");
+  const [toAccountId, setToAccountId] = useState(
+    initial?.toAccountId ?? moneyAccounts.find((a) => a.id !== (initial?.accountId ?? moneyAccounts[0]?.id))?.id ?? "",
+  );
+  const [categoryId, setCategoryId] = useState(initial?.categoryId ?? "");
+  const today = todayISO();
+
+  return (
+    <div className="px-5 pb-8">
+      <p className="text-xs text-muted">{t.budget.adhocHint}</p>
+      <label className="block py-2">
+        <span className="text-xs text-muted">{t.more.kind}</span>
+        <select
+          value={kind}
+          onChange={(e) => setKind(e.target.value as TxType)}
+          className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none"
+        >
+          <option value="expense">{t.add.expense}</option>
+          <option value="income">{t.add.income}</option>
+          <option value="transfer">{t.add.transfer}</option>
+        </select>
+      </label>
+      <label className="block py-2">
+        <span className="text-xs text-muted">{t.budget.regularName}</span>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none"
+        />
+      </label>
+      <label className="block py-2">
+        <span className="text-xs text-muted">{t.add.amount}</span>
+        <input
+          inputMode="decimal"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none"
+        />
+      </label>
+      <label className="block py-2">
+        <span className="text-xs text-muted">{t.add.date}</span>
+        <input
+          type="date"
+          value={date}
+          min={`${month}-01`}
+          max={`${month}-31`}
+          onChange={(e) => setDate(e.target.value)}
+          className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none"
+        />
+      </label>
+      <label className="block py-2">
+        <span className="text-xs text-muted">{kind === "transfer" ? t.add.from : t.add.account}</span>
+        <select
+          value={accountId}
+          onChange={(e) => setAccountId(e.target.value)}
+          className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none"
+        >
+          {moneyAccounts.map((a) => (
+            <option key={a.id} value={a.id}>
+              {pickName(locale, a.name, a.nameZh)}
+            </option>
+          ))}
+        </select>
+      </label>
+      {kind === "transfer" ? (
+        <label className="block py-2">
+          <span className="text-xs text-muted">{t.add.to}</span>
+          <select
+            value={toAccountId}
+            onChange={(e) => setToAccountId(e.target.value)}
+            className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none"
+          >
+            {moneyAccounts
+              .filter((a) => a.id !== accountId)
+              .map((a) => (
+                <option key={a.id} value={a.id}>
+                  {pickName(locale, a.name, a.nameZh)}
+                </option>
+              ))}
+          </select>
+        </label>
+      ) : (
+        <label className="block py-2">
+          <span className="text-xs text-muted">{t.budget.pickCategory}</span>
+          <select
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+            className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none"
+          >
+            <option value="">{t.common.none}</option>
+            {categories
+              .filter((c) => (kind === "income" ? c.kind === "income" : c.kind === "expense"))
+              .map((c) => (
+                <option key={c.id} value={c.id}>
+                  {pickName(locale, c.name, c.nameZh)}
+                </option>
+              ))}
+          </select>
+        </label>
+      )}
+      <button
+        type="button"
+        className="mt-4 h-12 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent"
+        onClick={async () => {
+          const n = name.trim();
+          const amt = Number(amount) || 0;
+          if (!n || !accountId || amt <= 0) return;
+          const iso = date.startsWith(month) ? date : `${month}-28`;
+          const planned = iso > today;
+          const acc = moneyAccounts.find((a) => a.id === accountId);
+          const tx: Transaction = {
+            id: initial?.id ?? newId(),
+            type: kind,
+            amount: amt,
+            currency: acc?.currency === "MILES" ? "HKD" : (acc?.currency ?? "HKD"),
+            accountId,
+            toAccountId: kind === "transfer" ? toAccountId : undefined,
+            destAmount: kind === "transfer" ? amt : undefined,
+            categoryId: kind === "transfer" ? undefined : categoryId || undefined,
+            date: iso,
+            payee: n,
+            payeeZh: n,
+            planned,
+          };
+          if (initial) await updateTransaction(tx, initial);
+          else await addTransaction(tx);
+          toast(t.add.savedToast);
+          onClose();
+        }}
+      >
+        {t.add.save}
+      </button>
+      {initial ? (
+        <button
+          type="button"
+          className="mt-3 h-12 w-full rounded-xl text-sm font-medium text-expense"
+          onClick={async () => {
+            await deleteTransaction(initial.id);
+            onClose();
+          }}
         >
           {t.tx.delete}
         </button>

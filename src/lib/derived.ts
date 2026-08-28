@@ -128,19 +128,33 @@ export function forecastFromRecurring(
   fromMonth: string,
   n: number,
   locale: Locale,
+  txs: Transaction[] = [],
+  rates: FxRate[] = [],
 ): { month: string; inflow: number; outflow: number }[] {
   return monthKeysForward(fromMonth, n).map((key) => {
     let inflow = 0;
     let outflow = 0;
+    const counted = new Set<string>();
+    for (const tx of txs) {
+      if (!inMonth(tx.date, key)) continue;
+      if (tx.type === "transfer" || tx.type === "miles") continue;
+      const hkd = Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
+      if (tx.type === "income") inflow += hkd;
+      else if (tx.type === "expense") outflow += hkd;
+      if (tx.recurringId) counted.add(tx.recurringId);
+    }
     for (const r of recurring) {
+      if (counted.has(r.id)) continue;
       const amt = amountInMonth(r, key);
       if (!amt) continue;
-      if (r.type === "income") inflow += amt;
-      else if (r.type === "expense") outflow += amt;
+      const hkd = Math.abs(toHkd(amt, r.currency, rates));
+      if (r.type === "income") inflow += hkd;
+      else if (r.type === "expense") outflow += hkd;
     }
     return { month: monthLabel(key, locale), inflow, outflow };
   });
 }
+
 
 export function rangeFlow(
   txs: Transaction[],
@@ -267,13 +281,9 @@ export function monthStats(
   const actuals = budgetActuals(budgets, txs, month, rates, categories, recurring, asOf);
   const total = actuals.find((b) => !b.categoryId && !b.theme && b.monthly > 0);
   const remainingBudget = total ? total.remaining : actuals.reduce((s, b) => s + b.remaining, 0);
-  const essential = new Set(categories.filter((c) => c.essential).map((c) => c.id));
-  const remainingDisc = total
-    ? total.remaining
-    : actuals
-        .filter((b) => !b.categoryId || !essential.has(b.categoryId))
-        .reduce((s, b) => s + b.remaining, 0);
-  const daily = dailySpendable(remainingDisc, asOf);
+  const remainingDisc =
+    (total?.reserved ?? 0) + (total?.adhoc ?? 0) + (total?.projected ?? 0);
+  const daily = dailySpendable(remainingBudget, asOf);
   return { month, flow, actuals, remainingBudget, remainingDisc, daily };
 }
 

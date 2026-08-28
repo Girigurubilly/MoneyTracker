@@ -31,7 +31,6 @@ import { pickName } from "@/lib/i18n";
 import { decryptSnapshot, downloadBlob, encryptSnapshot, parseCsv } from "@/lib/backup";
 import { transactionsToCsv } from "@/lib/derived";
 import { convertBtp, isAppSnapshot, isBtpFile } from "@/lib/import-btp";
-import { publicUrl } from "@/lib/public-url";
 import { cn } from "@/lib/utils";
 import { useApp, newId, type AppSnapshot } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -505,25 +504,18 @@ export function ImportPage() {
   const jsonRef = useRef<HTMLInputElement>(null);
   const [rows, setRows] = useState<string[][]>([]);
   const [busy, setBusy] = useState(false);
-  const [confirm, setConfirm] = useState<null | "bundled" | File>(null);
+  const [confirm, setConfirm] = useState<null | File>(null);
 
   function parseFile(text: string) {
     const parsed = parseCsv(text);
     setRows(parsed.slice(0, 51));
   }
 
-  async function applyJson(source: "bundled" | File) {
+  async function applyJson(source: File) {
     setBusy(true);
     const toastId = toast.loading(t.import.replacing);
     try {
-      let data: unknown;
-      if (source === "bundled") {
-        const res = await fetch(publicUrl("imports/budget-tracker-pro.json"));
-        if (!res.ok) throw new Error("fetch");
-        data = await res.json();
-      } else {
-        data = JSON.parse(await source.text());
-      }
+      const data: unknown = JSON.parse(await source.text());
       let snap: AppSnapshot;
       if (isBtpFile(data)) snap = convertBtp(data);
       else if (isAppSnapshot(data)) snap = data;
@@ -543,21 +535,6 @@ export function ImportPage() {
       <ScreenHeader title={t.import.title} backTo="/more" />
       <p className="px-5 text-sm text-muted">{t.import.btpHint}</p>
       <Group>
-        <button
-          type="button"
-          disabled={busy}
-          className="flex w-full items-center gap-3 px-5 py-3 text-left disabled:opacity-60"
-          onClick={() => setConfirm("bundled")}
-        >
-          <span className="grid size-9 place-items-center rounded-[10px] bg-background">
-            <Archive className="size-4" />
-          </span>
-          <span>
-            <span className="block text-[15px]">{t.import.btp}</span>
-            <span className="text-xs text-muted">budget-tracker-pro.json</span>
-          </span>
-        </button>
-        <Hairline />
         <button
           type="button"
           disabled={busy}

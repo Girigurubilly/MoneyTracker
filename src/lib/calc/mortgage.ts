@@ -1,5 +1,5 @@
-import type { Mortgage } from "@/lib/types";
-import { roundMoney } from "./ledger";
+import type { Mortgage } from "../types.ts";
+import { roundMoney } from "./ledger.ts";
 
 export function effectiveRate(m: Pick<Mortgage, "rateType" | "benchmark" | "adjustment" | "effectiveRate">): number {
   if (m.rateType === "fixed") return m.effectiveRate;

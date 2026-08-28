@@ -11,7 +11,7 @@ import {
 import { longDate, money, monthGrid, monthTitle, shiftMonth, todayISO, weekdayLabels } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { Link } from "@tanstack/react-router";
-import { activityDates, monthStats } from "@/lib/derived";
+import { activityDates, plannedIso, monthStats } from "@/lib/derived";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
 import { asOfForMonth, chargedDayOf, forecastTone, upcomingExpenseRegulars } from "@/lib/calc/budget";
 import { cn } from "@/lib/utils";
@@ -143,9 +143,13 @@ function TodayBody() {
   const paid = transactions
     .filter((x) => x.date === selected && !x.planned && x.type !== "miles")
     .sort((a, b) => b.id.localeCompare(a.id));
+  const scheduled = transactions
+    .filter((x) => x.date === selected && x.planned && x.type !== "miles")
+    .sort((a, b) => b.id.localeCompare(a.id));
   const upcoming = upcomingExpenseRegulars(recurring, asOf);
   const cells = monthGrid(selected, firstDay);
   const active = activityDates(transactions);
+  const plannedDays = plannedIso(transactions);
   const weekdays = weekdayLabels(locale, firstDay);
 
   return (
@@ -180,6 +184,13 @@ function TodayBody() {
                         c.iso === selected ? "bg-on-accent" : "bg-accent",
                       )}
                     />
+                  ) : plannedDays.has(c.iso) ? (
+                    <span
+                      className={cn(
+                        "absolute bottom-1 size-1.5 rounded-full border",
+                        c.iso === selected ? "border-on-accent" : "border-accent",
+                      )}
+                    />
                   ) : null}
                 </button>
               ) : (
@@ -201,7 +212,15 @@ function TodayBody() {
       </div>
       <div className="mx-4 mb-2 grid grid-cols-3 gap-3 rounded-xl bg-elevated px-4 py-3">
         <Metric label={t.today.remainingBudget} value={money(stats.remainingBudget, "HKD")} />
-        <Metric label={t.today.remainingDisc} value={money(stats.remainingDisc, "HKD")} />
+        <div className="min-w-0">
+          <div className="flex items-center gap-1 text-[11px] text-muted">
+            {t.today.remainingDisc}
+            <InfoButton k="disc" />
+          </div>
+          <div className="mt-1 truncate text-base font-semibold tabular-nums">
+            {money(stats.remainingDisc, "HKD")}
+          </div>
+        </div>
         <div className="min-w-0">
           <div className="flex items-center gap-1 text-[11px] text-muted">
             {t.today.dailySpend}
@@ -267,15 +286,29 @@ function TodayBody() {
       <SectionLabel>{t.today.dayTx}</SectionLabel>
       <Hairline />
       <p className="px-5 pt-2 text-xs text-muted">{longDate(selected, locale)}</p>
-      {paid.length === 0 ? (
+      {paid.length === 0 && scheduled.length === 0 ? (
         <p className="px-5 py-6 text-sm text-muted">{t.today.noTxDay}</p>
       ) : (
-        paid.map((tx, i) => (
-          <div key={tx.id}>
-            {i > 0 ? <Hairline /> : null}
-            <TransactionRow tx={tx} onClick={() => setTx(tx.id)} />
-          </div>
-        ))
+        <>
+          {paid.map((tx, i) => (
+            <div key={tx.id}>
+              {i > 0 ? <Hairline /> : null}
+              <TransactionRow tx={tx} onClick={() => setTx(tx.id)} />
+            </div>
+          ))}
+          {scheduled.length ? (
+            <>
+              <SectionLabel>{t.today.scheduled}</SectionLabel>
+              <Hairline />
+              {scheduled.map((tx, i) => (
+                <div key={tx.id}>
+                  {i > 0 ? <Hairline /> : null}
+                  <TransactionRow tx={tx} onClick={() => setTx(tx.id)} />
+                </div>
+              ))}
+            </>
+          ) : null}
+        </>
       )}
     </div>
   );

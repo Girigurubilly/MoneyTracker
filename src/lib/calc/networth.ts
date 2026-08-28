@@ -1,6 +1,6 @@
-import type { Account, FxRate } from "@/lib/types";
-import { toHkd } from "./fx";
-import { roundMoney } from "./ledger";
+import type { Account, FxRate } from "../types.ts";
+import { toHkd } from "./fx.ts";
+import { roundMoney } from "./ledger.ts";
 
 export function netWorthNow(accounts: Account[], rates: FxRate[]) {
   let assets = 0;

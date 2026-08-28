@@ -204,7 +204,10 @@ export type Transaction = {
   tags?: string[];
   tripId?: string;
   milesType?: "earn" | "burn" | "adjust" | "expiry";
+  /** Future / not-yet-charged: does not change any account balance until the date arrives. */
   planned?: boolean;
+  /** Links a scheduled occurrence to a monthly regular. */
+  recurringId?: string;
   fxToHkd?: number;
 };
 
@@ -322,6 +325,9 @@ export type Allowance = {
   labelZh: string;
   monthly: number;
   startAge: number;
+  /** Inclusive. Omit for lifetime (e.g. 生果金). */
+  endAge?: number;
+  kind?: "oaa" | "annuity" | "other";
   inflationAdjusted: boolean;
 };
 

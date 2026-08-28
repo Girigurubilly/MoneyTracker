@@ -60,6 +60,7 @@ export function TxDetail() {
           <AmountPill type={displayType} amount={tx.amount} currency={tx.currency} />
         </div>
         <Row label={t.add.date} value={longDate(tx.date, locale)} />
+        {tx.planned ? <Row label={t.add.scheduled} value={t.add.scheduledHint} /> : null}
         <Row
           label={t.add.account}
           value={account ? pickName(locale, account.name, account.nameZh) : "—"}

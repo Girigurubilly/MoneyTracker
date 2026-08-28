@@ -6,7 +6,7 @@ import { CategoryPicker } from "@/components/category-picker";
 import { pickName } from "@/lib/i18n";
 import { money, todayISO } from "@/lib/format";
 import { rateToHkd } from "@/lib/calc/fx";
-import { categoryPath } from "@/lib/categories";
+import { categoryPath, isMortgageInterestCategory, isMortgagePrincipalCategory, isMortgageSplitCategory } from "@/lib/categories";
 import { spentInMonth } from "@/lib/calc/budget";
 import { activeTrips } from "@/lib/calc/trips";
 import { ACCOUNT_GROUPS, accountsInGroup, iconForAccountType } from "@/lib/accounts";
@@ -195,6 +195,7 @@ function AddForm({
   const txs = useApp((s) => s.transactions);
   const addTransaction = useApp((s) => s.addTransaction);
   const updateTransaction = useApp((s) => s.updateTransaction);
+  const mortgage = useApp((s) => s.mortgage);
 
   const monetary = kind !== "miles";
   const fromAccounts = accounts.filter((a) => {
@@ -245,6 +246,14 @@ function AddForm({
     editing?.milesType ?? "earn",
   );
   const [pick, setPick] = useState<null | "from" | "to" | "cat" | "trip" | "miles">(null);
+  const [scheduled, setScheduled] = useState(
+    Boolean(editing?.planned) || (editing?.date ?? selectedDate ?? todayISO()) > todayISO(),
+  );
+  const [splitMortgage, setSplitMortgage] = useState(
+    Boolean(!editing && isMortgageSplitCategory(presetCategory, categories)),
+  );
+  const [principalDigits, setPrincipalDigits] = useState("0");
+  const [interestDigits, setInterestDigits] = useState("0");
 
   useEffect(() => {
     setDigits(editing ? String(editing.amount) : "0");
@@ -259,6 +268,11 @@ function AddForm({
     setPayee(editing ? (locale === "zh-HK" ? editing.payeeZh : editing.payee) : "");
     setTripId(editing?.tripId ?? "");
     setMilesType(editing?.milesType ?? "earn");
+    const nextDate = editing?.date ?? selectedDate ?? todayISO();
+    setScheduled(Boolean(editing?.planned) || nextDate > todayISO());
+    setSplitMortgage(Boolean(!editing && isMortgageSplitCategory(presetCategory, categories)));
+    setPrincipalDigits("0");
+    setInterestDigits("0");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing?.id, kind]);
 
@@ -266,6 +280,7 @@ function AddForm({
   const from = accounts.find((a) => a.id === accountId);
   const to = accounts.find((a) => a.id === toAccountId);
   const cat = categories.find((c) => c.id === categoryId);
+  const mortgageSplitCat = kind === "expense" && isMortgageSplitCategory(cat, categories);
   const currency = from?.currency ?? (kind === "miles" ? "MILES" : "HKD");
   const spendMap = useMemo(() => {
     const month = (date || todayISO()).slice(0, 7);
@@ -283,18 +298,36 @@ function AddForm({
 
   function tap(k: string) {
     setDigits((prev) => {
+      let next = prev;
       if (k === "⌫") {
-        const next = prev.slice(0, -1);
-        return next.length ? next : "0";
+        next = prev.slice(0, -1);
+        if (!next.length) next = "0";
+      } else if (k === "." && (prev.includes(".") || !monetary || currency === "JPY")) {
+        return prev;
+      } else if (prev === "0" && k !== ".") {
+        next = k;
+      } else {
+        next = prev + k;
       }
-      if (k === "." && (prev.includes(".") || !monetary || currency === "JPY")) return prev;
-      if (prev === "0" && k !== ".") return k;
-      return prev + k;
+      if (splitMortgage) {
+        const total = Number(next) || 0;
+        const interest = Number(interestDigits) || 0;
+        setPrincipalDigits(String(Math.max(0, Math.round((total - interest) * 100) / 100)));
+      }
+      return next;
     });
   }
 
   async function save() {
-    if (amount <= 0 && milesType !== "adjust") {
+    const planned = scheduled || date > todayISO();
+    const principal = Number(principalDigits) || 0;
+    const interest = Number(interestDigits) || 0;
+    const useSplit = !editing && splitMortgage && mortgageSplitCat && (principal > 0 || interest > 0);
+    if (!useSplit && amount <= 0 && milesType !== "adjust") {
+      toast(t.add.needAmount);
+      return;
+    }
+    if (useSplit && principal + interest <= 0) {
       toast(t.add.needAmount);
       return;
     }
@@ -302,8 +335,54 @@ function AddForm({
       toast(t.add.needAmount);
       return;
     }
+    const fx = currency !== "HKD" && currency !== "MILES" ? rateToHkd(currency, fxRates) : undefined;
     const payeeEn = payee.trim() || cat?.name || t.add.note;
     const payeeZh = payee.trim() || cat?.nameZh || t.add.note;
+
+    if (useSplit) {
+      const mortgageAccId =
+        mortgage?.accountId ?? accounts.find((a) => a.type === "mortgage" && !a.hidden)?.id;
+      if (principal > 0) {
+        await addTransaction({
+          type: mortgageAccId ? "transfer" : "expense",
+          amount: principal,
+          currency,
+          accountId,
+          toAccountId: mortgageAccId,
+          destAmount: mortgageAccId ? principal : undefined,
+          categoryId:
+            categories.find((c) => isMortgagePrincipalCategory(c))?.id ?? "mortgage-p",
+          date,
+          payee: payee.trim() || "Mortgage principal",
+          payeeZh: payee.trim() || "按揭本金",
+          note: payee.trim() || undefined,
+          tripId: tripId || undefined,
+          planned,
+          fxToHkd: fx,
+        });
+      }
+      if (interest > 0) {
+        await addTransaction({
+          type: "expense",
+          amount: interest,
+          currency,
+          accountId,
+          categoryId:
+            categories.find((c) => isMortgageInterestCategory(c))?.id ?? "mortgage-i",
+          date,
+          payee: payee.trim() || "Mortgage interest",
+          payeeZh: payee.trim() || "按揭利息",
+          note: payee.trim() || undefined,
+          tripId: tripId || undefined,
+          planned,
+          fxToHkd: fx,
+        });
+      }
+      toast(t.add.savedToast);
+      close();
+      return;
+    }
+
     let destAmount: number | undefined;
     if (kind === "transfer" && from && to) {
       const fromRate = rateToHkd(from.currency, fxRates);
@@ -325,7 +404,8 @@ function AddForm({
       note: payee.trim() || undefined,
       tripId: tripId || undefined,
       milesType: kind === "miles" ? milesType : undefined,
-      fxToHkd: currency !== "HKD" && currency !== "MILES" ? rateToHkd(currency, fxRates) : undefined,
+      fxToHkd: fx,
+      planned,
     };
     if (editing) await updateTransaction(tx, editing);
     else await addTransaction(tx);
@@ -379,10 +459,97 @@ function AddForm({
         <input
           type="date"
           value={date}
-          onChange={(e) => setDate(e.target.value)}
+          onChange={(e) => {
+            const v = e.target.value;
+            setDate(v);
+            if (v > todayISO()) setScheduled(true);
+            else if (!editing?.planned) setScheduled(false);
+          }}
           className="bg-transparent text-right text-sm outline-none"
         />
       </label>
+      {kind !== "miles" ? (
+        <button
+          type="button"
+          onClick={() => setScheduled((v) => !v)}
+          className="flex w-full items-start gap-3 border-b border-line py-3 text-left"
+        >
+          <span
+            className={cn(
+              "mt-0.5 grid size-5 shrink-0 place-items-center rounded border",
+              scheduled ? "border-accent bg-accent text-on-accent" : "border-line bg-background",
+            )}
+            aria-hidden
+          >
+            {scheduled ? "✓" : ""}
+          </span>
+          <span>
+            <span className="block text-sm font-medium">{t.add.scheduled}</span>
+            <span className="mt-0.5 block text-xs text-muted">{t.add.scheduledHint}</span>
+          </span>
+        </button>
+      ) : null}
+      {kind === "expense" && mortgageSplitCat && !editing ? (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              setSplitMortgage((v) => {
+                const next = !v;
+                if (next) {
+                  setPrincipalDigits(digits);
+                  setInterestDigits("0");
+                }
+                return next;
+              });
+            }}
+            className="flex w-full items-start gap-3 border-b border-line py-3 text-left"
+          >
+            <span
+              className={cn(
+                "mt-0.5 grid size-5 shrink-0 place-items-center rounded border",
+                splitMortgage ? "border-accent bg-accent text-on-accent" : "border-line bg-background",
+              )}
+              aria-hidden
+            >
+              {splitMortgage ? "✓" : ""}
+            </span>
+            <span className="block text-sm font-medium">{t.add.splitMortgage}</span>
+          </button>
+          {splitMortgage ? (
+            <div className="grid grid-cols-2 gap-3 border-b border-line py-3">
+              <label>
+                <span className="text-xs text-muted">{t.add.principal}</span>
+                <input
+                  inputMode="decimal"
+                  value={principalDigits}
+                  onChange={(e) => {
+                    setPrincipalDigits(e.target.value);
+                    const p = Number(e.target.value) || 0;
+                    const i = Number(interestDigits) || 0;
+                    setDigits(String(p + i));
+                  }}
+                  className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 tabular-nums outline-none"
+                />
+              </label>
+              <label>
+                <span className="text-xs text-muted">{t.add.interest}</span>
+                <input
+                  inputMode="decimal"
+                  value={interestDigits}
+                  onChange={(e) => {
+                    setInterestDigits(e.target.value);
+                    const i = Number(e.target.value) || 0;
+                    const p = Number(principalDigits) || 0;
+                    setDigits(String(p + i));
+                  }}
+                  className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 tabular-nums outline-none"
+                />
+              </label>
+            </div>
+          ) : null}
+        </>
+      ) : null}
       <label className="flex items-center justify-between gap-3 border-b border-line py-3">
         <span className="shrink-0 text-sm text-muted">{t.add.note}</span>
         <input
@@ -515,6 +682,13 @@ function AddForm({
           onClose={() => setPick(null)}
           onSelect={(c) => {
             setCategoryId(c.id);
+            if (isMortgageSplitCategory(c, categories)) {
+              setSplitMortgage(true);
+              setPrincipalDigits(digits);
+              setInterestDigits("0");
+            } else {
+              setSplitMortgage(false);
+            }
             if (c.defaultAccountId && fromAccounts.some((a) => a.id === c.defaultAccountId)) {
               setAccountId(c.defaultAccountId);
             } else {

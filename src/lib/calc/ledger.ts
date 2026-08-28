@@ -1,4 +1,4 @@
-import type { Account, Transaction } from "@/lib/types";
+import type { Account, Transaction } from "../types.ts";
 
 export function isPosted(tx: Transaction): boolean {
   return !tx.planned;
