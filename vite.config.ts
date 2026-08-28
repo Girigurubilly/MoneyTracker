@@ -12,27 +12,6 @@ import { grokPwaPlugin } from "./scripts/grok-pwa-plugin.mjs";
 import { appEnvPlugin } from "./scripts/app-env-plugin.mjs";
 import { isMigrationFile } from "./scripts/migration-plan.mjs";
 
-const githubPages = process.env.GITHUB_PAGES === "1";
-if (githubPages) process.env.VITE_GITHUB_PAGES = "1";
-
-function viteBase() {
-  if (!githubPages) return "/";
-  const raw = process.env.BASE_PATH || "/";
-  return raw.endsWith("/") ? raw : `${raw}/`;
-}
-
-function githubPagesStart() {
-  const base = viteBase().replace(/\/$/, "");
-  return {
-    // Client-only static site. Nitro's github-pages preset crashes on Vite 8
-    // ("rolldownOptions.input should not be an html file when building for SSR").
-    spa: { enabled: false },
-    prerender: { enabled: false },
-    client: { entry: "spa-client.tsx" },
-    ...(base ? { router: { basepath: base } } : {}),
-  };
-}
-
 /** The files `src/lib/db.ts` globs — same directory, same non-recursive scope. */
 function hasGlobbedMigrations(root: string): boolean {
   try {
@@ -167,7 +146,6 @@ function authPopupPlugin(): Plugin {
 // The dev server starts once `src/router.tsx` and `src/routes/` exist — see
 // AGENTS.md § "First scaffold".
 export default defineConfig(({ command, isPreview }) => ({
-  base: viteBase(),
   server: {
     host: "0.0.0.0",
     port: 8080,
@@ -188,22 +166,17 @@ export default defineConfig(({ command, isPreview }) => ({
     // PWA head + ?install=1 tutorial page; runs before Start/Nitro.
     grokPwaPlugin(),
     tailwindcss(),
-    tanstackStart(githubPages ? githubPagesStart() : {}),
-    // GitHub Pages is a static SPA — Nitro's github-pages preset crashes on
-    // Vite 8 (HTML used as SSR input). Skip Nitro; the build script writes
-    // index.html + 404.html into .output/public.
+    tanstackStart(),
     ...(command === "build" || isPreview
-      ? githubPages
-        ? []
-        : [
-            nitro({
-              preset: "vercel",
-              // Auto-registers server/middleware/* (the PWA install page +
-              // manifest + head-tag middleware). Nitro v3 defaults serverDir to
-              // false, so removing this silently unwires /?install=1 on deploys.
-              serverDir: "./server",
-            }),
-          ]
+      ? [
+          nitro({
+            preset: "vercel",
+            // Auto-registers server/middleware/* (the PWA install page +
+            // manifest + head-tag middleware). Nitro v3 defaults serverDir to
+            // false, so removing this silently unwires /?install=1 on deploys.
+            serverDir: "./server",
+          }),
+        ]
       : []),
     viteReact(),
   ],
