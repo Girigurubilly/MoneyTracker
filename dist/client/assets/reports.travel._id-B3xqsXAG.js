@@ -1,0 +1,1 @@
+import{r as e}from"./useRouter-B64lGpJS.js";import{l as t}from"./reports-Beowzejb.js";import{t as n}from"./index-CqQU_WSt.js";var r=e();function i(){let{id:e}=n.useParams();return(0,r.jsx)(t,{id:e})}export{i as component};

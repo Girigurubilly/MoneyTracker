@@ -1,0 +1,1 @@
+import{a as e}from"./more-DMh2LoQH.js";var t=e;export{t as component};

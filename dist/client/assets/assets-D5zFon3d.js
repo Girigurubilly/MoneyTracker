@@ -1,0 +1,1 @@
+import{r as e}from"./useRouter-B64lGpJS.js";import{o as t}from"./index-CqQU_WSt.js";var n=e(),r=()=>(0,n.jsx)(t,{});export{r as component};

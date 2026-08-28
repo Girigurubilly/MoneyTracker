@@ -1,0 +1,1 @@
+import{s as e}from"./reports-Beowzejb.js";var t=e;export{t as component};
