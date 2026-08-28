@@ -109,17 +109,6 @@ writeFileSync(indexPath, html);
 copyFileSync(indexPath, join(publicDir, "404.html"));
 writeFileSync(join(publicDir, ".nojekyll"), "");
 
-const missing = [];
-for (const href of collectHrefs(html)) {
-  const file = hrefToPublicFile(href, publicDir, base);
-  if (!file) continue;
-  if (!existsSync(file)) missing.push(href);
-}
-if (missing.length) {
-  console.error(`[pages] shell references missing files:\n  ${missing.join("\n  ")}`);
-  process.exit(1);
-}
-
 const start = base === "./" ? "./" : base;
 mkdirSync(join(publicDir, "__grok"), { recursive: true });
 writeFileSync(
@@ -146,6 +135,21 @@ writeFileSync(
     2,
   )}\n`,
 );
+
+const srcIcon = join(ROOT, "public", "__grok", "icon-180.png");
+const destIcon = join(publicDir, "__grok", "icon-180.png");
+if (!existsSync(destIcon) && existsSync(srcIcon)) copyFileSync(srcIcon, destIcon);
+
+const missing = [];
+for (const href of collectHrefs(html)) {
+  const file = hrefToPublicFile(href, publicDir, base);
+  if (!file) continue;
+  if (!existsSync(file)) missing.push(href);
+}
+if (missing.length) {
+  console.error(`[pages] shell references missing files:\n  ${missing.join("\n  ")}`);
+  process.exit(1);
+}
 
 console.log(`[pages] static site ready at ${publicDir}`);
 console.log(`[pages] base=${base} index=${existsSync(indexPath)} 404=yes .nojekyll=yes`);
