@@ -9,30 +9,47 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AppRouteImport } from './routes/_app'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as AssetsRouteImport } from './routes/assets'
+import { Route as BudgetRouteImport } from './routes/budget'
+import { Route as MoreRouteImport } from './routes/more'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
-import { Route as AppIndexRouteImport } from './routes/_app/index'
-import { Route as AppAssetsRouteImport } from './routes/_app/assets'
-import { Route as AppBudgetRouteImport } from './routes/_app/budget'
-import { Route as AppMoreRouteImport } from './routes/_app/more'
-import { Route as AppReportsRouteImport } from './routes/_app/reports'
-import { Route as AppAssetsIndexRouteImport } from './routes/_app/assets.index'
-import { Route as AppAssetsIdRouteImport } from './routes/_app/assets.$id'
-import { Route as AppMoreIndexRouteImport } from './routes/_app/more.index'
-import { Route as AppMorePageRouteImport } from './routes/_app/more.$page'
-import { Route as AppReportsIndexRouteImport } from './routes/_app/reports.index'
-import { Route as AppReportsCashflowRouteImport } from './routes/_app/reports.cashflow'
-import { Route as AppReportsDashboardRouteImport } from './routes/_app/reports.dashboard'
-import { Route as AppReportsHistoryRouteImport } from './routes/_app/reports.history'
-import { Route as AppReportsLivingRouteImport } from './routes/_app/reports.living'
-import { Route as AppReportsRetirementRouteImport } from './routes/_app/reports.retirement'
-import { Route as AppReportsSpendingRouteImport } from './routes/_app/reports.spending'
-import { Route as AppReportsTravelRouteImport } from './routes/_app/reports.travel'
-import { Route as AppReportsTravelIndexRouteImport } from './routes/_app/reports.travel.index'
-import { Route as AppReportsTravelIdRouteImport } from './routes/_app/reports.travel.$id'
+import { Route as ReportsRouteImport } from './routes/reports'
+import { Route as MoreIndexRouteImport } from './routes/more.index'
+import { Route as MoreBackupRouteImport } from './routes/more.backup'
+import { Route as MoreCategoriesRouteImport } from './routes/more.categories'
+import { Route as MoreFxRouteImport } from './routes/more.fx'
+import { Route as MoreImportRouteImport } from './routes/more.import'
+import { Route as MoreSecurityRouteImport } from './routes/more.security'
+import { Route as ReportsIndexRouteImport } from './routes/reports.index'
+import { Route as ReportsCashflowRouteImport } from './routes/reports.cashflow'
+import { Route as ReportsDashboardRouteImport } from './routes/reports.dashboard'
+import { Route as ReportsHistoryRouteImport } from './routes/reports.history'
+import { Route as ReportsLivingRouteImport } from './routes/reports.living'
+import { Route as ReportsRetirementRouteImport } from './routes/reports.retirement'
+import { Route as ReportsSpendingRouteImport } from './routes/reports.spending'
+import { Route as ReportsTravelRouteImport } from './routes/reports.travel'
+import { Route as ReportsTravelIndexRouteImport } from './routes/reports.travel.index'
+import { Route as ReportsTravelIdRouteImport } from './routes/reports.travel.$id'
 
-const AppRoute = AppRouteImport.update({
-  id: '/_app',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AssetsRoute = AssetsRouteImport.update({
+  id: '/assets',
+  path: '/assets',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BudgetRoute = BudgetRouteImport.update({
+  id: '/budget',
+  path: '/budget',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MoreRoute = MoreRouteImport.update({
+  id: '/more',
+  path: '/more',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OnboardingRoute = OnboardingRouteImport.update({
@@ -40,177 +57,176 @@ const OnboardingRoute = OnboardingRouteImport.update({
   path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AppIndexRoute = AppIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppAssetsRoute = AppAssetsRouteImport.update({
-  id: '/assets',
-  path: '/assets',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppBudgetRoute = AppBudgetRouteImport.update({
-  id: '/budget',
-  path: '/budget',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppMoreRoute = AppMoreRouteImport.update({
-  id: '/more',
-  path: '/more',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppReportsRoute = AppReportsRouteImport.update({
+const ReportsRoute = ReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
-  getParentRoute: () => AppRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AppAssetsIndexRoute = AppAssetsIndexRouteImport.update({
+const MoreIndexRoute = MoreIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AppAssetsRoute,
+  getParentRoute: () => MoreRoute,
 } as any)
-const AppAssetsIdRoute = AppAssetsIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => AppAssetsRoute,
+const MoreBackupRoute = MoreBackupRouteImport.update({
+  id: '/backup',
+  path: '/backup',
+  getParentRoute: () => MoreRoute,
 } as any)
-const AppMoreIndexRoute = AppMoreIndexRouteImport.update({
+const MoreCategoriesRoute = MoreCategoriesRouteImport.update({
+  id: '/categories',
+  path: '/categories',
+  getParentRoute: () => MoreRoute,
+} as any)
+const MoreFxRoute = MoreFxRouteImport.update({
+  id: '/fx',
+  path: '/fx',
+  getParentRoute: () => MoreRoute,
+} as any)
+const MoreImportRoute = MoreImportRouteImport.update({
+  id: '/import',
+  path: '/import',
+  getParentRoute: () => MoreRoute,
+} as any)
+const MoreSecurityRoute = MoreSecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
+  getParentRoute: () => MoreRoute,
+} as any)
+const ReportsIndexRoute = ReportsIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AppMoreRoute,
+  getParentRoute: () => ReportsRoute,
 } as any)
-const AppMorePageRoute = AppMorePageRouteImport.update({
-  id: '/$page',
-  path: '/$page',
-  getParentRoute: () => AppMoreRoute,
-} as any)
-const AppReportsIndexRoute = AppReportsIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AppReportsRoute,
-} as any)
-const AppReportsCashflowRoute = AppReportsCashflowRouteImport.update({
+const ReportsCashflowRoute = ReportsCashflowRouteImport.update({
   id: '/cashflow',
   path: '/cashflow',
-  getParentRoute: () => AppReportsRoute,
+  getParentRoute: () => ReportsRoute,
 } as any)
-const AppReportsDashboardRoute = AppReportsDashboardRouteImport.update({
+const ReportsDashboardRoute = ReportsDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
-  getParentRoute: () => AppReportsRoute,
+  getParentRoute: () => ReportsRoute,
 } as any)
-const AppReportsHistoryRoute = AppReportsHistoryRouteImport.update({
+const ReportsHistoryRoute = ReportsHistoryRouteImport.update({
   id: '/history',
   path: '/history',
-  getParentRoute: () => AppReportsRoute,
+  getParentRoute: () => ReportsRoute,
 } as any)
-const AppReportsLivingRoute = AppReportsLivingRouteImport.update({
+const ReportsLivingRoute = ReportsLivingRouteImport.update({
   id: '/living',
   path: '/living',
-  getParentRoute: () => AppReportsRoute,
+  getParentRoute: () => ReportsRoute,
 } as any)
-const AppReportsRetirementRoute = AppReportsRetirementRouteImport.update({
+const ReportsRetirementRoute = ReportsRetirementRouteImport.update({
   id: '/retirement',
   path: '/retirement',
-  getParentRoute: () => AppReportsRoute,
+  getParentRoute: () => ReportsRoute,
 } as any)
-const AppReportsSpendingRoute = AppReportsSpendingRouteImport.update({
+const ReportsSpendingRoute = ReportsSpendingRouteImport.update({
   id: '/spending',
   path: '/spending',
-  getParentRoute: () => AppReportsRoute,
+  getParentRoute: () => ReportsRoute,
 } as any)
-const AppReportsTravelRoute = AppReportsTravelRouteImport.update({
+const ReportsTravelRoute = ReportsTravelRouteImport.update({
   id: '/travel',
   path: '/travel',
-  getParentRoute: () => AppReportsRoute,
+  getParentRoute: () => ReportsRoute,
 } as any)
-const AppReportsTravelIndexRoute = AppReportsTravelIndexRouteImport.update({
+const ReportsTravelIndexRoute = ReportsTravelIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AppReportsTravelRoute,
+  getParentRoute: () => ReportsTravelRoute,
 } as any)
-const AppReportsTravelIdRoute = AppReportsTravelIdRouteImport.update({
+const ReportsTravelIdRoute = ReportsTravelIdRouteImport.update({
   id: '/$id',
   path: '/$id',
-  getParentRoute: () => AppReportsTravelRoute,
+  getParentRoute: () => ReportsTravelRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof AppIndexRoute
+  '/': typeof IndexRoute
+  '/assets': typeof AssetsRoute
+  '/budget': typeof BudgetRoute
+  '/more': typeof MoreRouteWithChildren
   '/onboarding': typeof OnboardingRoute
-  '/assets': typeof AppAssetsRouteWithChildren
-  '/budget': typeof AppBudgetRoute
-  '/more': typeof AppMoreRouteWithChildren
-  '/reports': typeof AppReportsRouteWithChildren
-  '/assets/$id': typeof AppAssetsIdRoute
-  '/more/$page': typeof AppMorePageRoute
-  '/reports/cashflow': typeof AppReportsCashflowRoute
-  '/reports/dashboard': typeof AppReportsDashboardRoute
-  '/reports/history': typeof AppReportsHistoryRoute
-  '/reports/living': typeof AppReportsLivingRoute
-  '/reports/retirement': typeof AppReportsRetirementRoute
-  '/reports/spending': typeof AppReportsSpendingRoute
-  '/reports/travel': typeof AppReportsTravelRouteWithChildren
-  '/assets/': typeof AppAssetsIndexRoute
-  '/more/': typeof AppMoreIndexRoute
-  '/reports/': typeof AppReportsIndexRoute
-  '/reports/travel/$id': typeof AppReportsTravelIdRoute
-  '/reports/travel/': typeof AppReportsTravelIndexRoute
+  '/reports': typeof ReportsRouteWithChildren
+  '/more/backup': typeof MoreBackupRoute
+  '/more/categories': typeof MoreCategoriesRoute
+  '/more/fx': typeof MoreFxRoute
+  '/more/import': typeof MoreImportRoute
+  '/more/security': typeof MoreSecurityRoute
+  '/reports/cashflow': typeof ReportsCashflowRoute
+  '/reports/dashboard': typeof ReportsDashboardRoute
+  '/reports/history': typeof ReportsHistoryRoute
+  '/reports/living': typeof ReportsLivingRoute
+  '/reports/retirement': typeof ReportsRetirementRoute
+  '/reports/spending': typeof ReportsSpendingRoute
+  '/reports/travel': typeof ReportsTravelRouteWithChildren
+  '/more/': typeof MoreIndexRoute
+  '/reports/': typeof ReportsIndexRoute
+  '/reports/travel/$id': typeof ReportsTravelIdRoute
+  '/reports/travel/': typeof ReportsTravelIndexRoute
 }
 export interface FileRoutesByTo {
+  '/': typeof IndexRoute
+  '/assets': typeof AssetsRoute
+  '/budget': typeof BudgetRoute
   '/onboarding': typeof OnboardingRoute
-  '/budget': typeof AppBudgetRoute
-  '/': typeof AppIndexRoute
-  '/assets/$id': typeof AppAssetsIdRoute
-  '/more/$page': typeof AppMorePageRoute
-  '/reports/cashflow': typeof AppReportsCashflowRoute
-  '/reports/dashboard': typeof AppReportsDashboardRoute
-  '/reports/history': typeof AppReportsHistoryRoute
-  '/reports/living': typeof AppReportsLivingRoute
-  '/reports/retirement': typeof AppReportsRetirementRoute
-  '/reports/spending': typeof AppReportsSpendingRoute
-  '/assets': typeof AppAssetsIndexRoute
-  '/more': typeof AppMoreIndexRoute
-  '/reports': typeof AppReportsIndexRoute
-  '/reports/travel/$id': typeof AppReportsTravelIdRoute
-  '/reports/travel': typeof AppReportsTravelIndexRoute
+  '/more/backup': typeof MoreBackupRoute
+  '/more/categories': typeof MoreCategoriesRoute
+  '/more/fx': typeof MoreFxRoute
+  '/more/import': typeof MoreImportRoute
+  '/more/security': typeof MoreSecurityRoute
+  '/reports/cashflow': typeof ReportsCashflowRoute
+  '/reports/dashboard': typeof ReportsDashboardRoute
+  '/reports/history': typeof ReportsHistoryRoute
+  '/reports/living': typeof ReportsLivingRoute
+  '/reports/retirement': typeof ReportsRetirementRoute
+  '/reports/spending': typeof ReportsSpendingRoute
+  '/more': typeof MoreIndexRoute
+  '/reports': typeof ReportsIndexRoute
+  '/reports/travel/$id': typeof ReportsTravelIdRoute
+  '/reports/travel': typeof ReportsTravelIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/_app': typeof AppRouteWithChildren
+  '/': typeof IndexRoute
+  '/assets': typeof AssetsRoute
+  '/budget': typeof BudgetRoute
+  '/more': typeof MoreRouteWithChildren
   '/onboarding': typeof OnboardingRoute
-  '/_app/assets': typeof AppAssetsRouteWithChildren
-  '/_app/budget': typeof AppBudgetRoute
-  '/_app/more': typeof AppMoreRouteWithChildren
-  '/_app/reports': typeof AppReportsRouteWithChildren
-  '/_app/': typeof AppIndexRoute
-  '/_app/assets/$id': typeof AppAssetsIdRoute
-  '/_app/more/$page': typeof AppMorePageRoute
-  '/_app/reports/cashflow': typeof AppReportsCashflowRoute
-  '/_app/reports/dashboard': typeof AppReportsDashboardRoute
-  '/_app/reports/history': typeof AppReportsHistoryRoute
-  '/_app/reports/living': typeof AppReportsLivingRoute
-  '/_app/reports/retirement': typeof AppReportsRetirementRoute
-  '/_app/reports/spending': typeof AppReportsSpendingRoute
-  '/_app/reports/travel': typeof AppReportsTravelRouteWithChildren
-  '/_app/assets/': typeof AppAssetsIndexRoute
-  '/_app/more/': typeof AppMoreIndexRoute
-  '/_app/reports/': typeof AppReportsIndexRoute
-  '/_app/reports/travel/$id': typeof AppReportsTravelIdRoute
-  '/_app/reports/travel/': typeof AppReportsTravelIndexRoute
+  '/reports': typeof ReportsRouteWithChildren
+  '/more/backup': typeof MoreBackupRoute
+  '/more/categories': typeof MoreCategoriesRoute
+  '/more/fx': typeof MoreFxRoute
+  '/more/import': typeof MoreImportRoute
+  '/more/security': typeof MoreSecurityRoute
+  '/reports/cashflow': typeof ReportsCashflowRoute
+  '/reports/dashboard': typeof ReportsDashboardRoute
+  '/reports/history': typeof ReportsHistoryRoute
+  '/reports/living': typeof ReportsLivingRoute
+  '/reports/retirement': typeof ReportsRetirementRoute
+  '/reports/spending': typeof ReportsSpendingRoute
+  '/reports/travel': typeof ReportsTravelRouteWithChildren
+  '/more/': typeof MoreIndexRoute
+  '/reports/': typeof ReportsIndexRoute
+  '/reports/travel/$id': typeof ReportsTravelIdRoute
+  '/reports/travel/': typeof ReportsTravelIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/onboarding'
     | '/assets'
     | '/budget'
     | '/more'
+    | '/onboarding'
     | '/reports'
-    | '/assets/$id'
-    | '/more/$page'
+    | '/more/backup'
+    | '/more/categories'
+    | '/more/fx'
+    | '/more/import'
+    | '/more/security'
     | '/reports/cashflow'
     | '/reports/dashboard'
     | '/reports/history'
@@ -218,66 +234,94 @@ export interface FileRouteTypes {
     | '/reports/retirement'
     | '/reports/spending'
     | '/reports/travel'
-    | '/assets/'
     | '/more/'
     | '/reports/'
     | '/reports/travel/$id'
     | '/reports/travel/'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/onboarding'
-    | '/budget'
     | '/'
-    | '/assets/$id'
-    | '/more/$page'
+    | '/assets'
+    | '/budget'
+    | '/onboarding'
+    | '/more/backup'
+    | '/more/categories'
+    | '/more/fx'
+    | '/more/import'
+    | '/more/security'
     | '/reports/cashflow'
     | '/reports/dashboard'
     | '/reports/history'
     | '/reports/living'
     | '/reports/retirement'
     | '/reports/spending'
-    | '/assets'
     | '/more'
     | '/reports'
     | '/reports/travel/$id'
     | '/reports/travel'
   id:
     | '__root__'
-    | '/_app'
+    | '/'
+    | '/assets'
+    | '/budget'
+    | '/more'
     | '/onboarding'
-    | '/_app/assets'
-    | '/_app/budget'
-    | '/_app/more'
-    | '/_app/reports'
-    | '/_app/'
-    | '/_app/assets/$id'
-    | '/_app/more/$page'
-    | '/_app/reports/cashflow'
-    | '/_app/reports/dashboard'
-    | '/_app/reports/history'
-    | '/_app/reports/living'
-    | '/_app/reports/retirement'
-    | '/_app/reports/spending'
-    | '/_app/reports/travel'
-    | '/_app/assets/'
-    | '/_app/more/'
-    | '/_app/reports/'
-    | '/_app/reports/travel/$id'
-    | '/_app/reports/travel/'
+    | '/reports'
+    | '/more/backup'
+    | '/more/categories'
+    | '/more/fx'
+    | '/more/import'
+    | '/more/security'
+    | '/reports/cashflow'
+    | '/reports/dashboard'
+    | '/reports/history'
+    | '/reports/living'
+    | '/reports/retirement'
+    | '/reports/spending'
+    | '/reports/travel'
+    | '/more/'
+    | '/reports/'
+    | '/reports/travel/$id'
+    | '/reports/travel/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  AppRoute: typeof AppRouteWithChildren
+  IndexRoute: typeof IndexRoute
+  AssetsRoute: typeof AssetsRoute
+  BudgetRoute: typeof BudgetRoute
+  MoreRoute: typeof MoreRouteWithChildren
   OnboardingRoute: typeof OnboardingRoute
+  ReportsRoute: typeof ReportsRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/_app': {
-      id: '/_app'
-      path: ''
+    '/': {
+      id: '/'
+      path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof AppRouteImport
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/assets': {
+      id: '/assets'
+      path: '/assets'
+      fullPath: '/assets'
+      preLoaderRoute: typeof AssetsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/budget': {
+      id: '/budget'
+      path: '/budget'
+      fullPath: '/budget'
+      preLoaderRoute: typeof BudgetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/more': {
+      id: '/more'
+      path: '/more'
+      fullPath: '/more'
+      preLoaderRoute: typeof MoreRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/onboarding': {
@@ -287,229 +331,194 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_app/': {
-      id: '/_app/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof AppIndexRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/assets': {
-      id: '/_app/assets'
-      path: '/assets'
-      fullPath: '/assets'
-      preLoaderRoute: typeof AppAssetsRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/budget': {
-      id: '/_app/budget'
-      path: '/budget'
-      fullPath: '/budget'
-      preLoaderRoute: typeof AppBudgetRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/more': {
-      id: '/_app/more'
-      path: '/more'
-      fullPath: '/more'
-      preLoaderRoute: typeof AppMoreRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/reports': {
-      id: '/_app/reports'
+    '/reports': {
+      id: '/reports'
       path: '/reports'
       fullPath: '/reports'
-      preLoaderRoute: typeof AppReportsRouteImport
-      parentRoute: typeof AppRoute
+      preLoaderRoute: typeof ReportsRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_app/assets/': {
-      id: '/_app/assets/'
-      path: '/'
-      fullPath: '/assets/'
-      preLoaderRoute: typeof AppAssetsIndexRouteImport
-      parentRoute: typeof AppAssetsRoute
-    }
-    '/_app/assets/$id': {
-      id: '/_app/assets/$id'
-      path: '/$id'
-      fullPath: '/assets/$id'
-      preLoaderRoute: typeof AppAssetsIdRouteImport
-      parentRoute: typeof AppAssetsRoute
-    }
-    '/_app/more/': {
-      id: '/_app/more/'
+    '/more/': {
+      id: '/more/'
       path: '/'
       fullPath: '/more/'
-      preLoaderRoute: typeof AppMoreIndexRouteImport
-      parentRoute: typeof AppMoreRoute
+      preLoaderRoute: typeof MoreIndexRouteImport
+      parentRoute: typeof MoreRoute
     }
-    '/_app/more/$page': {
-      id: '/_app/more/$page'
-      path: '/$page'
-      fullPath: '/more/$page'
-      preLoaderRoute: typeof AppMorePageRouteImport
-      parentRoute: typeof AppMoreRoute
+    '/more/backup': {
+      id: '/more/backup'
+      path: '/backup'
+      fullPath: '/more/backup'
+      preLoaderRoute: typeof MoreBackupRouteImport
+      parentRoute: typeof MoreRoute
     }
-    '/_app/reports/': {
-      id: '/_app/reports/'
+    '/more/categories': {
+      id: '/more/categories'
+      path: '/categories'
+      fullPath: '/more/categories'
+      preLoaderRoute: typeof MoreCategoriesRouteImport
+      parentRoute: typeof MoreRoute
+    }
+    '/more/fx': {
+      id: '/more/fx'
+      path: '/fx'
+      fullPath: '/more/fx'
+      preLoaderRoute: typeof MoreFxRouteImport
+      parentRoute: typeof MoreRoute
+    }
+    '/more/import': {
+      id: '/more/import'
+      path: '/import'
+      fullPath: '/more/import'
+      preLoaderRoute: typeof MoreImportRouteImport
+      parentRoute: typeof MoreRoute
+    }
+    '/more/security': {
+      id: '/more/security'
+      path: '/security'
+      fullPath: '/more/security'
+      preLoaderRoute: typeof MoreSecurityRouteImport
+      parentRoute: typeof MoreRoute
+    }
+    '/reports/': {
+      id: '/reports/'
       path: '/'
       fullPath: '/reports/'
-      preLoaderRoute: typeof AppReportsIndexRouteImport
-      parentRoute: typeof AppReportsRoute
+      preLoaderRoute: typeof ReportsIndexRouteImport
+      parentRoute: typeof ReportsRoute
     }
-    '/_app/reports/cashflow': {
-      id: '/_app/reports/cashflow'
+    '/reports/cashflow': {
+      id: '/reports/cashflow'
       path: '/cashflow'
       fullPath: '/reports/cashflow'
-      preLoaderRoute: typeof AppReportsCashflowRouteImport
-      parentRoute: typeof AppReportsRoute
+      preLoaderRoute: typeof ReportsCashflowRouteImport
+      parentRoute: typeof ReportsRoute
     }
-    '/_app/reports/dashboard': {
-      id: '/_app/reports/dashboard'
+    '/reports/dashboard': {
+      id: '/reports/dashboard'
       path: '/dashboard'
       fullPath: '/reports/dashboard'
-      preLoaderRoute: typeof AppReportsDashboardRouteImport
-      parentRoute: typeof AppReportsRoute
+      preLoaderRoute: typeof ReportsDashboardRouteImport
+      parentRoute: typeof ReportsRoute
     }
-    '/_app/reports/history': {
-      id: '/_app/reports/history'
+    '/reports/history': {
+      id: '/reports/history'
       path: '/history'
       fullPath: '/reports/history'
-      preLoaderRoute: typeof AppReportsHistoryRouteImport
-      parentRoute: typeof AppReportsRoute
+      preLoaderRoute: typeof ReportsHistoryRouteImport
+      parentRoute: typeof ReportsRoute
     }
-    '/_app/reports/living': {
-      id: '/_app/reports/living'
+    '/reports/living': {
+      id: '/reports/living'
       path: '/living'
       fullPath: '/reports/living'
-      preLoaderRoute: typeof AppReportsLivingRouteImport
-      parentRoute: typeof AppReportsRoute
+      preLoaderRoute: typeof ReportsLivingRouteImport
+      parentRoute: typeof ReportsRoute
     }
-    '/_app/reports/retirement': {
-      id: '/_app/reports/retirement'
+    '/reports/retirement': {
+      id: '/reports/retirement'
       path: '/retirement'
       fullPath: '/reports/retirement'
-      preLoaderRoute: typeof AppReportsRetirementRouteImport
-      parentRoute: typeof AppReportsRoute
+      preLoaderRoute: typeof ReportsRetirementRouteImport
+      parentRoute: typeof ReportsRoute
     }
-    '/_app/reports/spending': {
-      id: '/_app/reports/spending'
+    '/reports/spending': {
+      id: '/reports/spending'
       path: '/spending'
       fullPath: '/reports/spending'
-      preLoaderRoute: typeof AppReportsSpendingRouteImport
-      parentRoute: typeof AppReportsRoute
+      preLoaderRoute: typeof ReportsSpendingRouteImport
+      parentRoute: typeof ReportsRoute
     }
-    '/_app/reports/travel': {
-      id: '/_app/reports/travel'
+    '/reports/travel': {
+      id: '/reports/travel'
       path: '/travel'
       fullPath: '/reports/travel'
-      preLoaderRoute: typeof AppReportsTravelRouteImport
-      parentRoute: typeof AppReportsRoute
+      preLoaderRoute: typeof ReportsTravelRouteImport
+      parentRoute: typeof ReportsRoute
     }
-    '/_app/reports/travel/': {
-      id: '/_app/reports/travel/'
+    '/reports/travel/': {
+      id: '/reports/travel/'
       path: '/'
       fullPath: '/reports/travel/'
-      preLoaderRoute: typeof AppReportsTravelIndexRouteImport
-      parentRoute: typeof AppReportsTravelRoute
+      preLoaderRoute: typeof ReportsTravelIndexRouteImport
+      parentRoute: typeof ReportsTravelRoute
     }
-    '/_app/reports/travel/$id': {
-      id: '/_app/reports/travel/$id'
+    '/reports/travel/$id': {
+      id: '/reports/travel/$id'
       path: '/$id'
       fullPath: '/reports/travel/$id'
-      preLoaderRoute: typeof AppReportsTravelIdRouteImport
-      parentRoute: typeof AppReportsTravelRoute
+      preLoaderRoute: typeof ReportsTravelIdRouteImport
+      parentRoute: typeof ReportsTravelRoute
     }
   }
 }
 
-interface AppAssetsRouteChildren {
-  AppAssetsIdRoute: typeof AppAssetsIdRoute
-  AppAssetsIndexRoute: typeof AppAssetsIndexRoute
+interface MoreRouteChildren {
+  MoreBackupRoute: typeof MoreBackupRoute
+  MoreCategoriesRoute: typeof MoreCategoriesRoute
+  MoreFxRoute: typeof MoreFxRoute
+  MoreImportRoute: typeof MoreImportRoute
+  MoreSecurityRoute: typeof MoreSecurityRoute
+  MoreIndexRoute: typeof MoreIndexRoute
 }
 
-const AppAssetsRouteChildren: AppAssetsRouteChildren = {
-  AppAssetsIdRoute: AppAssetsIdRoute,
-  AppAssetsIndexRoute: AppAssetsIndexRoute,
+const MoreRouteChildren: MoreRouteChildren = {
+  MoreBackupRoute: MoreBackupRoute,
+  MoreCategoriesRoute: MoreCategoriesRoute,
+  MoreFxRoute: MoreFxRoute,
+  MoreImportRoute: MoreImportRoute,
+  MoreSecurityRoute: MoreSecurityRoute,
+  MoreIndexRoute: MoreIndexRoute,
 }
 
-const AppAssetsRouteWithChildren = AppAssetsRoute._addFileChildren(
-  AppAssetsRouteChildren,
+const MoreRouteWithChildren = MoreRoute._addFileChildren(MoreRouteChildren)
+
+interface ReportsTravelRouteChildren {
+  ReportsTravelIdRoute: typeof ReportsTravelIdRoute
+  ReportsTravelIndexRoute: typeof ReportsTravelIndexRoute
+}
+
+const ReportsTravelRouteChildren: ReportsTravelRouteChildren = {
+  ReportsTravelIdRoute: ReportsTravelIdRoute,
+  ReportsTravelIndexRoute: ReportsTravelIndexRoute,
+}
+
+const ReportsTravelRouteWithChildren = ReportsTravelRoute._addFileChildren(
+  ReportsTravelRouteChildren,
 )
 
-interface AppMoreRouteChildren {
-  AppMorePageRoute: typeof AppMorePageRoute
-  AppMoreIndexRoute: typeof AppMoreIndexRoute
+interface ReportsRouteChildren {
+  ReportsCashflowRoute: typeof ReportsCashflowRoute
+  ReportsDashboardRoute: typeof ReportsDashboardRoute
+  ReportsHistoryRoute: typeof ReportsHistoryRoute
+  ReportsLivingRoute: typeof ReportsLivingRoute
+  ReportsRetirementRoute: typeof ReportsRetirementRoute
+  ReportsSpendingRoute: typeof ReportsSpendingRoute
+  ReportsTravelRoute: typeof ReportsTravelRouteWithChildren
+  ReportsIndexRoute: typeof ReportsIndexRoute
 }
 
-const AppMoreRouteChildren: AppMoreRouteChildren = {
-  AppMorePageRoute: AppMorePageRoute,
-  AppMoreIndexRoute: AppMoreIndexRoute,
+const ReportsRouteChildren: ReportsRouteChildren = {
+  ReportsCashflowRoute: ReportsCashflowRoute,
+  ReportsDashboardRoute: ReportsDashboardRoute,
+  ReportsHistoryRoute: ReportsHistoryRoute,
+  ReportsLivingRoute: ReportsLivingRoute,
+  ReportsRetirementRoute: ReportsRetirementRoute,
+  ReportsSpendingRoute: ReportsSpendingRoute,
+  ReportsTravelRoute: ReportsTravelRouteWithChildren,
+  ReportsIndexRoute: ReportsIndexRoute,
 }
 
-const AppMoreRouteWithChildren =
-  AppMoreRoute._addFileChildren(AppMoreRouteChildren)
-
-interface AppReportsTravelRouteChildren {
-  AppReportsTravelIdRoute: typeof AppReportsTravelIdRoute
-  AppReportsTravelIndexRoute: typeof AppReportsTravelIndexRoute
-}
-
-const AppReportsTravelRouteChildren: AppReportsTravelRouteChildren = {
-  AppReportsTravelIdRoute: AppReportsTravelIdRoute,
-  AppReportsTravelIndexRoute: AppReportsTravelIndexRoute,
-}
-
-const AppReportsTravelRouteWithChildren =
-  AppReportsTravelRoute._addFileChildren(AppReportsTravelRouteChildren)
-
-interface AppReportsRouteChildren {
-  AppReportsCashflowRoute: typeof AppReportsCashflowRoute
-  AppReportsDashboardRoute: typeof AppReportsDashboardRoute
-  AppReportsHistoryRoute: typeof AppReportsHistoryRoute
-  AppReportsLivingRoute: typeof AppReportsLivingRoute
-  AppReportsRetirementRoute: typeof AppReportsRetirementRoute
-  AppReportsSpendingRoute: typeof AppReportsSpendingRoute
-  AppReportsTravelRoute: typeof AppReportsTravelRouteWithChildren
-  AppReportsIndexRoute: typeof AppReportsIndexRoute
-}
-
-const AppReportsRouteChildren: AppReportsRouteChildren = {
-  AppReportsCashflowRoute: AppReportsCashflowRoute,
-  AppReportsDashboardRoute: AppReportsDashboardRoute,
-  AppReportsHistoryRoute: AppReportsHistoryRoute,
-  AppReportsLivingRoute: AppReportsLivingRoute,
-  AppReportsRetirementRoute: AppReportsRetirementRoute,
-  AppReportsSpendingRoute: AppReportsSpendingRoute,
-  AppReportsTravelRoute: AppReportsTravelRouteWithChildren,
-  AppReportsIndexRoute: AppReportsIndexRoute,
-}
-
-const AppReportsRouteWithChildren = AppReportsRoute._addFileChildren(
-  AppReportsRouteChildren,
-)
-
-interface AppRouteChildren {
-  AppAssetsRoute: typeof AppAssetsRouteWithChildren
-  AppBudgetRoute: typeof AppBudgetRoute
-  AppMoreRoute: typeof AppMoreRouteWithChildren
-  AppReportsRoute: typeof AppReportsRouteWithChildren
-  AppIndexRoute: typeof AppIndexRoute
-}
-
-const AppRouteChildren: AppRouteChildren = {
-  AppAssetsRoute: AppAssetsRouteWithChildren,
-  AppBudgetRoute: AppBudgetRoute,
-  AppMoreRoute: AppMoreRouteWithChildren,
-  AppReportsRoute: AppReportsRouteWithChildren,
-  AppIndexRoute: AppIndexRoute,
-}
-
-const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+const ReportsRouteWithChildren =
+  ReportsRoute._addFileChildren(ReportsRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
-  AppRoute: AppRouteWithChildren,
+  IndexRoute: IndexRoute,
+  AssetsRoute: AssetsRoute,
+  BudgetRoute: BudgetRoute,
+  MoreRoute: MoreRouteWithChildren,
   OnboardingRoute: OnboardingRoute,
+  ReportsRoute: ReportsRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

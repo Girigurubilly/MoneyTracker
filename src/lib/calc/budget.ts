@@ -48,28 +48,25 @@ export function chargedDayOf(r: Recurring): number {
   return Number.isFinite(d) && d >= 1 ? Math.min(28, d) : 1;
 }
 
-export function monthlyExpenseRegulars(recurring: Recurring[]): Recurring[] {
-  return recurring.filter((r) => isExpenseRegular(r) && r.frequency === "monthly");
-}
-
-/** Expense regulars, plus transfers that count as spend (mortgage principal). */
 export function isExpenseRegular(r: Recurring): boolean {
   return r.type === "expense" || (r.type === "transfer" && Boolean(r.countsAsExpense));
 }
 
-/** True when this regular’s charged day has arrived as of `asOfIso` (passed or today). */
+export function monthlyExpenseRegulars(recurring: Recurring[]): Recurring[] {
+  return recurring.filter((r) => isExpenseRegular(r) && r.frequency === "monthly");
+}
+
+export function monthlyIncomeRegulars(recurring: Recurring[]): Recurring[] {
+  return recurring.filter((r) => r.type === "income" && r.frequency === "monthly");
+}
+
 export function regularChargedBy(r: Recurring, asOfIso: string): boolean {
   const day = Number(asOfIso.slice(8, 10));
   if (!Number.isFinite(day) || day <= 0) return false;
   return chargedDayOf(r) <= day;
 }
 
-/** Monthly regulars whose charged day is still after `asOfIso` — reserved from remaining budget. */
-export function reservedRegulars(
-  recurring: Recurring[],
-  rates: FxRate[],
-  asOfIso: string,
-): number {
+export function reservedRegulars(recurring: Recurring[], rates: FxRate[], asOfIso: string): number {
   let sum = 0;
   for (const r of monthlyExpenseRegulars(recurring)) {
     if (regularChargedBy(r, asOfIso)) continue;
@@ -78,12 +75,7 @@ export function reservedRegulars(
   return sum;
 }
 
-/** Monthly regulars already deducted — charged day has passed or is today. */
-export function realizedRegulars(
-  recurring: Recurring[],
-  rates: FxRate[],
-  asOfIso: string,
-): number {
+export function realizedRegulars(recurring: Recurring[], rates: FxRate[], asOfIso: string): number {
   let sum = 0;
   for (const r of monthlyExpenseRegulars(recurring)) {
     if (!regularChargedBy(r, asOfIso)) continue;
@@ -107,12 +99,7 @@ export function chargedIso(month: string, day: number): string {
   return `${month}-${String(d).padStart(2, "0")}`;
 }
 
-/** This-month planned expenses that are not linked to a monthly regular. */
-export function plannedAdhocSpend(
-  txs: Transaction[],
-  month: string,
-  rates: FxRate[],
-): number {
+export function plannedAdhocSpend(txs: Transaction[], month: string, rates: FxRate[]): number {
   let sum = 0;
   for (const tx of txs) {
     if (!tx.planned || !isSpendLike(tx)) continue;
@@ -131,11 +118,7 @@ export function adhocChargedBy(a: AdhocBudget, asOfIso: string): boolean {
   return a.date <= asOfIso;
 }
 
-export function adhocTotal(
-  rows: AdhocBudget[],
-  month: string,
-  rates: FxRate[],
-): number {
+export function adhocTotal(rows: AdhocBudget[], month: string, rates: FxRate[]): number {
   let sum = 0;
   for (const a of adhocForMonth(rows, month)) {
     sum += Math.abs(toHkd(a.amount, a.currency, rates));
@@ -143,12 +126,7 @@ export function adhocTotal(
   return sum;
 }
 
-export function reservedAdhoc(
-  rows: AdhocBudget[],
-  month: string,
-  rates: FxRate[],
-  asOfIso: string,
-): number {
+export function reservedAdhoc(rows: AdhocBudget[], month: string, rates: FxRate[], asOfIso: string): number {
   let sum = 0;
   for (const a of adhocForMonth(rows, month)) {
     if (adhocChargedBy(a, asOfIso)) continue;
@@ -157,12 +135,7 @@ export function reservedAdhoc(
   return sum;
 }
 
-export function realizedAdhoc(
-  rows: AdhocBudget[],
-  month: string,
-  rates: FxRate[],
-  asOfIso: string,
-): number {
+export function realizedAdhoc(rows: AdhocBudget[], month: string, rates: FxRate[], asOfIso: string): number {
   let sum = 0;
   for (const a of adhocForMonth(rows, month)) {
     if (!adhocChargedBy(a, asOfIso)) continue;
@@ -171,12 +144,11 @@ export function realizedAdhoc(
   return sum;
 }
 
-/** Posted spend minus realized monthly regulars. 本月臨時 is never a txn, so it is not in spent. */
-export function realizedNonRegularSpend(spent: number, realizedRegularsAmt: number): number {
-  return Math.max(0, spent - realizedRegularsAmt);
+/** 已實現非定期 = 本月已花費 − 已實現每月定期 − 本月臨時 */
+export function realizedNonRegularSpend(spent: number, realizedRegularsAmt: number, adhocAmt: number): number {
+  return Math.max(0, spent - realizedRegularsAmt - adhocAmt);
 }
 
-/** Use today when `month` is the current month; last day if past; 1st if future. */
 export function asOfForMonth(month: string, today: string): string {
   const tm = today.slice(0, 7);
   if (month < tm) return monthEndIso(month);
@@ -184,11 +156,6 @@ export function asOfForMonth(month: string, today: string): string {
   return today;
 }
 
-/**
- * Pace of non-regular spend so far, applied to the remaining days of the month.
- * (spent − realized regulars) / day-of-month × remaining days.
- * 本月臨時 is a budget hold, not a txn, so it is not subtracted from spent.
- */
 export function projectedNonRegular(spent: number, realized: number, asOfIso: string): number {
   const day = Number(asOfIso.slice(8, 10));
   const last = daysInMonth(asOfIso.slice(0, 7));
@@ -199,7 +166,6 @@ export function projectedNonRegular(spent: number, realized: number, asOfIso: st
   return (nonRegular / day) * remainingDays;
 }
 
-/** Monthly expense regulars whose charged day is still after `asOfIso`, soonest first. */
 export function upcomingExpenseRegulars(recurring: Recurring[], asOfIso: string): Recurring[] {
   return monthlyExpenseRegulars(recurring)
     .filter((r) => !regularChargedBy(r, asOfIso))
@@ -228,6 +194,48 @@ export function inferLivingRegular(r: Recurring, categories: { id: string; paren
   return Boolean(cat && (cat.parentId === "p-housing" || cat.id === "p-housing"));
 }
 
+export function hkdOfRegular(r: Recurring, rates: FxRate[]): number {
+  return Math.abs(toHkd(r.amount, r.currency, rates));
+}
+
+/**
+ * Cash-flow forecast for one month.
+ * Income = realized + still-scheduled income in that month.
+ * Expense (current month) = realized + uncharged monthly regulars + uncharged 本月臨時.
+ * Expense (future) = monthly expense regulars. Past = realized only.
+ */
+export function monthCashflowForecast(
+  txs: Transaction[],
+  recurring: Recurring[],
+  adhoc: AdhocBudget[],
+  month: string,
+  rates: FxRate[],
+  today: string,
+): { income: number; expense: number; net: number } {
+  const posted = monthFlow(txs, month, rates);
+  const current = month === today.slice(0, 7);
+  const future = month > today.slice(0, 7);
+  const asOf = asOfForMonth(month, today);
+
+  let schedIncome = 0;
+  for (const r of monthlyIncomeRegulars(recurring)) {
+    if (current && regularChargedBy(r, asOf)) continue;
+    if (!current && !future) continue;
+    schedIncome += hkdOfRegular(r, rates);
+  }
+
+  let schedExpense = 0;
+  if (current) {
+    schedExpense = reservedRegulars(recurring, rates, asOf) + reservedAdhoc(adhoc, month, rates, asOf);
+  } else if (future) {
+    for (const r of monthlyExpenseRegulars(recurring)) schedExpense += hkdOfRegular(r, rates);
+  }
+
+  const income = posted.income + schedIncome;
+  const expense = posted.expense + schedExpense;
+  return { income, expense, net: income - expense };
+}
+
 export function budgetActuals(
   budgets: Budget[],
   txs: Transaction[],
@@ -242,6 +250,7 @@ export function budgetActuals(
   remaining: number;
   ratio: number;
   reserved: number;
+  reservedAdhoc: number;
   realized: number;
   projected: number;
   adhoc: number;
@@ -251,6 +260,7 @@ export function budgetActuals(
   const reserved = reservedRegulars(recurring, rates, asOf);
   const realized = realizedRegulars(recurring, rates, asOf);
   const adhoc = adhocTotal(adhocRows, month, rates);
+  const reservedA = reservedAdhoc(adhocRows, month, rates, asOf);
   const allRegulars = reserved + realized;
   return budgets.map((b) => {
     const unscoped = !b.categoryId && !b.theme;
@@ -263,20 +273,21 @@ export function budgetActuals(
           theme: b.theme,
           categories,
         });
-    const hold = unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? reserved + adhoc : 0;
+    const hold = unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? reserved + reservedA : 0;
     const realizedAmt = unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? realized : 0;
+    const adhocAmt = unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? adhoc : 0;
     const nonRegular =
-      unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? realizedNonRegularSpend(spent, realizedAmt) : 0;
+      unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? realizedNonRegularSpend(spent, realizedAmt, adhocAmt) : 0;
     const projected =
-      unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? projectedNonRegular(spent, realizedAmt, asOf) : 0;
-    const expected =
-      unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? nonRegular + allRegulars + adhoc : spent;
+      unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? projectedNonRegular(spent, realizedAmt + adhocAmt, asOf) : 0;
+    const expected = unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? nonRegular + allRegulars + adhocAmt : spent;
     const remaining = b.monthly - spent - hold;
     return {
       ...b,
       spent,
       reserved: unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? reserved : 0,
-      adhoc: unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? adhoc : 0,
+      reservedAdhoc: unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? reservedA : 0,
+      adhoc: adhocAmt,
       realized: realizedAmt,
       projected,
       remaining,
@@ -286,10 +297,7 @@ export function budgetActuals(
   });
 }
 
-export function dailySpendable(
-  remainingDisc: number,
-  isoDate: string,
-): { daysLeft: number; daily: number } {
+export function dailySpendable(remainingDisc: number, isoDate: string): { daysLeft: number; daily: number } {
   const [y, m] = isoDate.split("-").map(Number);
   const last = new Date(y, m, 0).getDate();
   const day = Number(isoDate.slice(8, 10));
@@ -297,14 +305,8 @@ export function dailySpendable(
   return { daysLeft, daily: remainingDisc / daysLeft };
 }
 
-export function essentialCommitments(
-  recurring: Recurring[],
-  budgets: Budget[],
-  categories: Category[],
-): number {
-  const rec = recurring
-    .filter((r) => r.essential && isExpenseRegular(r))
-    .reduce((s, r) => s + r.amount, 0);
+export function essentialCommitments(recurring: Recurring[], budgets: Budget[], categories: Category[]): number {
+  const rec = recurring.filter((r) => r.essential && isExpenseRegular(r)).reduce((s, r) => s + r.amount, 0);
   const catEssential = new Set(categories.filter((c) => c.essential).map((c) => c.id));
   const bud = budgets
     .filter((b) => b.categoryId && catEssential.has(b.categoryId))

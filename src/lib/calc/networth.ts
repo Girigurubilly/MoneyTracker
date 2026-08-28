@@ -1,8 +1,7 @@
-import type { Account, FxRate } from "../types.ts";
-import { toHkd } from "./fx.ts";
-import { roundMoney } from "./ledger.ts";
+import type { Account, FxRate } from "../types";
+import { toHkd } from "./fx";
 
-export function netWorthNow(accounts: Account[], rates: FxRate[]) {
+export function netWorthNow(accounts: Account[], rates: FxRate[]): { assets: number; liab: number; net: number } {
   let assets = 0;
   let liab = 0;
   for (const a of accounts) {
@@ -11,20 +10,5 @@ export function netWorthNow(accounts: Account[], rates: FxRate[]) {
     if (hkd >= 0) assets += hkd;
     else liab += -hkd;
   }
-  return {
-    assets: roundMoney(assets),
-    liab: roundMoney(liab),
-    net: roundMoney(assets - liab),
-  };
-}
-
-export function investableNow(accounts: Account[], rates: FxRate[]) {
-  let sum = 0;
-  for (const a of accounts) {
-    if (!a.includeInNetWorth || a.currency === "MILES") continue;
-    if (a.type === "property" || a.type === "mortgage") continue;
-    const hkd = toHkd(a.balance, a.currency, rates);
-    if (hkd > 0) sum += hkd;
-  }
-  return roundMoney(sum);
+  return { assets, liab, net: assets - liab };
 }

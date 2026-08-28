@@ -1,122 +1,39 @@
 @import "tailwindcss";
-@import "tw-animate-css";
-
-:root {
-  --bg: #f3f6f9;
-  --fg: #1a2332;
-  --muted: #5c6b7a;
-  --faint: #94a3b8;
-  --elevated: #ffffff;
-  --row: #ffffff;
-  --line: #e8eef3;
-  --border: #dce3ea;
-  --income: #059669;
-  --expense: #dc2626;
-  --transfer: #0284c7;
-  --miles: #0369a1;
-  --accent: #0284c7;
-  --accent-hover: #0369a1;
-  --accent-soft: #e0f2fe;
-  --on-accent: #ffffff;
-  --warn: #d97706;
-  --watch: #d97706;
-  --success-soft: #d1fae5;
-  --danger-soft: #fee2e2;
-  --warn-soft: #fef3c7;
-  --pill-expense: #fee2e2;
-  --pill-income: #d1fae5;
-  --pill-transfer: #e0f2fe;
-  --pill-miles: #e0f2fe;
-  --nav: #ffffff;
-  --overlay: rgba(26, 35, 50, 0.42);
-  --shadow: 0 10px 30px rgba(26, 35, 50, 0.08);
-  --ring-track: #e8eef3;
-  --cat-orange: #ea580c;
-  --cat-orange-soft: #ffedd5;
-  --cat-amber: #d97706;
-  --cat-amber-soft: #fef3c7;
-  --cat-teal: #0d9488;
-  --cat-teal-soft: #ccfbf1;
-  --cat-green: #059669;
-  --cat-green-soft: #d1fae5;
-  --cat-sky: #0284c7;
-  --cat-sky-soft: #e0f2fe;
-  --cat-rose: #e11d48;
-  --cat-rose-soft: #ffe4e6;
-  --cat-violet: #7c3aed;
-  --cat-violet-soft: #ede9fe;
-  --cat-slate: #475569;
-  --cat-slate-soft: #e2e8f0;
-}
 
 @theme {
-  --font-sans: "DM Sans", "Noto Sans TC", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "DM Sans", "Noto Sans TC", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-sans: "SF Pro Text", "PingFang HK", "Noto Sans TC", "Segoe UI", system-ui, sans-serif;
+  --font-display: "SF Pro Display", "PingFang HK", "Noto Sans TC", "Segoe UI", system-ui, sans-serif;
 
-  --color-background: var(--bg);
-  --color-foreground: var(--fg);
-  --color-muted: var(--muted);
-  --color-faint: var(--faint);
-  --color-elevated: var(--elevated);
-  --color-row: var(--row);
-  --color-line: var(--line);
-  --color-border: var(--border);
-  --color-income: var(--income);
-  --color-expense: var(--expense);
-  --color-transfer: var(--transfer);
-  --color-miles: var(--miles);
-  --color-accent: var(--accent);
-  --color-accent-hover: var(--accent-hover);
-  --color-accent-soft: var(--accent-soft);
-  --color-on-accent: var(--on-accent);
-  --color-warn: var(--warn);
-  --color-watch: var(--watch);
-  --color-success-soft: var(--success-soft);
-  --color-danger-soft: var(--danger-soft);
-  --color-warn-soft: var(--warn-soft);
-  --color-pill-expense: var(--pill-expense);
-  --color-pill-income: var(--pill-income);
-  --color-pill-transfer: var(--pill-transfer);
-  --color-pill-miles: var(--pill-miles);
-  --color-nav: var(--nav);
-  --color-ring-track: var(--ring-track);
+  --color-background: #f2f2f7;
+  --color-foreground: #1c1c1e;
+  --color-elevated: #ffffff;
+  --color-muted: #8e8e93;
+  --color-faint: #aeaeb2;
+  --color-line: #e5e5ea;
+  --color-accent: #007aff;
+  --color-on-accent: #ffffff;
+  --color-accent-soft: #e8f1ff;
+  --color-income: #248a3d;
+  --color-expense: #d70015;
+  --color-watch: #c93400;
+  --color-success-soft: #e4f8e9;
+  --color-ring-track: #e5e5ea;
+  --color-scrim: rgb(0 0 0 / 0.32);
 
-  --radius-xs: 4px;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
   --radius-xl: 20px;
-  --radius-2xl: 24px;
-
-  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @layer base {
-  html {
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-
   html,
   body,
-  #app {
-    min-height: 100dvh;
-    background: var(--bg);
-    color: var(--fg);
-  }
-
-  body {
+  #root {
+    min-height: 100%;
+    background: var(--color-background);
+    color: var(--color-foreground);
     font-family: var(--font-sans);
-    min-height: 100dvh;
-  }
-
-  h1 {
-    text-wrap: balance;
-  }
-
-  p {
-    text-wrap: pretty;
   }
 
   button:not(:disabled),
@@ -124,41 +41,18 @@
     cursor: pointer;
   }
 
-  input[type="text"],
-  input[type="number"],
-  input[type="date"],
-  input[type="search"],
-  input[type="password"],
+  input,
   select,
   textarea {
-    font-size: 16px;
-  }
-
-  * {
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  ::selection {
-    background: color-mix(in oklab, var(--accent) 28%, transparent);
+    font: inherit;
+    color: inherit;
   }
 }
 
-@layer utilities {
-  .tabular {
-    font-variant-numeric: tabular-nums;
-  }
-
-  .scrim {
-    background: var(--overlay);
-  }
+.scrim {
+  background: var(--color-scrim);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }

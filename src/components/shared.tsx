@@ -1,143 +1,52 @@
-import { useEffect, type ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
 import { createPortal } from "react-dom";
-import {
-  ArrowLeft,
-  ArrowLeftRight,
-  BookOpen,
-  Briefcase,
-  Brush,
-  Building2,
-  Car,
-  CircleDollarSign,
-  Clock,
-  Coins,
-  CupSoda,
-  FileText,
-  Film,
-  Gamepad2,
-  Gift,
-  Globe,
-  GraduationCap,
-  Heart,
-  Home,
-  Info,
-  Landmark,
-  Map,
-  PiggyBank,
-  Plane,
-  RefreshCw,
-  Shield,
-  ShoppingBag,
-  ShoppingCart,
-  Smartphone,
-  Sparkles,
-  Tent,
-  Ticket,
-  TrainFront,
-  TrendingUp,
-  Umbrella,
-  User,
-  UtensilsCrossed,
-  Wallet,
-  Wrench,
-  Zap,
-} from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import { ChevronRight, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { money } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
-import type { CategoryIconName, Transaction, TxType } from "@/lib/types";
-import { accountById as findAccount, categoryById as findCategory, useApp } from "@/store/app";
+import { cashflowSide } from "@/lib/calc/ledger";
+import type { Transaction } from "@/lib/types";
 import { useT, useUi } from "@/store/ui";
+import { useApp } from "@/store/app";
 
-const iconMap: Record<CategoryIconName, typeof Home> = {
-  utensils: UtensilsCrossed,
-  shopping: ShoppingCart,
-  train: TrainFront,
-  car: Car,
-  home: Home,
-  wrench: Wrench,
-  zap: Zap,
-  wifi: Smartphone,
-  heart: Heart,
-  shield: Shield,
-  graduation: GraduationCap,
-  film: Film,
-  sparkles: Sparkles,
-  plane: Plane,
-  building: Building2,
-  map: Map,
-  ticket: Ticket,
-  umbrella: Umbrella,
-  bag: ShoppingBag,
-  landmark: Landmark,
-  piggy: PiggyBank,
-  repeat: RefreshCw,
-  wallet: Wallet,
-  gift: Gift,
-  coins: Coins,
-  trending: TrendingUp,
-  briefcase: Briefcase,
-  gamepad: Gamepad2,
-  user: User,
-  broom: Brush,
-  tent: Tent,
-  cup: CupSoda,
-  book: BookOpen,
-  file: FileText,
-  clock: Clock,
-  dollar: CircleDollarSign,
-};
-
-export function CategoryGlyph({
-  name,
-  className,
-}: {
-  name?: CategoryIconName;
-  className?: string;
-}) {
-  const Icon = name ? iconMap[name] : Wallet;
-  return <Icon className={cn("size-5", className)} strokeWidth={1.6} />;
+export function ScreenHeader({ title, large, right }: { title: string; large?: boolean; right?: ReactNode }) {
+  return (
+    <header className="flex items-end justify-between px-5 pb-3 pt-[max(0.9rem,env(safe-area-inset-top))]">
+      <h1 className={cn("font-semibold tracking-tight", large ? "text-3xl" : "text-xl")}>{title}</h1>
+      {right}
+    </header>
+  );
 }
 
-export function AmountPill({
-  type,
-  amount,
-  currency,
-}: {
-  type: TxType;
-  amount: number;
-  currency: Transaction["currency"];
-}) {
-  let text: string;
-  if (currency === "MILES") {
-    const n = Math.round(amount).toLocaleString("en-HK");
-    text = type === "income" ? `+${n}` : type === "expense" ? `−${n}` : n;
-  } else if (type === "transfer") {
-    text = money(Math.abs(amount), currency);
-  } else if (type === "expense") {
-    text = money(-Math.abs(amount), currency, { sign: true });
-  } else {
-    text = money(Math.abs(amount), currency, { sign: true });
-  }
+export function Hairline() {
+  return <div className="h-px bg-line" />;
+}
+
+export function SectionLabel({ children }: { children: ReactNode }) {
+  return <h2 className="px-5 pb-1 pt-5 text-sm font-medium text-muted">{children}</h2>;
+}
+
+export function Metric({ label, value, tone }: { label: string; value: string; tone?: "income" | "expense" }) {
   return (
-    <span
-      className={cn(
-        "inline-flex min-h-8 min-w-16 items-center justify-center rounded-lg px-2.5 text-sm font-semibold tabular-nums",
-        type === "income" && "bg-pill-income text-income",
-        type === "expense" && "bg-pill-expense text-expense",
-        type === "transfer" && "bg-pill-transfer text-transfer",
-        type === "miles" && "bg-pill-miles text-miles",
-      )}
-    >
-      {text}
-    </span>
+    <div className="min-w-0">
+      <div className="truncate text-xs text-muted">{label}</div>
+      <div
+        className={cn(
+          "mt-1 truncate text-base font-semibold tabular-nums",
+          tone === "income" && "text-income",
+          tone === "expense" && "text-expense",
+        )}
+      >
+        {value}
+      </div>
+    </div>
   );
 }
 
 export function ProgressRing({
   value,
-  size = 36,
+  size = 40,
   stroke = 3,
   tone = "income",
 }: {
@@ -148,20 +57,11 @@ export function ProgressRing({
 }) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
-  const clamped = Math.min(1, Math.max(0, value));
-  const offset = c - clamped * c;
-  const color =
-    tone === "expense" ? "var(--expense)" : tone === "watch" ? "var(--watch)" : "var(--income)";
+  const pct = Math.max(0, Math.min(1.2, value));
+  const color = tone === "expense" ? "var(--color-expense)" : tone === "watch" ? "var(--color-watch)" : "var(--color-income)";
   return (
-    <svg width={size} height={size} className="shrink-0" aria-hidden>
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        stroke="var(--ring-track)"
-        strokeWidth={stroke}
-      />
+    <svg width={size} height={size} className="block -rotate-90">
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--color-ring-track)" strokeWidth={stroke} />
       <circle
         cx={size / 2}
         cy={size / 2}
@@ -169,249 +69,10 @@ export function ProgressRing({
         fill="none"
         stroke={color}
         strokeWidth={stroke}
-        strokeDasharray={c}
-        strokeDashoffset={offset}
+        strokeDasharray={`${c * Math.min(1, pct)} ${c}`}
         strokeLinecap="round"
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
       />
     </svg>
-  );
-}
-
-export function StatusChip({
-  status,
-}: {
-  status: "on-track" | "watch" | "at-risk";
-}) {
-  const t = useT();
-  const label =
-    status === "on-track"
-      ? t.status.onTrack
-      : status === "watch"
-        ? t.status.watch
-        : t.status.atRisk;
-  return (
-    <span
-      className={cn(
-        "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
-        status === "on-track" && "bg-income/15 text-income",
-        status === "watch" && "bg-watch/15 text-watch",
-        status === "at-risk" && "bg-expense/15 text-expense",
-      )}
-    >
-      <span
-        className={cn(
-          "size-1.5 rounded-full",
-          status === "on-track" && "bg-income",
-          status === "watch" && "bg-watch",
-          status === "at-risk" && "bg-expense",
-        )}
-      />
-      {label}
-    </span>
-  );
-}
-
-export function SectionLabel({
-  children,
-  action,
-}: {
-  children: ReactNode;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="flex items-center justify-between px-5 pb-1 pt-5">
-      <h2 className="text-sm font-medium text-muted">{children}</h2>
-      {action}
-    </div>
-  );
-}
-
-export function Hairline() {
-  return <div className="h-px bg-line" />;
-}
-
-export function ScreenHeader({
-  title,
-  backTo,
-  right,
-  large,
-}: {
-  title: string;
-  backTo?: string;
-  right?: ReactNode;
-  large?: boolean;
-}) {
-  const t = useT();
-  return (
-    <header className="flex items-center gap-3 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
-      {backTo ? (
-        <Link
-          to={backTo as "/"}
-          className="inline-flex size-11 items-center justify-center rounded-full text-accent"
-          aria-label={t.common.back}
-        >
-          <ArrowLeft className="size-5" strokeWidth={1.8} />
-        </Link>
-      ) : null}
-      <h1
-        className={cn(
-          "min-w-0 flex-1 font-semibold tracking-tight text-foreground",
-          large ? "text-3xl leading-tight" : "text-lg",
-          backTo && !large && "text-center",
-        )}
-      >
-        {title}
-      </h1>
-      <div className="flex min-w-11 items-center justify-end gap-1">{right}</div>
-    </header>
-  );
-}
-
-export function TransactionRow({
-  tx,
-  showDate,
-  onClick,
-}: {
-  tx: Transaction;
-  showDate?: boolean;
-  onClick?: () => void;
-}) {
-  const locale = useUi((s) => s.locale);
-  const accounts = useApp((s) => s.accounts);
-  const categories = useApp((s) => s.categories);
-  const cat = findCategory(tx.categoryId, categories);
-  const account = findAccount(tx.accountId, accounts);
-  const milesType = tx.milesType;
-  const displayType: TxType =
-    tx.type === "miles"
-      ? milesType === "earn"
-        ? "income"
-        : milesType === "burn" || milesType === "expiry"
-          ? "expense"
-          : "miles"
-      : tx.type === "transfer" && tx.countsAsExpense
-        ? "expense"
-        : tx.type;
-  const iconName: CategoryIconName | undefined =
-    tx.type === "miles" ? "plane" : tx.type === "transfer" ? "repeat" : cat?.icon;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex w-full items-center gap-3 px-5 py-3 text-left"
-    >
-      <span className="grid size-10 shrink-0 place-items-center rounded-full bg-elevated text-foreground ring-1 ring-line">
-        {tx.type === "transfer" ? (
-          <ArrowLeftRight className="size-5" strokeWidth={1.6} />
-        ) : (
-          <CategoryGlyph name={iconName} />
-        )}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[15px] font-medium text-foreground">
-          {pickName(locale, tx.payee, tx.payeeZh)}
-        </span>
-        <span className="mt-0.5 block truncate text-xs text-muted">
-          {showDate ? (
-            <>
-              {locale === "zh-HK"
-                ? `${Number(tx.date.slice(5, 7))}月 ${Number(tx.date.slice(8, 10))}`
-                : tx.date.slice(5)}
-              {" · "}
-            </>
-          ) : null}
-          {account ? pickName(locale, account.name, account.nameZh) : null}
-          {tx.planned ? (locale === "zh-HK" ? " · 計劃" : " · planned") : null}
-        </span>
-      </span>
-      <AmountPill type={displayType} amount={tx.amount} currency={tx.currency} />
-    </button>
-  );
-}
-
-export function Row({
-  icon,
-  title,
-  subtitle,
-  trailing,
-  onClick,
-  to,
-  chevron,
-}: {
-  icon?: ReactNode;
-  title: string;
-  subtitle?: string;
-  trailing?: ReactNode;
-  onClick?: () => void;
-  to?: string;
-  chevron?: boolean;
-}) {
-  const inner = (
-    <>
-      {icon ? (
-        <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-background text-foreground">
-          {icon}
-        </span>
-      ) : null}
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[15px] text-foreground">{title}</span>
-        {subtitle ? (
-          <span className="mt-0.5 block truncate text-xs text-muted">{subtitle}</span>
-        ) : null}
-      </span>
-      {trailing ? (
-        <span className="shrink-0 text-[15px] tabular-nums text-muted">{trailing}</span>
-      ) : null}
-      {chevron ? (
-        <span className="pl-1 text-lg leading-none text-faint" aria-hidden>
-          ›
-        </span>
-      ) : null}
-    </>
-  );
-  const cls = "flex w-full items-center gap-3 px-5 py-3 text-left";
-  if (to) {
-    return (
-      <Link to={to as "/"} className={cls}>
-        {inner}
-      </Link>
-    );
-  }
-  if (onClick) {
-    return (
-      <button type="button" onClick={onClick} className={cls}>
-        {inner}
-      </button>
-    );
-  }
-  return <div className={cls}>{inner}</div>;
-}
-
-export function Group({ children }: { children: ReactNode }) {
-  return (
-    <div className="mx-4 overflow-hidden rounded-xl bg-elevated">{children}</div>
-  );
-}
-
-export function Disclaimer({ children }: { children: ReactNode }) {
-  return (
-    <p className="px-5 py-4 text-xs leading-relaxed text-muted">{children}</p>
-  );
-}
-
-export function InfoButton({ k }: { k: string }) {
-  const t = useT();
-  const setInfoKey = useUi((s) => s.setInfoKey);
-  return (
-    <button
-      type="button"
-      aria-label={t.common.info}
-      onClick={() => setInfoKey(k)}
-      className="inline-flex size-8 items-center justify-center rounded-full text-muted"
-    >
-      <Info className="size-4" strokeWidth={1.8} />
-    </button>
   );
 }
 
@@ -425,15 +86,15 @@ export function Segmented<T extends string>({
   options: { id: T; label: string }[];
 }) {
   return (
-    <div className="mx-4 grid auto-cols-fr grid-flow-col rounded-lg bg-line p-0.5">
+    <div className="mx-4 grid grid-cols-2 rounded-lg bg-elevated p-1">
       {options.map((o) => (
         <button
           key={o.id}
           type="button"
           onClick={() => onChange(o.id)}
           className={cn(
-            "h-8 rounded-md text-sm font-medium transition-colors duration-150",
-            value === o.id ? "bg-elevated text-foreground shadow-sm" : "text-muted",
+            "h-9 rounded-md text-sm font-medium",
+            value === o.id ? "bg-background text-foreground shadow-sm" : "text-muted",
           )}
         >
           {o.label}
@@ -443,29 +104,12 @@ export function Segmented<T extends string>({
   );
 }
 
-export function Metric({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "income" | "expense" | "muted";
-}) {
+export function InfoButton({ k }: { k: string }) {
+  const set = useUi((s) => s.setInfoKey);
   return (
-    <div className="min-w-0">
-      <div className="text-[11px] text-muted">{label}</div>
-      <div
-        className={cn(
-          "mt-1 text-base font-semibold tabular-nums leading-snug",
-          tone === "income" && "text-income",
-          tone === "expense" && "text-expense",
-          !tone && "text-foreground",
-        )}
-      >
-        {value}
-      </div>
-    </div>
+    <button type="button" aria-label="info" onClick={() => set(k)} className="grid size-8 place-items-center text-faint">
+      <Info className="size-4" />
+    </button>
   );
 }
 
@@ -494,19 +138,9 @@ export function Overlay({
   if (!open) return null;
   const page = variant === "page";
   const sheet = (
-    <div
-      className={cn(
-        "fixed inset-0 grid",
-        page ? "z-[92] bg-background" : "z-[90] place-items-end md:place-items-center",
-      )}
-    >
+    <div className={cn("fixed inset-0 grid", page ? "z-[92] bg-background" : "z-[90] place-items-end md:place-items-center")}>
       {page ? null : (
-        <button
-          type="button"
-          className="absolute inset-0 scrim"
-          aria-label={t.common.close}
-          onClick={onClose}
-        />
+        <button type="button" className="absolute inset-0 scrim" aria-label={t.common.close} onClick={onClose} />
       )}
       <div
         className={cn(
@@ -516,7 +150,6 @@ export function Overlay({
             : "max-h-[92dvh] rounded-t-2xl pb-[max(1rem,env(safe-area-inset-bottom))] md:max-w-md md:rounded-2xl",
         )}
       >
-        {page ? null : <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-border md:hidden" />}
         {title ? (
           <div className="flex items-center justify-between px-5 pb-2 pt-3">
             <h2 className="text-base font-semibold">{title}</h2>
@@ -533,4 +166,101 @@ export function Overlay({
   return createPortal(sheet, document.body);
 }
 
-export { Globe };
+export function StatusChip({ status }: { status: "on-track" | "watch" | "at-risk" }) {
+  const locale = useUi((s) => s.locale);
+  const label =
+    status === "on-track"
+      ? locale === "zh-HK"
+        ? "進度良好"
+        : "On track"
+      : status === "watch"
+        ? locale === "zh-HK"
+          ? "需留意"
+          : "Watch"
+        : locale === "zh-HK"
+          ? "超支"
+          : "Over";
+  return (
+    <span
+      className={cn(
+        "rounded-full px-2 py-0.5 text-xs font-medium",
+        status === "on-track" && "bg-success-soft text-income",
+        status === "watch" && "bg-accent-soft text-watch",
+        status === "at-risk" && "bg-accent-soft text-expense",
+      )}
+    >
+      {label}
+    </span>
+  );
+}
+
+export function TransactionRow({ tx, onClick }: { tx: Transaction; onClick?: () => void }) {
+  const locale = useUi((s) => s.locale);
+  const cats = useApp((s) => s.categories);
+  const accs = useApp((s) => s.accounts);
+  const cat = cats.find((c) => c.id === tx.categoryId);
+  const acc = accs.find((a) => a.id === tx.accountId);
+  const side = cashflowSide(tx);
+  const spend = tx.type === "expense" || Boolean(tx.countsAsExpense);
+  return (
+    <button type="button" onClick={onClick} className="flex w-full items-center gap-3 px-5 py-3 text-left">
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-medium">{pickName(locale, tx.payee, tx.payeeZh)}</div>
+        <div className="truncate text-xs text-muted">
+          {cat ? pickName(locale, cat.name, cat.nameZh) : acc ? pickName(locale, acc.name, acc.nameZh) : "—"}
+          {tx.planned ? (locale === "zh-HK" ? " · 計劃" : " · planned") : ""}
+        </div>
+      </div>
+      <span
+        className={cn(
+          "text-sm font-semibold tabular-nums",
+          side === "income" || tx.type === "income" ? "text-income" : "text-foreground",
+        )}
+      >
+        {money(spend ? -tx.amount : tx.type === "income" ? tx.amount : tx.amount, tx.currency, { sign: true })}
+      </span>
+    </button>
+  );
+}
+
+export function Group({ children }: { children: ReactNode }) {
+  return <div className="mx-4 overflow-hidden rounded-xl bg-elevated">{children}</div>;
+}
+
+export function Row({
+  title,
+  to,
+  chevron,
+  icon,
+  onClick,
+}: {
+  title: string;
+  to?: string;
+  chevron?: boolean;
+  icon?: ReactNode;
+  onClick?: () => void;
+}) {
+  const inner = (
+    <div className="flex items-center gap-3 px-4 py-3.5">
+      {icon ? <span className="text-accent">{icon}</span> : null}
+      <span className="flex-1 text-sm">{title}</span>
+      {chevron ? <ChevronRight className="size-4 text-faint" /> : null}
+    </div>
+  );
+  if (to) {
+    return (
+      <Link to={to as never} className="block">
+        {inner}
+      </Link>
+    );
+  }
+  return (
+    <button type="button" onClick={onClick} className="block w-full text-left">
+      {inner}
+    </button>
+  );
+}
+
+export function Disclaimer({ children }: { children: ReactNode }) {
+  return <p className="px-5 py-4 text-xs leading-relaxed text-faint">{children}</p>;
+}

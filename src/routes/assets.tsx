@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppGate } from "@/components/shell";
-import { OnboardingScreen } from "@/components/more";
+import { AssetsScreen } from "@/components/assets";
 
-export const Route = createFileRoute("/onboarding")({ ssr: false, component: Page });
+export const Route = createFileRoute("/assets")({ ssr: false, component: Page });
 
 function Page() {
   return (
     <AppGate>
-      <OnboardingScreen />
+      <AssetsScreen />
     </AppGate>
   );
 }

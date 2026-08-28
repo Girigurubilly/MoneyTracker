@@ -96,18 +96,6 @@ export type Account = {
   sortOrder?: number;
 };
 
-export type Category = {
-  id: string;
-  name: string;
-  nameZh: string;
-  theme: LifeTheme;
-  kind: "expense" | "income";
-  icon: CategoryIconName;
-  essential?: boolean;
-  defaultAccountId?: string;
-  parentId?: string;
-};
-
 export type CategoryIconName =
   | "utensils"
   | "shopping"
@@ -185,6 +173,18 @@ export const CATEGORY_ICONS: CategoryIconName[] = [
   "dollar",
 ];
 
+export type Category = {
+  id: string;
+  name: string;
+  nameZh: string;
+  theme: LifeTheme;
+  kind: "expense" | "income";
+  icon: CategoryIconName;
+  essential?: boolean;
+  defaultAccountId?: string;
+  parentId?: string;
+};
+
 export const MONTH_TOTAL_BUDGET_ID = "b-month-total";
 
 export type Transaction = {
@@ -204,14 +204,8 @@ export type Transaction = {
   tags?: string[];
   tripId?: string;
   milesType?: "earn" | "burn" | "adjust" | "expiry";
-  /** Future / not-yet-charged: does not change any account balance until the date arrives. */
   planned?: boolean;
-  /** Links a scheduled occurrence to a monthly regular. */
   recurringId?: string;
-  /**
-   * Mortgage principal (and similar): stored as a transfer so cash falls and
-   * the loan account is reduced, but still counted as spend on Today / Budget.
-   */
   countsAsExpense?: boolean;
   fxToHkd?: number;
 };
@@ -231,18 +225,11 @@ export type Recurring = {
   chargedDay?: number;
   essential?: boolean;
   variable?: boolean;
-  /** Counts toward Living / Home essential spend when true. */
   living?: boolean;
-  /**
-   * Transfer that still counts as spend (mortgage principal). Cash leaves the
-   * payment account and the destination (loan) balance is reduced.
-   */
   countsAsExpense?: boolean;
-  /** Partner regular when this item is one half of a 本金 / 利息 split. */
   splitWithId?: string;
 };
 
-/** This-month budget hold — does not create a transaction or change balances. */
 export type AdhocBudget = {
   id: string;
   label: string;
@@ -267,19 +254,15 @@ export type Trip = {
   id: string;
   name: string;
   nameZh: string;
-  destinations: string;
-  destinationsZh: string;
+  destination: string;
   start: string;
-  end?: string;
+  end: string;
   status: "planning" | "booked" | "completed" | "cancelled";
   cashBudget: number;
   cashSaved: number;
   milesTarget: number;
   milesSaved: number;
   monthlyCash: number;
-  monthlyMiles: number;
-  notes?: string;
-  notesZh?: string;
 };
 
 export type Goal = {
@@ -289,57 +272,22 @@ export type Goal = {
   current: number;
   target: number;
   currency: MoneyUnit;
-  change30: number;
+  change30?: number;
 };
 
 export type Mortgage = {
   id: string;
+  name: string;
+  nameZh: string;
   accountId: string;
-  propertyAccountId?: string;
-  lender: string;
-  lenderZh: string;
   original: number;
   outstanding: number;
+  rate: number;
+  pRate?: number;
+  spread?: number;
   remainingMonths: number;
-  endDate?: string;
-  rateType: "P" | "H" | "fixed";
-  benchmark: number;
-  adjustment: number;
-  effectiveRate: number;
-  monthlyPayment: number;
-  nextReprice?: string;
-  paymentAccountId: string;
-};
-
-export type RetirementScenario = {
-  currentAge: number;
-  retireAge: number;
-  deathAge: number;
-  monthlyIncomeNow: number;
-  monthlySpendNow: number;
-  targetMonthly: number;
-  sustainableMonthly: number;
-  corpusAtRetire: number;
-  requiredCorpus: number;
-  gap: number;
-  extraMonthlySaving: number;
-  preReturn: number;
-  postReturn: number;
-  inflation: number;
-  travelInRetirement: number;
-  depletes: boolean;
-  depletionAge?: number;
-  mortgagePayoffAge: number;
-  status: "on-track" | "watch" | "at-risk";
-};
-
-export type OneOff = {
-  id: string;
-  label: string;
-  labelZh: string;
-  amount: number;
-  direction: "in" | "out";
-  age: number;
+  paymentDay: number;
+  type: "p" | "h" | "fixed";
 };
 
 export type Allowance = {
@@ -348,10 +296,17 @@ export type Allowance = {
   labelZh: string;
   monthly: number;
   startAge: number;
-  /** Inclusive. Omit for lifetime (e.g. 生果金). */
   endAge?: number;
-  kind?: "oaa" | "annuity" | "other";
+  kind: "oaa" | "annuity" | "other";
   inflationAdjusted: boolean;
+};
+
+export type OneOff = {
+  id: string;
+  label: string;
+  labelZh: string;
+  amount: number;
+  age: number;
 };
 
 export type FxRate = {

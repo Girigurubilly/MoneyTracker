@@ -31,11 +31,7 @@ export async function encryptSnapshot(json: string, password: string): Promise<s
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const key = await deriveKey(password, salt);
-  const cipher = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
-    key,
-    new TextEncoder().encode(json),
-  );
+  const cipher = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(json));
   return JSON.stringify({
     v: SCHEMA,
     alg: "AES-GCM",
@@ -47,11 +43,7 @@ export async function encryptSnapshot(json: string, password: string): Promise<s
 }
 
 export async function decryptSnapshot(payload: string, password: string): Promise<string> {
-  const parsed = JSON.parse(payload) as {
-    salt: string;
-    iv: string;
-    data: string;
-  };
+  const parsed = JSON.parse(payload) as { salt: string; iv: string; data: string };
   const key = await deriveKey(password, fromB64(parsed.salt));
   const plain = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv: fromB64(parsed.iv) as BufferSource },
@@ -95,9 +87,9 @@ export function parseCsv(text: string): string[][] {
       cur = "";
     } else if (ch !== "\r") cur += ch;
   }
-  if (cur.length || row.length) {
+  if (cur || row.length) {
     row.push(cur);
     rows.push(row);
   }
-  return rows.filter((r) => r.some((c) => c.trim()));
+  return rows;
 }
