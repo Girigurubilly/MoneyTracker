@@ -16,7 +16,7 @@ import { convertAmount, parseErApi, parseFrankfurter } from "./fx.ts";
 import { MONTH_TOTAL_BUDGET_ID } from "../types.ts";
 import type { AdhocBudget, Budget, Category, Recurring, Transaction } from "../types.ts";
 import { monthlyLivingEssentials, monthlyHousingCost, isPrincipalRegular, housingRegularRows, housingMonthLines } from "./housing.ts";
-import { periodCategoryTotals, periodRange } from "./period.ts";
+import { periodCategoryTotals, periodCategoryTxs, periodRange } from "./period.ts";
 import { runRetirement, sustainableMonthly } from "./retirement.ts";
 
 function rec(partial: Partial<Recurring> & Pick<Recurring, "id" | "type" | "amount" | "chargedDay">): Recurring {
@@ -358,6 +358,20 @@ describe("period merge", () => {
     assert.equal(merged.rows[0].value, 140);
     const split = periodCategoryTotals(txs, cats, [], "2026-08-01", "2026-08-31", "expense", false);
     assert.equal(split.rows.length, 2);
+    const mergedTx = periodCategoryTxs(txs, cats, "2026-08-01", "2026-08-31", "expense", true, "p-food");
+    assert.equal(mergedTx.length, 2);
+    assert.deepEqual(
+      mergedTx.map((x) => x.id).sort(),
+      ["a", "b"],
+    );
+    const dining = periodCategoryTxs(txs, cats, "2026-08-01", "2026-08-31", "expense", false, "dining");
+    assert.equal(dining.length, 1);
+    assert.equal(dining[0].id, "a");
+    const incomeBoth = periodCategoryTxs(txs, cats, "2026-08-01", "2026-08-31", "income", false, "dining");
+    assert.equal(incomeBoth.length, 1);
+    assert.equal(incomeBoth[0].id, "c");
+    const outOfRange = periodCategoryTxs(txs, cats, "2026-07-01", "2026-07-31", "expense", true, "p-food");
+    assert.equal(outOfRange.length, 0);
   });
   it("this-year range is inclusive calendar year", () => {
     const r = periodRange("this-year", "2026-08-28");

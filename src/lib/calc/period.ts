@@ -49,6 +49,19 @@ export type PeriodRow = {
   colorIndex: number;
 };
 
+/** Bucket a posted cash-flow txn into the same category id used on the 費用 chart. */
+export function periodBucketId(
+  tx: Transaction,
+  categories: Category[],
+  mergeParents: boolean,
+): string | null {
+  const side = cashflowSide(tx);
+  if (side === "none") return null;
+  const cat = categories.find((c) => c.id === tx.categoryId);
+  if (!cat) return side === "income" ? "uncat-in" : "uncat-out";
+  return mergeParents ? (cat.parentId ?? cat.id) : cat.id;
+}
+
 export function periodCategoryTotals(
   txs: Transaction[],
   categories: Category[],
@@ -71,11 +84,9 @@ export function periodCategoryTotals(
     if (side === "income") income += hkd;
     if (tab === "expense" && side !== "expense") continue;
     if (tab === "income" && side !== "income") continue;
-    const cat = categories.find((c) => c.id === tx.categoryId);
-    let id = cat?.id ?? (side === "income" ? "uncat-in" : "uncat-out");
-    if (mergeParents && cat) id = cat.parentId ?? cat.id;
-    const signed = tab === "both" && side === "income" ? hkd : hkd;
-    sums.set(id, (sums.get(id) ?? 0) + signed);
+    const id = periodBucketId(tx, categories, mergeParents);
+    if (!id) continue;
+    sums.set(id, (sums.get(id) ?? 0) + hkd);
   }
   const rows: PeriodRow[] = [];
   for (const [id, value] of sums) {
@@ -94,4 +105,29 @@ export function periodCategoryTotals(
     r.colorIndex = i % 8;
   });
   return { rows, expense, income };
+}
+
+/** Posted txs that make up one 費用/收入 chart row for the selected timeframe. */
+export function periodCategoryTxs(
+  txs: Transaction[],
+  categories: Category[],
+  from: string,
+  to: string,
+  tab: PeriodTab,
+  mergeParents: boolean,
+  categoryId: string,
+): Transaction[] {
+  const rows: Transaction[] = [];
+  for (const tx of txs) {
+    if (tx.planned) continue;
+    if (!inPeriod(tx.date, from, to)) continue;
+    const side = cashflowSide(tx);
+    if (side === "none") continue;
+    if (tab === "expense" && side !== "expense") continue;
+    if (tab === "income" && side !== "income") continue;
+    if (periodBucketId(tx, categories, mergeParents) !== categoryId) continue;
+    rows.push(tx);
+  }
+  rows.sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+  return rows;
 }
