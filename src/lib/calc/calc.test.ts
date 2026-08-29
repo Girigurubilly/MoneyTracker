@@ -57,7 +57,7 @@ describe("budget formulas", () => {
     assert.equal(realizedNonRegularSpend(1_000, 3_000, 2_000), 0);
   });
 
-  it("剩餘預算 holds only uncharged regulars and uncharged adhoc", () => {
+  it("剩餘預算 holds unposted regulars and ad-hoc even without a covering txn", () => {
     const budgets: Budget[] = [
       { id: MONTH_TOTAL_BUDGET_ID, label: "cap", labelZh: "上限", monthly: 20_000, spent: 0 },
     ];
@@ -75,14 +75,15 @@ describe("budget formulas", () => {
     ];
     const asOf = "2026-08-15";
     const [row] = budgetActuals(budgets, txs, "2026-08", [], [], recurring, asOf, adhoc);
-    const reservedHold = 4_000 + 1_500;
-    const pace = 10_000 - reservedHold;
+    const reservedHold = 4_000 + 500 + 1_500;
+    const realized = 3_000;
+    const pace = 10_000 - realized;
     const remain = projectedNonRegularRemain(pace, asOf);
     assert.equal(row.spent, 10_000);
     assert.equal(row.reserved, 4_000);
-    assert.equal(row.reservedAdhoc, 1_500);
+    assert.equal(row.reservedAdhoc, 2_000);
     assert.equal(row.adhoc, 2_000);
-    assert.equal(row.realized, 3_000);
+    assert.equal(row.realized, realized);
     assert.equal(row.nonRegular, pace);
     assert.equal(row.avgDaily, avgDailyNonRegular(pace, asOf));
     assert.equal(row.projectedRemain, remain);
@@ -92,10 +93,9 @@ describe("budget formulas", () => {
     assert.equal(row.daysRemaining, 16);
     assert.equal(row.dailyAllowed, row.remaining / 16);
     assert.equal(row.ratio, row.expected / 20_000);
-    assert.equal(realizedNonRegularSpend(row.spent, row.realized, row.adhoc), 5_000);
   });
 
-  it("posted spend covering a category marks that regular realised", () => {
+  it("same-category spend does not realise a regular without recurringId", () => {
     const budgets: Budget[] = [
       { id: MONTH_TOTAL_BUDGET_ID, label: "cap", labelZh: "上限", monthly: 20_000, spent: 0 },
     ];
@@ -110,8 +110,8 @@ describe("budget formulas", () => {
     ];
     const [row] = budgetActuals(budgets, txs, "2026-08", [], cats, recurring, "2026-08-15", []);
     assert.equal(row.spent, 198);
-    assert.equal(row.reserved, 0);
-    assert.equal(row.realized, 198);
+    assert.equal(row.reserved, 200);
+    assert.equal(row.realized, 0);
     assert.equal(row.avgDaily, 198 / 15);
   });
 
@@ -176,7 +176,7 @@ describe("monthCashflowForecast", () => {
 });
 
 describe("cap projection", () => {
-  it("avgDaily is (spent − reserved) / day; headline adds remaining-days pace", () => {
+  it("avgDaily is (spent − realized) / day; headline adds remaining-days pace", () => {
     const budgets: Budget[] = [
       { id: MONTH_TOTAL_BUDGET_ID, label: "cap", labelZh: "上限", monthly: 20_000, spent: 0 },
     ];
@@ -189,11 +189,14 @@ describe("cap projection", () => {
       tx({ id: "t1", type: "expense", amount: 7_000, date: "2026-08-12" }),
     ];
     const [row] = budgetActuals(budgets, txs, "2026-08", [], [], recurring, "2026-08-15", []);
-    const hold = 4_000;
-    const pace = 10_000 - hold;
+    const reservedHold = 4_000;
+    const realized = 3_000;
+    const pace = 10_000 - realized;
+    assert.equal(row.realized, realized);
+    assert.equal(row.reserved, reservedHold);
     assert.equal(row.avgDaily, pace / 15);
     assert.equal(row.projected, pace + (pace / 15) * 16);
-    assert.equal(row.expected, 10_000 + hold + (pace / 15) * 16);
+    assert.equal(row.expected, 10_000 + reservedHold + (pace / 15) * 16);
     assert.equal(row.remaining, 6_000);
     assert.equal(row.dailyAllowed, 6_000 / 16);
   });
@@ -208,13 +211,35 @@ describe("cap projection", () => {
     ];
     const txs: Transaction[] = [tx({ id: "t-all", type: "expense", amount: 10_000, date: "2026-08-12" })];
     const [row] = budgetActuals(budgets, txs, "2026-08", [], [], recurring, "2026-08-15", []);
-    const hold = 7_000;
-    const pace = 10_000 - hold;
+    const reservedHold = 7_000;
+    const pace = 10_000;
     assert.equal(row.spent, 10_000);
     assert.equal(row.reserved, 7_000);
+    assert.equal(row.realized, 0);
     assert.equal(row.avgDaily, pace / 15);
-    assert.equal(row.expected, 10_000 + hold + (pace / 15) * 16);
-    assert.equal(row.remaining, 20_000 - 10_000 - hold);
+    assert.equal(row.expected, 10_000 + reservedHold + (pace / 15) * 16);
+    assert.equal(row.remaining, 20_000 - 10_000 - reservedHold);
+  });
+
+  it("adhoc with a matching posted category is realised and omitted from 已預留", () => {
+    const budgets: Budget[] = [
+      { id: MONTH_TOTAL_BUDGET_ID, label: "cap", labelZh: "上限", monthly: 20_000, spent: 0 },
+    ];
+    const adhoc: AdhocBudget[] = [
+      hold({ id: "a-gift", amount: 2_000, date: "2026-08-10", categoryId: "gift" }),
+      hold({ id: "a-open", amount: 1_500, date: "2026-08-30" }),
+    ];
+    const txs: Transaction[] = [
+      tx({ id: "t-gift", type: "expense", amount: 2_000, date: "2026-08-10", categoryId: "gift" }),
+      tx({ id: "t1", type: "expense", amount: 3_000, date: "2026-08-12" }),
+    ];
+    const [row] = budgetActuals(budgets, txs, "2026-08", [], [], [], "2026-08-15", adhoc);
+    assert.equal(row.spent, 5_000);
+    assert.equal(row.reserved, 0);
+    assert.equal(row.reservedAdhoc, 1_500);
+    assert.equal(row.realized, 2_000);
+    assert.equal(row.avgDaily, 3_000 / 15);
+    assert.equal(row.expected, 5_000 + 1_500 + (3_000 / 15) * 16);
   });
 });
 

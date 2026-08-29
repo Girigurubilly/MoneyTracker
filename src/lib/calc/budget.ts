@@ -198,7 +198,9 @@ export function upcomingExpenseRegulars(recurring: Recurring[], asOfIso: string)
 export function coverRegulars(
   regulars: Recurring[],
   txs: Transaction[],
+  opts?: { matchCategory?: boolean },
 ): { covered: { regular: Recurring; txs: Transaction[] }[]; uncovered: Recurring[] } {
+  const matchCategory = opts?.matchCategory !== false;
   const used = new Set<string>();
   const covered: { regular: Recurring; txs: Transaction[] }[] = [];
   const uncovered: Recurring[] = [];
@@ -209,7 +211,7 @@ export function coverRegulars(
       covered.push({ regular: r, txs: byId });
       continue;
     }
-    if (r.categoryId) {
+    if (matchCategory && r.categoryId) {
       const hit = txs.find((tx) => !used.has(tx.id) && tx.categoryId === r.categoryId);
       if (hit) {
         used.add(hit.id);
@@ -232,6 +234,34 @@ export function coverExpenseRegulars(
     txs.filter((tx) => inMonth(tx.date, month) && isSpendLike(tx)),
   );
 }
+
+/** Ad-hoc holds are realised only when a posted spend matches the same category. */
+export function coverAdhoc(
+  rows: AdhocBudget[],
+  txs: Transaction[],
+  usedTxIds?: Set<string>,
+): { covered: AdhocBudget[]; uncovered: AdhocBudget[] } {
+  const used = usedTxIds ?? new Set<string>();
+  const covered: AdhocBudget[] = [];
+  const uncovered: AdhocBudget[] = [];
+  for (const a of rows) {
+    if (a.categoryId) {
+      const hit = txs.find((tx) => !used.has(tx.id) && tx.categoryId === a.categoryId);
+      if (hit) {
+        used.add(hit.id);
+        covered.push(a);
+        continue;
+      }
+    }
+    uncovered.push(a);
+  }
+  return { covered, uncovered };
+}
+
+export function hkdOfAdhoc(a: AdhocBudget, rates: FxRate[]): number {
+  return Math.abs(toHkd(a.amount, a.currency, rates));
+}
+
 
 export function forecastTone(ratio: number): "income" | "watch" | "expense" {
   if (!Number.isFinite(ratio) || ratio < 0.96) return "income";
@@ -297,18 +327,15 @@ export function monthCashflowForecast(
   return { income, expense, net: income - expense };
 }
 
-function hkdTx(tx: Transaction, rates: FxRate[]): number {
-  return Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
-}
-
 /**
- * Cap card formulas (user-specified):
- *   R (已預留)     = monthly expense regulars not yet posted this month
- *                    (no covering posted tx) + this-month holds not yet due
- *   avgDaily        = (spent − R) / day of month
- *   dailyAllowed    = (cap − spent − R) / days after today
- *   projected (全月) = (spent − R) + avgDaily × remaining days
- *   headline        = spent + R + avgDaily × remaining days
+ * Cap card formulas:
+ *   reserved (已預留) = monthly expense regulars + this-month ad-hoc with no matching posted txn
+ *                       (past due still counts if nothing has posted)
+ *   realized (hidden) = those same items that do have a matching posted txn
+ *   avgDaily          = (spent − realized) / day of month
+ *   dailyAllowed      = (cap − spent − reserved) / days after today
+ *   projected (全月)  = (spent − realized) + avgDaily × remaining days
+ *   headline          = spent + reserved + avgDaily × remaining days
  */
 export function budgetActuals(
   budgets: Budget[],
@@ -337,14 +364,15 @@ export function budgetActuals(
 })[] {
   const asOf = asOfIso ?? monthEndIso(month);
   const postedSpend = txs.filter((tx) => inMonth(tx.date, month) && isSpendLike(tx) && !tx.planned);
-  const cover = coverRegulars(monthlyExpenseRegulars(recurring), postedSpend);
+  const cover = coverRegulars(monthlyExpenseRegulars(recurring), postedSpend, { matchCategory: false });
+  const used = new Set(cover.covered.flatMap((row) => row.txs.map((tx) => tx.id)));
+  const adhocCover = coverAdhoc(adhocForMonth(adhocRows, month), postedSpend, used);
   const reservedReg = cover.uncovered.reduce((s, r) => s + hkdOfRegular(r, rates), 0);
-  let postedCovering = 0;
-  for (const row of cover.covered) {
-    for (const tx of row.txs) postedCovering += hkdTx(tx, rates);
-  }
+  const reservedA = adhocCover.uncovered.reduce((s, a) => s + hkdOfAdhoc(a, rates), 0);
+  const realizedReg = cover.covered.reduce((s, row) => s + hkdOfRegular(row.regular, rates), 0);
+  const realizedA = adhocCover.covered.reduce((s, a) => s + hkdOfAdhoc(a, rates), 0);
+  const realized = realizedReg + realizedA;
   const adhoc = adhocTotal(adhocRows, month, rates);
-  const reservedA = reservedAdhoc(adhocRows, month, rates, asOf);
   return budgets.map((b) => {
     const unscoped = !b.categoryId && !b.theme;
     const isMonth = unscoped && b.id === MONTH_TOTAL_BUDGET_ID;
@@ -358,7 +386,7 @@ export function budgetActuals(
           categories,
         });
     const hold = isMonth ? reservedReg + reservedA : 0;
-    const paceBase = isMonth ? spent - hold : 0;
+    const paceBase = isMonth ? spent - realized : 0;
     const avgDaily = isMonth ? avgDailyNonRegular(paceBase, asOf) : 0;
     const projectedRemain = isMonth ? projectedNonRegularRemain(paceBase, asOf) : 0;
     const projected = isMonth ? paceBase + projectedRemain : 0;
@@ -371,7 +399,7 @@ export function budgetActuals(
       reserved: isMonth ? reservedReg : 0,
       reservedAdhoc: isMonth ? reservedA : 0,
       adhoc: isMonth ? adhoc : 0,
-      realized: isMonth ? postedCovering : 0,
+      realized: isMonth ? realized : 0,
       nonRegular: paceBase,
       avgDaily,
       projected,
