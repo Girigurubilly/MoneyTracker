@@ -251,7 +251,7 @@ export function ProgressBar({ value, tone = "income" }: { value: number; tone?: 
   );
 }
 
-export function TransactionRow({ tx, onClick }: { tx: Transaction; onClick?: () => void }) {
+export function TransactionRow({ tx, onClick, showDate }: { tx: Transaction; onClick?: () => void; showDate?: boolean }) {
   const locale = useUi((s) => s.locale);
   const cats = useApp((s) => s.categories);
   const accs = useApp((s) => s.accounts);
@@ -265,6 +265,7 @@ export function TransactionRow({ tx, onClick }: { tx: Transaction; onClick?: () 
         <div className="truncate text-sm font-medium">{pickName(locale, tx.payee, tx.payeeZh)}</div>
         <div className="truncate text-xs text-muted">
           {cat ? pickName(locale, cat.name, cat.nameZh) : acc ? pickName(locale, acc.name, acc.nameZh) : "—"}
+          {showDate ? ` · ${tx.date}` : ""}
           {tx.planned ? (locale === "zh-HK" ? " · 計劃" : " · planned") : ""}
         </div>
       </div>

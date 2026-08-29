@@ -15,7 +15,19 @@ export function cashflowSide(tx: Transaction): "income" | "expense" | "none" {
   return "none";
 }
 
-export function balanceDeltas(tx: Transaction): { accountId: string; delta: number }[] {
+export function isDebtAccount(a: Pick<Account, "type">): boolean {
+  return a.type === "mortgage" || a.type === "loan" || a.type === "credit";
+}
+
+/** Move a liability toward zero. Positive stored debt decreases; negative stored debt increases (toward 0). */
+export function payDownDelta(balance: number, amount: number): number {
+  const pay = Math.abs(amount);
+  if (pay === 0) return 0;
+  if (balance > 0) return -pay;
+  return pay;
+}
+
+export function balanceDeltas(tx: Transaction, accounts: Account[] = []): { accountId: string; delta: number }[] {
   if (tx.planned) return [];
   if (tx.type === "expense") {
     return [{ accountId: tx.accountId, delta: -Math.abs(tx.amount) }];
@@ -26,9 +38,11 @@ export function balanceDeltas(tx: Transaction): { accountId: string; delta: numb
   if (tx.type === "transfer") {
     const rows = [{ accountId: tx.accountId, delta: -Math.abs(tx.amount) }];
     if (tx.toAccountId) {
+      const dest = accounts.find((a) => a.id === tx.toAccountId);
+      const amt = Math.abs(tx.destAmount ?? tx.amount);
       rows.push({
         accountId: tx.toAccountId,
-        delta: Math.abs(tx.destAmount ?? tx.amount),
+        delta: dest && isDebtAccount(dest) ? payDownDelta(dest.balance, amt) : amt,
       });
     }
     return rows;

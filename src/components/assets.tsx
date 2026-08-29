@@ -1,21 +1,29 @@
 import { useState } from "react";
-import { Plus } from "lucide-react";
-import { Group, Overlay, ScreenHeader } from "@/components/shared";
+import { ChevronDown, ChevronUp, Plus } from "lucide-react";
+import { Group, Hairline, Overlay, ScreenHeader, SectionLabel, TransactionRow } from "@/components/shared";
 import { money } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { netWorthNow } from "@/lib/calc/networth";
-import { accountsInGroup, BALANCE_GROUP_ORDER } from "@/lib/accounts";
-import { ACCOUNT_TYPE_OPTIONS, groupForType, type Account, type AccountType } from "@/lib/types";
+import { accountsInGroup, BALANCE_GROUP_ORDER, nextSortOrder } from "@/lib/accounts";
+import {
+  ACCOUNT_TYPE_OPTIONS,
+  CURRENCIES,
+  groupForType,
+  type Account,
+  type AccountType,
+  type MoneyUnit,
+} from "@/lib/types";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 
 export function AssetsScreen() {
   const t = useT();
-  const locale = useUi((s) => s.locale);
   const accounts = useApp((s) => s.accounts);
   const rates = useApp((s) => s.fxRates);
   const nw = netWorthNow(accounts, rates);
-  const [addOpen, setAddOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null | "new">(null);
+  const [viewingId, setViewingId] = useState<string | null>(null);
+  const [reorder, setReorder] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
   const labels: Record<Account["group"], string> = {
     cash: t.assets.cash,
@@ -31,9 +39,14 @@ export function AssetsScreen() {
         title={t.assets.title}
         large
         right={
-          <button type="button" aria-label={t.assets.addAccount} onClick={() => setAddOpen(true)} className="grid size-11 place-items-center text-accent">
-            <Plus className="size-6" />
-          </button>
+          <div className="flex items-center">
+            <button type="button" className="h-11 px-2 text-sm font-medium text-accent" onClick={() => setReorder((v) => !v)}>
+              {reorder ? t.common.done : t.common.edit}
+            </button>
+            <button type="button" aria-label={t.assets.addAccount} onClick={() => setEditingId("new")} className="grid size-11 place-items-center text-accent">
+              <Plus className="size-6" />
+            </button>
+          </div>
         }
       />
       <div className="mx-4 mb-4 rounded-xl bg-elevated px-4 py-4">
@@ -55,104 +68,252 @@ export function AssetsScreen() {
           <div key={g.id} className="mb-4">
             <h2 className="px-5 pb-1 text-sm font-medium text-muted">{g.label}</h2>
             <Group>
-              {rows.map((a) => (
-                <AccountRow key={a.id} a={a} />
+              {rows.map((a, i) => (
+                <AccountRow
+                  key={a.id}
+                  a={a}
+                  reorder={reorder}
+                  canUp={i > 0 && rows[i - 1].type === a.type}
+                  canDown={i < rows.length - 1 && rows[i + 1].type === a.type}
+                  onEdit={() => setViewingId(a.id)}
+                />
               ))}
             </Group>
           </div>
         );
       })}
       <button type="button" className="mx-5 mt-2 text-sm text-accent" onClick={() => setShowHidden((v) => !v)}>
-        {t.assets.showHidden}
+        {showHidden ? t.assets.hideHidden : t.assets.showHidden}
       </button>
-      <AddAccount open={addOpen} onClose={() => setAddOpen(false)} />
-      <span className="hidden">{locale}</span>
+      {viewingId && !editingId ? (
+        <AccountDetail
+          account={accounts.find((a) => a.id === viewingId) ?? null}
+          onClose={() => setViewingId(null)}
+          onEdit={() => setEditingId(viewingId)}
+        />
+      ) : null}
+      <AccountEditor
+        key={editingId ?? "closed"}
+        open={editingId !== null}
+        account={editingId && editingId !== "new" ? accounts.find((a) => a.id === editingId) ?? null : null}
+        onClose={() => setEditingId(null)}
+      />
     </div>
   );
 }
 
-function AccountRow({ a }: { a: Account }) {
+function AccountRow({
+  a,
+  reorder,
+  canUp,
+  canDown,
+  onEdit,
+}: {
+  a: Account;
+  reorder: boolean;
+  canUp: boolean;
+  canDown: boolean;
+  onEdit: () => void;
+}) {
   const locale = useUi((s) => s.locale);
-  const update = useApp((s) => s.updateAccount);
-  const [open, setOpen] = useState(false);
-  const [bal, setBal] = useState(String(a.balance));
+  const move = useApp((s) => s.moveAccount);
   return (
-    <>
-      <button type="button" className="flex w-full items-center justify-between px-4 py-3 text-left" onClick={() => setOpen(true)}>
-        <span className="text-sm">{pickName(locale, a.name, a.nameZh)}</span>
+    <div className="flex items-center">
+      <button type="button" className="flex min-w-0 flex-1 items-center justify-between px-4 py-3 text-left" onClick={onEdit}>
+        <span className="min-w-0">
+          <span className="block truncate text-sm">{pickName(locale, a.name, a.nameZh)}</span>
+          {a.hidden ? <span className="text-xs text-muted">{locale === "zh-HK" ? "已隱藏" : "Hidden"}</span> : null}
+        </span>
         <span className="text-sm font-semibold tabular-nums">{money(a.balance, a.currency)}</span>
       </button>
-      <Overlay open={open} onClose={() => setOpen(false)} title={pickName(locale, a.name, a.nameZh)}>
-        <div className="px-5 pb-8">
-          <label className="block py-2 text-xs text-muted">
-            {tAmount()}
-            <input inputMode="decimal" value={bal} onChange={(e) => setBal(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
-          </label>
-          <label className="mt-2 flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={a.includeInNetWorth}
-              onChange={(e) => void update({ ...a, includeInNetWorth: e.target.checked })}
-            />
-            {useUi.getState().locale === "zh-HK" ? "計入淨資產" : "Included in net worth"}
-          </label>
-          <button
-            type="button"
-            className="mt-4 h-12 w-full rounded-xl bg-accent font-semibold text-on-accent"
-            onClick={async () => {
-              await update({ ...a, balance: Number(bal) || 0 });
-              setOpen(false);
-            }}
-          >
-            {useUi.getState().locale === "zh-HK" ? "儲存" : "Save"}
+      {reorder ? (
+        <div className="flex pr-2">
+          <button type="button" aria-label="up" disabled={!canUp} className="grid size-11 place-items-center text-accent disabled:text-faint" onClick={() => void move(a.id, -1)}>
+            <ChevronUp className="size-5" />
+          </button>
+          <button type="button" aria-label="down" disabled={!canDown} className="grid size-11 place-items-center text-accent disabled:text-faint" onClick={() => void move(a.id, 1)}>
+            <ChevronDown className="size-5" />
           </button>
         </div>
-      </Overlay>
-    </>
+      ) : null}
+    </div>
   );
 }
 
-function tAmount() {
-  return useUi.getState().locale === "zh-HK" ? "結餘" : "Balance";
-}
-
-function AddAccount({ open, onClose }: { open: boolean; onClose: () => void }) {
+function AccountDetail({
+  account,
+  onClose,
+  onEdit,
+}: {
+  account: Account | null;
+  onClose: () => void;
+  onEdit: () => void;
+}) {
   const t = useT();
   const locale = useUi((s) => s.locale);
-  const add = useApp((s) => s.addAccount);
-  const [name, setName] = useState("");
-  const [type, setType] = useState<AccountType>("current");
-  const [bal, setBal] = useState("0");
+  const setTx = useUi((s) => s.setTxDetailId);
+  const txs = useApp((s) => s.transactions);
+  if (!account) return null;
+  const rows = txs
+    .filter((x) => x.accountId === account.id || x.toAccountId === account.id)
+    .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+  const typeLabel = ACCOUNT_TYPE_OPTIONS.find((o) => o.id === account.type);
   return (
-    <Overlay open={open} onClose={onClose} title={t.assets.addAccount}>
-      <div className="px-5 pb-8">
-        <input value={name} onChange={(e) => setName(e.target.value)} className="h-11 w-full rounded-lg bg-elevated px-3" placeholder={locale === "zh-HK" ? "名稱" : "Name"} />
-        <select value={type} onChange={(e) => setType(e.target.value as AccountType)} className="mt-3 h-11 w-full rounded-lg bg-elevated px-3">
-          {ACCOUNT_TYPE_OPTIONS.map((o) => (
-            <option key={o.id} value={o.id}>
-              {locale === "zh-HK" ? o.zh : o.en}
-            </option>
-          ))}
-        </select>
-        <input inputMode="decimal" value={bal} onChange={(e) => setBal(e.target.value)} className="mt-3 h-11 w-full rounded-lg bg-elevated px-3" />
-        <button
-          type="button"
-          className="mt-4 h-12 w-full rounded-xl bg-accent font-semibold text-on-accent"
-          onClick={async () => {
-            const n = name.trim() || (locale === "zh-HK" ? "帳戶" : "Account");
-            await add({
-              id: newId(),
-              name: n,
-              nameZh: n,
-              type,
-              currency: type === "miles" ? "MILES" : "HKD",
-              balance: Number(bal) || 0,
-              includeInNetWorth: type !== "miles",
-              group: groupForType(type),
-            });
-            onClose();
-          }}
-        >
+    <Overlay open onClose={onClose} variant="page">
+      <header className="flex items-center justify-between px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <button type="button" className="h-11 min-w-11 px-2 text-sm text-accent" onClick={onClose}>
+          {t.common.back}
+        </button>
+        <h1 className="min-w-0 flex-1 truncate text-center text-base font-semibold">{pickName(locale, account.name, account.nameZh)}</h1>
+        <button type="button" className="h-11 min-w-11 px-2 text-sm font-medium text-accent" onClick={onEdit}>
+          {t.common.edit}
+        </button>
+      </header>
+      <div className="mx-4 mb-4 mt-2 rounded-xl bg-elevated px-4 py-4">
+        <div className="text-xs text-muted">{typeLabel ? (locale === "zh-HK" ? typeLabel.zh : typeLabel.en) : account.type}</div>
+        <div className="mt-1 text-2xl font-semibold tabular-nums">{money(account.balance, account.currency)}</div>
+        {account.hidden ? <div className="mt-1 text-xs text-muted">{t.assets.hidden}</div> : null}
+      </div>
+      <SectionLabel>{t.assets.transactions}</SectionLabel>
+      <Hairline />
+      {rows.length === 0 ? (
+        <p className="px-5 py-6 text-sm text-muted">{t.assets.noTransactions}</p>
+      ) : (
+        rows.map((tx, i) => (
+          <div key={tx.id}>
+            {i > 0 ? <Hairline /> : null}
+            <TransactionRow tx={tx} showDate onClick={() => setTx(tx.id)} />
+          </div>
+        ))
+      )}
+    </Overlay>
+  );
+}
+
+function AccountEditor({ open, account, onClose }: { open: boolean; account: Account | null; onClose: () => void }) {
+  const t = useT();
+  const locale = useUi((s) => s.locale);
+  const accounts = useApp((s) => s.accounts);
+  const mortgage = useApp((s) => s.mortgage);
+  const add = useApp((s) => s.addAccount);
+  const update = useApp((s) => s.updateAccount);
+  const updateMortgage = useApp((s) => s.updateMortgage);
+  const properties = accounts.filter((a) => a.type === "property" && a.id !== account?.id);
+  const loans = accounts.filter((a) => (a.type === "mortgage" || a.type === "loan") && a.id !== account?.id);
+  const [name, setName] = useState(account ? pickName(locale, account.name, account.nameZh) : "");
+  const [type, setType] = useState<AccountType>(account?.type ?? "current");
+  const [currency, setCurrency] = useState<MoneyUnit>(account?.currency ?? "HKD");
+  const [bal, setBal] = useState(account ? String(account.balance) : "0");
+  const [notes, setNotes] = useState(account ? pickName(locale, account.notes ?? "", account.notesZh ?? "") : "");
+  const [include, setInclude] = useState(account?.includeInNetWorth ?? true);
+  const [hidden, setHidden] = useState(account?.hidden ?? false);
+  const [linkedId, setLinkedId] = useState(
+    account?.linkedAccountId ?? (account?.type === "mortgage" ? mortgage?.propertyAccountId ?? "" : ""),
+  );
+
+  async function save() {
+    const n = name.trim() || (locale === "zh-HK" ? "帳戶" : "Account");
+    const group = groupForType(type);
+    const row: Account = {
+      id: account?.id ?? newId(),
+      name: n,
+      nameZh: n,
+      type,
+      currency: type === "miles" ? "MILES" : currency === "MILES" ? "HKD" : currency,
+      balance: Number(bal) || 0,
+      includeInNetWorth: type === "miles" ? false : include,
+      group,
+      hidden,
+      notes: notes || undefined,
+      notesZh: notes || undefined,
+      sortOrder: account?.group === group ? account.sortOrder : nextSortOrder(accounts, group),
+      linkedAccountId: type === "mortgage" || type === "loan" || type === "property" ? linkedId || undefined : undefined,
+    };
+    if (account) await update(row);
+    else await add(row);
+    if (mortgage && (row.type === "mortgage" || row.type === "loan") && row.id === mortgage.accountId) {
+      await updateMortgage({
+        ...mortgage,
+        propertyAccountId: row.linkedAccountId,
+        outstanding: Math.abs(row.balance),
+        accountId: row.id,
+      });
+    } else if (mortgage && row.type === "property" && row.linkedAccountId === mortgage.accountId) {
+      await updateMortgage({ ...mortgage, propertyAccountId: row.id });
+    }
+    onClose();
+  }
+
+  const linkOptions = type === "property" ? loans : type === "mortgage" || type === "loan" ? properties : [];
+
+  return (
+    <Overlay open={open} onClose={onClose} title={account ? t.common.edit : t.assets.addAccount} variant="page">
+      <div className="px-5 pb-10">
+        <label className="block py-2">
+          <span className="text-xs text-muted">{t.assets.name}</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none" />
+        </label>
+        <label className="block py-2">
+          <span className="text-xs text-muted">{t.assets.type}</span>
+          <select
+            value={type}
+            onChange={(e) => {
+              const next = e.target.value as AccountType;
+              setType(next);
+              if (next === "miles") setCurrency("MILES");
+              else if (currency === "MILES") setCurrency("HKD");
+            }}
+            className="mt-1 h-11 w-full rounded-lg bg-elevated px-3"
+          >
+            {ACCOUNT_TYPE_OPTIONS.map((o) => (
+              <option key={o.id} value={o.id}>
+                {locale === "zh-HK" ? o.zh : o.en}
+              </option>
+            ))}
+          </select>
+        </label>
+        {type !== "miles" ? (
+          <label className="block py-2">
+            <span className="text-xs text-muted">{t.assets.currency}</span>
+            <select value={currency} onChange={(e) => setCurrency(e.target.value as MoneyUnit)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3">
+              {CURRENCIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        <label className="block py-2">
+          <span className="text-xs text-muted">{t.assets.balance}</span>
+          <input inputMode="decimal" value={bal} onChange={(e) => setBal(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none" />
+        </label>
+        {linkOptions.length ? (
+          <label className="block py-2">
+            <span className="text-xs text-muted">{type === "property" ? t.assets.linkedLoan : t.assets.linkedProperty}</span>
+            <select value={linkedId} onChange={(e) => setLinkedId(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3">
+              <option value="">{t.common.none}</option>
+              {linkOptions.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {pickName(locale, a.name, a.nameZh)}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        <label className="block py-2">
+          <span className="text-xs text-muted">{t.add.note}</span>
+          <input value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none" />
+        </label>
+        <label className="flex items-center gap-2 py-2 text-sm">
+          <input type="checkbox" checked={include} onChange={(e) => setInclude(e.target.checked)} />
+          {t.assets.include}
+        </label>
+        <label className="flex items-center gap-2 py-2 text-sm">
+          <input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} />
+          {t.assets.hideAccount}
+        </label>
+        <button type="button" className="mt-4 h-12 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={() => void save()}>
           {t.add.save}
         </button>
       </div>

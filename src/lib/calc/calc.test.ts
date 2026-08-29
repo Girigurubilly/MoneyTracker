@@ -8,13 +8,14 @@ import {
   adhocTotal,
   budgetActuals,
   monthCashflowForecast,
+  forecastTone,
+  projectedNonRegular,
 } from "./budget.ts";
 import { MONTH_TOTAL_BUDGET_ID } from "../types.ts";
-import type { AdhocBudget, Budget, Category, Mortgage, Recurring, Transaction } from "../types.ts";
-import { monthlyLivingEssentials, monthlyHousingCost, isPrincipalRegular, housingRegularRows } from "./housing.ts";
+import type { AdhocBudget, Budget, Category, Recurring, Transaction } from "../types.ts";
+import { monthlyLivingEssentials, monthlyHousingCost, isPrincipalRegular, housingRegularRows, housingMonthLines } from "./housing.ts";
 import { periodCategoryTotals, periodRange } from "./period.ts";
 import { runRetirement, sustainableMonthly } from "./retirement.ts";
-import { monthlyPayment } from "./mortgage.ts";
 
 function rec(partial: Partial<Recurring> & Pick<Recurring, "id" | "type" | "amount" | "chargedDay">): Recurring {
   return {
@@ -67,17 +68,41 @@ describe("budget formulas", () => {
       hold({ id: "a-open", amount: 1_500, date: "2026-08-30" }),
     ];
     const txs: Transaction[] = [
-      tx({ id: "t1", type: "expense", amount: 10_000, date: "2026-08-12" }),
+      tx({ id: "t-charged", type: "expense", amount: 3_000, date: "2026-08-01", recurringId: "r-charged" }),
+      tx({ id: "t1", type: "expense", amount: 7_000, date: "2026-08-12" }),
     ];
     const asOf = "2026-08-15";
     const [row] = budgetActuals(budgets, txs, "2026-08", [], [], recurring, asOf, adhoc);
+    const projected = projectedNonRegular(10_000, 3_000, asOf);
     assert.equal(row.spent, 10_000);
     assert.equal(row.reserved, 4_000);
     assert.equal(row.reservedAdhoc, 1_500);
     assert.equal(row.adhoc, 2_000);
     assert.equal(row.realized, 3_000);
+    assert.equal(row.projected, projected);
+    assert.equal(row.expected, 10_000 + 4_000 + 1_500 + projected);
     assert.equal(row.remaining, 20_000 - 10_000 - 4_000 - 1_500);
+    assert.equal(row.ratio, row.expected / 20_000);
     assert.equal(realizedNonRegularSpend(row.spent, row.realized, row.adhoc), 5_000);
+  });
+
+  it("posted spend without recurringId covers the matching category regular", () => {
+    const budgets: Budget[] = [
+      { id: MONTH_TOTAL_BUDGET_ID, label: "cap", labelZh: "上限", monthly: 20_000, spent: 0 },
+    ];
+    const recurring: Recurring[] = [
+      rec({ id: "r-phone", type: "expense", amount: 200, chargedDay: 25, categoryId: "phone" }),
+    ];
+    const cats: Category[] = [
+      { id: "phone", name: "Phone", nameZh: "電話", theme: "living", kind: "expense", icon: "wifi" },
+    ];
+    const txs: Transaction[] = [
+      tx({ id: "t-phone", type: "expense", amount: 198, date: "2026-08-05", categoryId: "phone" }),
+    ];
+    const [row] = budgetActuals(budgets, txs, "2026-08", [], cats, recurring, "2026-08-15", []);
+    assert.equal(row.spent, 198);
+    assert.equal(row.reserved, 0);
+    assert.equal(row.realized, 198);
   });
 
   it("reserved helpers skip charged items", () => {
@@ -140,6 +165,18 @@ describe("monthCashflowForecast", () => {
   });
 });
 
+describe("forecastTone", () => {
+  it("0–95% green, 96–100% amber, over 100% red", () => {
+    assert.equal(forecastTone(0), "income");
+    assert.equal(forecastTone(0.95), "income");
+    assert.equal(forecastTone(0.959), "income");
+    assert.equal(forecastTone(0.96), "watch");
+    assert.equal(forecastTone(1), "watch");
+    assert.equal(forecastTone(1.01), "expense");
+    assert.equal(forecastTone(Number.NaN), "income");
+  });
+});
+
 describe("housing monthly cost", () => {
   const cats: Category[] = [
     { id: "p-housing", name: "Housing", nameZh: "房屋", theme: "living", kind: "expense", icon: "home" },
@@ -170,24 +207,28 @@ describe("housing monthly cost", () => {
     assert.equal(rows.some((r) => r.id === "r-p"), true);
     assert.equal(rows.reduce((s, r) => s + r.amount, 0), 1590 + 8800 + 5319);
   });
-  it("住房成本 is the mortgage instalment", () => {
-    const m: Mortgage = {
-      id: "m",
-      name: "m",
-      nameZh: "m",
-      accountId: "mortgage",
-      original: 4_000_000,
-      outstanding: 2_913_000,
-      rate: 0.0215,
-      pRate: 0.0525,
-      spread: -0.031,
-      remainingMonths: 256,
-      paymentDay: 28,
-      type: "p",
-      livingMode: "own-mortgage",
-    };
-    const pmt = monthlyPayment(m.outstanding, 0.0215, 256);
-    assert.equal(monthlyHousingCost(m, recurring, cats, []), pmt);
+  it("住房成本 is posted house spend plus remaining scheduled, including 本金", () => {
+    const asOf = "2026-08-29";
+    assert.equal(monthlyHousingCost([], recurring, cats, [], asOf), 1590 + 8800 + 5319);
+    const posted = [
+      tx({ id: "t-p", type: "transfer", amount: 8800, categoryId: "mortgage-p", countsAsExpense: true, recurringId: "r-p", date: "2026-08-01" }),
+    ];
+    assert.equal(monthlyHousingCost(posted, recurring, cats, [], asOf), 1590 + 8800 + 5319);
+  });
+  it("住房成本 does not double-count posted house spend without recurringId", () => {
+    const asOf = "2026-08-29";
+    const posted = [
+      tx({ id: "t-p", type: "transfer", amount: 8800, categoryId: "mortgage-p", countsAsExpense: true, date: "2026-08-01" }),
+      tx({ id: "t-i", type: "expense", amount: 5319, categoryId: "mortgage-i", date: "2026-08-01" }),
+      tx({ id: "t-m", type: "expense", amount: 1590, categoryId: "mgmt", date: "2026-08-01" }),
+    ];
+    assert.equal(monthlyHousingCost(posted, recurring, cats, [], asOf), 1590 + 8800 + 5319);
+    const lines = housingMonthLines(posted, recurring, cats, [], asOf);
+    assert.equal(lines.length, 3);
+    assert.equal(
+      lines.reduce((s, r) => s + r.amount, 0),
+      1590 + 8800 + 5319,
+    );
   });
 });
 

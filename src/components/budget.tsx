@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { Plus, ChevronRight } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { InfoButton, Overlay, ScreenHeader, StatusChip } from "@/components/shared";
 import { CategoryPicker } from "@/components/category-picker";
 import { AccountSelect } from "@/components/account-select";
 import { money, pct, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
-import { asOfForMonth, budgetActuals, chargedDayOf } from "@/lib/calc/budget";
+import { asOfForMonth, budgetActuals, chargedDayOf, forecastTone } from "@/lib/calc/budget";
 import { travelSpendYtd } from "@/lib/calc/trips";
 import { monthKey } from "@/lib/calc/ledger";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
@@ -15,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 import { defaultMortgageAccountId, moneyAccountsForPicker } from "@/lib/accounts";
-import { categoryPath, isMortgageInterestCategory, isMortgagePrincipalCategory, mortgageEntryKind } from "@/lib/categories";
+import { categoryPath, canSplitMortgage, isMortgageInterestCategory, isMortgagePrincipalCategory, mortgageEntryKind, resolvedDefaultAccountId } from "@/lib/categories";
 import { applyTxRules } from "@/lib/tx-rules";
 
 export function BudgetScreen() {
@@ -28,7 +29,6 @@ export function BudgetScreen() {
   const recurring = useApp((s) => s.recurring);
   const adhocRows = useApp((s) => s.adhocBudgets);
   const annual = useApp((s) => s.annualTravelBudget);
-  const setAnnual = useApp((s) => s.setAnnualTravel);
   const updateBudget = useApp((s) => s.updateBudget);
   const month = monthKey();
   const asOf = asOfForMonth(month, todayISO());
@@ -40,13 +40,15 @@ export function BudgetScreen() {
   const projected = storedTotal?.projected ?? 0;
   const adhoc = storedTotal?.adhoc ?? 0;
   const monthCap = storedTotal?.monthly ?? 0;
-  const monthUsed = monthSpent + reserved + reservedA + projected;
+  const monthUsed = storedTotal?.expected ?? monthSpent + reserved + reservedA + projected;
   const monthRemain = monthCap - monthSpent - reserved - reservedA;
   const monthRatio = storedTotal?.ratio ?? (monthCap > 0 ? monthUsed / monthCap : 0);
+  const monthTone = forecastTone(monthRatio);
   const categoryActuals = actuals.filter((b) => b.id !== MONTH_TOTAL_BUDGET_ID);
   const travelIds = new Set(categories.filter((c) => c.theme === "travel").map((c) => c.id));
   const spent = travelSpendYtd(txs, Number(month.slice(0, 4)), travelIds, rates);
   const travelPct = annual > 0 ? spent / annual : 0;
+  const travelTone = forecastTone(travelPct);
   const [editCap, setEditCap] = useState(false);
   const [capDraft, setCapDraft] = useState("");
   const [regOpen, setRegOpen] = useState(false);
@@ -111,7 +113,10 @@ export function BudgetScreen() {
         {monthCap > 0 ? (
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ring-track">
             <div
-              className={cn("h-full rounded-full", monthRatio > 1.1 ? "bg-expense" : monthRatio > 1 ? "bg-watch" : "bg-income")}
+              className={cn(
+                "h-full rounded-full",
+                monthTone === "expense" ? "bg-expense" : monthTone === "watch" ? "bg-watch" : "bg-income",
+              )}
               style={{ width: `${Math.min(100, monthRatio * 100)}%` }}
             />
           </div>
@@ -142,27 +147,31 @@ export function BudgetScreen() {
         }}
       />
 
-      <div className="mx-4 mt-3 rounded-xl bg-elevated px-4 py-4">
-        <span className="text-sm text-muted">{t.budget.annualTravel}</span>
+      <Link to="/reports/travel" className="mx-4 mt-3 block rounded-xl bg-elevated px-4 py-4">
+        <div className="flex items-start justify-between gap-2">
+          <span className="text-sm text-muted">{t.budget.annualTravel}</span>
+          <ChevronRight className="size-4 shrink-0 text-faint" />
+        </div>
         <div className="mt-1 text-xl font-semibold tabular-nums">
           {money(spent, "HKD")}
           <span className="ml-2 text-sm font-normal text-muted">/ {money(annual, "HKD")}</span>
         </div>
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ring-track">
-          <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, travelPct * 100)}%` }} />
+          <div
+            className={cn(
+              "h-full rounded-full",
+              travelTone === "expense" ? "bg-expense" : travelTone === "watch" ? "bg-watch" : "bg-income",
+            )}
+            style={{ width: `${Math.min(100, travelPct * 100)}%` }}
+          />
         </div>
-        <input
-          inputMode="decimal"
-          defaultValue={annual}
-          onBlur={(e) => void setAnnual(Number(e.target.value) || 0)}
-          className="mt-3 h-11 w-full rounded-lg bg-background px-3 text-sm"
-        />
-      </div>
+      </Link>
 
       <h2 className="px-5 pb-1 pt-6 text-sm font-medium text-muted">{t.budget.byCategory}</h2>
       {categoryActuals.map((b) => {
         const ratio = b.ratio;
-        const status = ratio >= 1.2 ? "at-risk" : ratio >= 0.8 ? "watch" : "on-track";
+        const tone = forecastTone(ratio);
+        const status = tone === "income" ? "on-track" : tone === "watch" ? "watch" : "at-risk";
         return (
           <div key={b.id} className="px-5 py-3">
             <div className="flex items-center justify-between gap-3">
@@ -175,7 +184,13 @@ export function BudgetScreen() {
               <StatusChip status={status} />
             </div>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ring-track">
-              <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, ratio * 100)}%` }} />
+              <div
+                className={cn(
+                  "h-full rounded-full",
+                  tone === "expense" ? "bg-expense" : tone === "watch" ? "bg-watch" : "bg-income",
+                )}
+                style={{ width: `${Math.min(100, ratio * 100)}%` }}
+              />
             </div>
           </div>
         );
@@ -464,12 +479,15 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
   const [accountId, setAccountId] = useState(initial?.accountId ?? moneyAccounts[0]?.id ?? "");
   const [toAccountId, setToAccountId] = useState(initial?.toAccountId ?? defaultMortgageAccountId(accounts) ?? "");
   const [categoryId, setCategoryId] = useState(initial?.categoryId ?? "");
-  const [splitMortgage, setSplitMortgage] = useState(alreadySplit);
+  const [splitMortgage, setSplitMortgage] = useState(
+    alreadySplit ||
+      canSplitMortgage(mortgageEntryKind(categories.find((c) => c.id === initial?.categoryId), categories)),
+  );
   const [living, setLiving] = useState(Boolean(initial?.living));
   const [pickCat, setPickCat] = useState(false);
   const cat = categories.find((c) => c.id === categoryId);
   const mortgageKind = mortgageEntryKind(cat, categories);
-  const showSplit = alreadySplit || (kind === "expense" && mortgageKind === "split");
+  const showSplit = kind !== "income" && (alreadySplit || canSplitMortgage(mortgageKind));
   const principalOnly = (kind === "expense" || kind === "transfer") && mortgageKind === "principal";
   const showDest = kind === "transfer" || principalOnly || (showSplit && splitMortgage);
 
@@ -566,7 +584,10 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
           onClose={() => setPickCat(false)}
           onSelect={(c) => {
             setCategoryId(c?.id ?? "");
-            setSplitMortgage(mortgageEntryKind(c, categories) === "split");
+            const nextKind = mortgageEntryKind(c, categories);
+            setSplitMortgage(alreadySplit || canSplitMortgage(nextKind));
+            const def = resolvedDefaultAccountId(c, categories);
+            if (def && accounts.some((a) => a.id === def)) setAccountId(def);
           }}
         />
       ) : null}
@@ -583,6 +604,16 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
         <span className="text-xs text-muted">{t.budget.regularName}</span>
         <input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3" />
       </label>
+      <label className="block py-2">
+        <span className="text-xs text-muted">{t.budget.pickCategory}</span>
+        <button type="button" className="mt-1 flex h-11 w-full items-center rounded-lg bg-elevated px-3 text-left" onClick={() => setPickCat(true)}>
+          {cat ? categoryPath(cat, categories, locale) : t.add.pickCategory}
+        </button>
+      </label>
+      <label className="block py-2">
+        <span className="text-xs text-muted">{kind === "transfer" ? t.add.from : t.add.account}</span>
+        <AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} />
+      </label>
       {showSplit ? (
         <label className="flex items-center gap-2 py-2 text-sm">
           <input type="checkbox" checked={splitMortgage} onChange={(e) => setSplitMortgage(e.target.checked)} />
@@ -590,15 +621,18 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
         </label>
       ) : null}
       {showSplit && splitMortgage ? (
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block py-2">
-            <span className="text-xs text-muted">{t.add.principal}</span>
-            <input inputMode="decimal" value={principalAmt} onChange={(e) => setPrincipalAmt(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3" />
-          </label>
-          <label className="block py-2">
-            <span className="text-xs text-muted">{t.add.interest}</span>
-            <input inputMode="decimal" value={interestAmt} onChange={(e) => setInterestAmt(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3" />
-          </label>
+        <div>
+          <p className="text-xs text-muted">{t.add.splitHint}</p>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block py-2">
+              <span className="text-xs text-muted">{t.add.principal}</span>
+              <input inputMode="decimal" value={principalAmt} onChange={(e) => setPrincipalAmt(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3" />
+            </label>
+            <label className="block py-2">
+              <span className="text-xs text-muted">{t.add.interest}</span>
+              <input inputMode="decimal" value={interestAmt} onChange={(e) => setInterestAmt(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3" />
+            </label>
+          </div>
         </div>
       ) : (
         <label className="block py-2">
@@ -606,14 +640,6 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
           <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3" />
         </label>
       )}
-      <label className="block py-2">
-        <span className="text-xs text-muted">{t.budget.chargedDay}</span>
-        <input inputMode="numeric" value={day} onChange={(e) => setDay(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3" />
-      </label>
-      <label className="block py-2">
-        <span className="text-xs text-muted">{kind === "transfer" ? t.add.from : t.add.account}</span>
-        <AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} />
-      </label>
       {showDest ? (
         <label className="block py-2">
           <span className="text-xs text-muted">{principalOnly || (showSplit && splitMortgage) ? t.add.mortgageTo : t.add.to}</span>
@@ -621,10 +647,8 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
         </label>
       ) : null}
       <label className="block py-2">
-        <span className="text-xs text-muted">{t.budget.pickCategory}</span>
-        <button type="button" className="mt-1 flex h-11 w-full items-center rounded-lg bg-elevated px-3 text-left" onClick={() => setPickCat(true)}>
-          {cat ? categoryPath(cat, categories, locale) : t.add.pickCategory}
-        </button>
+        <span className="text-xs text-muted">{t.budget.chargedDay}</span>
+        <input inputMode="numeric" value={day} onChange={(e) => setDay(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3" />
       </label>
       <label className="flex items-center gap-2 py-2 text-sm">
         <input type="checkbox" checked={living} onChange={(e) => setLiving(e.target.checked)} />

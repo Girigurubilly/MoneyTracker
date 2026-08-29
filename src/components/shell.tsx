@@ -91,16 +91,16 @@ function InfoDialog() {
   const locale = useUi((s) => s.locale);
   const copy: Record<string, { en: string; zh: string }> = {
     daily: {
-      en: "Remaining budget = spending cap − spending so far − monthly regulars not yet charged − this-month-only holds not yet due. Daily spendable divides that by remaining calendar days this month, including today. This-month-only items are budget holds, not transactions.",
-      zh: "剩餘預算 = 開支上限 − 本月已花費 − 尚未扣帳的每月定期 − 尚未扣帳的本月臨時。每日可花費把該金額除以本月剩餘日數（含今天）。本月臨時只佔預算，不會建立交易。",
+      en: "Remaining budget = spending cap − spending so far − monthly regulars not yet posted this month − this-month-only holds not yet due. Daily spendable divides that by remaining calendar days this month, including today. This-month-only items are budget holds, not transactions.",
+      zh: "剩餘預算 = 開支上限 − 本月已花費 − 尚未入帳的每月定期 − 尚未扣帳的本月臨時。每日可花費把該金額除以本月剩餘日數（含今天）。本月臨時只佔預算，不會建立交易。",
     },
     disc: {
-      en: "Still to spend = uncharged monthly regulars + uncharged this-month-only holds + paced leftover non-regular spend. Non-regular so far = spending so far − realized monthly regulars − this-month-only holds.",
-      zh: "預計本月尚餘開支 = 尚未扣帳的每月定期 + 尚未扣帳的本月臨時 + 按其速度推算的其餘非定期。已實現非定期 = 本月已花費 − 已實現每月定期 − 本月臨時。",
+      en: "Still to spend = monthly regulars not yet posted this month + uncharged this-month-only holds + paced leftover non-regular spend. Non-regular so far = spending so far − posted regulars matched this month.",
+      zh: "預計本月尚餘開支 = 尚未入帳的每月定期 + 尚未扣帳的本月臨時 + 按其速度推算的其餘非定期。已實現非定期 = 本月已花費 − 本月已配對的定期。",
     },
     cap: {
-      en: "Remaining = cap − spending so far − monthly regulars whose charged day has not yet arrived − this-month-only holds whose date has not yet arrived. Forecast used also adds projected remaining non-regular spend.",
-      zh: "剩餘 = 上限 − 本月已花費 − 尚未扣帳的每月定期 − 尚未扣帳的本月臨時。預測已用會再加上預計其餘非定期。",
+      en: "The headline is projected spending for this month versus your monthly cap. Projected spend = posted spend + remaining scheduled regulars not yet posted + remaining this-month-only holds + paced leftover non-regular spend. Remaining = cap − posted − remaining scheduled − remaining holds.",
+      zh: "標題數字是本月預計開支對比開支上限。預計開支 = 本月已花費 + 尚未入帳的每月定期 + 尚未扣帳的本月臨時 + 按其速度推算的其餘非定期。剩餘 = 上限 − 已花費 − 尚未入帳定期 − 尚未扣帳臨時。",
     },
     mortgage: {
       en: "Constant-rate amortisation using the current effective rate. Not a lender quote.",

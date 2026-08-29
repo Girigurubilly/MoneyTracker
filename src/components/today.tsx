@@ -99,7 +99,7 @@ function TodayBody() {
   const adhoc = useApp((s) => s.adhocBudgets);
   const stats = monthStats(transactions, budgets, categories, rates, selected, recurring, adhoc);
   const cap = stats.actuals.find((b) => b.id === MONTH_TOTAL_BUDGET_ID) ?? stats.actuals.find((b) => !b.categoryId && !b.theme);
-  const used = cap ? cap.spent + (cap.reserved ?? 0) + (cap.reservedAdhoc ?? 0) + (cap.projected ?? 0) : stats.flow.expense;
+  const used = cap?.expected ?? stats.flow.expense;
   const target = cap?.monthly ?? 0;
   const today = todayISO();
   const asOf = asOfForMonth(selected.slice(0, 7), today);

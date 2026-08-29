@@ -8,11 +8,7 @@ import { cashflowSeries, monthKeysBack, monthLabel } from "@/lib/derived";
 import { livingEssentials, monthCashflowForecast } from "@/lib/calc/budget";
 import { asiaMilesBalance, nextTrip, spendStatus, travelSpendYtd, tripCashSpent } from "@/lib/calc/trips";
 import { effectiveRate, monthlyPayment } from "@/lib/calc/mortgage";
-import {
-  housingStatus,
-  monthlyHousingCost,
-  monthlyLivingEssentials,
-} from "@/lib/calc/housing";
+import { housingStatus, monthlyHousingCost } from "@/lib/calc/housing";
 import { investableNow } from "@/lib/calc/networth";
 import { retirementStatus, runRetirement, savingsLast12Months, sustainableMonthly } from "@/lib/calc/retirement";
 import { monthKey } from "@/lib/calc/ledger";
@@ -68,8 +64,7 @@ export function DashboardPage() {
   const allowances = useApp((s) => s.allowances);
   const oneOffs = useApp((s) => s.oneOffs);
   const today = todayISO();
-  const cost = monthlyHousingCost(m, rec, cats, rates);
-  const essentials = monthlyLivingEssentials(rec, cats, rates);
+  const cost = monthlyHousingCost(txs, rec, cats, rates, today);
   const houseStatus = housingStatus(m);
   const travelIds = new Set(cats.filter((c) => c.theme === "travel").map((c) => c.id));
   const ytd = travelSpendYtd(txs, Number(today.slice(0, 4)), travelIds, rates);
@@ -110,9 +105,11 @@ export function DashboardPage() {
           <h2 className="text-base font-semibold">{t.reports.living}</h2>
           <StatusChip status={houseStatus} />
         </div>
+        <div className="mt-4">
+          <div className="text-xs text-muted">{t.reports.housingCost}</div>
+          <div className="mt-1 text-lg font-semibold tabular-nums">{money(cost, "HKD")}</div>
+        </div>
         <div className="mt-4 grid grid-cols-2 gap-4">
-          <Metric label={t.reports.housingCost} value={money(cost, "HKD")} />
-          <Metric label={t.reports.essentials} value={money(essentials, "HKD")} />
           <Metric label={t.reports.outstanding} value={m ? money(m.outstanding, "HKD") : "—"} />
           <Metric label={t.reports.effectiveRate} value={m ? `${(effectiveRate(m) * 100).toFixed(2)}%` : "—"} />
         </div>

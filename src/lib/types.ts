@@ -94,6 +94,7 @@ export type Account = {
   notes?: string;
   notesZh?: string;
   sortOrder?: number;
+  linkedAccountId?: string;
 };
 
 export type CategoryIconName =

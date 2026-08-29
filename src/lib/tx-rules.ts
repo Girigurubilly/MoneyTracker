@@ -1,6 +1,6 @@
 import { defaultMortgageAccountId } from "./accounts.ts";
 import { housingCategoryIds } from "./calc/housing.ts";
-import { mortgageEntryKind } from "./categories.ts";
+import { mortgageEntryKind, type MortgageEntryKind } from "./categories.ts";
 import type { Account, Category, TxType } from "./types.ts";
 
 export type TxRuleFields = {
@@ -59,4 +59,24 @@ export function applyTxRules<T extends TxRuleFields>(
   }
 
   return { ...next, destAmount: next.destAmount ?? Math.abs(next.amount) };
+}
+
+export function splitMortgageAmounts(
+  principalRaw: string,
+  interestRaw: string,
+  totalRaw: string,
+  prefer?: MortgageEntryKind | null,
+): { principal: number; interest: number } {
+  const total = Number(totalRaw) || 0;
+  let principal = Number(principalRaw) || 0;
+  let interest = Number(interestRaw) || 0;
+  if (principal > 0 && interest <= 0 && total > principal) {
+    interest = Math.round((total - principal + Number.EPSILON) * 100) / 100;
+  } else if (interest > 0 && principal <= 0 && total > interest) {
+    principal = Math.round((total - interest + Number.EPSILON) * 100) / 100;
+  } else if (principal <= 0 && interest <= 0 && total > 0) {
+    if (prefer === "interest") interest = total;
+    else principal = total;
+  }
+  return { principal, interest };
 }

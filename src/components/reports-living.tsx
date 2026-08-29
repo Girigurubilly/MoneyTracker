@@ -4,14 +4,12 @@ import { money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import {
   formatRatePct,
-  housingRegularRows,
+  housingMonthLines,
   housingTransactions,
   installmentOf,
   linkedLoan,
   linkedProperty,
   livingModeOf,
-  monthlyHousingCost,
-  monthlyLivingEssentials,
   monthsAgoIso,
   projection12,
   rateLine,
@@ -36,9 +34,8 @@ export function LivingPage() {
   const setTx = useUi((s) => s.setTxDetailId);
   const [edit, setEdit] = useState(false);
   const today = todayISO();
-  const cost = monthlyHousingCost(m, rec, cats, rates);
-  const essentials = monthlyLivingEssentials(rec, cats, rates);
-  const rows = housingRegularRows(rec, cats, rates);
+  const lines = housingMonthLines(txs, rec, cats, rates, today);
+  const cost = lines.reduce((s, r) => s + r.amount, 0);
   const mode = livingModeOf(m);
   const modeLabel =
     mode === "own-mortgage"
@@ -75,22 +72,16 @@ export function LivingPage() {
       <div className="mx-4 rounded-xl bg-elevated p-4">
         <div className="text-xs text-muted">{t.reports.livingMode}</div>
         <div className="mt-0.5 text-base font-semibold">{modeLabel}</div>
-        <div className="mt-4 grid grid-cols-2 gap-4">
-          <div>
-            <div className="text-xs text-muted">{t.reports.housingCost}</div>
-            <div className="mt-1 text-lg font-semibold tabular-nums">{money(cost, "HKD")}</div>
-          </div>
-          <div>
-            <div className="text-xs text-muted">{t.reports.essentials}</div>
-            <div className="mt-1 text-lg font-semibold tabular-nums">{money(essentials, "HKD")}</div>
-          </div>
+        <div className="mt-4">
+          <div className="text-xs text-muted">{t.reports.housingCost}</div>
+          <div className="mt-1 text-lg font-semibold tabular-nums">{money(cost, "HKD")}</div>
         </div>
-        {rows.length ? (
+        {lines.length ? (
           <>
             <div className="my-3">
               <Hairline />
             </div>
-            {rows.map((r) => (
+            {lines.map((r) => (
               <div key={r.id} className="flex justify-between py-1.5 text-sm">
                 <span className="text-muted">{pickName(locale, r.label, r.labelZh)}</span>
                 <span className="tabular-nums">{money(r.amount, "HKD")}</span>

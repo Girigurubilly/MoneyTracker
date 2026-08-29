@@ -1,7 +1,7 @@
 import type { Account, Category, FxRate, Locale, Mortgage, Recurring, Transaction } from "../types.ts";
 import { isMortgagePrincipalCategory, housingParentId, isMortgageInterestCategory } from "../categories.ts";
-import { cashflowSide } from "./ledger.ts";
-import { monthlyExpenseRegulars, hkdOfRegular } from "./budget.ts";
+import { isSpendLike, inMonth } from "./ledger.ts";
+import { monthlyExpenseRegulars, hkdOfRegular, coverRegulars } from "./budget.ts";
 import { monthlyPayment, remainingInterest, effectiveRate, amortize } from "./mortgage.ts";
 import { toHkd } from "./fx.ts";
 
@@ -58,21 +58,95 @@ export function housingRegularRows(
     }));
 }
 
+export function isHousingSpendRegular(r: Recurring, categories: Category[]): boolean {
+  if (r.housing === false) return false;
+  if (isPrincipalRegular(r, categories)) return true;
+  if (r.living || r.housing) return true;
+  return Boolean(r.categoryId && housingCategoryIds(categories).has(r.categoryId));
+}
+
 export function monthlyLivingEssentials(recurring: Recurring[], categories: Category[], rates: FxRate[]): number {
   return livingEssentialRows(recurring, categories, rates).reduce((s, r) => s + r.amount, 0);
 }
 
-export function monthlyHousingCost(
-  m: Mortgage | null,
+export type HousingMonthLine = {
+  id: string;
+  label: string;
+  labelZh: string;
+  amount: number;
+  posted: boolean;
+};
+
+function isHousingMonthTx(tx: Transaction, categories: Category[], month: string): boolean {
+  if (!inMonth(tx.date, month)) return false;
+  if (tx.housing === false) return false;
+  const tagged = tx.housing === true || Boolean(tx.categoryId && housingCategoryIds(categories).has(tx.categoryId));
+  if (!tagged) return false;
+  return isSpendLike(tx);
+}
+
+/** Current-month house spend + still-scheduled house regulars, without double-counting posted items. */
+export function housingMonthLines(
+  txs: Transaction[],
   recurring: Recurring[],
   categories: Category[],
   rates: FxRate[],
+  asOf: string,
+): HousingMonthLine[] {
+  const iso = typeof asOf === "string" ? asOf : "";
+  if (iso.length < 7) return [];
+  const month = iso.slice(0, 7);
+  const houseTxs = txs.filter((tx) => isHousingMonthTx(tx, categories, month));
+  const regulars = monthlyExpenseRegulars(recurring).filter((r) => isHousingSpendRegular(r, categories));
+  const cover = coverRegulars(regulars, houseTxs);
+  const lines: HousingMonthLine[] = [];
+  const used = new Set<string>();
+  for (const row of cover.covered) {
+    let amount = 0;
+    let posted = false;
+    for (const tx of row.txs) {
+      used.add(tx.id);
+      amount += Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
+      if (!tx.planned) posted = true;
+    }
+    lines.push({
+      id: row.regular.id,
+      label: row.regular.label,
+      labelZh: row.regular.labelZh,
+      amount,
+      posted,
+    });
+  }
+  for (const r of cover.uncovered) {
+    lines.push({
+      id: r.id,
+      label: r.label,
+      labelZh: r.labelZh,
+      amount: hkdOfRegular(r, rates),
+      posted: false,
+    });
+  }
+  for (const tx of houseTxs) {
+    if (used.has(tx.id)) continue;
+    lines.push({
+      id: tx.id,
+      label: tx.payee,
+      labelZh: tx.payeeZh,
+      amount: Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd)),
+      posted: !tx.planned,
+    });
+  }
+  return lines;
+}
+
+export function monthlyHousingCost(
+  txs: Transaction[],
+  recurring: Recurring[],
+  categories: Category[],
+  rates: FxRate[],
+  asOf: string,
 ): number {
-  const mode = livingModeOf(m);
-  if (m && mode === "own-mortgage") return installmentOf(m);
-  const rows = livingEssentialRows(recurring, categories, rates);
-  if (mode === "rent") return rows.reduce((s, r) => s + r.amount, 0);
-  return rows.reduce((s, r) => s + r.amount, 0);
+  return housingMonthLines(txs, recurring, categories, rates, asOf).reduce((s, r) => s + r.amount, 0);
 }
 
 export function housingStatus(m: Mortgage | null): "on-track" | "watch" | "at-risk" {
@@ -127,11 +201,12 @@ export function housingTransactions(
 ): Transaction[] {
   const ids = housingCategoryIds(categories);
   return txs
-    .filter((tx) => !tx.planned && tx.date >= from && tx.date <= to)
+    .filter((tx) => tx.date >= from && tx.date <= to)
     .filter((tx) => {
       if (tx.housing === false) return false;
       const tagged = tx.housing === true || Boolean(tx.categoryId && ids.has(tx.categoryId));
-      return tagged && cashflowSide(tx) === "expense";
+      if (!tagged) return false;
+      return tx.type === "expense" || (tx.type === "transfer" && Boolean(tx.countsAsExpense));
     })
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
 }

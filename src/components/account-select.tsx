@@ -8,11 +8,15 @@ export function AccountSelect({
   value,
   onChange,
   excludeId,
+  allowEmpty,
+  emptyLabel,
 }: {
   accounts: Account[];
   value: string;
   onChange: (id: string) => void;
   excludeId?: string;
+  allowEmpty?: boolean;
+  emptyLabel?: string;
 }) {
   const t = useT();
   const locale = useUi((s) => s.locale);
@@ -31,6 +35,7 @@ export function AccountSelect({
 
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3">
+      {allowEmpty ? <option value="">{emptyLabel ?? t.common.none}</option> : null}
       {groups.map((g) => (
         <optgroup key={g.group} label={labels[g.group]}>
           {g.items.map((a) => (

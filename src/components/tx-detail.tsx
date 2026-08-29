@@ -6,11 +6,11 @@ import { Overlay } from "@/components/shared";
 import { todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { defaultMortgageAccountId, moneyAccountsForPicker } from "@/lib/accounts";
-import { categoryPath, mortgageEntryKind } from "@/lib/categories";
+import { canSplitMortgage, categoryPath, mortgageEntryKind, resolvedDefaultAccountId } from "@/lib/categories";
 import { isTripActive } from "@/lib/calc/trips";
-import { applyTxRules, infersHousing } from "@/lib/tx-rules";
+import { applyTxRules, infersHousing, splitMortgageAmounts } from "@/lib/tx-rules";
 import type { Category, Transaction, TxType } from "@/lib/types";
-import { useApp } from "@/store/app";
+import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 
 function formTypeOf(tx: Transaction, categories: Category[]): TxType {
@@ -54,19 +54,175 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
   const [payee, setPayee] = useState(pickName(locale, tx.payee, tx.payeeZh));
   const [housing, setHousing] = useState(tx.housing === true || infersHousing(tx.categoryId, categories));
   const [pickCat, setPickCat] = useState(false);
+  const [principal, setPrincipal] = useState(tx.type === "transfer" && tx.countsAsExpense ? String(tx.amount) : "");
+  const [interest, setInterest] = useState(tx.type === "expense" && mortgageEntryKind(categories.find((c) => c.id === tx.categoryId), categories) === "interest" ? String(tx.amount) : "");
+  const [doSplit, setDoSplit] = useState(
+    canSplitMortgage(mortgageEntryKind(categories.find((c) => c.id === tx.categoryId), categories)),
+  );
   const cat = categories.find((c) => c.id === categoryId);
   const mortgageKind = mortgageEntryKind(cat, categories);
+  const canSplit = type !== "income" && type !== "miles" && canSplitMortgage(mortgageKind);
   const principalOnly = (type === "expense" || type === "transfer") && mortgageKind === "principal";
-  const showDest = type === "transfer" || principalOnly;
+  const showDest = type === "transfer" || principalOnly || (canSplit && doSplit);
   const moneyTx = type !== "miles";
   const activeTrips = trips.filter((tr) => isTripActive(tr, todayISO()) || tr.id === tx.tripId);
+
+  function changeType(next: TxType) {
+    setType(next);
+    if (next !== "miles") setPickCat(true);
+  }
 
   function onPickCategory(c: Category | null) {
     setCategoryId(c?.id ?? "");
     if (infersHousing(c?.id, categories)) setHousing(true);
-    if (mortgageEntryKind(c, categories) === "principal") {
+    const kind = mortgageEntryKind(c, categories);
+    if (canSplitMortgage(kind)) {
+      setDoSplit(true);
       setToAccountId((id) => id || defaultMortgageAccountId(accounts) || "");
+    } else {
+      setDoSplit(false);
     }
+    const def = resolvedDefaultAccountId(c, categories);
+    if (def && accounts.some((a) => a.id === def)) setAccountId(def);
+  }
+
+  async function save() {
+    const amt = Number(amount) || 0;
+    const parts = splitMortgageAmounts(principal, interest, amount, mortgageKind);
+    const acc = moneyAccounts.find((a) => a.id === accountId) ?? accounts.find((a) => a.id === accountId);
+    const currency = type === "miles" ? "MILES" : acc?.currency === "MILES" ? "HKD" : (acc?.currency ?? tx.currency);
+    const ctx = { categories, accounts };
+    const planned = date > todayISO();
+    const dest = toAccountId || defaultMortgageAccountId(accounts);
+    const pCat = categories.find((c) => mortgageEntryKind(c, categories) === "principal");
+    const iCat = categories.find((c) => mortgageEntryKind(c, categories) === "interest");
+    if (canSplit && doSplit) {
+      const p = parts.principal;
+      const i = parts.interest;
+      if (p <= 0 && i <= 0) {
+        toast(t.add.needAmount);
+        return;
+      }
+      const wasPrincipal = tx.type === "transfer" && Boolean(tx.countsAsExpense);
+      if (p > 0 && i > 0) {
+        const pTx = applyTxRules(
+          {
+            ...tx,
+            type: "transfer",
+            amount: p,
+            currency,
+            accountId,
+            toAccountId: dest,
+            destAmount: p,
+            categoryId: pCat?.id,
+            date,
+            payee: payee || t.add.principal,
+            payeeZh: payee || t.add.principal,
+            planned,
+            housing,
+            countsAsExpense: true,
+          },
+          ctx,
+        );
+        const iTx = applyTxRules(
+          {
+            ...tx,
+            id: newId(),
+            type: "expense",
+            amount: i,
+            currency,
+            accountId,
+            toAccountId: undefined,
+            destAmount: undefined,
+            categoryId: iCat?.id ?? categoryId,
+            date,
+            payee: payee || t.add.interest,
+            payeeZh: payee || t.add.interest,
+            planned,
+            housing,
+            countsAsExpense: undefined,
+          },
+          ctx,
+        );
+        if (wasPrincipal || mortgageKind === "principal") {
+          await update(pTx, tx);
+          await add(iTx);
+        } else {
+          await update({ ...iTx, id: tx.id }, tx);
+          await add({ ...pTx, id: newId() });
+        }
+      } else if (p > 0) {
+        await update(
+          applyTxRules(
+            {
+              ...tx,
+              type: "transfer",
+              amount: p,
+              currency,
+              accountId,
+              toAccountId: dest,
+              destAmount: p,
+              categoryId: pCat?.id ?? categoryId,
+              date,
+              payee: payee || tx.payee,
+              payeeZh: payee || tx.payeeZh,
+              planned,
+              housing,
+            },
+            ctx,
+          ),
+          tx,
+        );
+      } else {
+        await update(
+          applyTxRules(
+            {
+              ...tx,
+              type: "expense",
+              amount: i,
+              currency,
+              accountId,
+              categoryId: iCat?.id ?? categoryId,
+              date,
+              payee: payee || tx.payee,
+              payeeZh: payee || tx.payeeZh,
+              planned,
+              housing,
+            },
+            ctx,
+          ),
+          tx,
+        );
+      }
+    } else {
+      if (amt <= 0) {
+        toast(t.add.needAmount);
+        return;
+      }
+      const next = applyTxRules(
+        {
+          ...tx,
+          type,
+          amount: amt,
+          currency,
+          accountId,
+          toAccountId: type === "transfer" || principalOnly ? toAccountId : undefined,
+          destAmount: type === "transfer" || principalOnly ? amt : undefined,
+          categoryId: categoryId || undefined,
+          date,
+          payee: payee || tx.payee,
+          payeeZh: payee || tx.payeeZh,
+          planned,
+          tripId: type === "expense" && tripId ? tripId : undefined,
+          housing,
+          countsAsExpense: type === "transfer" ? tx.countsAsExpense : undefined,
+        },
+        ctx,
+      );
+      await update(next, tx);
+    }
+    toast(t.add.savedToast);
+    onClose();
   }
 
   return (
@@ -88,33 +244,76 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
             {t.add.cancel}
           </button>
           <div className="min-w-0 flex-1 text-center">
-            {moneyTx ? <TypeSwitch value={type} onChange={setType} /> : <div className="text-base font-semibold">{t.tx.edit}</div>}
+            {moneyTx ? <TypeSwitch value={type} onChange={changeType} /> : <div className="text-base font-semibold">{t.tx.edit}</div>}
           </div>
-          <span className="min-w-11" />
+          <button type="button" className="h-11 min-w-11 px-2 text-sm font-medium text-accent" onClick={() => void save()}>
+            {t.add.save}
+          </button>
         </header>
         <div className="px-5">
           <label className="block py-2">
-            <span className="text-xs text-muted">{t.add.amount}</span>
-            <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none" />
+            <span className="text-xs text-muted">{t.add.date}</span>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3" />
           </label>
-          {moneyTx ? (
-            <label className="block py-2">
-              <span className="text-xs text-muted">{type === "transfer" ? t.add.from : t.add.account}</span>
-              <AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} />
-            </label>
-          ) : null}
-          {showDest ? (
-            <label className="block py-2">
-              <span className="text-xs text-muted">{principalOnly ? t.add.mortgageTo : t.add.to}</span>
-              <AccountSelect accounts={accounts} value={toAccountId} onChange={setToAccountId} excludeId={accountId} />
-            </label>
-          ) : null}
           {type !== "miles" ? (
             <label className="block py-2">
               <span className="text-xs text-muted">{t.add.category}</span>
               <button type="button" className="mt-1 flex h-11 w-full items-center rounded-lg bg-elevated px-3 text-left" onClick={() => setPickCat(true)}>
                 {cat ? categoryPath(cat, categories, locale) : t.add.pickCategory}
               </button>
+            </label>
+          ) : null}
+          {moneyTx ? (
+            <label className="block py-2">
+              <span className="text-xs text-muted">{type === "transfer" ? t.add.from : t.add.account}</span>
+              <AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} />
+            </label>
+          ) : null}
+          {canSplit ? (
+            <label className="flex items-center gap-2 py-2 text-sm">
+              <input
+                type="checkbox"
+                checked={doSplit}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setDoSplit(on);
+                  if (on && !principal && !interest && amount) {
+                    if (mortgageKind === "interest") setInterest(amount);
+                    else setPrincipal(amount);
+                  }
+                  if (!on && !amount) {
+                    const sum = (Number(principal) || 0) + (Number(interest) || 0);
+                    if (sum > 0) setAmount(String(sum));
+                  }
+                }}
+              />
+              {t.add.split}
+            </label>
+          ) : null}
+          {canSplit && doSplit ? (
+            <div>
+              <p className="text-xs text-muted">{t.add.splitHint}</p>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block py-2">
+                  <span className="text-xs text-muted">{t.add.principal}</span>
+                  <input inputMode="decimal" value={principal} onChange={(e) => setPrincipal(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3" />
+                </label>
+                <label className="block py-2">
+                  <span className="text-xs text-muted">{t.add.interest}</span>
+                  <input inputMode="decimal" value={interest} onChange={(e) => setInterest(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3" />
+                </label>
+              </div>
+            </div>
+          ) : (
+            <label className="block py-2">
+              <span className="text-xs text-muted">{t.add.amount}</span>
+              <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none" />
+            </label>
+          )}
+          {showDest ? (
+            <label className="block py-2">
+              <span className="text-xs text-muted">{principalOnly || (canSplit && doSplit) ? t.add.mortgageTo : t.add.to}</span>
+              <AccountSelect accounts={accounts} value={toAccountId} onChange={setToAccountId} excludeId={accountId} />
             </label>
           ) : null}
           {type === "expense" ? (
@@ -130,55 +329,20 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
               </select>
             </label>
           ) : null}
+          <label className="block py-2">
+            <span className="text-xs text-muted">{t.add.note}</span>
+            <input value={payee} onChange={(e) => setPayee(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3" />
+          </label>
           {moneyTx ? (
             <label className="flex items-center gap-2 py-2 text-sm">
               <input type="checkbox" checked={housing} onChange={(e) => setHousing(e.target.checked)} />
               {t.add.housing}
             </label>
           ) : null}
-          <label className="block py-2">
-            <span className="text-xs text-muted">{t.add.date}</span>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3" />
-          </label>
-          <label className="block py-2">
-            <span className="text-xs text-muted">{t.add.note}</span>
-            <input value={payee} onChange={(e) => setPayee(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3" />
-          </label>
           <button
             type="button"
             className="mt-4 h-12 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent"
-            onClick={async () => {
-              const amt = Number(amount) || 0;
-              if (amt <= 0) {
-                toast(t.add.needAmount);
-                return;
-              }
-              const acc = moneyAccounts.find((a) => a.id === accountId) ?? accounts.find((a) => a.id === accountId);
-              const currency = type === "miles" ? "MILES" : acc?.currency === "MILES" ? "HKD" : (acc?.currency ?? tx.currency);
-              const next = applyTxRules(
-                {
-                  ...tx,
-                  type,
-                  amount: amt,
-                  currency,
-                  accountId,
-                  toAccountId: type === "transfer" || principalOnly ? toAccountId : undefined,
-                  destAmount: type === "transfer" || principalOnly ? amt : undefined,
-                  categoryId: categoryId || undefined,
-                  date,
-                  payee: payee || tx.payee,
-                  payeeZh: payee || tx.payeeZh,
-                  planned: date > todayISO(),
-                  tripId: type === "expense" && tripId ? tripId : undefined,
-                  housing,
-                  countsAsExpense: type === "transfer" ? tx.countsAsExpense : undefined,
-                },
-                { categories, accounts },
-              );
-              await update(next, tx);
-              toast(t.add.savedToast);
-              onClose();
-            }}
+            onClick={() => void save()}
           >
             {t.add.save}
           </button>

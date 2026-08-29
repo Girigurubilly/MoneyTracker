@@ -322,13 +322,16 @@ async function postDuePlanned() {
   const due = txs.filter((t) => t.planned && t.date <= today);
   if (!due.length) return;
   let accounts = await idb().accounts.toArray();
-  await idb().transaction("rw", [idb().transactions, idb().accounts], async () => {
+  await idb().transaction("rw", [idb().transactions, idb().accounts, idb().mortgage], async () => {
     for (const tx of due) {
       const posted = { ...tx, planned: false };
-      accounts = applyDeltas(accounts, balanceDeltas(posted));
+      accounts = applyDeltas(accounts, balanceDeltas(posted, accounts));
       await idb().transactions.put(posted);
     }
     for (const a of accounts) await idb().accounts.put(a);
+    const m = (await idb().mortgage.toArray())[0] ?? null;
+    const next = syncMortgageOutstanding(m, accounts);
+    if (next) await idb().mortgage.put(next);
   });
 }
 
@@ -433,6 +436,46 @@ async function bulkChunk<T>(add: (rows: T[]) => Promise<unknown>, rows: T[], siz
   for (let i = 0; i < rows.length; i += size) await add(rows.slice(i, i + size));
 }
 
+function syncMortgageOutstanding(m: Mortgage | null, accounts: Account[], destId?: string): Mortgage | null {
+  if (!m) return m;
+  const dest = destId ? accounts.find((a) => a.id === destId) : undefined;
+  const loan =
+    (dest && (dest.type === "mortgage" || dest.type === "loan") ? dest : undefined) ??
+    accounts.find((a) => a.id === m.accountId) ??
+    accounts.find((a) => a.type === "mortgage");
+  if (!loan) return m;
+  const outstanding = Math.abs(loan.balance);
+  if (outstanding === m.outstanding && loan.id === m.accountId) return m;
+  return { ...m, accountId: loan.id, outstanding };
+}
+
+function withLinkedCounterpart(accounts: Account[], row: Account): Account[] {
+  if (row.linkedAccountId) {
+    return accounts.map((x) => {
+      if (x.id === row.id) return row;
+      if (x.id === row.linkedAccountId) return { ...x, linkedAccountId: row.id };
+      if (x.linkedAccountId === row.id) return { ...x, linkedAccountId: undefined };
+      return x;
+    });
+  }
+  return accounts.map((x) => (x.id === row.id ? row : x.linkedAccountId === row.id ? { ...x, linkedAccountId: undefined } : x));
+}
+
+function mortgageFromAccount(m: Mortgage | null, row: Account, accounts: Account[]): Mortgage | null {
+  if (!m) return m;
+  let next = m;
+  if ((row.type === "mortgage" || row.type === "loan") && row.id === m.accountId) {
+    next = {
+      ...next,
+      outstanding: Math.abs(row.balance),
+      propertyAccountId: row.linkedAccountId ?? next.propertyAccountId,
+    };
+  } else if (row.type === "property" && row.linkedAccountId === m.accountId) {
+    next = { ...next, propertyAccountId: row.id };
+  }
+  return syncMortgageOutstanding(next, accounts);
+}
+
 export const useApp = create<AppState>((set, get) => ({
   ready: false,
   accounts: [],
@@ -487,13 +530,14 @@ export const useApp = create<AppState>((set, get) => ({
   addTransaction: async (partial) => {
     const ctx = { categories: get().categories, accounts: get().accounts };
     const tx: Transaction = applyTxRules({ ...partial, id: partial.id ?? nid() }, ctx);
-    let accounts = get().accounts;
-    accounts = applyDeltas(accounts, balanceDeltas(tx));
-    await idb().transaction("rw", [idb().transactions, idb().accounts], async () => {
+    const accounts = applyDeltas(get().accounts, balanceDeltas(tx, get().accounts));
+    const mortgage = syncMortgageOutstanding(get().mortgage, accounts, tx.toAccountId);
+    await idb().transaction("rw", [idb().transactions, idb().accounts, idb().mortgage], async () => {
       await idb().transactions.add(tx);
       await Promise.all(accounts.map((a) => idb().accounts.put(a)));
+      if (mortgage) await idb().mortgage.put(mortgage);
     });
-    set({ transactions: [tx, ...get().transactions], accounts });
+    set({ transactions: [tx, ...get().transactions], accounts, mortgage });
     return tx;
   },
 
@@ -502,35 +546,55 @@ export const useApp = create<AppState>((set, get) => ({
     const next = applyTxRules(tx, ctx);
     const prev = previous ?? get().transactions.find((t) => t.id === next.id);
     let accounts = get().accounts;
-    if (prev) accounts = applyDeltas(accounts, balanceDeltas(prev), -1);
-    accounts = applyDeltas(accounts, balanceDeltas(next), 1);
-    await idb().transaction("rw", [idb().transactions, idb().accounts], async () => {
+    if (prev) accounts = applyDeltas(accounts, balanceDeltas(prev, accounts), -1);
+    accounts = applyDeltas(accounts, balanceDeltas(next, accounts), 1);
+    const mortgage = syncMortgageOutstanding(get().mortgage, accounts, next.toAccountId);
+    await idb().transaction("rw", [idb().transactions, idb().accounts, idb().mortgage], async () => {
       await idb().transactions.put(next);
       await Promise.all(accounts.map((a) => idb().accounts.put(a)));
+      if (mortgage) await idb().mortgage.put(mortgage);
     });
-    set({ transactions: get().transactions.map((t) => (t.id === next.id ? next : t)), accounts });
+    set({ transactions: get().transactions.map((t) => (t.id === next.id ? next : t)), accounts, mortgage });
   },
 
   deleteTransaction: async (id) => {
     const prev = get().transactions.find((t) => t.id === id);
     if (!prev) return undefined;
-    const accounts = applyDeltas(get().accounts, balanceDeltas(prev), -1);
-    await idb().transaction("rw", [idb().transactions, idb().accounts], async () => {
+    const accounts = applyDeltas(get().accounts, balanceDeltas(prev, get().accounts), -1);
+    const mortgage = syncMortgageOutstanding(get().mortgage, accounts, prev.toAccountId);
+    await idb().transaction("rw", [idb().transactions, idb().accounts, idb().mortgage], async () => {
       await idb().transactions.delete(id);
       await Promise.all(accounts.map((a) => idb().accounts.put(a)));
+      if (mortgage) await idb().mortgage.put(mortgage);
     });
-    set({ transactions: get().transactions.filter((t) => t.id !== id), accounts });
+    set({ transactions: get().transactions.filter((t) => t.id !== id), accounts, mortgage });
     return prev;
   },
 
   addAccount: async (a) => {
     const row = { ...a, sortOrder: a.sortOrder ?? nextSortOrder(get().accounts, a.group) };
-    await idb().accounts.add(row);
-    set({ accounts: [...get().accounts, row] });
+    const accounts = withLinkedCounterpart([...get().accounts, row], row);
+    const mortgage = mortgageFromAccount(get().mortgage, row, accounts);
+    await idb().transaction("rw", [idb().accounts, idb().mortgage], async () => {
+      for (const x of accounts) {
+        const before = get().accounts.find((y) => y.id === x.id);
+        if (before !== x) await idb().accounts.put(x);
+      }
+      if (mortgage) await idb().mortgage.put(mortgage);
+    });
+    set({ accounts, mortgage });
   },
   updateAccount: async (a) => {
-    await idb().accounts.put(a);
-    set({ accounts: get().accounts.map((x) => (x.id === a.id ? a : x)) });
+    const accounts = withLinkedCounterpart(get().accounts, a);
+    const mortgage = mortgageFromAccount(get().mortgage, a, accounts);
+    await idb().transaction("rw", [idb().accounts, idb().mortgage], async () => {
+      for (const x of accounts) {
+        const before = get().accounts.find((y) => y.id === x.id);
+        if (before !== x) await idb().accounts.put(x);
+      }
+      if (mortgage) await idb().mortgage.put(mortgage);
+    });
+    set({ accounts, mortgage });
   },
   moveAccount: async (id, dir) => {
     const accounts = get().accounts;
@@ -538,8 +602,10 @@ export const useApp = create<AppState>((set, get) => ({
     if (!acc) return;
     const rows = accountsInGroup(accounts, acc.group);
     const i = rows.findIndex((a) => a.id === id);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= rows.length) return;
+    if (i < 0) return;
+    let j = i + dir;
+    while (j >= 0 && j < rows.length && rows[j].type !== acc.type) j += dir;
+    if (j < 0 || j >= rows.length) return;
     const next = [...rows];
     const swap = next[i];
     next[i] = next[j];

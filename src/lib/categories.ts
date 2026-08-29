@@ -46,6 +46,17 @@ export function isMortgageSplitCategory(c: Category | undefined, categories: Cat
 
 export type MortgageEntryKind = "principal" | "interest" | "split" | null;
 
+export function canSplitMortgage(kind: MortgageEntryKind): boolean {
+  return kind === "principal" || kind === "interest" || kind === "split";
+}
+
+export function resolvedDefaultAccountId(c: Category | undefined | null, categories: Category[]): string | undefined {
+  if (!c) return undefined;
+  if (c.defaultAccountId) return c.defaultAccountId;
+  if (!c.parentId) return undefined;
+  return categories.find((x) => x.id === c.parentId)?.defaultAccountId;
+}
+
 export function mortgageEntryKind(c: Category | undefined | null, categories: Category[]): MortgageEntryKind {
   if (!c) return null;
   if (isHousingGroup(c)) return null;

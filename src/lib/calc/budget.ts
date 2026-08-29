@@ -172,9 +172,52 @@ export function upcomingExpenseRegulars(recurring: Recurring[], asOfIso: string)
     .sort((a, b) => chargedDayOf(a) - chargedDayOf(b) || a.label.localeCompare(b.label));
 }
 
+/** Match this month's spend-like txs to monthly expense regulars without double-counting. */
+export function coverRegulars(
+  regulars: Recurring[],
+  txs: Transaction[],
+): { covered: { regular: Recurring; txs: Transaction[] }[]; uncovered: Recurring[] } {
+  const used = new Set<string>();
+  const covered: { regular: Recurring; txs: Transaction[] }[] = [];
+  const uncovered: Recurring[] = [];
+  for (const r of regulars) {
+    const byId = txs.filter((tx) => tx.recurringId === r.id && !used.has(tx.id));
+    if (byId.length) {
+      for (const tx of byId) used.add(tx.id);
+      covered.push({ regular: r, txs: byId });
+      continue;
+    }
+    if (r.categoryId) {
+      const hit = txs.find((tx) => !used.has(tx.id) && tx.categoryId === r.categoryId);
+      if (hit) {
+        used.add(hit.id);
+        covered.push({ regular: r, txs: [hit] });
+        continue;
+      }
+    }
+    uncovered.push(r);
+  }
+  return { covered, uncovered };
+}
+
+export function coverExpenseRegulars(
+  recurring: Recurring[],
+  txs: Transaction[],
+  month: string,
+): { covered: { regular: Recurring; txs: Transaction[] }[]; uncovered: Recurring[] } {
+  return coverRegulars(
+    monthlyExpenseRegulars(recurring),
+    txs.filter((tx) => inMonth(tx.date, month) && isSpendLike(tx)),
+  );
+}
+
+function hkdTx(tx: Transaction, rates: FxRate[]): number {
+  return Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
+}
+
 export function forecastTone(ratio: number): "income" | "watch" | "expense" {
-  if (!Number.isFinite(ratio) || ratio <= 1) return "income";
-  if (ratio <= 1.1) return "watch";
+  if (!Number.isFinite(ratio) || ratio < 0.96) return "income";
+  if (ratio <= 1) return "watch";
   return "expense";
 }
 
@@ -257,11 +300,28 @@ export function budgetActuals(
   expected: number;
 })[] {
   const asOf = asOfIso ?? monthEndIso(month);
-  const reserved = reservedRegulars(recurring, rates, asOf);
-  const realized = realizedRegulars(recurring, rates, asOf);
+  const cover = coverExpenseRegulars(recurring, txs, month);
+  const reservedRegularAmt = cover.uncovered.reduce((s, r) => s + hkdOfRegular(r, rates), 0);
+  let postedCovering = 0;
+  let plannedCovering = 0;
+  const coveredTxIds = new Set<string>();
+  for (const row of cover.covered) {
+    for (const tx of row.txs) {
+      coveredTxIds.add(tx.id);
+      const amt = hkdTx(tx, rates);
+      if (tx.planned) plannedCovering += amt;
+      else postedCovering += amt;
+    }
+  }
+  let plannedOther = 0;
+  for (const tx of txs) {
+    if (!inMonth(tx.date, month) || !isSpendLike(tx) || !tx.planned || coveredTxIds.has(tx.id)) continue;
+    plannedOther += hkdTx(tx, rates);
+  }
+  const reserved = reservedRegularAmt + plannedCovering + plannedOther;
+  const realized = postedCovering;
   const adhoc = adhocTotal(adhocRows, month, rates);
   const reservedA = reservedAdhoc(adhocRows, month, rates, asOf);
-  const allRegulars = reserved + realized;
   return budgets.map((b) => {
     const unscoped = !b.categoryId && !b.theme;
     const spent = unscoped
@@ -276,11 +336,9 @@ export function budgetActuals(
     const hold = unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? reserved + reservedA : 0;
     const realizedAmt = unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? realized : 0;
     const adhocAmt = unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? adhoc : 0;
-    const nonRegular =
-      unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? realizedNonRegularSpend(spent, realizedAmt, adhocAmt) : 0;
     const projected =
-      unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? projectedNonRegular(spent, realizedAmt + adhocAmt, asOf) : 0;
-    const expected = unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? nonRegular + allRegulars + adhocAmt : spent;
+      unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? projectedNonRegular(spent, realizedAmt, asOf) : 0;
+    const expected = unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? spent + hold + projected : spent;
     const remaining = b.monthly - spent - hold;
     return {
       ...b,
@@ -292,7 +350,7 @@ export function budgetActuals(
       projected,
       remaining,
       expected,
-      ratio: b.monthly > 0 ? (spent + hold + projected) / b.monthly : 0,
+      ratio: b.monthly > 0 ? expected / b.monthly : 0,
     };
   });
 }

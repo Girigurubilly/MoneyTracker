@@ -59,15 +59,21 @@ export function CategoriesPage() {
   const t = useT();
   const locale = useUi((s) => s.locale);
   const cats = useApp((s) => s.categories);
+  const accounts = useApp((s) => s.accounts);
   const [edit, setEdit] = useState<Category | null | "new-main" | "new-sub">(null);
   const [subParent, setSubParent] = useState<string>("");
   const parents = cats.filter((c) => !c.parentId);
   const editing = typeof edit === "object" ? edit : null;
+  function accountLabel(id?: string) {
+    const a = accounts.find((x) => x.id === id);
+    return a ? pickName(locale, a.name, a.nameZh) : "";
+  }
   return (
     <div className="pb-10">
       <ScreenHeader title={t.more.categories} />
       {parents.map((p) => {
         const kids = cats.filter((c) => c.parentId === p.id);
+        const pAcc = accountLabel(p.defaultAccountId);
         return (
           <div key={p.id} className="mb-4">
             <button type="button" className="flex w-full items-center gap-3 px-5 py-2 text-left" onClick={() => setEdit(p)}>
@@ -76,17 +82,26 @@ export function CategoriesPage() {
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-medium">{pickName(locale, p.name, p.nameZh)}</span>
-                <span className="text-xs text-muted">{p.kind === "income" ? t.add.income : t.add.expense}</span>
+                <span className="text-xs text-muted">
+                  {p.kind === "income" ? t.add.income : t.add.expense}
+                  {pAcc ? ` · ${pAcc}` : ""}
+                </span>
               </span>
             </button>
-            {kids.map((c) => (
-              <button key={c.id} type="button" className="flex w-full items-center gap-3 py-2 pl-14 pr-5 text-left" onClick={() => setEdit(c)}>
-                <span className="grid size-9 place-items-center rounded-full bg-elevated">
-                  <CategoryIcon name={c.icon} />
-                </span>
-                <span className="text-sm">{pickName(locale, c.name, c.nameZh)}</span>
-              </button>
-            ))}
+            {kids.map((c) => {
+              const acc = accountLabel(c.defaultAccountId ?? p.defaultAccountId);
+              return (
+                <button key={c.id} type="button" className="flex w-full items-center gap-3 py-2 pl-14 pr-5 text-left" onClick={() => setEdit(c)}>
+                  <span className="grid size-9 place-items-center rounded-full bg-elevated">
+                    <CategoryIcon name={c.icon} />
+                  </span>
+                  <span className="min-w-0 flex-1 text-left">
+                    <span className="block text-sm">{pickName(locale, c.name, c.nameZh)}</span>
+                    {acc ? <span className="text-xs text-muted">{acc}</span> : null}
+                  </span>
+                </button>
+              );
+            })}
             <button
               type="button"
               className="px-5 py-2 text-sm text-accent"

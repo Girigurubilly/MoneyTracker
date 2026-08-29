@@ -2,6 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Overlay } from "@/components/shared";
 import { CategoryIcon } from "@/components/category-icon";
+import { AccountSelect } from "@/components/account-select";
 import { pickName } from "@/lib/i18n";
 import { CATEGORY_ICONS, type Category, type CategoryIconName, type LifeTheme } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
@@ -51,6 +52,7 @@ function CategoryEditorBody({
   const t = useT();
   const locale = useUi((s) => s.locale);
   const cats = useApp((s) => s.categories);
+  const accounts = useApp((s) => s.accounts);
   const add = useApp((s) => s.addCategory);
   const update = useApp((s) => s.updateCategory);
   const del = useApp((s) => s.deleteCategory);
@@ -59,6 +61,9 @@ function CategoryEditorBody({
   const [kind, setKind] = useState<"expense" | "income">(initial?.kind ?? defaultKind ?? "expense");
   const [parentId, setParentId] = useState(initial?.parentId ?? defaultParentId ?? "");
   const [icon, setIcon] = useState<CategoryIconName>(initial?.icon ?? "wallet");
+  const [defaultAccountId, setDefaultAccountId] = useState(
+    initial?.defaultAccountId ?? cats.find((c) => c.id === (initial?.parentId ?? defaultParentId))?.defaultAccountId ?? "",
+  );
 
   async function save() {
     const n = name.trim();
@@ -74,7 +79,7 @@ function CategoryEditorBody({
       icon,
       parentId: parentId || undefined,
       essential: initial?.essential,
-      defaultAccountId: initial?.defaultAccountId,
+      defaultAccountId: defaultAccountId || undefined,
     };
     if (initial) await update(row);
     else await add(row);
@@ -110,6 +115,17 @@ function CategoryEditorBody({
           </select>
         </label>
       ) : null}
+      <label className="block py-2">
+        <span className="text-xs text-muted">{t.add.defaultAccount}</span>
+        <AccountSelect
+          accounts={accounts}
+          value={defaultAccountId}
+          onChange={setDefaultAccountId}
+          allowEmpty
+          emptyLabel={t.add.noDefaultAccount}
+        />
+        <span className="mt-1 block text-xs text-muted">{t.add.defaultAccountHint}</span>
+      </label>
       <div className="py-2">
         <span className="text-xs text-muted">{t.add.icon}</span>
         <div className="mt-2 grid grid-cols-6 gap-2">
