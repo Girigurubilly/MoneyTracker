@@ -38,6 +38,7 @@ export function BudgetScreen() {
   const monthSpent = storedTotal?.spent ?? 0;
   const reserved = storedTotal?.reserved ?? 0;
   const reservedA = storedTotal?.reservedAdhoc ?? 0;
+  const realized = storedTotal?.realized ?? 0;
   const projected = storedTotal?.projected ?? 0;
   const projectedRemain = storedTotal?.projectedRemain ?? 0;
   const avgDaily = storedTotal?.avgDaily ?? 0;
@@ -99,6 +100,9 @@ export function BudgetScreen() {
           </span>
           <span>
             {t.today.reservedRegulars}: {money(reserved + reservedA, "HKD")}
+          </span>
+          <span className="col-span-2">
+            {t.budget.postedRegulars}: {money(realized, "HKD")}
           </span>
           <span>
             {t.budget.avgDaily}: {money(avgDaily, "HKD")}

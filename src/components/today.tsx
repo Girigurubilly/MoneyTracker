@@ -189,6 +189,9 @@ function TodayBody() {
           <span className="block text-sm font-medium">{t.budget.monthlyTotal}</span>
           <span className="text-xs text-muted">
             {t.today.reservedRegulars}: {money((cap?.reserved ?? 0) + (cap?.reservedAdhoc ?? 0), "HKD")}
+            <span className="block">
+              {t.budget.postedRegulars}: {money(cap?.realized ?? 0, "HKD")}
+            </span>
           </span>
         </span>
         <span className="text-right">

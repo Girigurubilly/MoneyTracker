@@ -235,34 +235,6 @@ export function coverExpenseRegulars(
   );
 }
 
-/** Ad-hoc holds are realised only when a posted spend matches the same category. */
-export function coverAdhoc(
-  rows: AdhocBudget[],
-  txs: Transaction[],
-  usedTxIds?: Set<string>,
-): { covered: AdhocBudget[]; uncovered: AdhocBudget[] } {
-  const used = usedTxIds ?? new Set<string>();
-  const covered: AdhocBudget[] = [];
-  const uncovered: AdhocBudget[] = [];
-  for (const a of rows) {
-    if (a.categoryId) {
-      const hit = txs.find((tx) => !used.has(tx.id) && tx.categoryId === a.categoryId);
-      if (hit) {
-        used.add(hit.id);
-        covered.push(a);
-        continue;
-      }
-    }
-    uncovered.push(a);
-  }
-  return { covered, uncovered };
-}
-
-export function hkdOfAdhoc(a: AdhocBudget, rates: FxRate[]): number {
-  return Math.abs(toHkd(a.amount, a.currency, rates));
-}
-
-
 export function forecastTone(ratio: number): "income" | "watch" | "expense" {
   if (!Number.isFinite(ratio) || ratio < 0.96) return "income";
   if (ratio <= 1) return "watch";
@@ -328,10 +300,9 @@ export function monthCashflowForecast(
 }
 
 /**
- * Cap card formulas:
- *   reserved (已預留) = monthly expense regulars + this-month ad-hoc with no matching posted txn
- *                       (past due still counts if nothing has posted)
- *   realized (hidden) = those same items that do have a matching posted txn
+ * Cap card formulas (calendar day only — no txn matching):
+ *   reserved (已預留) = monthly expense regulars + this-month ad-hoc whose charged/hold day is still after today
+ *   realized (已入帳) = those same items whose charged/hold day is today or earlier
  *   avgDaily          = (spent − realized) / day of month
  *   dailyAllowed      = (cap − spent − reserved) / days after today
  *   projected (全月)  = (spent − realized) + avgDaily × remaining days
@@ -363,15 +334,9 @@ export function budgetActuals(
   expected: number;
 })[] {
   const asOf = asOfIso ?? monthEndIso(month);
-  const postedSpend = txs.filter((tx) => inMonth(tx.date, month) && isSpendLike(tx) && !tx.planned);
-  const cover = coverRegulars(monthlyExpenseRegulars(recurring), postedSpend, { matchCategory: false });
-  const used = new Set(cover.covered.flatMap((row) => row.txs.map((tx) => tx.id)));
-  const adhocCover = coverAdhoc(adhocForMonth(adhocRows, month), postedSpend, used);
-  const reservedReg = cover.uncovered.reduce((s, r) => s + hkdOfRegular(r, rates), 0);
-  const reservedA = adhocCover.uncovered.reduce((s, a) => s + hkdOfAdhoc(a, rates), 0);
-  const realizedReg = cover.covered.reduce((s, row) => s + hkdOfRegular(row.regular, rates), 0);
-  const realizedA = adhocCover.covered.reduce((s, a) => s + hkdOfAdhoc(a, rates), 0);
-  const realized = realizedReg + realizedA;
+  const reservedReg = reservedRegulars(recurring, rates, asOf);
+  const reservedA = reservedAdhoc(adhocRows, month, rates, asOf);
+  const realized = realizedRegulars(recurring, rates, asOf) + realizedAdhoc(adhocRows, month, rates, asOf);
   const adhoc = adhocTotal(adhocRows, month, rates);
   return budgets.map((b) => {
     const unscoped = !b.categoryId && !b.theme;

@@ -57,7 +57,7 @@ describe("budget formulas", () => {
     assert.equal(realizedNonRegularSpend(1_000, 3_000, 2_000), 0);
   });
 
-  it("剩餘預算 holds unposted regulars and ad-hoc even without a covering txn", () => {
+  it("剩餘預算 uses charged-day calendar, not txn matching", () => {
     const budgets: Budget[] = [
       { id: MONTH_TOTAL_BUDGET_ID, label: "cap", labelZh: "上限", monthly: 20_000, spent: 0 },
     ];
@@ -75,13 +75,13 @@ describe("budget formulas", () => {
     ];
     const asOf = "2026-08-15";
     const [row] = budgetActuals(budgets, txs, "2026-08", [], [], recurring, asOf, adhoc);
-    const reservedHold = 4_000 + 500 + 1_500;
-    const realized = 3_000;
+    const reservedHold = 4_000 + 1_500;
+    const realized = 3_000 + 500;
     const pace = 10_000 - realized;
     const remain = projectedNonRegularRemain(pace, asOf);
     assert.equal(row.spent, 10_000);
     assert.equal(row.reserved, 4_000);
-    assert.equal(row.reservedAdhoc, 2_000);
+    assert.equal(row.reservedAdhoc, 1_500);
     assert.equal(row.adhoc, 2_000);
     assert.equal(row.realized, realized);
     assert.equal(row.nonRegular, pace);
@@ -95,7 +95,7 @@ describe("budget formulas", () => {
     assert.equal(row.ratio, row.expected / 20_000);
   });
 
-  it("same-category spend does not realise a regular without recurringId", () => {
+  it("a regular whose charged day has not arrived stays reserved even if the category spent", () => {
     const budgets: Budget[] = [
       { id: MONTH_TOTAL_BUDGET_ID, label: "cap", labelZh: "上限", monthly: 20_000, spent: 0 },
     ];
@@ -201,7 +201,7 @@ describe("cap projection", () => {
     assert.equal(row.dailyAllowed, 6_000 / 16);
   });
 
-  it("unposted regulars stay in 已預留 even after their charged day", () => {
+  it("past charged day counts as 已入帳 even with no matching txn", () => {
     const budgets: Budget[] = [
       { id: MONTH_TOTAL_BUDGET_ID, label: "cap", labelZh: "上限", monthly: 20_000, spent: 0 },
     ];
@@ -211,17 +211,18 @@ describe("cap projection", () => {
     ];
     const txs: Transaction[] = [tx({ id: "t-all", type: "expense", amount: 10_000, date: "2026-08-12" })];
     const [row] = budgetActuals(budgets, txs, "2026-08", [], [], recurring, "2026-08-15", []);
-    const reservedHold = 7_000;
-    const pace = 10_000;
+    const reservedHold = 4_000;
+    const realized = 3_000;
+    const pace = 10_000 - realized;
     assert.equal(row.spent, 10_000);
-    assert.equal(row.reserved, 7_000);
-    assert.equal(row.realized, 0);
+    assert.equal(row.reserved, 4_000);
+    assert.equal(row.realized, 3_000);
     assert.equal(row.avgDaily, pace / 15);
     assert.equal(row.expected, 10_000 + reservedHold + (pace / 15) * 16);
     assert.equal(row.remaining, 20_000 - 10_000 - reservedHold);
   });
 
-  it("adhoc with a matching posted category is realised and omitted from 已預留", () => {
+  it("adhoc whose date has passed is 已入帳; later dates stay 已預留", () => {
     const budgets: Budget[] = [
       { id: MONTH_TOTAL_BUDGET_ID, label: "cap", labelZh: "上限", monthly: 20_000, spent: 0 },
     ];
