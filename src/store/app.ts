@@ -38,6 +38,7 @@ import { fetchLiveFx } from "@/lib/calc/fx";
 import { chargedDayOf, chargedIso, inferLivingRegular, isExpenseRegular } from "@/lib/calc/budget";
 import { isMortgageInterestCategory, isMortgagePrincipalCategory } from "@/lib/categories";
 import { accountsInGroup, nextSortOrder } from "@/lib/accounts";
+import { applyTxRules } from "@/lib/tx-rules";
 import { todayISO } from "@/lib/format";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
 
@@ -84,6 +85,7 @@ type Dispatchers = {
   moveAccount: (id: string, dir: number) => Promise<void>;
   addCategory: (c: Category) => Promise<void>;
   updateCategory: (c: Category) => Promise<void>;
+  deleteCategory: (id: string) => Promise<void>;
   updateMortgage: (m: Mortgage) => Promise<void>;
   updateRetirement: (r: RetirementInputs & { id: string }) => Promise<void>;
   updateBudget: (b: Budget) => Promise<void>;
@@ -285,6 +287,7 @@ function scheduledFromRegular(r: Recurring, month: string, today: string, existi
     planned: iso > today,
     recurringId: r.id,
     countsAsExpense: r.countsAsExpense,
+    housing: r.housing,
   };
 }
 
@@ -482,7 +485,8 @@ export const useApp = create<AppState>((set, get) => ({
   },
 
   addTransaction: async (partial) => {
-    const tx: Transaction = { ...partial, id: partial.id ?? nid() };
+    const ctx = { categories: get().categories, accounts: get().accounts };
+    const tx: Transaction = applyTxRules({ ...partial, id: partial.id ?? nid() }, ctx);
     let accounts = get().accounts;
     accounts = applyDeltas(accounts, balanceDeltas(tx));
     await idb().transaction("rw", [idb().transactions, idb().accounts], async () => {
@@ -494,15 +498,17 @@ export const useApp = create<AppState>((set, get) => ({
   },
 
   updateTransaction: async (tx, previous) => {
-    const prev = previous ?? get().transactions.find((t) => t.id === tx.id);
+    const ctx = { categories: get().categories, accounts: get().accounts };
+    const next = applyTxRules(tx, ctx);
+    const prev = previous ?? get().transactions.find((t) => t.id === next.id);
     let accounts = get().accounts;
     if (prev) accounts = applyDeltas(accounts, balanceDeltas(prev), -1);
-    accounts = applyDeltas(accounts, balanceDeltas(tx), 1);
+    accounts = applyDeltas(accounts, balanceDeltas(next), 1);
     await idb().transaction("rw", [idb().transactions, idb().accounts], async () => {
-      await idb().transactions.put(tx);
+      await idb().transactions.put(next);
       await Promise.all(accounts.map((a) => idb().accounts.put(a)));
     });
-    set({ transactions: get().transactions.map((t) => (t.id === tx.id ? tx : t)), accounts });
+    set({ transactions: get().transactions.map((t) => (t.id === next.id ? next : t)), accounts });
   },
 
   deleteTransaction: async (id) => {
@@ -553,6 +559,18 @@ export const useApp = create<AppState>((set, get) => ({
     await idb().categories.put(c);
     set({ categories: get().categories.map((x) => (x.id === c.id ? c : x)) });
   },
+  deleteCategory: async (id) => {
+    const prev = get().categories;
+    const next = prev.filter((c) => c.id !== id).map((c) => (c.parentId === id ? { ...c, parentId: undefined } : c));
+    await idb().transaction("rw", [idb().categories], async () => {
+      await idb().categories.delete(id);
+      for (const c of next) {
+        const before = prev.find((x) => x.id === c.id);
+        if (before && before.parentId !== c.parentId) await idb().categories.put(c);
+      }
+    });
+    set({ categories: next });
+  },
   updateMortgage: async (m) => {
     const accounts = get().accounts.map((a) => (a.id === m.accountId ? { ...a, balance: -Math.abs(m.outstanding) } : a));
     await idb().transaction("rw", [idb().mortgage, idb().accounts], async () => {
@@ -587,14 +605,16 @@ export const useApp = create<AppState>((set, get) => ({
     set({ trips: get().trips.filter((t) => t.id !== id) });
   },
   addRecurring: async (r) => {
-    await idb().recurring.put(r);
-    await upsertScheduledFor(r);
+    const row = applyTxRules(r, { categories: get().categories, accounts: get().accounts });
+    await idb().recurring.put(row);
+    await upsertScheduledFor(row);
     const data = await loadAll();
     set({ recurring: data.recurring, transactions: data.transactions });
   },
   updateRecurring: async (r) => {
-    await idb().recurring.put(r);
-    await upsertScheduledFor(r);
+    const row = applyTxRules(r, { categories: get().categories, accounts: get().accounts });
+    await idb().recurring.put(row);
+    await upsertScheduledFor(row);
     const data = await loadAll();
     set({ recurring: data.recurring, transactions: data.transactions });
   },

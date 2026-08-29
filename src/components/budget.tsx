@@ -3,6 +3,7 @@ import { Plus, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { InfoButton, Overlay, ScreenHeader, StatusChip } from "@/components/shared";
 import { CategoryPicker } from "@/components/category-picker";
+import { AccountSelect } from "@/components/account-select";
 import { money, pct, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { asOfForMonth, budgetActuals, chargedDayOf } from "@/lib/calc/budget";
@@ -13,8 +14,9 @@ import type { AdhocBudget, Recurring, TxType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
-import { defaultMortgageAccountId } from "@/lib/accounts";
-import { categoryPath, isMortgageInterestCategory, isMortgagePrincipalCategory, isMortgageSplitCategory } from "@/lib/categories";
+import { defaultMortgageAccountId, moneyAccountsForPicker } from "@/lib/accounts";
+import { categoryPath, isMortgageInterestCategory, isMortgagePrincipalCategory, mortgageEntryKind } from "@/lib/categories";
+import { applyTxRules } from "@/lib/tx-rules";
 
 export function BudgetScreen() {
   const t = useT();
@@ -355,12 +357,26 @@ function AdhocEditorBody({ initial, month, onClose }: { initial: AdhocBudget | n
   const add = useApp((s) => s.addAdhocBudget);
   const update = useApp((s) => s.updateAdhocBudget);
   const del = useApp((s) => s.deleteAdhocBudget);
+  const categories = useApp((s) => s.categories);
   const today = todayISO();
   const [name, setName] = useState(initial ? pickName(locale, initial.label, initial.labelZh) : "");
   const [amount, setAmount] = useState(initial ? String(initial.amount) : "");
   const [date, setDate] = useState(initial?.date ?? (today.startsWith(month) ? today : `${month}-28`));
+  const [categoryId, setCategoryId] = useState(initial?.categoryId ?? "");
+  const [pickCat, setPickCat] = useState(false);
+  const cat = categories.find((c) => c.id === categoryId);
   return (
-    <div className="px-5 pb-8">
+    <>
+      {pickCat ? (
+        <CategoryPicker
+          categories={categories}
+          kind="expense"
+          selectedId={categoryId || undefined}
+          onClose={() => setPickCat(false)}
+          onSelect={(c) => setCategoryId(c?.id ?? "")}
+        />
+      ) : null}
+      <div className="px-5 pb-8">
       <p className="text-xs text-muted">{t.budget.adhocHint}</p>
       <label className="block py-2">
         <span className="text-xs text-muted">{t.budget.regularName}</span>
@@ -369,6 +385,12 @@ function AdhocEditorBody({ initial, month, onClose }: { initial: AdhocBudget | n
       <label className="block py-2">
         <span className="text-xs text-muted">{t.add.amount}</span>
         <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3" />
+      </label>
+      <label className="block py-2">
+        <span className="text-xs text-muted">{t.add.category}</span>
+        <button type="button" className="mt-1 flex h-11 w-full items-center rounded-lg bg-elevated px-3 text-left" onClick={() => setPickCat(true)}>
+          {cat ? categoryPath(cat, categories, locale) : t.add.pickCategory}
+        </button>
       </label>
       <label className="block py-2">
         <span className="text-xs text-muted">{t.add.date}</span>
@@ -390,6 +412,7 @@ function AdhocEditorBody({ initial, month, onClose }: { initial: AdhocBudget | n
             currency: "HKD",
             month,
             date: iso,
+            categoryId: categoryId || undefined,
           };
           if (initial) await update(row);
           else await add(row);
@@ -405,6 +428,7 @@ function AdhocEditorBody({ initial, month, onClose }: { initial: AdhocBudget | n
         </button>
       ) : null}
     </div>
+    </>
   );
 }
 
@@ -426,10 +450,12 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
   const addRecurring = useApp((s) => s.addRecurring);
   const updateRecurring = useApp((s) => s.updateRecurring);
   const deleteRecurring = useApp((s) => s.deleteRecurring);
-  const moneyAccounts = accounts.filter((a) => a.currency !== "MILES" && !a.hidden);
+  const moneyAccounts = moneyAccountsForPicker(accounts);
   const mate = initial?.splitWithId ? recurring.find((r) => r.id === initial.splitWithId) : null;
   const alreadySplit = Boolean(mate);
-  const [kind, setKind] = useState<TxType>(initial?.type ?? "expense");
+  const [kind, setKind] = useState<TxType>(
+    initial?.type === "transfer" && initial.countsAsExpense ? "expense" : (initial?.type ?? "expense"),
+  );
   const [name, setName] = useState(initial ? pickName(locale, initial.label, initial.labelZh) : "");
   const [amount, setAmount] = useState(initial ? String((alreadySplit ? initial.amount + (mate?.amount ?? 0) : initial.amount)) : "");
   const [principalAmt, setPrincipalAmt] = useState(alreadySplit && initial?.type === "transfer" ? String(initial.amount) : alreadySplit && mate?.type === "transfer" ? String(mate.amount) : "");
@@ -442,7 +468,10 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
   const [living, setLiving] = useState(Boolean(initial?.living));
   const [pickCat, setPickCat] = useState(false);
   const cat = categories.find((c) => c.id === categoryId);
-  const showSplit = kind === "expense" && isMortgageSplitCategory(cat, categories);
+  const mortgageKind = mortgageEntryKind(cat, categories);
+  const showSplit = alreadySplit || (kind === "expense" && mortgageKind === "split");
+  const principalOnly = (kind === "expense" || kind === "transfer") && mortgageKind === "principal";
+  const showDest = kind === "transfer" || principalOnly || (showSplit && splitMortgage);
 
   async function save() {
     const n = name.trim();
@@ -489,21 +518,34 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
         splitWithId: pId,
       });
     } else {
+      const ruled = applyTxRules(
+        {
+          type: kind,
+          amount: Number(amount) || 0,
+          accountId,
+          toAccountId: kind === "transfer" || principalOnly ? toAccountId : undefined,
+          categoryId: categoryId || undefined,
+          housing: undefined,
+          countsAsExpense: undefined,
+        },
+        { categories, accounts },
+      );
       const row: Recurring = {
         id: initial?.id ?? newId(),
-        type: kind,
+        type: ruled.type,
         label: n,
         labelZh: n,
-        amount: Number(amount) || 0,
+        amount: ruled.amount,
         currency: "HKD",
-        accountId,
-        toAccountId: kind === "transfer" ? toAccountId : undefined,
-        categoryId: categoryId || undefined,
+        accountId: ruled.accountId,
+        toAccountId: ruled.toAccountId,
+        categoryId: ruled.categoryId,
         frequency: "monthly",
         nextDate: next,
         chargedDay: d,
         living,
-        countsAsExpense: kind === "transfer" ? undefined : undefined,
+        countsAsExpense: ruled.countsAsExpense,
+        housing: ruled.housing,
       };
       if (initial) await updateRecurring(row);
       else await addRecurring(row);
@@ -513,7 +555,22 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
   }
 
   return (
-    <div className="px-5 pb-8">
+    <>
+      {pickCat ? (
+        <CategoryPicker
+          categories={categories}
+          kind={kind === "income" ? "income" : "expense"}
+          selectedId={categoryId || undefined}
+          txType={kind}
+          onTxTypeChange={(next) => setKind(next)}
+          onClose={() => setPickCat(false)}
+          onSelect={(c) => {
+            setCategoryId(c?.id ?? "");
+            setSplitMortgage(mortgageEntryKind(c, categories) === "split");
+          }}
+        />
+      ) : null}
+      <div className="px-5 pb-8">
       <label className="block py-2">
         <span className="text-xs text-muted">{t.more.kind}</span>
         <select value={kind} onChange={(e) => setKind(e.target.value as TxType)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3">
@@ -554,25 +611,13 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
         <input inputMode="numeric" value={day} onChange={(e) => setDay(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3" />
       </label>
       <label className="block py-2">
-        <span className="text-xs text-muted">{t.add.account}</span>
-        <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3">
-          {moneyAccounts.map((a) => (
-            <option key={a.id} value={a.id}>
-              {pickName(locale, a.name, a.nameZh)}
-            </option>
-          ))}
-        </select>
+        <span className="text-xs text-muted">{kind === "transfer" ? t.add.from : t.add.account}</span>
+        <AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} />
       </label>
-      {kind === "transfer" || (showSplit && splitMortgage) ? (
+      {showDest ? (
         <label className="block py-2">
-          <span className="text-xs text-muted">{t.add.mortgageTo}</span>
-          <select value={toAccountId} onChange={(e) => setToAccountId(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3">
-            {moneyAccounts.filter((a) => a.type === "mortgage" || a.type === "loan" || a.id !== accountId).map((a) => (
-              <option key={a.id} value={a.id}>
-                {pickName(locale, a.name, a.nameZh)}
-              </option>
-            ))}
-          </select>
+          <span className="text-xs text-muted">{principalOnly || (showSplit && splitMortgage) ? t.add.mortgageTo : t.add.to}</span>
+          <AccountSelect accounts={accounts} value={toAccountId} onChange={setToAccountId} excludeId={accountId} />
         </label>
       ) : null}
       <label className="block py-2">
@@ -593,17 +638,7 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
           {t.tx.delete}
         </button>
       ) : null}
-      <Overlay open={pickCat} onClose={() => setPickCat(false)} variant="page">
-        <CategoryPicker
-          categories={categories}
-          kind={kind === "income" ? "income" : "expense"}
-          onClose={() => setPickCat(false)}
-          onSelect={(c) => {
-            setCategoryId(c?.id ?? "");
-            if (c && isMortgageSplitCategory(c, categories)) setSplitMortgage(true);
-          }}
-        />
-      </Overlay>
     </div>
+    </>
   );
 }

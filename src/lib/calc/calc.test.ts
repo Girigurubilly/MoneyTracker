@@ -11,7 +11,7 @@ import {
 } from "./budget.ts";
 import { MONTH_TOTAL_BUDGET_ID } from "../types.ts";
 import type { AdhocBudget, Budget, Category, Mortgage, Recurring, Transaction } from "../types.ts";
-import { monthlyLivingEssentials, monthlyHousingCost, isPrincipalRegular } from "./housing.ts";
+import { monthlyLivingEssentials, monthlyHousingCost, isPrincipalRegular, housingRegularRows } from "./housing.ts";
 import { periodCategoryTotals, periodRange } from "./period.ts";
 import { runRetirement, sustainableMonthly } from "./retirement.ts";
 import { monthlyPayment } from "./mortgage.ts";
@@ -164,6 +164,11 @@ describe("housing monthly cost", () => {
   it("必要開支 excludes mortgage principal", () => {
     assert.equal(isPrincipalRegular(recurring[1], cats), true);
     assert.equal(monthlyLivingEssentials(recurring, cats, []), 1590 + 5319);
+  });
+  it("房屋定期 includes mortgage principal as a house expense", () => {
+    const rows = housingRegularRows(recurring, cats, []);
+    assert.equal(rows.some((r) => r.id === "r-p"), true);
+    assert.equal(rows.reduce((s, r) => s + r.amount, 0), 1590 + 8800 + 5319);
   });
   it("住房成本 is the mortgage instalment", () => {
     const m: Mortgage = {

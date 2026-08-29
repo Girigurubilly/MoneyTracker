@@ -39,6 +39,12 @@ export const messages = {
       interest: "Interest",
       split: "Split principal / interest",
       mortgageTo: "Mortgage / loan account",
+      housing: "Related to housing",
+      newMain: "New group",
+      newSub: "New subcategory",
+      parentCategory: "Main category",
+      icon: "Icon",
+      noParent: "None — this is a main category",
     },
     today: {
       remainingBudget: "Remaining budget",
@@ -237,7 +243,7 @@ export const messages = {
     },
     fx: { title: "FX rates", refresh: "Refresh rates", hint: "Indicative only. Card rates can differ." },
     security: { title: "Security", hint: "Records stay on this device. Optional encrypted backup is under More → Backup." },
-    common: { edit: "Edit", none: "None", info: "Info", coming: "Coming later.", close: "Close", back: "Back" },
+    common: { edit: "Edit", done: "Done", none: "None", info: "Info", coming: "Coming later.", close: "Close", back: "Back" },
     onboarding: {
       title: "HK Life Money",
       body: "Private money tracking for Hong Kong. Records stay on this device.",
@@ -279,6 +285,12 @@ export const messages = {
       interest: "利息",
       split: "分拆本金 / 利息",
       mortgageTo: "按揭 / 貸款帳戶",
+      housing: "房屋相關",
+      newMain: "新增主分類",
+      newSub: "新增子分類",
+      parentCategory: "主分類",
+      icon: "圖示",
+      noParent: "無 — 這是主分類",
     },
     today: {
       remainingBudget: "剩餘預算",
@@ -474,7 +486,7 @@ export const messages = {
     },
     fx: { title: "匯率", refresh: "更新匯率", hint: "僅供參考，信用卡實際匯率可能不同。" },
     security: { title: "保安", hint: "紀錄只留在此裝置。加密備份在「更多 → 備份」。" },
-    common: { edit: "編輯", none: "無", info: "說明", coming: "稍後提供。", close: "關閉", back: "返回" },
+    common: { edit: "編輯", done: "完成", none: "無", info: "說明", coming: "稍後提供。", close: "關閉", back: "返回" },
     onboarding: {
       title: "HK Life Money",
       body: "為香港而設的私密理財紀錄。資料只留在此裝置。",

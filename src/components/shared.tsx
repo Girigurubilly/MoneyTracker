@@ -142,12 +142,14 @@ export function Overlay({
   children,
   title,
   variant = "sheet",
+  layer = "base",
 }: {
   open: boolean;
   onClose: () => void;
   children: ReactNode;
   title?: string;
   variant?: "sheet" | "page";
+  layer?: "base" | "stack";
 }) {
   const t = useT();
   useEffect(() => {
@@ -160,8 +162,15 @@ export function Overlay({
   }, [open, onClose]);
   if (!open) return null;
   const page = variant === "page";
+  const zClass = page
+    ? layer === "stack"
+      ? "z-[98]"
+      : "z-[92]"
+    : layer === "stack"
+      ? "z-[96]"
+      : "z-[90]";
   const sheet = (
-    <div className={cn("fixed inset-0 grid", page ? "z-[92] bg-background" : "z-[90] place-items-end md:place-items-center")}>
+    <div className={cn("fixed inset-0 grid", zClass, page ? "bg-background" : "place-items-end md:place-items-center")}>
       {page ? null : (
         <button type="button" className="absolute inset-0 scrim" aria-label={t.common.close} onClick={onClose} />
       )}

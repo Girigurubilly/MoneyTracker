@@ -207,6 +207,7 @@ export type Transaction = {
   planned?: boolean;
   recurringId?: string;
   countsAsExpense?: boolean;
+  housing?: boolean;
   fxToHkd?: number;
 };
 
@@ -227,6 +228,7 @@ export type Recurring = {
   variable?: boolean;
   living?: boolean;
   countsAsExpense?: boolean;
+  housing?: boolean;
   splitWithId?: string;
 };
 
@@ -238,6 +240,7 @@ export type AdhocBudget = {
   currency: MoneyUnit;
   month: string;
   date: string;
+  categoryId?: string;
 };
 
 export type Budget = {

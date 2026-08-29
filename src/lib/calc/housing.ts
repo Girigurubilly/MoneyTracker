@@ -43,6 +43,21 @@ export function livingEssentialRows(
     }));
 }
 
+export function housingRegularRows(
+  recurring: Recurring[],
+  categories: Category[],
+  rates: FxRate[],
+): { id: string; label: string; labelZh: string; amount: number }[] {
+  return monthlyExpenseRegulars(recurring)
+    .filter((r) => r.living || isPrincipalRegular(r, categories))
+    .map((r) => ({
+      id: r.id,
+      label: r.label,
+      labelZh: r.labelZh,
+      amount: hkdOfRegular(r, rates),
+    }));
+}
+
 export function monthlyLivingEssentials(recurring: Recurring[], categories: Category[], rates: FxRate[]): number {
   return livingEssentialRows(recurring, categories, rates).reduce((s, r) => s + r.amount, 0);
 }
@@ -113,8 +128,11 @@ export function housingTransactions(
   const ids = housingCategoryIds(categories);
   return txs
     .filter((tx) => !tx.planned && tx.date >= from && tx.date <= to)
-    .filter((tx) => tx.categoryId && ids.has(tx.categoryId))
-    .filter((tx) => cashflowSide(tx) === "expense")
+    .filter((tx) => {
+      if (tx.housing === false) return false;
+      const tagged = tx.housing === true || Boolean(tx.categoryId && ids.has(tx.categoryId));
+      return tagged && cashflowSide(tx) === "expense";
+    })
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
 }
 

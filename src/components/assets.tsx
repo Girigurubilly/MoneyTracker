@@ -4,7 +4,7 @@ import { Group, Overlay, ScreenHeader } from "@/components/shared";
 import { money } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { netWorthNow } from "@/lib/calc/networth";
-import { accountsInGroup } from "@/lib/accounts";
+import { accountsInGroup, BALANCE_GROUP_ORDER } from "@/lib/accounts";
 import { ACCOUNT_TYPE_OPTIONS, groupForType, type Account, type AccountType } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -17,13 +17,14 @@ export function AssetsScreen() {
   const nw = netWorthNow(accounts, rates);
   const [addOpen, setAddOpen] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
-  const groups: { id: Account["group"]; label: string }[] = [
-    { id: "cash", label: t.assets.cash },
-    { id: "credit", label: t.assets.credit },
-    { id: "assets", label: t.assets.investments },
-    { id: "housing", label: t.assets.housing },
-    { id: "loyalty", label: t.assets.loyalty },
-  ];
+  const labels: Record<Account["group"], string> = {
+    cash: t.assets.cash,
+    credit: t.assets.credit,
+    assets: t.assets.investments,
+    housing: t.assets.housing,
+    loyalty: t.assets.loyalty,
+  };
+  const groups = BALANCE_GROUP_ORDER.map((id) => ({ id, label: labels[id] }));
   return (
     <div className="pb-10">
       <ScreenHeader

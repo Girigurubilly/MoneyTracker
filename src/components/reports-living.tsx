@@ -4,11 +4,11 @@ import { money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import {
   formatRatePct,
+  housingRegularRows,
   housingTransactions,
   installmentOf,
   linkedLoan,
   linkedProperty,
-  livingEssentialRows,
   livingModeOf,
   monthlyHousingCost,
   monthlyLivingEssentials,
@@ -38,7 +38,7 @@ export function LivingPage() {
   const today = todayISO();
   const cost = monthlyHousingCost(m, rec, cats, rates);
   const essentials = monthlyLivingEssentials(rec, cats, rates);
-  const rows = livingEssentialRows(rec, cats, rates);
+  const rows = housingRegularRows(rec, cats, rates);
   const mode = livingModeOf(m);
   const modeLabel =
     mode === "own-mortgage"

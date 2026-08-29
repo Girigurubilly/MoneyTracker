@@ -44,6 +44,17 @@ export function isMortgageSplitCategory(c: Category | undefined, categories: Cat
   return false;
 }
 
+export type MortgageEntryKind = "principal" | "interest" | "split" | null;
+
+export function mortgageEntryKind(c: Category | undefined | null, categories: Category[]): MortgageEntryKind {
+  if (!c) return null;
+  if (isHousingGroup(c)) return null;
+  if (isMortgagePrincipalCategory(c)) return "principal";
+  if (isMortgageInterestCategory(c)) return "interest";
+  if (isMortgageSplitCategory(c, categories)) return "split";
+  return null;
+}
+
 export function parentCategoryName(c: Category, categories: Category[], locale: "en" | "zh-HK"): string {
   const p = categories.find((x) => x.id === c.parentId);
   if (!p) return locale === "zh-HK" ? c.nameZh : c.name;

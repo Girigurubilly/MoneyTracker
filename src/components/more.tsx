@@ -3,13 +3,14 @@ import { Archive, FolderTree, Globe, Lock, Repeat, Upload, Wallet } from "lucide
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
 import { Disclaimer, Group, Hairline, Row, ScreenHeader } from "@/components/shared";
+import { CategoryIcon } from "@/components/category-icon";
+import { CategoryEditor } from "@/components/category-editor";
 import { pickName } from "@/lib/i18n";
 import { decryptSnapshot, downloadBlob, encryptSnapshot } from "@/lib/backup";
 import { transactionsToCsv } from "@/lib/derived";
 import { convertBtp, isAppSnapshot, isBtpFile } from "@/lib/import-btp";
-import { housingParentId, isMortgageInterestCategory, isMortgagePrincipalCategory } from "@/lib/categories";
 import type { Category } from "@/lib/types";
-import { useApp, newId, type AppSnapshot } from "@/store/app";
+import { useApp, type AppSnapshot } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 
 export function MoreScreen() {
@@ -58,46 +59,59 @@ export function CategoriesPage() {
   const t = useT();
   const locale = useUi((s) => s.locale);
   const cats = useApp((s) => s.categories);
-  const add = useApp((s) => s.addCategory);
-  const [name, setName] = useState("");
+  const [edit, setEdit] = useState<Category | null | "new-main" | "new-sub">(null);
+  const [subParent, setSubParent] = useState<string>("");
   const parents = cats.filter((c) => !c.parentId);
+  const editing = typeof edit === "object" ? edit : null;
   return (
     <div className="pb-10">
       <ScreenHeader title={t.more.categories} />
-      {cats.map((c) => (
-        <div key={c.id} className="flex items-center justify-between px-5 py-2 text-sm">
-          <span>{pickName(locale, c.name, c.nameZh)}</span>
-          <span className="text-xs text-muted">{c.kind}</span>
-        </div>
-      ))}
-      <div className="mx-5 mt-4 flex gap-2">
-        <input value={name} onChange={(e) => setName(e.target.value)} className="h-11 flex-1 rounded-lg bg-elevated px-3" />
-        <button
-          type="button"
-          className="h-11 rounded-lg bg-accent px-4 text-sm text-on-accent"
-          onClick={async () => {
-            const n = name.trim();
-            if (!n) return;
-            const row: Category = {
-              id: newId(),
-              name: n,
-              nameZh: n,
-              theme: "living",
-              kind: "expense",
-              icon: "wallet",
-              parentId:
-                isMortgagePrincipalCategory({ id: "x", name: n, nameZh: n, theme: "living", kind: "expense", icon: "home" }) ||
-                isMortgageInterestCategory({ id: "x", name: n, nameZh: n, theme: "living", kind: "expense", icon: "home" })
-                  ? housingParentId(cats)
-                  : parents[0]?.id,
-            };
-            await add(row);
-            setName("");
-          }}
-        >
-          {t.add.save}
+      {parents.map((p) => {
+        const kids = cats.filter((c) => c.parentId === p.id);
+        return (
+          <div key={p.id} className="mb-4">
+            <button type="button" className="flex w-full items-center gap-3 px-5 py-2 text-left" onClick={() => setEdit(p)}>
+              <span className="grid size-10 place-items-center rounded-full bg-elevated">
+                <CategoryIcon name={p.icon} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium">{pickName(locale, p.name, p.nameZh)}</span>
+                <span className="text-xs text-muted">{p.kind === "income" ? t.add.income : t.add.expense}</span>
+              </span>
+            </button>
+            {kids.map((c) => (
+              <button key={c.id} type="button" className="flex w-full items-center gap-3 py-2 pl-14 pr-5 text-left" onClick={() => setEdit(c)}>
+                <span className="grid size-9 place-items-center rounded-full bg-elevated">
+                  <CategoryIcon name={c.icon} />
+                </span>
+                <span className="text-sm">{pickName(locale, c.name, c.nameZh)}</span>
+              </button>
+            ))}
+            <button
+              type="button"
+              className="px-5 py-2 text-sm text-accent"
+              onClick={() => {
+                setSubParent(p.id);
+                setEdit("new-sub");
+              }}
+            >
+              {t.add.newSub}
+            </button>
+          </div>
+        );
+      })}
+      <div className="px-5">
+        <button type="button" className="h-11 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={() => setEdit("new-main")}>
+          {t.add.newMain}
         </button>
       </div>
+      <CategoryEditor
+        open={edit !== null}
+        onClose={() => setEdit(null)}
+        initial={editing}
+        defaultParentId={edit === "new-sub" ? subParent : undefined}
+        defaultKind="expense"
+      />
     </div>
   );
 }
