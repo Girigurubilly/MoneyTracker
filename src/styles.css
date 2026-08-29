@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=Rajdhani:wght@500;600;700&family=Zen+Maru+Gothic:wght@500;700&display=swap");
 @import "tailwindcss";
 
 @theme {
@@ -65,4 +66,138 @@
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html,
+  body,
+  #root {
+    transition:
+      background-color 180ms ease,
+      color 180ms ease;
+  }
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --font-sans: "SF Pro Text", "PingFang HK", "Noto Sans TC", "Segoe UI", system-ui, sans-serif;
+  --font-display: "SF Pro Display", "PingFang HK", "Noto Sans TC", "Segoe UI", system-ui, sans-serif;
+  --color-background: #000000;
+  --color-foreground: #f5f5f7;
+  --color-elevated: #1c1c1e;
+  --color-muted: #98989d;
+  --color-faint: #636366;
+  --color-line: #38383a;
+  --color-accent: #0a84ff;
+  --color-on-accent: #ffffff;
+  --color-accent-soft: #12253d;
+  --color-income: #30d158;
+  --color-expense: #ff453a;
+  --color-watch: #ff9f0a;
+  --color-success-soft: #12301c;
+  --color-watch-soft: #33240a;
+  --color-expense-soft: #3a1214;
+  --color-ring-track: #2c2c2e;
+  --color-scrim: rgb(0 0 0 / 0.56);
+  --color-chart-1: #30d158;
+  --color-chart-2: #64d2ff;
+  --color-chart-3: #ffd60a;
+  --color-chart-4: #ff453a;
+  --color-chart-5: #ff9f0a;
+  --color-chart-6: #5ac8fa;
+  --color-chart-7: #bf5af2;
+  --color-chart-8: #ff375f;
+}
+
+html[data-theme="pinky"] {
+  color-scheme: light;
+  --font-sans: "Nunito", ui-rounded, "Hiragino Maru Gothic ProN", "PingFang HK", "Noto Sans TC", system-ui, sans-serif;
+  --font-display: "Nunito", ui-rounded, "Hiragino Maru Gothic ProN", "PingFang HK", "Noto Sans TC", system-ui, sans-serif;
+  --color-background: #fdf2f8;
+  --color-foreground: #4a044e;
+  --color-elevated: #ffffff;
+  --color-muted: #a15a86;
+  --color-faint: #d8a6c2;
+  --color-line: #f5d0e4;
+  --color-accent: #db2777;
+  --color-on-accent: #ffffff;
+  --color-accent-soft: #fce7f3;
+  --color-income: #0f766e;
+  --color-expense: #be123c;
+  --color-watch: #c2410c;
+  --color-success-soft: #ccfbf1;
+  --color-watch-soft: #ffedd5;
+  --color-expense-soft: #ffe4e6;
+  --color-ring-track: #f5d0e4;
+  --color-scrim: rgb(74 4 78 / 0.28);
+  --color-chart-1: #f472b6;
+  --color-chart-2: #c084fc;
+  --color-chart-3: #fb7185;
+  --color-chart-4: #f59e0b;
+  --color-chart-5: #2dd4bf;
+  --color-chart-6: #818cf8;
+  --color-chart-7: #e879f9;
+  --color-chart-8: #fb923c;
+}
+
+html[data-theme="anime"] {
+  color-scheme: light;
+  --font-sans: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "PingFang HK", "Noto Sans TC", system-ui, sans-serif;
+  --font-display: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "PingFang HK", "Noto Sans TC", system-ui, sans-serif;
+  --color-background: #fff1f5;
+  --color-foreground: #2b1638;
+  --color-elevated: #ffffff;
+  --color-muted: #8b6b90;
+  --color-faint: #c9adc8;
+  --color-line: #ffd6e5;
+  --color-accent: #ff5d8f;
+  --color-on-accent: #ffffff;
+  --color-accent-soft: #ffe4ee;
+  --color-income: #2a9d8f;
+  --color-expense: #e63956;
+  --color-watch: #ef8d32;
+  --color-success-soft: #d8f3ef;
+  --color-watch-soft: #ffe8d2;
+  --color-expense-soft: #ffd9e1;
+  --color-ring-track: #ffd6e5;
+  --color-scrim: rgb(43 22 56 / 0.28);
+  --color-chart-1: #ff8fab;
+  --color-chart-2: #9b8cff;
+  --color-chart-3: #7fd8c8;
+  --color-chart-4: #ffd166;
+  --color-chart-5: #ffa07a;
+  --color-chart-6: #80d0ff;
+  --color-chart-7: #d4a5ff;
+  --color-chart-8: #ff6b9d;
+}
+
+html[data-theme="cyberpunk"] {
+  color-scheme: dark;
+  --font-sans: "Rajdhani", "Segoe UI", "PingFang HK", "Noto Sans TC", system-ui, sans-serif;
+  --font-display: "Rajdhani", "Segoe UI", "PingFang HK", "Noto Sans TC", system-ui, sans-serif;
+  --color-background: #090414;
+  --color-foreground: #d8f3ff;
+  --color-elevated: #140c28;
+  --color-muted: #7aa8c4;
+  --color-faint: #4c6d86;
+  --color-line: #2a1848;
+  --color-accent: #00e5ff;
+  --color-on-accent: #041018;
+  --color-accent-soft: #0b3140;
+  --color-income: #5cff8d;
+  --color-expense: #ff2e97;
+  --color-watch: #ffb703;
+  --color-success-soft: #0d3320;
+  --color-watch-soft: #33280a;
+  --color-expense-soft: #3a1028;
+  --color-ring-track: #2a1848;
+  --color-scrim: rgb(0 0 0 / 0.62);
+  --color-chart-1: #00e5ff;
+  --color-chart-2: #ff2e97;
+  --color-chart-3: #c7ff00;
+  --color-chart-4: #7b61ff;
+  --color-chart-5: #ffb703;
+  --color-chart-6: #39ff14;
+  --color-chart-7: #ff6ec7;
+  --color-chart-8: #00f5d4;
 }

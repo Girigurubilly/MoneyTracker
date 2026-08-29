@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
-import { Archive, FolderTree, Globe, Lock, Repeat, Upload, Wallet } from "lucide-react";
+import { Archive, FolderTree, Globe, Lock, Palette, Repeat, Settings2, Upload, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
-import { Disclaimer, Group, Hairline, Row, ScreenHeader } from "@/components/shared";
+import { Disclaimer, Group, Hairline, Overlay, Row, ScreenHeader } from "@/components/shared";
 import { CurrencySelect } from "@/components/currency-field";
 import { CategoryIcon } from "@/components/category-icon";
 import { CategoryEditor } from "@/components/category-editor";
@@ -14,13 +14,13 @@ import type { Category } from "@/lib/types";
 import { CURRENCIES } from "@/lib/types";
 import { useApp, type AppSnapshot } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
+import { THEME_IDS, THEME_PRESETS, normalizeHex, type ThemeId } from "@/lib/theme";
+import { cn } from "@/lib/utils";
 
 export function MoreScreen() {
   const t = useT();
   const locale = useUi((s) => s.locale);
   const setLocale = useUi((s) => s.setLocale);
-  const resetSample = useApp((s) => s.resetSample);
-  const clearAll = useApp((s) => s.clearAll);
   return (
     <div className="pb-10">
       <ScreenHeader title={t.more.title} large />
@@ -33,6 +33,8 @@ export function MoreScreen() {
         <Row icon={<Wallet className="size-4" />} title={t.more.budgets} to="/budget" chevron />
         <Hairline />
         <Row icon={<Globe className="size-4" />} title={t.more.fx} to="/more/fx" chevron />
+        <Hairline />
+        <Row icon={<Palette className="size-4" />} title={t.more.appearance} to="/more/appearance" chevron />
       </Group>
       <h2 className="px-5 pb-1 pt-6 text-sm font-medium text-muted">{t.more.data}</h2>
       <Group>
@@ -41,16 +43,12 @@ export function MoreScreen() {
         <Row icon={<Archive className="size-4" />} title={t.more.backup} to="/more/backup" chevron />
         <Hairline />
         <Row icon={<Lock className="size-4" />} title={t.more.security} to="/more/security" chevron />
+        <Hairline />
+        <Row icon={<Settings2 className="size-4" />} title={t.more.other} to="/more/other" chevron />
       </Group>
       <div className="px-5 pt-6">
         <button type="button" className="h-11 w-full rounded-xl bg-elevated text-sm" onClick={() => setLocale(locale === "zh-HK" ? "en" : "zh-HK")}>
           {t.more.language}: {locale === "zh-HK" ? "繁體中文" : "English"}
-        </button>
-        <button type="button" className="mt-3 h-11 w-full rounded-xl bg-elevated text-sm" onClick={() => void resetSample()}>
-          {t.more.sample}
-        </button>
-        <button type="button" className="mt-3 h-11 w-full rounded-xl bg-elevated text-sm text-expense" onClick={() => void clearAll()}>
-          {t.more.clear}
         </button>
       </div>
     </div>
@@ -316,6 +314,167 @@ export function SecurityPage() {
     <div className="pb-10">
       <ScreenHeader title={t.security.title} />
       <p className="px-5 text-sm text-muted">{t.security.hint}</p>
+    </div>
+  );
+}
+
+export function AppearancePage() {
+  const t = useT();
+  const theme = useUi((s) => s.theme);
+  const custom = useUi((s) => s.customColors);
+  const setTheme = useUi((s) => s.setTheme);
+  const setCustomColor = useUi((s) => s.setCustomColor);
+  const resetCustomColors = useUi((s) => s.resetCustomColors);
+  const labels: Record<ThemeId, string> = {
+    normal: t.more.themeNormal,
+    dark: t.more.themeDark,
+    pinky: t.more.themePinky,
+    anime: t.more.themeAnime,
+    cyberpunk: t.more.themeCyberpunk,
+  };
+  const preset = THEME_PRESETS[theme];
+  return (
+    <div className="pb-10">
+      <ScreenHeader title={t.more.appearance} backTo="/more" />
+      <p className="px-5 pb-3 text-sm text-muted">{t.more.appearanceHint}</p>
+      <h2 className="px-5 pb-2 text-sm font-medium text-muted">{t.more.theme}</h2>
+      <div className="grid grid-cols-2 gap-3 px-4">
+        {THEME_IDS.map((id) => {
+          const swatch = THEME_PRESETS[id];
+          const on = theme === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTheme(id)}
+              className={cn(
+                "min-h-16 rounded-xl px-3 py-3 text-left",
+                on ? "ring-2 ring-accent" : "ring-1 ring-line",
+              )}
+              style={{ background: swatch.elevated, color: swatch.foreground }}
+            >
+              <span className="flex items-center gap-2">
+                <span className="size-4 rounded-full" style={{ background: swatch.background }} />
+                <span className="size-4 rounded-full" style={{ background: swatch.accent }} />
+              </span>
+              <span className="mt-2 block text-sm font-medium">{labels[id]}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="pt-6">
+        <Group>
+          <ColorRow
+            label={t.more.colorBackground}
+            value={custom.background}
+            fallback={preset.background}
+            onChange={(hex) => setCustomColor("background", hex)}
+          />
+          <Hairline />
+          <ColorRow
+            label={t.more.colorFont}
+            value={custom.foreground}
+            fallback={preset.foreground}
+            onChange={(hex) => setCustomColor("foreground", hex)}
+          />
+          <Hairline />
+          <ColorRow
+            label={t.more.colorHighlight}
+            value={custom.accent}
+            fallback={preset.accent}
+            onChange={(hex) => setCustomColor("accent", hex)}
+          />
+        </Group>
+      </div>
+      <div className="px-5 pt-4">
+        <button type="button" className="h-11 w-full rounded-xl bg-elevated text-sm" onClick={resetCustomColors}>
+          {t.more.resetColors}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ColorRow({
+  label,
+  value,
+  fallback,
+  onChange,
+}: {
+  label: string;
+  value?: string;
+  fallback: string;
+  onChange: (hex: string) => void;
+}) {
+  const shown = normalizeHex(value) ?? fallback;
+  return (
+    <label className="flex min-h-11 items-center justify-between gap-3 px-4 py-2">
+      <span className="text-sm">{label}</span>
+      <span className="relative size-11 shrink-0 overflow-hidden rounded-lg ring-1 ring-line">
+        <span className="absolute inset-0" style={{ background: shown }} />
+        <input
+          type="color"
+          value={shown}
+          aria-label={label}
+          onChange={(e) => {
+            const hex = normalizeHex(e.target.value);
+            if (hex) onChange(hex);
+          }}
+          className="absolute inset-0 size-full cursor-pointer opacity-0"
+        />
+      </span>
+    </label>
+  );
+}
+
+export function OtherSettingsPage() {
+  const t = useT();
+  const resetSample = useApp((s) => s.resetSample);
+  const clearAll = useApp((s) => s.clearAll);
+  const [confirm, setConfirm] = useState<"sample" | "clear" | null>(null);
+  return (
+    <div className="pb-10">
+      <ScreenHeader title={t.more.other} backTo="/more" />
+      <p className="px-5 pb-3 text-sm text-muted">{t.more.otherHint}</p>
+      <div className="px-5">
+        <button type="button" className="h-12 w-full rounded-xl bg-elevated text-sm font-medium" onClick={() => setConfirm("sample")}>
+          {t.more.sample}
+        </button>
+        <button type="button" className="mt-3 h-12 w-full rounded-xl bg-elevated text-sm font-medium text-expense" onClick={() => setConfirm("clear")}>
+          {t.more.clear}
+        </button>
+      </div>
+      <Overlay
+        open={confirm !== null}
+        onClose={() => setConfirm(null)}
+        title={confirm === "clear" ? t.more.clear : t.more.sample}
+      >
+        <div className="px-5 pb-8">
+          <p className="text-sm text-muted">{confirm === "clear" ? t.more.confirmClear : t.more.confirmSample}</p>
+          <button
+            type="button"
+            className={cn(
+              "mt-5 h-12 w-full rounded-xl text-sm font-semibold",
+              confirm === "clear" ? "bg-expense text-on-accent" : "bg-accent text-on-accent",
+            )}
+            onClick={async () => {
+              if (confirm === "clear") {
+                await clearAll();
+                toast(t.more.cleared);
+              } else {
+                await resetSample();
+                toast(t.more.sampleDone);
+              }
+              setConfirm(null);
+            }}
+          >
+            {t.more.confirm}
+          </button>
+          <button type="button" className="mt-2 h-11 w-full text-sm text-muted" onClick={() => setConfirm(null)}>
+            {t.add.cancel}
+          </button>
+        </div>
+      </Overlay>
     </div>
   );
 }

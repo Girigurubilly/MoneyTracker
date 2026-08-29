@@ -2,6 +2,15 @@ import { create } from "zustand";
 import type { Locale, TodayView, TxType } from "@/lib/types";
 import { todayISO } from "@/lib/format";
 import { messages, type Messages } from "@/lib/i18n";
+import {
+  applyTheme,
+  readSavedCustom,
+  readSavedTheme,
+  THEME_CUSTOM_KEY,
+  THEME_KEY,
+  type ThemeCustom,
+  type ThemeId,
+} from "@/lib/theme";
 
 const LOCALE_KEY = "hk-life-money-locale";
 
@@ -17,6 +26,8 @@ export function readSavedLocale(): Locale {
 
 type UiState = {
   locale: Locale;
+  theme: ThemeId;
+  customColors: ThemeCustom;
   selectedDate: string;
   todayView: TodayView;
   firstDayOfWeek: 0 | 1;
@@ -27,6 +38,9 @@ type UiState = {
   infoKey: string | null;
   onboarded: boolean;
   setLocale: (l: Locale) => void;
+  setTheme: (t: ThemeId) => void;
+  setCustomColor: (key: keyof ThemeCustom, hex: string | undefined) => void;
+  resetCustomColors: () => void;
   setSelectedDate: (iso: string) => void;
   setTodayView: (v: TodayView) => void;
   openAddPicker: () => void;
@@ -38,8 +52,22 @@ type UiState = {
   setOnboarded: (v: boolean) => void;
 };
 
-export const useUi = create<UiState>((set) => ({
+function persistCustom(next: ThemeCustom) {
+  try {
+    localStorage.setItem(THEME_CUSTOM_KEY, JSON.stringify(next));
+  } catch {
+    /* ignore */
+  }
+}
+
+if (typeof window !== "undefined") {
+  applyTheme(readSavedTheme(), readSavedCustom());
+}
+
+export const useUi = create<UiState>((set, get) => ({
   locale: "zh-HK",
+  theme: typeof window === "undefined" ? "normal" : readSavedTheme(),
+  customColors: typeof window === "undefined" ? {} : readSavedCustom(),
   selectedDate: todayISO(),
   todayView: "month",
   firstDayOfWeek: 0,
@@ -56,6 +84,29 @@ export const useUi = create<UiState>((set) => ({
       /* ignore */
     }
     set({ locale: l });
+  },
+  setTheme: (t) => {
+    try {
+      localStorage.setItem(THEME_KEY, t);
+      localStorage.setItem(THEME_CUSTOM_KEY, "{}");
+    } catch {
+      /* ignore */
+    }
+    applyTheme(t, {});
+    set({ theme: t, customColors: {} });
+  },
+  setCustomColor: (key, hex) => {
+    const next = { ...get().customColors };
+    if (hex) next[key] = hex;
+    else delete next[key];
+    persistCustom(next);
+    applyTheme(get().theme, next);
+    set({ customColors: next });
+  },
+  resetCustomColors: () => {
+    persistCustom({});
+    applyTheme(get().theme, {});
+    set({ customColors: {} });
   },
   setSelectedDate: (iso) => set({ selectedDate: iso }),
   setTodayView: (v) => set({ todayView: v }),

@@ -104,6 +104,7 @@ function TodayBody() {
   const target = cap?.monthly ?? 0;
   const today = todayISO();
   const asOf = asOfForMonth(selected.slice(0, 7), today);
+  const onThisMonth = selected.slice(0, 7) === today.slice(0, 7);
   const ringTone = forecastTone(target > 0 ? used / target : 0);
   const paid = transactions.filter((x) => x.date === selected && !x.planned && x.type !== "miles").sort((a, b) => b.id.localeCompare(a.id));
   const scheduled = transactions.filter((x) => x.date === selected && x.planned && x.type !== "miles").sort((a, b) => b.id.localeCompare(a.id));
@@ -157,76 +158,80 @@ function TodayBody() {
         <Metric label={t.today.expenseMonth} value={money(stats.flow.expense, "HKD")} tone="expense" />
         <Metric label={t.today.netMonth} value={money(stats.flow.net, "HKD", { sign: true })} tone={stats.flow.net >= 0 ? "income" : "expense"} />
       </div>
-      <div className="mx-4 mb-2 grid grid-cols-3 gap-3 rounded-xl bg-elevated px-4 py-3">
-        <Metric label={t.today.remainingBudget} value={money(stats.remainingBudget, "HKD")} />
-        <div className="min-w-0">
-          <div className="flex items-center gap-1 text-xs text-muted">
-            {t.today.remainingDisc}
-            <InfoButton k="disc" />
-          </div>
-          <div className="mt-1 truncate text-base font-semibold tabular-nums">{money(stats.remainingDisc, "HKD")}</div>
-        </div>
-        <div className="min-w-0">
-          <div className="flex items-center gap-1 text-xs text-muted">
-            {t.today.dailySpend}
-            <InfoButton k="daily" />
-          </div>
-          <div className="mt-1 truncate text-base font-semibold tabular-nums">{money(stats.daily.daily, "HKD")}</div>
-        </div>
-      </div>
-      <p className="px-5 pb-2 text-xs text-faint">{t.today.guidance}</p>
-
-      <SectionLabel>{t.today.goals}</SectionLabel>
-      <Hairline />
-      <Link to="/budget" className="flex w-full items-center gap-3 px-5 py-3.5 text-left">
-        <span className="relative">
-          <ProgressRing value={target ? used / target : 0} size={40} stroke={3} tone={ringTone} />
-          <span className={cn("pointer-events-none absolute inset-0 grid place-items-center", ringTone === "expense" ? "text-expense" : ringTone === "watch" ? "text-watch" : "text-income")}>
-            <Wallet className="size-3.5" />
-          </span>
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-medium">{t.budget.monthlyTotal}</span>
-          <span className="text-xs text-muted">
-            {t.today.reservedRegulars}: {money((cap?.reserved ?? 0) + (cap?.reservedAdhoc ?? 0), "HKD")}
-            <span className="block">
-              {t.budget.postedRegulars}: {money(cap?.realized ?? 0, "HKD")}
-            </span>
-          </span>
-        </span>
-        <span className="text-right">
-          <span className="block text-sm font-semibold tabular-nums">{money(used, "HKD")}</span>
-          <span className="text-xs tabular-nums text-muted">{target > 0 ? money(target, "HKD") : "—"}</span>
-        </span>
-      </Link>
-      <Hairline />
-
-      {upcoming.length ? (
+      {onThisMonth ? (
         <>
-          <SectionLabel>{t.today.upcoming}</SectionLabel>
+          <div className="mx-4 mb-2 grid grid-cols-3 gap-3 rounded-xl bg-elevated px-4 py-3">
+            <Metric label={t.today.remainingBudget} value={money(stats.remainingBudget, "HKD")} />
+            <div className="min-w-0">
+              <div className="flex items-center gap-1 text-xs text-muted">
+                {t.today.remainingDisc}
+                <InfoButton k="disc" />
+              </div>
+              <div className="mt-1 truncate text-base font-semibold tabular-nums">{money(stats.remainingDisc, "HKD")}</div>
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1 text-xs text-muted">
+                {t.today.dailySpend}
+                <InfoButton k="daily" />
+              </div>
+              <div className="mt-1 truncate text-base font-semibold tabular-nums">{money(stats.daily.daily, "HKD")}</div>
+            </div>
+          </div>
+          <p className="px-5 pb-2 text-xs text-faint">{t.today.guidance}</p>
+
+          <SectionLabel>{t.today.goals}</SectionLabel>
           <Hairline />
-          {upcoming.map((r, i) => (
-            <div key={r.id}>
-              {i > 0 ? <Hairline /> : null}
-              <div className="flex items-center justify-between px-5 py-3">
-                <div>
-                  <div className="text-sm">{pickName(locale, r.label, r.labelZh)}</div>
-                  <div className="text-xs text-muted">
-                    {t.budget.chargedDay} {chargedDayOf(r)}
+          <Link to="/budget" className="flex w-full items-center gap-3 px-5 py-3.5 text-left">
+            <span className="relative">
+              <ProgressRing value={target ? used / target : 0} size={40} stroke={3} tone={ringTone} />
+              <span className={cn("pointer-events-none absolute inset-0 grid place-items-center", ringTone === "expense" ? "text-expense" : ringTone === "watch" ? "text-watch" : "text-income")}>
+                <Wallet className="size-3.5" />
+              </span>
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium">{t.budget.monthlyTotal}</span>
+              <span className="text-xs text-muted">
+                {t.today.reservedRegulars}: {money((cap?.reserved ?? 0) + (cap?.reservedAdhoc ?? 0), "HKD")}
+                <span className="block">
+                  {t.budget.postedRegulars}: {money(cap?.realized ?? 0, "HKD")}
+                </span>
+              </span>
+            </span>
+            <span className="text-right">
+              <span className="block text-sm font-semibold tabular-nums">{money(used, "HKD")}</span>
+              <span className="text-xs tabular-nums text-muted">{target > 0 ? money(target, "HKD") : "—"}</span>
+            </span>
+          </Link>
+          <Hairline />
+
+          {upcoming.length ? (
+            <>
+              <SectionLabel>{t.today.upcoming}</SectionLabel>
+              <Hairline />
+              {upcoming.map((r, i) => (
+                <div key={r.id}>
+                  {i > 0 ? <Hairline /> : null}
+                  <div className="flex items-center justify-between px-5 py-3">
+                    <div>
+                      <div className="text-sm">{pickName(locale, r.label, r.labelZh)}</div>
+                      <div className="text-xs text-muted">
+                        {t.budget.chargedDay} {chargedDayOf(r)}
+                      </div>
+                    </div>
+                    <div className={cn("shrink-0", r.type === "income" ? "text-income" : "text-foreground")}>
+                      <AmountWithHkd
+                        amount={r.type === "expense" || r.countsAsExpense ? -r.amount : r.amount}
+                        currency={r.currency}
+                        rates={rates}
+                        sign
+                        className="text-sm font-semibold"
+                      />
+                    </div>
                   </div>
                 </div>
-                <div className={cn("shrink-0", r.type === "income" ? "text-income" : "text-foreground")}>
-                  <AmountWithHkd
-                    amount={r.type === "expense" || r.countsAsExpense ? -r.amount : r.amount}
-                    currency={r.currency}
-                    rates={rates}
-                    sign
-                    className="text-sm font-semibold"
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
+              ))}
+            </>
+          ) : null}
         </>
       ) : null}
 

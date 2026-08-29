@@ -26,6 +26,11 @@ export const Route = createRootRoute({
   component: () => (
     <html lang="zh-HK" suppressHydrationWarning>
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem("hk-life-money-theme");if(t)document.documentElement.setAttribute("data-theme",t);var c=JSON.parse(localStorage.getItem("hk-life-money-theme-custom")||"{}");var s=document.documentElement.style;if(c.background)s.setProperty("--color-background",c.background);if(c.foreground)s.setProperty("--color-foreground",c.foreground);if(c.accent)s.setProperty("--color-accent",c.accent);}catch(e){}})();`,
+          }}
+        />
         <HeadContent />
       </head>
       <body className="bg-background text-foreground antialiased">

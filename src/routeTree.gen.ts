@@ -16,10 +16,12 @@ import { Route as MoreRouteImport } from './routes/more'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as MoreIndexRouteImport } from './routes/more.index'
+import { Route as MoreAppearanceRouteImport } from './routes/more.appearance'
 import { Route as MoreBackupRouteImport } from './routes/more.backup'
 import { Route as MoreCategoriesRouteImport } from './routes/more.categories'
 import { Route as MoreFxRouteImport } from './routes/more.fx'
 import { Route as MoreImportRouteImport } from './routes/more.import'
+import { Route as MoreOtherRouteImport } from './routes/more.other'
 import { Route as MoreSecurityRouteImport } from './routes/more.security'
 import { Route as ReportsIndexRouteImport } from './routes/reports.index'
 import { Route as ReportsCashflowRouteImport } from './routes/reports.cashflow'
@@ -67,6 +69,11 @@ const MoreIndexRoute = MoreIndexRouteImport.update({
   path: '/',
   getParentRoute: () => MoreRoute,
 } as any)
+const MoreAppearanceRoute = MoreAppearanceRouteImport.update({
+  id: '/appearance',
+  path: '/appearance',
+  getParentRoute: () => MoreRoute,
+} as any)
 const MoreBackupRoute = MoreBackupRouteImport.update({
   id: '/backup',
   path: '/backup',
@@ -85,6 +92,11 @@ const MoreFxRoute = MoreFxRouteImport.update({
 const MoreImportRoute = MoreImportRouteImport.update({
   id: '/import',
   path: '/import',
+  getParentRoute: () => MoreRoute,
+} as any)
+const MoreOtherRoute = MoreOtherRouteImport.update({
+  id: '/other',
+  path: '/other',
   getParentRoute: () => MoreRoute,
 } as any)
 const MoreSecurityRoute = MoreSecurityRouteImport.update({
@@ -150,10 +162,12 @@ export interface FileRoutesByFullPath {
   '/more': typeof MoreRouteWithChildren
   '/onboarding': typeof OnboardingRoute
   '/reports': typeof ReportsRouteWithChildren
+  '/more/appearance': typeof MoreAppearanceRoute
   '/more/backup': typeof MoreBackupRoute
   '/more/categories': typeof MoreCategoriesRoute
   '/more/fx': typeof MoreFxRoute
   '/more/import': typeof MoreImportRoute
+  '/more/other': typeof MoreOtherRoute
   '/more/security': typeof MoreSecurityRoute
   '/reports/cashflow': typeof ReportsCashflowRoute
   '/reports/dashboard': typeof ReportsDashboardRoute
@@ -172,10 +186,12 @@ export interface FileRoutesByTo {
   '/assets': typeof AssetsRoute
   '/budget': typeof BudgetRoute
   '/onboarding': typeof OnboardingRoute
+  '/more/appearance': typeof MoreAppearanceRoute
   '/more/backup': typeof MoreBackupRoute
   '/more/categories': typeof MoreCategoriesRoute
   '/more/fx': typeof MoreFxRoute
   '/more/import': typeof MoreImportRoute
+  '/more/other': typeof MoreOtherRoute
   '/more/security': typeof MoreSecurityRoute
   '/reports/cashflow': typeof ReportsCashflowRoute
   '/reports/dashboard': typeof ReportsDashboardRoute
@@ -196,10 +212,12 @@ export interface FileRoutesById {
   '/more': typeof MoreRouteWithChildren
   '/onboarding': typeof OnboardingRoute
   '/reports': typeof ReportsRouteWithChildren
+  '/more/appearance': typeof MoreAppearanceRoute
   '/more/backup': typeof MoreBackupRoute
   '/more/categories': typeof MoreCategoriesRoute
   '/more/fx': typeof MoreFxRoute
   '/more/import': typeof MoreImportRoute
+  '/more/other': typeof MoreOtherRoute
   '/more/security': typeof MoreSecurityRoute
   '/reports/cashflow': typeof ReportsCashflowRoute
   '/reports/dashboard': typeof ReportsDashboardRoute
@@ -222,10 +240,12 @@ export interface FileRouteTypes {
     | '/more'
     | '/onboarding'
     | '/reports'
+    | '/more/appearance'
     | '/more/backup'
     | '/more/categories'
     | '/more/fx'
     | '/more/import'
+    | '/more/other'
     | '/more/security'
     | '/reports/cashflow'
     | '/reports/dashboard'
@@ -244,10 +264,12 @@ export interface FileRouteTypes {
     | '/assets'
     | '/budget'
     | '/onboarding'
+    | '/more/appearance'
     | '/more/backup'
     | '/more/categories'
     | '/more/fx'
     | '/more/import'
+    | '/more/other'
     | '/more/security'
     | '/reports/cashflow'
     | '/reports/dashboard'
@@ -267,10 +289,12 @@ export interface FileRouteTypes {
     | '/more'
     | '/onboarding'
     | '/reports'
+    | '/more/appearance'
     | '/more/backup'
     | '/more/categories'
     | '/more/fx'
     | '/more/import'
+    | '/more/other'
     | '/more/security'
     | '/reports/cashflow'
     | '/reports/dashboard'
@@ -345,6 +369,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MoreIndexRouteImport
       parentRoute: typeof MoreRoute
     }
+    '/more/appearance': {
+      id: '/more/appearance'
+      path: '/appearance'
+      fullPath: '/more/appearance'
+      preLoaderRoute: typeof MoreAppearanceRouteImport
+      parentRoute: typeof MoreRoute
+    }
     '/more/backup': {
       id: '/more/backup'
       path: '/backup'
@@ -371,6 +402,13 @@ declare module '@tanstack/react-router' {
       path: '/import'
       fullPath: '/more/import'
       preLoaderRoute: typeof MoreImportRouteImport
+      parentRoute: typeof MoreRoute
+    }
+    '/more/other': {
+      id: '/more/other'
+      path: '/other'
+      fullPath: '/more/other'
+      preLoaderRoute: typeof MoreOtherRouteImport
       parentRoute: typeof MoreRoute
     }
     '/more/security': {
@@ -454,19 +492,23 @@ declare module '@tanstack/react-router' {
 }
 
 interface MoreRouteChildren {
+  MoreAppearanceRoute: typeof MoreAppearanceRoute
   MoreBackupRoute: typeof MoreBackupRoute
   MoreCategoriesRoute: typeof MoreCategoriesRoute
   MoreFxRoute: typeof MoreFxRoute
   MoreImportRoute: typeof MoreImportRoute
+  MoreOtherRoute: typeof MoreOtherRoute
   MoreSecurityRoute: typeof MoreSecurityRoute
   MoreIndexRoute: typeof MoreIndexRoute
 }
 
 const MoreRouteChildren: MoreRouteChildren = {
+  MoreAppearanceRoute: MoreAppearanceRoute,
   MoreBackupRoute: MoreBackupRoute,
   MoreCategoriesRoute: MoreCategoriesRoute,
   MoreFxRoute: MoreFxRoute,
   MoreImportRoute: MoreImportRoute,
+  MoreOtherRoute: MoreOtherRoute,
   MoreSecurityRoute: MoreSecurityRoute,
   MoreIndexRoute: MoreIndexRoute,
 }

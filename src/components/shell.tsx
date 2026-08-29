@@ -5,6 +5,7 @@ import { Toaster } from "sonner";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { useT, useUi, readOnboarded } from "@/store/ui";
+import { isDarkTheme } from "@/lib/theme";
 import { Overlay } from "@/components/shared";
 import { AddFlow } from "@/components/add-sheet";
 import { SearchFlow } from "@/components/search-sheet";
@@ -16,6 +17,7 @@ export function AppGate({ children }: { children: ReactNode }) {
   const onboarded = useUi((s) => s.onboarded);
   const setOnboarded = useUi((s) => s.setOnboarded);
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const theme = useUi((s) => s.theme);
 
   useEffect(() => {
     void hydrate();
@@ -29,7 +31,7 @@ export function AppGate({ children }: { children: ReactNode }) {
     return (
       <>
         {children}
-        <Toaster theme="light" position="top-center" richColors={false} />
+        <Toaster theme={isDarkTheme(theme) ? "dark" : "light"} position="top-center" richColors={false} />
       </>
     );
   }
@@ -44,7 +46,7 @@ export function AppGate({ children }: { children: ReactNode }) {
       <SearchFlow />
       <TxDetail />
       <InfoDialog />
-      <Toaster theme="light" position="top-center" richColors={false} />
+      <Toaster theme={isDarkTheme(theme) ? "dark" : "light"} position="top-center" richColors={false} />
     </div>
   );
 }
