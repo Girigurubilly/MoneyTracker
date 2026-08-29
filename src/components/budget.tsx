@@ -5,13 +5,14 @@ import { toast } from "sonner";
 import { InfoButton, Overlay, ScreenHeader, StatusChip } from "@/components/shared";
 import { CategoryPicker } from "@/components/category-picker";
 import { AccountSelect } from "@/components/account-select";
+import { AmountCurrencyRow, AmountWithHkd, CurrencySelect, asFiat, autoDestAmount } from "@/components/currency-field";
 import { money, pct, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { asOfForMonth, budgetActuals, chargedDayOf, forecastTone } from "@/lib/calc/budget";
 import { travelSpendYtd } from "@/lib/calc/trips";
 import { monthKey } from "@/lib/calc/ledger";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
-import type { AdhocBudget, Recurring, TxType } from "@/lib/types";
+import type { AdhocBudget, Currency, Recurring, TxType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -38,9 +39,12 @@ export function BudgetScreen() {
   const reserved = storedTotal?.reserved ?? 0;
   const reservedA = storedTotal?.reservedAdhoc ?? 0;
   const projected = storedTotal?.projected ?? 0;
-  const adhoc = storedTotal?.adhoc ?? 0;
+  const projectedRemain = storedTotal?.projectedRemain ?? 0;
+  const avgDaily = storedTotal?.avgDaily ?? 0;
+  const dailyAllowed = storedTotal?.dailyAllowed ?? 0;
+  const daysRemaining = storedTotal?.daysRemaining ?? 0;
   const monthCap = storedTotal?.monthly ?? 0;
-  const monthUsed = storedTotal?.expected ?? monthSpent + reserved + reservedA + projected;
+  const monthUsed = storedTotal?.expected ?? monthSpent + reserved + reservedA + projectedRemain;
   const monthRemain = monthCap - monthSpent - reserved - reservedA;
   const monthRatio = storedTotal?.ratio ?? (monthCap > 0 ? monthUsed / monthCap : 0);
   const monthTone = forecastTone(monthRatio);
@@ -94,20 +98,21 @@ export function BudgetScreen() {
             {t.budget.spent}: {money(monthSpent, "HKD")}
           </span>
           <span>
-            {t.today.reservedRegulars}: {money(reserved, "HKD")}
+            {t.today.reservedRegulars}: {money(reserved + reservedA, "HKD")}
           </span>
-          {adhoc > 0 ? (
-            <span>
-              {t.budget.adhoc}: {money(adhoc, "HKD")}
-            </span>
-          ) : null}
-          {projected > 0 ? (
-            <span className="col-span-2">
-              {t.budget.projected}: {money(projected, "HKD")}
-            </span>
-          ) : null}
+          <span>
+            {t.budget.avgDaily}: {money(avgDaily, "HKD")}
+          </span>
+          <span>
+            {t.budget.dailyAllowed}: {money(dailyAllowed, "HKD")}
+          </span>
+          <span className="col-span-2">
+            {t.budget.projected}: {money(projected, "HKD")}
+            <span className="text-faint"> · {t.budget.atPace}</span>
+          </span>
           <span className="col-span-2 font-medium text-foreground">
             {t.budget.remaining}: {money(monthRemain, "HKD")}
+            {daysRemaining > 0 ? ` · ${daysRemaining} ${t.budget.daysLeft}` : ` · ${t.budget.lastDay}`}
           </span>
         </div>
         {monthCap > 0 ? (
@@ -263,6 +268,7 @@ function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recur
   const t = useT();
   const locale = useUi((s) => s.locale);
   const recurring = useApp((s) => s.recurring);
+  const rates = useApp((s) => s.fxRates);
   const today = Number(todayISO().slice(8, 10));
   const rows = recurring
     .filter((r) => r.frequency === "monthly" && r.type !== "miles")
@@ -283,14 +289,17 @@ function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recur
           {rows.map((r) => {
             const day = chargedDayOf(r);
             const charged = day <= today;
+            const signed = r.type === "income" ? r.amount : r.type === "expense" || r.countsAsExpense ? -r.amount : r.amount;
             return (
               <button key={r.id} type="button" className="flex w-full items-center gap-3 border-t border-line px-4 py-3 text-left first:border-0" onClick={() => onEdit(r)}>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{pickName(locale, r.label, r.labelZh)}</div>
                   <div className="mt-0.5 text-xs text-muted">
-                    {money(r.amount, r.currency)} · {locale === "zh-HK" ? `${day}日` : `day ${day}`} · {r.type === "income" ? t.add.income : r.type === "transfer" ? (r.countsAsExpense ? `${t.add.transfer} · ${t.add.principal}` : t.add.transfer) : t.add.expense}
+                    {locale === "zh-HK" ? `${day}日` : `day ${day}`}
+                    {` · ${r.type === "income" ? t.add.income : r.type === "transfer" ? (r.countsAsExpense ? `${t.add.transfer} · ${t.add.principal}` : t.add.transfer) : t.add.expense}`}
                   </div>
                 </div>
+                <AmountWithHkd amount={signed} currency={r.currency} rates={rates} sign className="text-sm font-semibold" />
                 <span className={cn("shrink-0 rounded-full px-2 py-1 text-xs font-medium", charged ? "bg-success-soft text-income" : "bg-accent-soft text-accent")}>
                   {charged ? t.budget.charged : t.budget.upcomingStatus}
                 </span>
@@ -315,6 +324,7 @@ function AdhocBlock({
 }) {
   const t = useT();
   const locale = useUi((s) => s.locale);
+  const rates = useApp((s) => s.fxRates);
   const rows = useApp((s) => s.adhocBudgets)
     .filter((a) => a.month === month || a.date.startsWith(month))
     .sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label));
@@ -337,7 +347,7 @@ function AdhocBlock({
                 <div className="truncate text-sm font-medium">{pickName(locale, a.label, a.labelZh)}</div>
                 <div className="mt-0.5 text-xs text-muted">{a.date.slice(8)}</div>
               </div>
-              <span className="text-sm font-semibold tabular-nums">{money(-a.amount, a.currency, { sign: true })}</span>
+              <AmountWithHkd amount={-a.amount} currency={a.currency} rates={rates} sign className="text-sm font-semibold" />
               <ChevronRight className="size-4 shrink-0 text-faint" />
             </button>
           ))}
@@ -373,9 +383,12 @@ function AdhocEditorBody({ initial, month, onClose }: { initial: AdhocBudget | n
   const update = useApp((s) => s.updateAdhocBudget);
   const del = useApp((s) => s.deleteAdhocBudget);
   const categories = useApp((s) => s.categories);
+  const rates = useApp((s) => s.fxRates);
+  const defaultCurrency = useApp((s) => s.defaultCurrency);
   const today = todayISO();
   const [name, setName] = useState(initial ? pickName(locale, initial.label, initial.labelZh) : "");
   const [amount, setAmount] = useState(initial ? String(initial.amount) : "");
+  const [currency, setCurrency] = useState<Currency>(initial && initial.currency !== "MILES" ? initial.currency : defaultCurrency);
   const [date, setDate] = useState(initial?.date ?? (today.startsWith(month) ? today : `${month}-28`));
   const [categoryId, setCategoryId] = useState(initial?.categoryId ?? "");
   const [pickCat, setPickCat] = useState(false);
@@ -399,7 +412,7 @@ function AdhocEditorBody({ initial, month, onClose }: { initial: AdhocBudget | n
       </label>
       <label className="block py-2">
         <span className="text-xs text-muted">{t.add.amount}</span>
-        <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3" />
+        <AmountCurrencyRow amount={amount} currency={currency} onAmount={setAmount} onCurrency={setCurrency} rates={rates} />
       </label>
       <label className="block py-2">
         <span className="text-xs text-muted">{t.add.category}</span>
@@ -424,7 +437,7 @@ function AdhocEditorBody({ initial, month, onClose }: { initial: AdhocBudget | n
             label: n,
             labelZh: n,
             amount: amt,
-            currency: "HKD",
+            currency,
             month,
             date: iso,
             categoryId: categoryId || undefined,
@@ -462,6 +475,8 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
   const accounts = useApp((s) => s.accounts);
   const categories = useApp((s) => s.categories);
   const recurring = useApp((s) => s.recurring);
+  const rates = useApp((s) => s.fxRates);
+  const defaultCurrency = useApp((s) => s.defaultCurrency);
   const addRecurring = useApp((s) => s.addRecurring);
   const updateRecurring = useApp((s) => s.updateRecurring);
   const deleteRecurring = useApp((s) => s.deleteRecurring);
@@ -473,6 +488,9 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
   );
   const [name, setName] = useState(initial ? pickName(locale, initial.label, initial.labelZh) : "");
   const [amount, setAmount] = useState(initial ? String((alreadySplit ? initial.amount + (mate?.amount ?? 0) : initial.amount)) : "");
+  const [currency, setCurrency] = useState<Currency>(initial && initial.currency !== "MILES" ? initial.currency : defaultCurrency);
+  const [destAmount, setDestAmount] = useState(initial?.destAmount != null ? String(initial.destAmount) : "");
+  const [destLocked, setDestLocked] = useState(initial?.destAmount != null);
   const [principalAmt, setPrincipalAmt] = useState(alreadySplit && initial?.type === "transfer" ? String(initial.amount) : alreadySplit && mate?.type === "transfer" ? String(mate.amount) : "");
   const [interestAmt, setInterestAmt] = useState(alreadySplit && initial?.type === "expense" ? String(initial.amount) : alreadySplit && mate?.type === "expense" ? String(mate.amount) : "");
   const [day, setDay] = useState(String(initial ? chargedDayOf(initial) : 1));
@@ -490,6 +508,10 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
   const showSplit = kind !== "income" && (alreadySplit || canSplitMortgage(mortgageKind));
   const principalOnly = (kind === "expense" || kind === "transfer") && mortgageKind === "principal";
   const showDest = kind === "transfer" || principalOnly || (showSplit && splitMortgage);
+  const destAcc = accounts.find((a) => a.id === toAccountId);
+  const destCcy: Currency = destAcc ? asFiat(destAcc.currency, currency) : currency;
+  const autoDest = autoDestAmount(Number(amount) || 0, currency, destCcy, rates);
+  const destN = destLocked ? Number(destAmount) || 0 : autoDest;
 
   async function save() {
     const n = name.trim();
@@ -509,9 +531,10 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
         label: `${n} ${t.add.principal}`,
         labelZh: `${n} ${t.add.principal}`,
         amount: p,
-        currency: "HKD",
+        currency,
         accountId,
         toAccountId: dest,
+        destAmount: autoDestAmount(p, currency, destCcy, rates) || p,
         categoryId: pCat?.id,
         frequency: "monthly",
         nextDate: next,
@@ -526,7 +549,7 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
         label: `${n} ${t.add.interest}`,
         labelZh: `${n} ${t.add.interest}`,
         amount: i,
-        currency: "HKD",
+        currency,
         accountId,
         categoryId: iCat?.id,
         frequency: "monthly",
@@ -542,6 +565,7 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
           amount: Number(amount) || 0,
           accountId,
           toAccountId: kind === "transfer" || principalOnly ? toAccountId : undefined,
+          destAmount: kind === "transfer" || principalOnly ? destN || Number(amount) || 0 : undefined,
           categoryId: categoryId || undefined,
           housing: undefined,
           countsAsExpense: undefined,
@@ -554,9 +578,10 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
         label: n,
         labelZh: n,
         amount: ruled.amount,
-        currency: "HKD",
+        currency,
         accountId: ruled.accountId,
         toAccountId: ruled.toAccountId,
+        destAmount: ruled.destAmount,
         categoryId: ruled.categoryId,
         frequency: "monthly",
         nextDate: next,
@@ -623,6 +648,9 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
       {showSplit && splitMortgage ? (
         <div>
           <p className="text-xs text-muted">{t.add.splitHint}</p>
+          <div className="mt-1 flex justify-end">
+            <CurrencySelect value={currency} onChange={setCurrency} />
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <label className="block py-2">
               <span className="text-xs text-muted">{t.add.principal}</span>
@@ -637,13 +665,47 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
       ) : (
         <label className="block py-2">
           <span className="text-xs text-muted">{t.add.amount}</span>
-          <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3" />
+          <AmountCurrencyRow
+            amount={amount}
+            currency={currency}
+            onAmount={setAmount}
+            onCurrency={(c) => {
+              setCurrency(c);
+              setDestLocked(false);
+            }}
+            rates={rates}
+          />
         </label>
       )}
       {showDest ? (
         <label className="block py-2">
           <span className="text-xs text-muted">{principalOnly || (showSplit && splitMortgage) ? t.add.mortgageTo : t.add.to}</span>
-          <AccountSelect accounts={accounts} value={toAccountId} onChange={setToAccountId} excludeId={accountId} />
+          <AccountSelect
+            accounts={accounts}
+            value={toAccountId}
+            onChange={(id) => {
+              setToAccountId(id);
+              setDestLocked(false);
+            }}
+            excludeId={accountId}
+          />
+        </label>
+      ) : null}
+      {showDest && !(showSplit && splitMortgage) ? (
+        <label className="block py-2">
+          <span className="text-xs text-muted">{t.add.destAmount}</span>
+          <AmountCurrencyRow
+            amount={destLocked ? destAmount : String(autoDest || "")}
+            currency={destCcy}
+            onAmount={(v) => {
+              setDestLocked(true);
+              setDestAmount(v);
+            }}
+            onCurrency={() => undefined}
+            rates={rates}
+            currencyDisabled
+          />
+          <span className="mt-1 block text-xs text-faint">{t.add.destAmountHint}</span>
         </label>
       ) : null}
       <label className="block py-2">

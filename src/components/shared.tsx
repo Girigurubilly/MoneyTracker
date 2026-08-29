@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { money } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { cashflowSide } from "@/lib/calc/ledger";
+import { AmountWithHkd } from "@/components/currency-field";
 import type { Transaction } from "@/lib/types";
 import { useT, useUi } from "@/store/ui";
 import { useApp } from "@/store/app";
@@ -255,10 +256,12 @@ export function TransactionRow({ tx, onClick, showDate }: { tx: Transaction; onC
   const locale = useUi((s) => s.locale);
   const cats = useApp((s) => s.categories);
   const accs = useApp((s) => s.accounts);
+  const rates = useApp((s) => s.fxRates);
   const cat = cats.find((c) => c.id === tx.categoryId);
   const acc = accs.find((a) => a.id === tx.accountId);
   const side = cashflowSide(tx);
   const spend = tx.type === "expense" || Boolean(tx.countsAsExpense);
+  const signed = spend ? -tx.amount : tx.type === "income" ? tx.amount : tx.amount;
   return (
     <button type="button" onClick={onClick} className="flex w-full items-center gap-3 px-5 py-3 text-left">
       <div className="min-w-0 flex-1">
@@ -271,11 +274,18 @@ export function TransactionRow({ tx, onClick, showDate }: { tx: Transaction; onC
       </div>
       <span
         className={cn(
-          "text-sm font-semibold tabular-nums",
+          "shrink-0",
           side === "income" || tx.type === "income" ? "text-income" : "text-foreground",
         )}
       >
-        {money(spend ? -tx.amount : tx.type === "income" ? tx.amount : tx.amount, tx.currency, { sign: true })}
+        <AmountWithHkd
+          amount={signed}
+          currency={tx.currency}
+          rates={rates}
+          fxToHkd={tx.fxToHkd}
+          sign
+          className="text-sm font-semibold"
+        />
       </span>
     </button>
   );

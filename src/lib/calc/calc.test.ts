@@ -9,8 +9,10 @@ import {
   budgetActuals,
   monthCashflowForecast,
   forecastTone,
-  projectedNonRegular,
+  projectedNonRegularRemain,
+  avgDailyNonRegular,
 } from "./budget.ts";
+import { convertAmount, parseErApi, parseFrankfurter } from "./fx.ts";
 import { MONTH_TOTAL_BUDGET_ID } from "../types.ts";
 import type { AdhocBudget, Budget, Category, Recurring, Transaction } from "../types.ts";
 import { monthlyLivingEssentials, monthlyHousingCost, isPrincipalRegular, housingRegularRows, housingMonthLines } from "./housing.ts";
@@ -73,20 +75,27 @@ describe("budget formulas", () => {
     ];
     const asOf = "2026-08-15";
     const [row] = budgetActuals(budgets, txs, "2026-08", [], [], recurring, asOf, adhoc);
-    const projected = projectedNonRegular(10_000, 3_000, asOf);
+    const reservedHold = 4_000 + 1_500;
+    const pace = 10_000 - reservedHold;
+    const remain = projectedNonRegularRemain(pace, asOf);
     assert.equal(row.spent, 10_000);
     assert.equal(row.reserved, 4_000);
     assert.equal(row.reservedAdhoc, 1_500);
     assert.equal(row.adhoc, 2_000);
     assert.equal(row.realized, 3_000);
-    assert.equal(row.projected, projected);
-    assert.equal(row.expected, 10_000 + 4_000 + 1_500 + projected);
-    assert.equal(row.remaining, 20_000 - 10_000 - 4_000 - 1_500);
+    assert.equal(row.nonRegular, pace);
+    assert.equal(row.avgDaily, avgDailyNonRegular(pace, asOf));
+    assert.equal(row.projectedRemain, remain);
+    assert.equal(row.projected, pace + remain);
+    assert.equal(row.expected, 10_000 + reservedHold + remain);
+    assert.equal(row.remaining, 20_000 - 10_000 - reservedHold);
+    assert.equal(row.daysRemaining, 16);
+    assert.equal(row.dailyAllowed, row.remaining / 16);
     assert.equal(row.ratio, row.expected / 20_000);
     assert.equal(realizedNonRegularSpend(row.spent, row.realized, row.adhoc), 5_000);
   });
 
-  it("posted spend without recurringId covers the matching category regular", () => {
+  it("posted spend covering a category marks that regular realised", () => {
     const budgets: Budget[] = [
       { id: MONTH_TOTAL_BUDGET_ID, label: "cap", labelZh: "上限", monthly: 20_000, spent: 0 },
     ];
@@ -103,6 +112,7 @@ describe("budget formulas", () => {
     assert.equal(row.spent, 198);
     assert.equal(row.reserved, 0);
     assert.equal(row.realized, 198);
+    assert.equal(row.avgDaily, 198 / 15);
   });
 
   it("reserved helpers skip charged items", () => {
@@ -162,6 +172,78 @@ describe("monthCashflowForecast", () => {
     const past = monthCashflowForecast(txs, recurring, adhoc, "2026-07", [], today);
     assert.equal(past.income, 18_000);
     assert.equal(past.expense, 9_000);
+  });
+});
+
+describe("cap projection", () => {
+  it("avgDaily is (spent − reserved) / day; headline adds remaining-days pace", () => {
+    const budgets: Budget[] = [
+      { id: MONTH_TOTAL_BUDGET_ID, label: "cap", labelZh: "上限", monthly: 20_000, spent: 0 },
+    ];
+    const recurring: Recurring[] = [
+      rec({ id: "r-charged", type: "expense", amount: 3_000, chargedDay: 1 }),
+      rec({ id: "r-open", type: "expense", amount: 4_000, chargedDay: 28 }),
+    ];
+    const txs: Transaction[] = [
+      tx({ id: "t-charged", type: "expense", amount: 3_000, date: "2026-08-01", recurringId: "r-charged" }),
+      tx({ id: "t1", type: "expense", amount: 7_000, date: "2026-08-12" }),
+    ];
+    const [row] = budgetActuals(budgets, txs, "2026-08", [], [], recurring, "2026-08-15", []);
+    const hold = 4_000;
+    const pace = 10_000 - hold;
+    assert.equal(row.avgDaily, pace / 15);
+    assert.equal(row.projected, pace + (pace / 15) * 16);
+    assert.equal(row.expected, 10_000 + hold + (pace / 15) * 16);
+    assert.equal(row.remaining, 6_000);
+    assert.equal(row.dailyAllowed, 6_000 / 16);
+  });
+
+  it("unposted regulars stay in 已預留 even after their charged day", () => {
+    const budgets: Budget[] = [
+      { id: MONTH_TOTAL_BUDGET_ID, label: "cap", labelZh: "上限", monthly: 20_000, spent: 0 },
+    ];
+    const recurring: Recurring[] = [
+      rec({ id: "r-due", type: "expense", amount: 3_000, chargedDay: 1 }),
+      rec({ id: "r-open", type: "expense", amount: 4_000, chargedDay: 28 }),
+    ];
+    const txs: Transaction[] = [tx({ id: "t-all", type: "expense", amount: 10_000, date: "2026-08-12" })];
+    const [row] = budgetActuals(budgets, txs, "2026-08", [], [], recurring, "2026-08-15", []);
+    const hold = 7_000;
+    const pace = 10_000 - hold;
+    assert.equal(row.spent, 10_000);
+    assert.equal(row.reserved, 7_000);
+    assert.equal(row.avgDaily, pace / 15);
+    assert.equal(row.expected, 10_000 + hold + (pace / 15) * 16);
+    assert.equal(row.remaining, 20_000 - 10_000 - hold);
+  });
+});
+
+describe("convertAmount", () => {
+  it("converts via HKD and is reversible", () => {
+    const rates = [{ currency: "USD" as const, perHkd: 7.8, asOf: "2026-08-01", source: "test" }];
+    assert.equal(convertAmount(100, "USD", "HKD", rates), 780);
+    assert.equal(convertAmount(780, "HKD", "USD", rates), 100);
+    assert.equal(convertAmount(50, "HKD", "HKD", rates), 50);
+  });
+});
+
+describe("fx parsers", () => {
+  it("Frankfurter from HKD stores per-HKD as the inverse", () => {
+    const rows = parseFrankfurter({ date: "2026-08-28", rates: { USD: 0.128 } });
+    const usd = rows.find((r) => r.currency === "USD");
+    assert.ok(usd);
+    assert.equal(usd?.asOf, "2026-08-28");
+    assert.ok(Math.abs((usd?.perHkd ?? 0) - 1 / 0.128) < 1e-9);
+  });
+  it("ER-API uses the published update date", () => {
+    const rows = parseErApi({
+      time_last_update_utc: "Fri, 28 Aug 2026 00:02:30 +0000",
+      rates: { USD: 0.128, TWD: 4.1 },
+    });
+    const twd = rows.find((r) => r.currency === "TWD");
+    assert.ok(twd);
+    assert.equal(twd?.asOf, "2026-08-28");
+    assert.ok(Math.abs((twd?.perHkd ?? 0) - 1 / 4.1) < 1e-9);
   });
 });
 

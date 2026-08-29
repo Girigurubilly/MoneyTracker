@@ -117,6 +117,7 @@ export const retirement: RetirementInputs = {
 
 export const allowances: Allowance[] = [
   { id: "oaa", label: "Old Age Allowance", labelZh: "生果金", monthly: 1620, startAge: 70, kind: "oaa", inflationAdjusted: true },
+  { id: "annuity", label: "Annuity", labelZh: "年金", monthly: 0, startAge: 65, kind: "annuity", inflationAdjusted: false },
 ];
 
 export const oneOffs: OneOff[] = [];

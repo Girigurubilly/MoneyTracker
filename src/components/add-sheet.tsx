@@ -1,15 +1,17 @@
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { AccountSelect } from "@/components/account-select";
+import { AmountCurrencyRow, CurrencySelect, asFiat, autoDestAmount } from "@/components/currency-field";
 import { Overlay } from "@/components/shared";
 import { CategoryPicker, TypeSwitch } from "@/components/category-picker";
 import { todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { defaultMortgageAccountId, moneyAccountsForPicker } from "@/lib/accounts";
 import { canSplitMortgage, categoryPath, mortgageEntryKind, resolvedDefaultAccountId } from "@/lib/categories";
+import { captureFxToHkd } from "@/lib/calc/fx";
 import { isTripActive } from "@/lib/calc/trips";
 import { applyTxRules, infersHousing, splitMortgageAmounts } from "@/lib/tx-rules";
-import type { Category, TxType } from "@/lib/types";
+import type { Category, Currency, MoneyUnit, TxType } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 
@@ -63,10 +65,15 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
   const accounts = useApp((s) => s.accounts);
   const categories = useApp((s) => s.categories);
   const trips = useApp((s) => s.trips);
+  const rates = useApp((s) => s.fxRates);
+  const defaultCurrency = useApp((s) => s.defaultCurrency);
   const addTransaction = useApp((s) => s.addTransaction);
   const moneyAccounts = moneyAccountsForPicker(accounts);
   const [type, setType] = useState<TxType>(initialType);
   const [amount, setAmount] = useState("");
+  const [currency, setCurrency] = useState<Currency>(defaultCurrency);
+  const [destAmount, setDestAmount] = useState("");
+  const [destLocked, setDestLocked] = useState(false);
   const [date, setDate] = useState(selectedDate || todayISO());
   const [accountId, setAccountId] = useState(moneyAccounts[0]?.id ?? "");
   const [toAccountId, setToAccountId] = useState(
@@ -87,6 +94,10 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
   const principalOnly = (type === "expense" || type === "transfer") && mortgageKind === "principal";
   const showDest = type === "transfer" || principalOnly || (canSplit && doSplit);
   const destDefault = defaultMortgageAccountId(accounts) ?? toAccountId;
+  const destAcc = accounts.find((a) => a.id === (toAccountId || destDefault));
+  const destCcy: Currency = destAcc ? asFiat(destAcc.currency, currency) : currency;
+  const autoDest = autoDestAmount(Number(amount) || 0, currency, destCcy, rates);
+  const destN = destLocked ? Number(destAmount) || 0 : autoDest;
   const ctx = { categories, accounts };
 
   function changeType(next: TxType) {
@@ -130,10 +141,10 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
       return;
     }
     const planned = date > todayISO();
-    const acc = moneyAccounts.find((a) => a.id === accountId) ?? accounts.find((a) => a.id === accountId);
     const pCat = categories.find((c) => mortgageEntryKind(c, categories) === "principal");
     const iCat = categories.find((c) => mortgageEntryKind(c, categories) === "interest");
-    const currency = type === "miles" ? "MILES" : acc?.currency === "MILES" ? "HKD" : (acc?.currency ?? "HKD");
+    const ccy: MoneyUnit = type === "miles" ? "MILES" : currency;
+    const fxToHkd = captureFxToHkd(ccy, rates);
     if (canSplit && doSplit) {
       const p = parts.principal;
       const i = parts.interest;
@@ -147,10 +158,11 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
             {
               type: "transfer",
               amount: p,
-              currency,
+              currency: ccy,
+              fxToHkd,
               accountId,
               toAccountId: toAccountId || destDefault,
-              destAmount: p,
+              destAmount: autoDestAmount(p, ccy, destCcy, rates) || p,
               categoryId: pCat?.id,
               date,
               payee: payee || t.add.principal,
@@ -169,7 +181,8 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
             {
               type: "expense",
               amount: i,
-              currency,
+              currency: ccy,
+              fxToHkd,
               accountId,
               categoryId: iCat?.id ?? categoryId,
               date,
@@ -189,10 +202,11 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
             id: newId(),
             type,
             amount: amt,
-            currency,
+            currency: ccy,
+            fxToHkd,
             accountId: type === "miles" ? (accounts.find((a) => a.currency === "MILES")?.id ?? accountId) : accountId,
             toAccountId: type === "transfer" || principalOnly ? toAccountId || destDefault : undefined,
-            destAmount: type === "transfer" || principalOnly ? amt : undefined,
+            destAmount: type === "transfer" || principalOnly ? destN || amt : undefined,
             categoryId: categoryId || undefined,
             date,
             payee: payee || t.add[type],
@@ -281,6 +295,9 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
       {canSplit && doSplit ? (
         <div>
           <p className="text-xs text-muted">{t.add.splitHint}</p>
+          <div className="mt-1 flex justify-end">
+            <CurrencySelect value={currency} onChange={setCurrency} />
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <label className="block py-2">
               <span className="text-xs text-muted">{t.add.principal}</span>
@@ -292,10 +309,24 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
             </label>
           </div>
         </div>
-      ) : (
+      ) : type === "miles" ? (
         <label className="block py-2">
           <span className="text-xs text-muted">{t.add.amount}</span>
           <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none" />
+        </label>
+      ) : (
+        <label className="block py-2">
+          <span className="text-xs text-muted">{t.add.amount}</span>
+          <AmountCurrencyRow
+            amount={amount}
+            currency={currency}
+            onAmount={setAmount}
+            onCurrency={(c) => {
+              setCurrency(c);
+              setDestLocked(false);
+            }}
+            rates={rates}
+          />
         </label>
       )}
       {showDest ? (
@@ -304,9 +335,29 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
           <AccountSelect
             accounts={accounts}
             value={toAccountId || destDefault}
-            onChange={setToAccountId}
+            onChange={(id) => {
+              setToAccountId(id);
+              setDestLocked(false);
+            }}
             excludeId={accountId}
           />
+        </label>
+      ) : null}
+      {showDest && !(canSplit && doSplit) ? (
+        <label className="block py-2">
+          <span className="text-xs text-muted">{t.add.destAmount}</span>
+          <AmountCurrencyRow
+            amount={destLocked ? destAmount : String(autoDest || "")}
+            currency={destCcy}
+            onAmount={(v) => {
+              setDestLocked(true);
+              setDestAmount(v);
+            }}
+            onCurrency={() => undefined}
+            rates={rates}
+            currencyDisabled
+          />
+          <span className="mt-1 block text-xs text-faint">{t.add.destAmountHint}</span>
         </label>
       ) : null}
       {type === "expense" ? (

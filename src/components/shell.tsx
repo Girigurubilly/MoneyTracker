@@ -91,16 +91,16 @@ function InfoDialog() {
   const locale = useUi((s) => s.locale);
   const copy: Record<string, { en: string; zh: string }> = {
     daily: {
-      en: "Remaining budget = spending cap − spending so far − monthly regulars not yet posted this month − this-month-only holds not yet due. Daily spendable divides that by remaining calendar days this month, including today. This-month-only items are budget holds, not transactions.",
-      zh: "剩餘預算 = 開支上限 − 本月已花費 − 尚未入帳的每月定期 − 尚未扣帳的本月臨時。每日可花費把該金額除以本月剩餘日數（含今天）。本月臨時只佔預算，不會建立交易。",
+      en: "Remaining budget = cap − spending so far − scheduled regulars not yet posted this month − this-month-only holds not yet due. Daily allowed remaining divides that by calendar days after today (last day uses the remaining amount).",
+      zh: "剩餘預算 = 開支上限 − 本月已花費 − 尚未入帳的每月定期 − 尚未扣帳的本月臨時。每日尚可花費把該金額除以今天之後的剩餘日數（月末當日則用剩餘金額）。",
     },
     disc: {
-      en: "Still to spend = monthly regulars not yet posted this month + uncharged this-month-only holds + paced leftover non-regular spend. Non-regular so far = spending so far − posted regulars matched this month.",
-      zh: "預計本月尚餘開支 = 尚未入帳的每月定期 + 尚未扣帳的本月臨時 + 按其速度推算的其餘非定期。已實現非定期 = 本月已花費 − 本月已配對的定期。",
+      en: "Still to spend = scheduled regulars not yet posted + this-month-only holds not yet due + remaining-days pace. Projected avg daily spend = (spending so far − that reserved lump) ÷ day of month.",
+      zh: "預計本月尚餘開支 = 尚未入帳的每月定期與本月臨時 + 按其速度推算的其餘日數。預計每日平均開支 =（已花費 − 已預留）÷ 本月第幾天。",
     },
     cap: {
-      en: "The headline is projected spending for this month versus your monthly cap. Projected spend = posted spend + remaining scheduled regulars not yet posted + remaining this-month-only holds + paced leftover non-regular spend. Remaining = cap − posted − remaining scheduled − remaining holds.",
-      zh: "標題數字是本月預計開支對比開支上限。預計開支 = 本月已花費 + 尚未入帳的每月定期 + 尚未扣帳的本月臨時 + 按其速度推算的其餘非定期。剩餘 = 上限 − 已花費 − 尚未入帳定期 − 尚未扣帳臨時。",
+      en: "Headline = spending so far + reserved not-yet-posted regulars and this-month-only holds + projected avg daily × days left after today. Projected non-regular (full month) = (spending so far − reserved) + avg daily × days left. Remaining = cap − spending so far − reserved.",
+      zh: "本月開支上限標題 = 已花費 + 已預留（尚未入帳的定期與臨時）+ 預計每日平均 × 今天之後剩餘日數。預計非定期（全月）=（已花費 − 已預留）+ 預計每日平均 × 剩餘日數。剩餘 = 上限 − 已花費 − 已預留。",
     },
     mortgage: {
       en: "Constant-rate amortisation using the current effective rate. Not a lender quote.",

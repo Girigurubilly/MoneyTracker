@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, Plus, Search, Wallet } from "lucide-react";
 import { Hairline, InfoButton, Metric, ProgressRing, SectionLabel, Segmented, TransactionRow } from "@/components/shared";
+import { AmountWithHkd } from "@/components/currency-field";
 import { longDate, money, monthGrid, monthTitle, shiftMonth, todayISO, weekdayLabels } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { Link } from "@tanstack/react-router";
@@ -187,8 +188,7 @@ function TodayBody() {
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-medium">{t.budget.monthlyTotal}</span>
           <span className="text-xs text-muted">
-            {t.today.reservedRegulars}: {money(cap?.reserved ?? 0, "HKD")}
-            {(cap?.adhoc ?? 0) > 0 ? ` · ${t.budget.adhoc}: ${money(cap?.adhoc ?? 0, "HKD")}` : ""}
+            {t.today.reservedRegulars}: {money((cap?.reserved ?? 0) + (cap?.reservedAdhoc ?? 0), "HKD")}
           </span>
         </span>
         <span className="text-right">
@@ -212,8 +212,14 @@ function TodayBody() {
                     {t.budget.chargedDay} {chargedDayOf(r)}
                   </div>
                 </div>
-                <div className={cn("text-sm tabular-nums", r.type === "income" ? "text-income" : "text-foreground")}>
-                  {money(r.type === "expense" || r.countsAsExpense ? -r.amount : r.amount, r.currency, { sign: true })}
+                <div className={cn("shrink-0", r.type === "income" ? "text-income" : "text-foreground")}>
+                  <AmountWithHkd
+                    amount={r.type === "expense" || r.countsAsExpense ? -r.amount : r.amount}
+                    currency={r.currency}
+                    rates={rates}
+                    sign
+                    className="text-sm font-semibold"
+                  />
                 </div>
               </div>
             </div>

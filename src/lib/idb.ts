@@ -5,6 +5,7 @@ import type {
   Allowance,
   Budget,
   Category,
+  Currency,
   FxRate,
   Goal,
   Mortgage,
@@ -20,6 +21,8 @@ export type MetaRow = {
   annualTravelBudget: number;
   schemaVersion: number;
   seededAt?: string;
+  defaultCurrency?: Currency;
+  lastFxSyncAt?: string;
 };
 
 export type RetirementRow = RetirementInputs & { id: string };

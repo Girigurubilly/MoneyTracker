@@ -2,14 +2,16 @@ import { useMemo, useState } from "react";
 import { Area, AreaChart, ResponsiveContainer, XAxis } from "recharts";
 import { Hairline, InfoButton, ScreenHeader, SectionLabel, StatusChip } from "@/components/shared";
 import { money, todayISO } from "@/lib/format";
+import { pickName } from "@/lib/i18n";
 import { livingEssentials } from "@/lib/calc/budget";
 import { monthlyPayment, effectiveRate } from "@/lib/calc/mortgage";
 import { investableNow } from "@/lib/calc/networth";
 import { retirementStatus, runRetirement, savingsLast12Months, sustainableMonthly, type RetirementInputs } from "@/lib/calc/retirement";
 import { monthKey } from "@/lib/calc/ledger";
+import type { Allowance } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { useApp } from "@/store/app";
-import { useT } from "@/store/ui";
+import { useApp, newId } from "@/store/app";
+import { useT, useUi } from "@/store/ui";
 
 export function RetirementPage() {
   const t = useT();
@@ -149,6 +151,9 @@ export function RetirementPage() {
         <Hairline />
         <NumRow label={t.reports.travelRetired} value={base.travelInRetirement} money onCommit={(n) => persist({ travelInRetirement: n })} />
       </div>
+
+      <AllowanceSection />
+
       <p className="px-5 py-4 text-xs leading-relaxed text-faint">{t.reports.disclaimer}</p>
     </div>
   );
@@ -159,11 +164,13 @@ function NumRow({
   value,
   onCommit,
   money: asMoney,
+  blankZero,
 }: {
   label: string;
   value: number;
   onCommit: (n: number) => void;
   money?: boolean;
+  blankZero?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [raw, setRaw] = useState(String(value));
@@ -192,9 +199,128 @@ function NumRow({
           onClick={(e) => e.stopPropagation()}
         />
       ) : (
-        <span className="text-sm tabular-nums text-muted">{asMoney ? money(value, "HKD") : value}</span>
+        <span className="text-sm tabular-nums text-muted">
+          {blankZero && !value ? "—" : asMoney ? money(value, "HKD") : value}
+        </span>
       )}
     </button>
+  );
+}
+
+function kindLabel(kind: Allowance["kind"], t: ReturnType<typeof useT>): string {
+  if (kind === "oaa") return t.reports.oaa;
+  if (kind === "annuity") return t.reports.annuity;
+  return t.reports.addAllowance;
+}
+
+function AllowanceSection() {
+  const t = useT();
+  const locale = useUi((s) => s.locale);
+  const rows = useApp((s) => s.allowances);
+  const add = useApp((s) => s.addAllowance);
+  const update = useApp((s) => s.updateAllowance);
+  const del = useApp((s) => s.deleteAllowance);
+  const hasOaa = rows.some((a) => a.kind === "oaa");
+  const hasAnnuity = rows.some((a) => a.kind === "annuity");
+
+  function seed(kind: "oaa" | "annuity" | "other") {
+    if (kind === "oaa") {
+      void add({
+        id: newId(),
+        label: "Old Age Allowance",
+        labelZh: "生果金",
+        monthly: 1620,
+        startAge: 70,
+        kind: "oaa",
+        inflationAdjusted: true,
+      });
+      return;
+    }
+    if (kind === "annuity") {
+      void add({
+        id: newId(),
+        label: "Annuity",
+        labelZh: "年金",
+        monthly: 0,
+        startAge: 65,
+        kind: "annuity",
+        inflationAdjusted: false,
+      });
+      return;
+    }
+    void add({
+      id: newId(),
+      label: "Other retirement income",
+      labelZh: "其他退休收入",
+      monthly: 0,
+      startAge: 65,
+      kind: "other",
+      inflationAdjusted: false,
+    });
+  }
+
+  return (
+    <>
+      <SectionLabel>{t.reports.hkIncome}</SectionLabel>
+      {rows.length === 0 ? (
+        <p className="px-5 pb-2 text-xs text-muted">{t.reports.hkIncome}</p>
+      ) : (
+        <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
+          {rows.map((a, i) => (
+            <div key={a.id}>
+              {i > 0 ? <Hairline /> : null}
+              <div className="px-4 py-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium">{kindLabel(a.kind, t)}</div>
+                    <div className="text-xs text-muted">{pickName(locale, a.label, a.labelZh)}</div>
+                  </div>
+                  <button type="button" className="h-11 px-2 text-sm text-expense" onClick={() => void del(a.id)}>
+                    {t.tx.delete}
+                  </button>
+                </div>
+                <NumRow
+                  label={t.reports.allowanceMonthly}
+                  value={a.monthly}
+                  money
+                  onCommit={(n) => void update({ ...a, monthly: n })}
+                />
+                <NumRow label={t.reports.startAge} value={a.startAge} onCommit={(n) => void update({ ...a, startAge: n })} />
+                <NumRow
+                  label={t.reports.endAge}
+                  value={a.endAge ?? 0}
+                  blankZero
+                  onCommit={(n) => void update({ ...a, endAge: n > 0 ? n : undefined })}
+                />
+                <label className="flex items-center gap-2 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={a.inflationAdjusted}
+                    onChange={(e) => void update({ ...a, inflationAdjusted: e.target.checked })}
+                  />
+                  {t.reports.inflationAdj}
+                </label>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="mx-4 mt-3 flex flex-col gap-2">
+        {!hasOaa ? (
+          <button type="button" className="h-11 rounded-xl bg-elevated text-sm font-medium" onClick={() => seed("oaa")}>
+            {t.reports.addOaa}
+          </button>
+        ) : null}
+        {!hasAnnuity ? (
+          <button type="button" className="h-11 rounded-xl bg-elevated text-sm font-medium" onClick={() => seed("annuity")}>
+            {t.reports.addAnnuity}
+          </button>
+        ) : null}
+        <button type="button" className="h-11 rounded-xl bg-elevated text-sm" onClick={() => seed("other")}>
+          {t.reports.addAllowance}
+        </button>
+      </div>
+    </>
   );
 }
 

@@ -65,8 +65,10 @@ export function monthStats(
   const actuals = budgetActuals(budgets, txs, month, rates, categories, recurring, asOf, adhoc);
   const total = actuals.find((b) => b.id === MONTH_TOTAL_BUDGET_ID) ?? actuals.find((b) => !b.categoryId && !b.theme);
   const remainingBudget = total ? total.remaining : actuals.reduce((s, b) => s + b.remaining, 0);
-  const remainingDisc = (total?.reserved ?? 0) + (total?.reservedAdhoc ?? 0) + (total?.projected ?? 0);
-  const daily = dailySpendable(remainingBudget, asOf);
+  const remainingDisc = (total?.reserved ?? 0) + (total?.reservedAdhoc ?? 0) + (total?.projectedRemain ?? 0);
+  const daily = total
+    ? { daysLeft: total.daysRemaining, daily: total.dailyAllowed }
+    : dailySpendable(remainingBudget, asOf);
   return { month, flow, actuals, remainingBudget, remainingDisc, daily };
 }
 

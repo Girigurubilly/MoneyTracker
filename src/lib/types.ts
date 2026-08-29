@@ -231,6 +231,7 @@ export type Recurring = {
   countsAsExpense?: boolean;
   housing?: boolean;
   splitWithId?: string;
+  destAmount?: number;
 };
 
 export type AdhocBudget = {

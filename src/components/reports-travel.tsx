@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { Hairline, InfoButton, Overlay, ProgressBar, ScreenHeader, SectionLabel, StatusChip } from "@/components/shared";
+import { AmountWithHkd } from "@/components/currency-field";
 import { mdLabel, milesLabel, money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import {
@@ -201,9 +202,14 @@ export function TripDetailPage({ id }: { id: string }) {
                       {acc ? ` · ${pickName(loc, acc.name, acc.nameZh)}` : ""}
                     </div>
                   </div>
-                  <span className="rounded-full bg-expense-soft px-2.5 py-1 text-sm font-medium tabular-nums text-expense">
-                    {money(spend ? -Math.abs(tx.amount) : tx.amount, tx.currency, { sign: true })}
-                  </span>
+                  <AmountWithHkd
+                    amount={spend ? -Math.abs(tx.amount) : tx.amount}
+                    currency={tx.currency}
+                    rates={rates}
+                    fxToHkd={tx.fxToHkd}
+                    sign
+                    className="text-sm font-medium text-expense"
+                  />
                 </button>
               </div>
             );

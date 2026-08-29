@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { AccountSelect } from "@/components/account-select";
+import { AmountCurrencyRow, CurrencySelect, asFiat, autoDestAmount } from "@/components/currency-field";
 import { CategoryPicker, TypeSwitch } from "@/components/category-picker";
 import { Overlay } from "@/components/shared";
 import { todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
-import { defaultMortgageAccountId, moneyAccountsForPicker } from "@/lib/accounts";
+import { defaultMortgageAccountId } from "@/lib/accounts";
 import { canSplitMortgage, categoryPath, mortgageEntryKind, resolvedDefaultAccountId } from "@/lib/categories";
+import { captureFxToHkd } from "@/lib/calc/fx";
 import { isTripActive } from "@/lib/calc/trips";
 import { applyTxRules, infersHousing, splitMortgageAmounts } from "@/lib/tx-rules";
-import type { Category, Transaction, TxType } from "@/lib/types";
+import type { Category, Currency, MoneyUnit, Transaction, TxType } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 
@@ -40,12 +42,16 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
   const accounts = useApp((s) => s.accounts);
   const categories = useApp((s) => s.categories);
   const trips = useApp((s) => s.trips);
+  const rates = useApp((s) => s.fxRates);
+  const defaultCurrency = useApp((s) => s.defaultCurrency);
   const del = useApp((s) => s.deleteTransaction);
   const add = useApp((s) => s.addTransaction);
   const update = useApp((s) => s.updateTransaction);
-  const moneyAccounts = moneyAccountsForPicker(accounts, { includeId: tx.accountId });
   const [type, setType] = useState<TxType>(formTypeOf(tx, categories));
   const [amount, setAmount] = useState(String(tx.amount));
+  const [currency, setCurrency] = useState<Currency>(tx.currency === "MILES" ? defaultCurrency : tx.currency);
+  const [destAmount, setDestAmount] = useState(tx.destAmount != null ? String(tx.destAmount) : "");
+  const [destLocked, setDestLocked] = useState(tx.destAmount != null);
   const [date, setDate] = useState(tx.date);
   const [accountId, setAccountId] = useState(tx.accountId);
   const [toAccountId, setToAccountId] = useState(tx.toAccountId ?? defaultMortgageAccountId(accounts) ?? "");
@@ -65,6 +71,10 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
   const principalOnly = (type === "expense" || type === "transfer") && mortgageKind === "principal";
   const showDest = type === "transfer" || principalOnly || (canSplit && doSplit);
   const moneyTx = type !== "miles";
+  const destAcc = accounts.find((a) => a.id === toAccountId);
+  const destCcy: Currency = destAcc ? asFiat(destAcc.currency, currency) : currency;
+  const autoDest = autoDestAmount(Number(amount) || 0, currency, destCcy, rates, tx.fxToHkd);
+  const destN = destLocked ? Number(destAmount) || 0 : autoDest;
   const activeTrips = trips.filter((tr) => isTripActive(tr, todayISO()) || tr.id === tx.tripId);
 
   function changeType(next: TxType) {
@@ -89,8 +99,8 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
   async function save() {
     const amt = Number(amount) || 0;
     const parts = splitMortgageAmounts(principal, interest, amount, mortgageKind);
-    const acc = moneyAccounts.find((a) => a.id === accountId) ?? accounts.find((a) => a.id === accountId);
-    const currency = type === "miles" ? "MILES" : acc?.currency === "MILES" ? "HKD" : (acc?.currency ?? tx.currency);
+    const ccy: MoneyUnit = type === "miles" ? "MILES" : currency;
+    const fxToHkd = captureFxToHkd(ccy, rates);
     const ctx = { categories, accounts };
     const planned = date > todayISO();
     const dest = toAccountId || defaultMortgageAccountId(accounts);
@@ -110,10 +120,11 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
             ...tx,
             type: "transfer",
             amount: p,
-            currency,
+            currency: ccy,
+            fxToHkd,
             accountId,
             toAccountId: dest,
-            destAmount: p,
+            destAmount: autoDestAmount(p, ccy, destCcy, rates) || p,
             categoryId: pCat?.id,
             date,
             payee: payee || t.add.principal,
@@ -130,7 +141,8 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
             id: newId(),
             type: "expense",
             amount: i,
-            currency,
+            currency: ccy,
+            fxToHkd,
             accountId,
             toAccountId: undefined,
             destAmount: undefined,
@@ -158,10 +170,11 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
               ...tx,
               type: "transfer",
               amount: p,
-              currency,
+              currency: ccy,
+              fxToHkd,
               accountId,
               toAccountId: dest,
-              destAmount: p,
+              destAmount: autoDestAmount(p, ccy, destCcy, rates) || p,
               categoryId: pCat?.id ?? categoryId,
               date,
               payee: payee || tx.payee,
@@ -180,7 +193,8 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
               ...tx,
               type: "expense",
               amount: i,
-              currency,
+              currency: ccy,
+              fxToHkd,
               accountId,
               categoryId: iCat?.id ?? categoryId,
               date,
@@ -204,10 +218,11 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
           ...tx,
           type,
           amount: amt,
-          currency,
+          currency: ccy,
+          fxToHkd,
           accountId,
           toAccountId: type === "transfer" || principalOnly ? toAccountId : undefined,
-          destAmount: type === "transfer" || principalOnly ? amt : undefined,
+          destAmount: type === "transfer" || principalOnly ? destN || amt : undefined,
           categoryId: categoryId || undefined,
           date,
           payee: payee || tx.payee,
@@ -293,6 +308,9 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
           {canSplit && doSplit ? (
             <div>
               <p className="text-xs text-muted">{t.add.splitHint}</p>
+              <div className="mt-1 flex justify-end">
+                <CurrencySelect value={currency} onChange={setCurrency} />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <label className="block py-2">
                   <span className="text-xs text-muted">{t.add.principal}</span>
@@ -304,16 +322,56 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
                 </label>
               </div>
             </div>
-          ) : (
+          ) : type === "miles" ? (
             <label className="block py-2">
               <span className="text-xs text-muted">{t.add.amount}</span>
               <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none" />
+            </label>
+          ) : (
+            <label className="block py-2">
+              <span className="text-xs text-muted">{t.add.amount}</span>
+              <AmountCurrencyRow
+                amount={amount}
+                currency={currency}
+                onAmount={setAmount}
+                onCurrency={(c) => {
+                  setCurrency(c);
+                  setDestLocked(false);
+                }}
+                rates={rates}
+                fxToHkd={tx.fxToHkd}
+              />
             </label>
           )}
           {showDest ? (
             <label className="block py-2">
               <span className="text-xs text-muted">{principalOnly || (canSplit && doSplit) ? t.add.mortgageTo : t.add.to}</span>
-              <AccountSelect accounts={accounts} value={toAccountId} onChange={setToAccountId} excludeId={accountId} />
+              <AccountSelect
+                accounts={accounts}
+                value={toAccountId}
+                onChange={(id) => {
+                  setToAccountId(id);
+                  setDestLocked(false);
+                }}
+                excludeId={accountId}
+              />
+            </label>
+          ) : null}
+          {showDest && !(canSplit && doSplit) ? (
+            <label className="block py-2">
+              <span className="text-xs text-muted">{t.add.destAmount}</span>
+              <AmountCurrencyRow
+                amount={destLocked ? destAmount : String(autoDest || "")}
+                currency={destCcy}
+                onAmount={(v) => {
+                  setDestLocked(true);
+                  setDestAmount(v);
+                }}
+                onCurrency={() => undefined}
+                rates={rates}
+                currencyDisabled
+              />
+              <span className="mt-1 block text-xs text-faint">{t.add.destAmountHint}</span>
             </label>
           ) : null}
           {type === "expense" ? (

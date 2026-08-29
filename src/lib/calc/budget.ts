@@ -84,6 +84,10 @@ export function realizedRegulars(recurring: Recurring[], rates: FxRate[], asOfIs
   return sum;
 }
 
+export function totalExpenseRegulars(recurring: Recurring[], rates: FxRate[]): number {
+  return monthlyExpenseRegulars(recurring).reduce((s, r) => s + hkdOfRegular(r, rates), 0);
+}
+
 export function daysInMonth(month: string): number {
   const [y, m] = month.split("-").map(Number);
   return new Date(y, m, 0).getDate();
@@ -156,14 +160,32 @@ export function asOfForMonth(month: string, today: string): string {
   return today;
 }
 
-export function projectedNonRegular(spent: number, realized: number, asOfIso: string): number {
+/** MoneyProExtend liveMonthly: nonRegSoFar / day */
+export function avgDailyNonRegular(nonRegSoFar: number, asOfIso: string): number {
+  const day = Number(asOfIso.slice(8, 10));
+  if (!Number.isFinite(day) || day <= 0) return 0;
+  return nonRegSoFar / day;
+}
+
+/** Remaining-days projection after today: dailyNonReg × (dim − day). Last day = 0. */
+export function projectedNonRegularRemain(nonRegSoFar: number, asOfIso: string): number {
   const day = Number(asOfIso.slice(8, 10));
   const last = daysInMonth(asOfIso.slice(0, 7));
   if (!Number.isFinite(day) || day <= 0) return 0;
   const remainingDays = Math.max(0, last - day);
   if (remainingDays === 0) return 0;
-  const nonRegular = Math.max(0, spent - realized);
-  return (nonRegular / day) * remainingDays;
+  return avgDailyNonRegular(nonRegSoFar, asOfIso) * remainingDays;
+}
+
+/** PROJECTED NON-REGULAR (FULL MONTH) = dailyNonReg × days in month */
+export function projectedNonRegularFull(nonRegSoFar: number, asOfIso: string): number {
+  const last = daysInMonth(asOfIso.slice(0, 7));
+  return avgDailyNonRegular(nonRegSoFar, asOfIso) * last;
+}
+
+/** @deprecated remaining-days only; prefer projectedNonRegularFull / Remain */
+export function projectedNonRegular(spent: number, realized: number, asOfIso: string): number {
+  return projectedNonRegularRemain(Math.max(0, spent - realized), asOfIso);
 }
 
 export function upcomingExpenseRegulars(recurring: Recurring[], asOfIso: string): Recurring[] {
@@ -209,10 +231,6 @@ export function coverExpenseRegulars(
     monthlyExpenseRegulars(recurring),
     txs.filter((tx) => inMonth(tx.date, month) && isSpendLike(tx)),
   );
-}
-
-function hkdTx(tx: Transaction, rates: FxRate[]): number {
-  return Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
 }
 
 export function forecastTone(ratio: number): "income" | "watch" | "expense" {
@@ -279,6 +297,19 @@ export function monthCashflowForecast(
   return { income, expense, net: income - expense };
 }
 
+function hkdTx(tx: Transaction, rates: FxRate[]): number {
+  return Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
+}
+
+/**
+ * Cap card formulas (user-specified):
+ *   R (已預留)     = monthly expense regulars not yet posted this month
+ *                    (no covering posted tx) + this-month holds not yet due
+ *   avgDaily        = (spent − R) / day of month
+ *   dailyAllowed    = (cap − spent − R) / days after today
+ *   projected (全月) = (spent − R) + avgDaily × remaining days
+ *   headline        = spent + R + avgDaily × remaining days
+ */
 export function budgetActuals(
   budgets: Budget[],
   txs: Transaction[],
@@ -296,36 +327,29 @@ export function budgetActuals(
   reservedAdhoc: number;
   realized: number;
   projected: number;
+  projectedRemain: number;
+  avgDaily: number;
+  dailyAllowed: number;
+  daysRemaining: number;
+  nonRegular: number;
   adhoc: number;
   expected: number;
 })[] {
   const asOf = asOfIso ?? monthEndIso(month);
-  const cover = coverExpenseRegulars(recurring, txs, month);
-  const reservedRegularAmt = cover.uncovered.reduce((s, r) => s + hkdOfRegular(r, rates), 0);
+  const postedSpend = txs.filter((tx) => inMonth(tx.date, month) && isSpendLike(tx) && !tx.planned);
+  const cover = coverRegulars(monthlyExpenseRegulars(recurring), postedSpend);
+  const reservedReg = cover.uncovered.reduce((s, r) => s + hkdOfRegular(r, rates), 0);
   let postedCovering = 0;
-  let plannedCovering = 0;
-  const coveredTxIds = new Set<string>();
   for (const row of cover.covered) {
-    for (const tx of row.txs) {
-      coveredTxIds.add(tx.id);
-      const amt = hkdTx(tx, rates);
-      if (tx.planned) plannedCovering += amt;
-      else postedCovering += amt;
-    }
+    for (const tx of row.txs) postedCovering += hkdTx(tx, rates);
   }
-  let plannedOther = 0;
-  for (const tx of txs) {
-    if (!inMonth(tx.date, month) || !isSpendLike(tx) || !tx.planned || coveredTxIds.has(tx.id)) continue;
-    plannedOther += hkdTx(tx, rates);
-  }
-  const reserved = reservedRegularAmt + plannedCovering + plannedOther;
-  const realized = postedCovering;
   const adhoc = adhocTotal(adhocRows, month, rates);
   const reservedA = reservedAdhoc(adhocRows, month, rates, asOf);
   return budgets.map((b) => {
     const unscoped = !b.categoryId && !b.theme;
+    const isMonth = unscoped && b.id === MONTH_TOTAL_BUDGET_ID;
     const spent = unscoped
-      ? b.id === MONTH_TOTAL_BUDGET_ID
+      ? isMonth
         ? spentInMonth(txs, month, rates)
         : 0
       : spentInMonth(txs, month, rates, {
@@ -333,21 +357,27 @@ export function budgetActuals(
           theme: b.theme,
           categories,
         });
-    const hold = unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? reserved + reservedA : 0;
-    const realizedAmt = unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? realized : 0;
-    const adhocAmt = unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? adhoc : 0;
-    const projected =
-      unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? projectedNonRegular(spent, realizedAmt, asOf) : 0;
-    const expected = unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? spent + hold + projected : spent;
-    const remaining = b.monthly - spent - hold;
+    const hold = isMonth ? reservedReg + reservedA : 0;
+    const paceBase = isMonth ? spent - hold : 0;
+    const avgDaily = isMonth ? avgDailyNonRegular(paceBase, asOf) : 0;
+    const projectedRemain = isMonth ? projectedNonRegularRemain(paceBase, asOf) : 0;
+    const projected = isMonth ? paceBase + projectedRemain : 0;
+    const expected = isMonth ? spent + hold + projectedRemain : spent;
+    const remaining = isMonth ? b.monthly - spent - hold : b.monthly - spent;
+    const allowed = isMonth ? dailySpendable(remaining, asOf) : { daysLeft: 0, daily: 0 };
     return {
       ...b,
       spent,
-      reserved: unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? reserved : 0,
-      reservedAdhoc: unscoped && b.id === MONTH_TOTAL_BUDGET_ID ? reservedA : 0,
-      adhoc: adhocAmt,
-      realized: realizedAmt,
+      reserved: isMonth ? reservedReg : 0,
+      reservedAdhoc: isMonth ? reservedA : 0,
+      adhoc: isMonth ? adhoc : 0,
+      realized: isMonth ? postedCovering : 0,
+      nonRegular: paceBase,
+      avgDaily,
       projected,
+      projectedRemain,
+      dailyAllowed: allowed.daily,
+      daysRemaining: allowed.daysLeft,
       remaining,
       expected,
       ratio: b.monthly > 0 ? expected / b.monthly : 0,
@@ -355,12 +385,12 @@ export function budgetActuals(
   });
 }
 
-export function dailySpendable(remainingDisc: number, isoDate: string): { daysLeft: number; daily: number } {
-  const [y, m] = isoDate.split("-").map(Number);
-  const last = new Date(y, m, 0).getDate();
+export function dailySpendable(remainingAmt: number, isoDate: string): { daysLeft: number; daily: number } {
+  const last = daysInMonth(isoDate.slice(0, 7));
   const day = Number(isoDate.slice(8, 10));
-  const daysLeft = Math.max(1, last - day + 1);
-  return { daysLeft, daily: remainingDisc / daysLeft };
+  const daysLeft = Math.max(0, last - day);
+  if (daysLeft === 0) return { daysLeft: 0, daily: remainingAmt };
+  return { daysLeft, daily: remainingAmt / daysLeft };
 }
 
 export function essentialCommitments(recurring: Recurring[], budgets: Budget[], categories: Category[]): number {

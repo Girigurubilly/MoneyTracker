@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp, Plus } from "lucide-react";
 import { Group, Hairline, Overlay, ScreenHeader, SectionLabel, TransactionRow } from "@/components/shared";
+import { AmountWithHkd } from "@/components/currency-field";
 import { money } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { netWorthNow } from "@/lib/calc/networth";
@@ -117,14 +118,15 @@ function AccountRow({
 }) {
   const locale = useUi((s) => s.locale);
   const move = useApp((s) => s.moveAccount);
+  const rates = useApp((s) => s.fxRates);
   return (
     <div className="flex items-center">
-      <button type="button" className="flex min-w-0 flex-1 items-center justify-between px-4 py-3 text-left" onClick={onEdit}>
+      <button type="button" className="flex min-w-0 flex-1 items-center justify-between gap-3 px-4 py-3 text-left" onClick={onEdit}>
         <span className="min-w-0">
           <span className="block truncate text-sm">{pickName(locale, a.name, a.nameZh)}</span>
           {a.hidden ? <span className="text-xs text-muted">{locale === "zh-HK" ? "已隱藏" : "Hidden"}</span> : null}
         </span>
-        <span className="text-sm font-semibold tabular-nums">{money(a.balance, a.currency)}</span>
+        <AmountWithHkd amount={a.balance} currency={a.currency} rates={rates} className="text-sm font-semibold" />
       </button>
       {reorder ? (
         <div className="flex pr-2">
@@ -153,6 +155,7 @@ function AccountDetail({
   const locale = useUi((s) => s.locale);
   const setTx = useUi((s) => s.setTxDetailId);
   const txs = useApp((s) => s.transactions);
+  const rates = useApp((s) => s.fxRates);
   if (!account) return null;
   const rows = txs
     .filter((x) => x.accountId === account.id || x.toAccountId === account.id)
@@ -171,7 +174,9 @@ function AccountDetail({
       </header>
       <div className="mx-4 mb-4 mt-2 rounded-xl bg-elevated px-4 py-4">
         <div className="text-xs text-muted">{typeLabel ? (locale === "zh-HK" ? typeLabel.zh : typeLabel.en) : account.type}</div>
-        <div className="mt-1 text-2xl font-semibold tabular-nums">{money(account.balance, account.currency)}</div>
+        <div className="mt-1">
+          <AmountWithHkd amount={account.balance} currency={account.currency} rates={rates} align="start" className="text-2xl font-semibold" />
+        </div>
         {account.hidden ? <div className="mt-1 text-xs text-muted">{t.assets.hidden}</div> : null}
       </div>
       <SectionLabel>{t.assets.transactions}</SectionLabel>

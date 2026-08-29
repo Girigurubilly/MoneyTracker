@@ -1,10 +1,38 @@
 import type { Currency, FxRate, MoneyUnit } from "../types.ts";
+import { CURRENCIES } from "../types.ts";
+
+export function hkdPerUnit(currency: MoneyUnit, rates: FxRate[], override?: number): number {
+  if (currency === "MILES" || currency === "HKD") return 1;
+  if (override && override > 0) return override;
+  const row = rates.find((r) => r.currency === currency);
+  return row?.perHkd ?? 1;
+}
 
 export function toHkd(amount: number, currency: MoneyUnit, rates: FxRate[], override?: number): number {
-  if (currency === "MILES" || currency === "HKD") return amount;
-  if (override && override > 0) return amount * override;
-  const row = rates.find((r) => r.currency === currency);
-  return amount * (row?.perHkd ?? 1);
+  return amount * hkdPerUnit(currency, rates, override);
+}
+
+export function fromHkd(hkd: number, currency: MoneyUnit, rates: FxRate[]): number {
+  const per = hkdPerUnit(currency, rates);
+  if (!per) return hkd;
+  return hkd / per;
+}
+
+export function convertAmount(
+  amount: number,
+  from: MoneyUnit,
+  to: MoneyUnit,
+  rates: FxRate[],
+  fxToHkd?: number,
+): number {
+  if (from === to) return amount;
+  const hkd = toHkd(amount, from, rates, fxToHkd);
+  return fromHkd(hkd, to, rates);
+}
+
+export function captureFxToHkd(currency: MoneyUnit, rates: FxRate[]): number | undefined {
+  if (currency === "HKD" || currency === "MILES") return undefined;
+  return hkdPerUnit(currency, rates);
 }
 
 export function parseFrankfurter(data: { date?: string; rates?: Record<string, number> }): FxRate[] {
@@ -67,15 +95,20 @@ async function pullJson(url: string): Promise<unknown> {
 }
 
 export async function fetchLiveFx(current: FxRate[]): Promise<FxRate[]> {
-  const frank = await pullJson("https://api.frankfurter.dev/v1/latest?from=HKD")
-    .then((data) => parseFrankfurter(data as { date?: string; rates?: Record<string, number> }))
-    .catch(() => []);
-  const pulled =
-    frank.length > 0
-      ? frank
-      : await pullJson("https://open.er-api.com/v6/latest/HKD")
-          .then((data) => parseErApi(data as { time_last_update_utc?: string; rates?: Record<string, number> }))
-          .catch(() => []);
+  const [frank, er] = await Promise.all([
+    pullJson("https://api.frankfurter.dev/v1/latest?from=HKD")
+      .then((data) => parseFrankfurter(data as { date?: string; rates?: Record<string, number> }))
+      .catch(() => [] as FxRate[]),
+    pullJson("https://open.er-api.com/v6/latest/HKD")
+      .then((data) => parseErApi(data as { time_last_update_utc?: string; rates?: Record<string, number> }))
+      .catch(() => [] as FxRate[]),
+  ]);
+  // Prefer Frankfurter on overlap; keep ER-API for TWD/MOP and other gaps.
+  const supported = new Set<string>(CURRENCIES);
+  const pulled = mergeRates(er, frank).filter((r) => supported.has(r.currency));
   if (!pulled.length) throw new Error("fx");
-  return mergeRates(current, pulled);
+  return mergeRates(
+    current.filter((r) => supported.has(r.currency)),
+    pulled,
+  );
 }

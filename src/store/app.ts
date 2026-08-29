@@ -6,6 +6,7 @@ import type {
   Allowance,
   Budget,
   Category,
+  Currency,
   FxRate,
   Goal,
   Mortgage,
@@ -15,7 +16,7 @@ import type {
   Trip,
 } from "@/lib/types";
 import type { RetirementInputs } from "@/lib/calc/retirement";
-import type { SnapshotRow } from "@/lib/idb";
+import type { MetaRow, SnapshotRow } from "@/lib/idb";
 import {
   accounts as seedAccounts,
   allowances as seedAllowances,
@@ -60,6 +61,8 @@ export type AppSnapshot = {
   snapshots: SnapshotRow[];
   annualTravelBudget: number;
   adhocBudgets?: AdhocBudget[];
+  defaultCurrency?: Currency;
+  lastFxSyncAt?: string;
 };
 
 function idb() {
@@ -70,6 +73,21 @@ function idb() {
 
 function nid(): string {
   return crypto.randomUUID();
+}
+
+async function writeMeta(
+  patch: Partial<Omit<MetaRow, "key">>,
+  fallback: { annualTravelBudget: number; defaultCurrency: Currency },
+): Promise<void> {
+  const prev = await idb().meta.get("settings");
+  await idb().meta.put({
+    key: "settings",
+    annualTravelBudget: patch.annualTravelBudget ?? prev?.annualTravelBudget ?? fallback.annualTravelBudget,
+    schemaVersion: patch.schemaVersion ?? prev?.schemaVersion ?? 2,
+    seededAt: "seededAt" in patch ? patch.seededAt : prev?.seededAt,
+    defaultCurrency: patch.defaultCurrency ?? prev?.defaultCurrency ?? fallback.defaultCurrency,
+    lastFxSyncAt: "lastFxSyncAt" in patch ? patch.lastFxSyncAt : prev?.lastFxSyncAt,
+  });
 }
 
 export function newId(): string {
@@ -98,6 +116,7 @@ type Dispatchers = {
   setFxRates: (rows: FxRate[]) => Promise<void>;
   refreshFx: () => Promise<void>;
   setAnnualTravel: (n: number) => Promise<void>;
+  setDefaultCurrency: (c: Currency) => Promise<void>;
   addAllowance: (a: Allowance) => Promise<void>;
   updateAllowance: (a: Allowance) => Promise<void>;
   deleteAllowance: (id: string) => Promise<void>;
@@ -127,6 +146,8 @@ type AppState = {
   fxRates: FxRate[];
   snapshots: SnapshotRow[];
   annualTravelBudget: number;
+  defaultCurrency: Currency;
+  lastFxSyncAt?: string;
   hydrate: () => Promise<void>;
 } & Dispatchers;
 
@@ -180,6 +201,8 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     fxRates,
     snapshots,
     annualTravelBudget: meta?.annualTravelBudget ?? seedTravelBudget,
+    defaultCurrency: meta?.defaultCurrency ?? "HKD",
+    lastFxSyncAt: meta?.lastFxSyncAt,
   };
 }
 
@@ -205,6 +228,16 @@ const defaultOaa: Allowance = {
   startAge: 70,
   kind: "oaa",
   inflationAdjusted: true,
+};
+
+const defaultAnnuity: Allowance = {
+  id: "annuity",
+  label: "Annuity",
+  labelZh: "年金",
+  monthly: 0,
+  startAge: 65,
+  kind: "annuity",
+  inflationAdjusted: false,
 };
 
 const defaultCash: Account = {
@@ -242,6 +275,7 @@ async function seedDb() {
       annualTravelBudget: seedTravelBudget,
       schemaVersion: 2,
       seededAt: new Date().toISOString(),
+      defaultCurrency: "HKD",
     });
   });
 }
@@ -252,7 +286,7 @@ async function seedSkeleton() {
     await idb().accounts.bulkAdd([defaultCash]);
     await idb().categories.bulkAdd(seedCategories);
     await idb().fxRates.bulkAdd(seedFx);
-    await idb().allowances.bulkAdd([defaultOaa]);
+    await idb().allowances.bulkAdd([defaultOaa, defaultAnnuity]);
     await idb().retirement.add(emptyRetirement);
     await idb().budgets.add({
       id: MONTH_TOTAL_BUDGET_ID,
@@ -266,6 +300,7 @@ async function seedSkeleton() {
       annualTravelBudget: 0,
       schemaVersion: 2,
       seededAt: new Date().toISOString(),
+      defaultCurrency: "HKD",
     });
   });
 }
@@ -279,7 +314,7 @@ function scheduledFromRegular(r: Recurring, month: string, today: string, existi
     currency: r.currency,
     accountId: r.accountId,
     toAccountId: r.toAccountId,
-    destAmount: r.type === "transfer" ? r.amount : undefined,
+    destAmount: r.type === "transfer" ? (r.destAmount ?? r.amount) : undefined,
     categoryId: r.categoryId,
     date: iso,
     payee: r.label,
@@ -322,10 +357,11 @@ async function postDuePlanned() {
   const due = txs.filter((t) => t.planned && t.date <= today);
   if (!due.length) return;
   let accounts = await idb().accounts.toArray();
+  const rates = await idb().fxRates.toArray();
   await idb().transaction("rw", [idb().transactions, idb().accounts, idb().mortgage], async () => {
     for (const tx of due) {
       const posted = { ...tx, planned: false };
-      accounts = applyDeltas(accounts, balanceDeltas(posted, accounts));
+      accounts = applyDeltas(accounts, balanceDeltas(posted, accounts, rates));
       await idb().transactions.put(posted);
     }
     for (const a of accounts) await idb().accounts.put(a);
@@ -493,6 +529,8 @@ export const useApp = create<AppState>((set, get) => ({
   fxRates: seedFx,
   snapshots: [],
   annualTravelBudget: seedTravelBudget,
+  defaultCurrency: "HKD",
+  lastFxSyncAt: undefined,
 
   hydrate: async () => {
     try {
@@ -514,6 +552,10 @@ export const useApp = create<AppState>((set, get) => ({
         await syncRegularSchedules();
       }
       const data = await loadAll();
+      if (!data.fxRates.length) {
+        await idb().fxRates.bulkPut(seedFx);
+        data.fxRates = seedFx;
+      }
       const nw = netWorthNow(data.accounts, data.fxRates);
       const month = monthKey();
       if (!data.snapshots.some((s) => s.month === month)) {
@@ -530,7 +572,7 @@ export const useApp = create<AppState>((set, get) => ({
   addTransaction: async (partial) => {
     const ctx = { categories: get().categories, accounts: get().accounts };
     const tx: Transaction = applyTxRules({ ...partial, id: partial.id ?? nid() }, ctx);
-    const accounts = applyDeltas(get().accounts, balanceDeltas(tx, get().accounts));
+    const accounts = applyDeltas(get().accounts, balanceDeltas(tx, get().accounts, get().fxRates));
     const mortgage = syncMortgageOutstanding(get().mortgage, accounts, tx.toAccountId);
     await idb().transaction("rw", [idb().transactions, idb().accounts, idb().mortgage], async () => {
       await idb().transactions.add(tx);
@@ -546,8 +588,8 @@ export const useApp = create<AppState>((set, get) => ({
     const next = applyTxRules(tx, ctx);
     const prev = previous ?? get().transactions.find((t) => t.id === next.id);
     let accounts = get().accounts;
-    if (prev) accounts = applyDeltas(accounts, balanceDeltas(prev, accounts), -1);
-    accounts = applyDeltas(accounts, balanceDeltas(next, accounts), 1);
+    if (prev) accounts = applyDeltas(accounts, balanceDeltas(prev, accounts, get().fxRates), -1);
+    accounts = applyDeltas(accounts, balanceDeltas(next, accounts, get().fxRates), 1);
     const mortgage = syncMortgageOutstanding(get().mortgage, accounts, next.toAccountId);
     await idb().transaction("rw", [idb().transactions, idb().accounts, idb().mortgage], async () => {
       await idb().transactions.put(next);
@@ -560,7 +602,7 @@ export const useApp = create<AppState>((set, get) => ({
   deleteTransaction: async (id) => {
     const prev = get().transactions.find((t) => t.id === id);
     if (!prev) return undefined;
-    const accounts = applyDeltas(get().accounts, balanceDeltas(prev, get().accounts), -1);
+    const accounts = applyDeltas(get().accounts, balanceDeltas(prev, get().accounts, get().fxRates), -1);
     const mortgage = syncMortgageOutstanding(get().mortgage, accounts, prev.toAccountId);
     await idb().transaction("rw", [idb().transactions, idb().accounts, idb().mortgage], async () => {
       await idb().transactions.delete(id);
@@ -703,12 +745,18 @@ export const useApp = create<AppState>((set, get) => ({
   },
   refreshFx: async () => {
     const rows = await fetchLiveFx(get().fxRates);
-    await get().setFxRates(rows);
+    const synced = new Date().toISOString();
+    await idb().fxRates.bulkPut(rows);
+    await writeMeta({ lastFxSyncAt: synced }, get());
+    set({ fxRates: rows, lastFxSyncAt: synced });
   },
   setAnnualTravel: async (n) => {
-    const prev = await idb().meta.get("settings");
-    await idb().meta.put({ key: "settings", annualTravelBudget: n, schemaVersion: prev?.schemaVersion ?? 2, seededAt: prev?.seededAt });
+    await writeMeta({ annualTravelBudget: n }, get());
     set({ annualTravelBudget: n });
+  },
+  setDefaultCurrency: async (c) => {
+    await writeMeta({ defaultCurrency: c }, get());
+    set({ defaultCurrency: c });
   },
   addAllowance: async (a) => {
     await idb().allowances.put(a);
@@ -751,13 +799,15 @@ export const useApp = create<AppState>((set, get) => ({
       await bulkChunk((rows) => idb().allowances.bulkAdd(rows), snap.allowances ?? []);
       await bulkChunk((rows) => idb().oneOffs.bulkAdd(rows), snap.oneOffs ?? []);
       await bulkChunk((rows) => idb().adhocBudgets.bulkAdd(rows), snap.adhocBudgets ?? []);
-      if (snap.fxRates.length) await idb().fxRates.bulkPut(snap.fxRates);
+      await idb().fxRates.bulkPut(snap.fxRates.length ? snap.fxRates : seedFx);
       if (snap.snapshots.length) await idb().snapshots.bulkPut(snap.snapshots);
       await idb().meta.put({
         key: "settings",
         annualTravelBudget: snap.annualTravelBudget,
         schemaVersion: 2,
         seededAt: snap.exportedAt,
+        defaultCurrency: snap.defaultCurrency ?? "HKD",
+        lastFxSyncAt: snap.lastFxSyncAt,
       });
     });
     await migrateAdhocFromPlannedTxs();
@@ -784,6 +834,8 @@ export const useApp = create<AppState>((set, get) => ({
       snapshots: s.snapshots,
       annualTravelBudget: s.annualTravelBudget,
       adhocBudgets: s.adhocBudgets,
+      defaultCurrency: s.defaultCurrency,
+      lastFxSyncAt: s.lastFxSyncAt,
     };
   },
   resetSample: async () => {

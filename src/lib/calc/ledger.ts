@@ -1,4 +1,5 @@
-import type { Account, Transaction } from "../types.ts";
+import type { Account, FxRate, MoneyUnit, Transaction } from "../types.ts";
+import { convertAmount } from "./fx.ts";
 
 export function isPosted(tx: Transaction): boolean {
   return !tx.planned;
@@ -27,22 +28,43 @@ export function payDownDelta(balance: number, amount: number): number {
   return pay;
 }
 
-export function balanceDeltas(tx: Transaction, accounts: Account[] = []): { accountId: string; delta: number }[] {
+export function amountInAccount(
+  amount: number,
+  from: MoneyUnit,
+  account: Account | undefined,
+  rates: FxRate[],
+  fxToHkd?: number,
+): number {
+  if (!account || from === account.currency) return amount;
+  return convertAmount(amount, from, account.currency, rates, fxToHkd);
+}
+
+export function balanceDeltas(
+  tx: Transaction,
+  accounts: Account[] = [],
+  rates: FxRate[] = [],
+): { accountId: string; delta: number }[] {
   if (tx.planned) return [];
+  const src = accounts.find((a) => a.id === tx.accountId);
+  const srcAmt = Math.abs(amountInAccount(tx.amount, tx.currency, src, rates, tx.fxToHkd));
   if (tx.type === "expense") {
-    return [{ accountId: tx.accountId, delta: -Math.abs(tx.amount) }];
+    return [{ accountId: tx.accountId, delta: -srcAmt }];
   }
   if (tx.type === "income") {
-    return [{ accountId: tx.accountId, delta: Math.abs(tx.amount) }];
+    return [{ accountId: tx.accountId, delta: srcAmt }];
   }
   if (tx.type === "transfer") {
-    const rows = [{ accountId: tx.accountId, delta: -Math.abs(tx.amount) }];
+    const rows = [{ accountId: tx.accountId, delta: -srcAmt }];
     if (tx.toAccountId) {
       const dest = accounts.find((a) => a.id === tx.toAccountId);
-      const amt = Math.abs(tx.destAmount ?? tx.amount);
+      const destAmt = Math.abs(
+        tx.destAmount != null
+          ? tx.destAmount
+          : amountInAccount(tx.amount, tx.currency, dest, rates, tx.fxToHkd),
+      );
       rows.push({
         accountId: tx.toAccountId,
-        delta: dest && isDebtAccount(dest) ? payDownDelta(dest.balance, amt) : amt,
+        delta: dest && isDebtAccount(dest) ? payDownDelta(dest.balance, destAmt) : destAmt,
       });
     }
     return rows;
@@ -53,7 +75,7 @@ export function balanceDeltas(tx: Transaction, accounts: Account[] = []): { acco
   if (tx.milesType === "adjust") {
     return [{ accountId: tx.accountId, delta: tx.amount }];
   }
-  return [{ accountId: tx.accountId, delta: -Math.abs(tx.amount) }];
+  return [{ accountId: tx.accountId, delta: -srcAmt }];
 }
 
 export function applyDeltas(

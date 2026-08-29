@@ -45,7 +45,7 @@ export function applyTxRules<T extends TxRuleFields>(
       type: "transfer",
       countsAsExpense: true,
       toAccountId: dest,
-      destAmount: Math.abs(draft.amount),
+      destAmount: draft.destAmount != null ? draft.destAmount : Math.abs(draft.amount),
       housing: draft.housing === false ? false : true,
     };
   }

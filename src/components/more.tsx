@@ -3,6 +3,7 @@ import { Archive, FolderTree, Globe, Lock, Repeat, Upload, Wallet } from "lucide
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
 import { Disclaimer, Group, Hairline, Row, ScreenHeader } from "@/components/shared";
+import { CurrencySelect } from "@/components/currency-field";
 import { CategoryIcon } from "@/components/category-icon";
 import { CategoryEditor } from "@/components/category-editor";
 import { pickName } from "@/lib/i18n";
@@ -10,6 +11,7 @@ import { decryptSnapshot, downloadBlob, encryptSnapshot } from "@/lib/backup";
 import { transactionsToCsv } from "@/lib/derived";
 import { convertBtp, isAppSnapshot, isBtpFile } from "@/lib/import-btp";
 import type { Category } from "@/lib/types";
+import { CURRENCIES } from "@/lib/types";
 import { useApp, type AppSnapshot } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 
@@ -133,23 +135,77 @@ export function CategoriesPage() {
 
 export function FxPage() {
   const t = useT();
+  const locale = useUi((s) => s.locale);
   const rates = useApp((s) => s.fxRates);
   const refresh = useApp((s) => s.refreshFx);
+  const lastFxSyncAt = useApp((s) => s.lastFxSyncAt);
+  const defaultCurrency = useApp((s) => s.defaultCurrency);
+  const setDefaultCurrency = useApp((s) => s.setDefaultCurrency);
+  const [busy, setBusy] = useState(false);
+  const shown = rates
+    .filter((r) => (CURRENCIES as readonly string[]).includes(r.currency))
+    .sort((a, b) => a.currency.localeCompare(b.currency));
+  const asOf = shown.map((r) => r.asOf).filter(Boolean).sort().at(-1);
+  async function onRefresh() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await refresh();
+      toast.success(t.fx.updated);
+    } catch {
+      toast.error(t.fx.failed);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const syncedLabel = lastFxSyncAt
+    ? formatFxSync(lastFxSyncAt, locale)
+    : t.fx.lastSyncedNever;
   return (
     <div className="pb-10">
       <ScreenHeader title={t.fx.title} />
       <p className="px-5 pb-3 text-xs text-muted">{t.fx.hint}</p>
-      {rates.map((r) => (
+      <div className="mx-4 mb-4 rounded-xl bg-elevated px-4 py-4">
+        <div className="text-sm font-medium">{t.fx.defaultCurrency}</div>
+        <p className="mt-1 text-xs text-muted">{t.fx.defaultHint}</p>
+        <div className="mt-3">
+          <CurrencySelect
+            value={defaultCurrency}
+            onChange={(c) => void setDefaultCurrency(c)}
+            className="h-11 w-full rounded-lg bg-background px-3 text-sm"
+          />
+        </div>
+      </div>
+      {shown.map((r) => (
         <div key={r.currency} className="flex justify-between px-5 py-2 text-sm">
           <span>{r.currency}</span>
           <span className="tabular-nums">{r.perHkd.toPrecision(4)}</span>
         </div>
       ))}
-      <button type="button" className="mx-5 mt-4 h-11 w-[calc(100%-2.5rem)] rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={() => void refresh()}>
+      <p className="px-5 pt-3 text-xs text-muted">
+        {asOf ? `${t.fx.asOf} ${asOf}` : null}
+        {asOf ? " · " : null}
+        {t.fx.lastSynced}: {syncedLabel}
+      </p>
+      <button
+        type="button"
+        disabled={busy}
+        className="mx-5 mt-4 h-11 w-[calc(100%-2.5rem)] rounded-xl bg-accent text-sm font-semibold text-on-accent disabled:opacity-60"
+        onClick={() => void onRefresh()}
+      >
         {t.fx.refresh}
       </button>
     </div>
   );
+}
+
+function formatFxSync(iso: string, locale: "en" | "zh-HK"): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 16);
+  return d.toLocaleString(locale === "zh-HK" ? "zh-HK" : "en-HK", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }
 
 export function ImportPage() {
