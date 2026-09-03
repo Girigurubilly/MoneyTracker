@@ -294,7 +294,7 @@ export const messages = {
       expectedExpense: "Expected expense",
       saving: "Saving",
       nowBadge: "Now",
-      yearlyPastHint: "Closed months use posted salary, other income, and expenses from the ledger.",
+      yearlyPastHint: "Closed months use posted salary, interest income, other income, and expenses. Scheduled deposit interest is only used from this month onward.",,
     },
     more: {
       title: "More",
@@ -675,7 +675,7 @@ export const messages = {
       expectedExpense: "預期開支",
       saving: "儲蓄",
       nowBadge: "本月",
-      yearlyPastHint: "已過月份的薪金、其他收入和開支取自已入帳交易。",
+      yearlyPastHint: "已過月份的薪金、利息收入、其他收入和開支取自已入帳交易。定期存款的預計利息只用於本月及之後。",,
     },
     more: {
       title: "更多",

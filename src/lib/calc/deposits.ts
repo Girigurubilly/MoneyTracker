@@ -92,13 +92,14 @@ export function isSalaryCategory(cat: Category | undefined): boolean {
 }
 
 export function isDepositInterestIncome(tx: Transaction, cat: Category | undefined): boolean {
+  if (tx.type !== "income") return false;
   if (tx.depositId) return true;
   if (tx.categoryId === "interest-inc") return true;
   if (!cat) return false;
-  return /利息收入|deposit interest|interest income/i.test(`${cat.name} ${cat.nameZh}`);
+  return /利息收入|存款利息|定期利息|deposit interest|interest income|\binterest\b/i.test(`${cat.name} ${cat.nameZh}`);
 }
 
-export type MonthActuals = { salary: number; other: number; expense: number };
+export type MonthActuals = { salary: number; other: number; expense: number; interest: number };
 
 export function monthActualsFromTxs(
   txs: Transaction[],
@@ -117,7 +118,7 @@ export function monthActualsFromTxs(
     const hkd = Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
     let row = map.get(key);
     if (!row) {
-      row = { salary: 0, other: 0, expense: 0 };
+      row = { salary: 0, other: 0, expense: 0, interest: 0 };
       map.set(key, row);
     }
     if (side === "expense") {
@@ -125,7 +126,10 @@ export function monthActualsFromTxs(
       continue;
     }
     const cat = categories.find((c) => c.id === tx.categoryId);
-    if (isDepositInterestIncome(tx, cat)) continue;
+    if (isDepositInterestIncome(tx, cat)) {
+      row.interest += hkd;
+      continue;
+    }
     if (isSalaryCategory(cat)) row.salary += hkd;
     else row.other += hkd;
   }
@@ -176,7 +180,9 @@ export function yearlyProjection(
     const salary = fromLedger ? (actual?.salary ?? 0) : plan.salary || 0;
     const other = fromLedger ? (actual?.other ?? 0) : plan.other || 0;
     const expense = fromLedger ? (actual?.expense ?? 0) : plan.expense || 0;
-    const depInt = getMonthlyDepositInterest(deposits, year, month0, rates);
+    const depInt = fromLedger
+      ? (actual?.interest ?? 0)
+      : getMonthlyDepositInterest(deposits, year, month0, rates);
     const income = salary + other + depInt;
     const saving = income - expense;
     yearIncome += income;

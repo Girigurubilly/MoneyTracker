@@ -106,13 +106,34 @@ describe("deposits", () => {
       tx({ id: "plan", type: "income", amount: 1000, date: "2026-01-20", categoryId: "gift", planned: true }),
     ];
     const actuals = monthActualsFromTxs(txs, cats, rates, 2026);
-    assert.deepEqual(actuals.get("2026-01"), { salary: 72000, other: 500, expense: 8000 });
-    const y = yearlyProjection(plans, [dep({ id: "d1", endDate: "2026-01-15", interest: 200 })], rates, 2026, 8, txs, cats);
+    assert.deepEqual(actuals.get("2026-01"), { salary: 72000, other: 500, expense: 8000, interest: 200 });
+    const y = yearlyProjection(plans, [dep({ id: "d1", endDate: "2026-01-15", interest: 9999 })], rates, 2026, 8, txs, cats);
     assert.equal(y.rows[0].fromLedger, true);
     assert.equal(y.rows[0].salary, 72000);
     assert.equal(y.rows[0].other, 500);
     assert.equal(y.rows[0].expense, 8000);
     assert.equal(y.rows[0].depInt, 200);
     assert.equal(y.rows[0].income, 72700);
+  });
+
+  it("puts all posted interest income into the deposit column for closed months", () => {
+    const wage: Category = { id: "wage", name: "Wages", nameZh: "工資", theme: "other", kind: "income", icon: "briefcase" };
+    const house: Category = { id: "allow", name: "Allowance", nameZh: "家用", theme: "other", kind: "income", icon: "wallet" };
+    const extra: Category = { id: "misc", name: "Other", nameZh: "其他", theme: "other", kind: "income", icon: "coins" };
+    const gift: Category = { id: "gift2", name: "Gift", nameZh: "贈與", theme: "other", kind: "income", icon: "gift" };
+    const interest: Category = { id: "int", name: "Interest", nameZh: "利息收入", theme: "other", kind: "income", icon: "coins" };
+    const allCats = [...cats, wage, house, extra, gift, interest];
+    const txs = [
+      tx({ id: "w", type: "income", amount: 127274, date: "2026-02-10", categoryId: "wage" }),
+      tx({ id: "i", type: "income", amount: 8707.7, date: "2026-02-15", categoryId: "int" }),
+      tx({ id: "h", type: "income", amount: 8000, date: "2026-02-08", categoryId: "allow" }),
+      tx({ id: "o", type: "income", amount: 3270, date: "2026-02-20", categoryId: "misc" }),
+      tx({ id: "g2", type: "income", amount: 1220, date: "2026-02-22", categoryId: "gift2" }),
+    ];
+    const y = yearlyProjection([], [dep({ id: "sched", endDate: "2026-02-28", interest: 50 })], rates, 2026, 8, txs, allCats);
+    assert.equal(y.rows[1].salary, 127274);
+    assert.equal(y.rows[1].depInt, 8707.7);
+    assert.equal(y.rows[1].other, 8000 + 3270 + 1220);
+    assert.equal(y.rows[1].income, 148471.7);
   });
 });
