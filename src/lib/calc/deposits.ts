@@ -1,6 +1,6 @@
-import type { Currency, FxRate, TimeSaving, YearlyPlan } from "../types.ts";
+import type { Category, Currency, FxRate, TimeSaving, Transaction, YearlyPlan } from "../types.ts";
 import { toHkd } from "./fx.ts";
-import { roundMoney } from "./ledger.ts";
+import { cashflowSide, roundMoney } from "./ledger.ts";
 
 export const MONTHS_EN = [
   "January",
@@ -85,6 +85,53 @@ export function getYearlyPlan(plans: YearlyPlan[], year: number, month0: number)
   return plans.find((p) => p.id === id) ?? emptyYearlyPlan(id);
 }
 
+export function isSalaryCategory(cat: Category | undefined): boolean {
+  if (!cat) return false;
+  if (cat.id === "salary") return true;
+  return /薪金|薪水|工資|工资|salary|payroll/i.test(`${cat.name} ${cat.nameZh}`);
+}
+
+export function isDepositInterestIncome(tx: Transaction, cat: Category | undefined): boolean {
+  if (tx.depositId) return true;
+  if (tx.categoryId === "interest-inc") return true;
+  if (!cat) return false;
+  return /利息收入|deposit interest|interest income/i.test(`${cat.name} ${cat.nameZh}`);
+}
+
+export type MonthActuals = { salary: number; other: number; expense: number };
+
+export function monthActualsFromTxs(
+  txs: Transaction[],
+  categories: Category[],
+  rates: FxRate[],
+  year: number,
+): Map<string, MonthActuals> {
+  const map = new Map<string, MonthActuals>();
+  const prefix = String(year);
+  for (const tx of txs) {
+    if (tx.planned) continue;
+    if (!tx.date.startsWith(prefix)) continue;
+    const side = cashflowSide(tx);
+    if (side === "none") continue;
+    const key = tx.date.slice(0, 7);
+    const hkd = Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
+    let row = map.get(key);
+    if (!row) {
+      row = { salary: 0, other: 0, expense: 0 };
+      map.set(key, row);
+    }
+    if (side === "expense") {
+      row.expense += hkd;
+      continue;
+    }
+    const cat = categories.find((c) => c.id === tx.categoryId);
+    if (isDepositInterestIncome(tx, cat)) continue;
+    if (isSalaryCategory(cat)) row.salary += hkd;
+    else row.other += hkd;
+  }
+  return map;
+}
+
 export type YearlyMonthRow = {
   month0: number;
   id: string;
@@ -95,6 +142,7 @@ export type YearlyMonthRow = {
   income: number;
   saving: number;
   isCurrent: boolean;
+  fromLedger: boolean;
 };
 
 export function yearlyProjection(
@@ -103,6 +151,8 @@ export function yearlyProjection(
   rates: FxRate[],
   year: number,
   month0Now: number,
+  txs: Transaction[] = [],
+  categories: Category[] = [],
 ): {
   rows: YearlyMonthRow[];
   yearIncome: number;
@@ -112,6 +162,7 @@ export function yearlyProjection(
   asOfExpense: number;
   asOfSaving: number;
 } {
+  const actuals = monthActualsFromTxs(txs, categories, rates, year);
   let yearIncome = 0;
   let yearExpense = 0;
   let yearSaving = 0;
@@ -120,9 +171,13 @@ export function yearlyProjection(
   let asOfSaving = 0;
   const rows = Array.from({ length: 12 }, (_, month0) => {
     const plan = getYearlyPlan(plans, year, month0);
+    const fromLedger = month0 < month0Now;
+    const actual = actuals.get(plan.id);
+    const salary = fromLedger ? (actual?.salary ?? 0) : plan.salary || 0;
+    const other = fromLedger ? (actual?.other ?? 0) : plan.other || 0;
+    const expense = fromLedger ? (actual?.expense ?? 0) : plan.expense || 0;
     const depInt = getMonthlyDepositInterest(deposits, year, month0, rates);
-    const income = (plan.salary || 0) + (plan.other || 0) + depInt;
-    const expense = plan.expense || 0;
+    const income = salary + other + depInt;
     const saving = income - expense;
     yearIncome += income;
     yearExpense += expense;
@@ -135,13 +190,14 @@ export function yearlyProjection(
     return {
       month0,
       id: plan.id,
-      salary: plan.salary || 0,
-      other: plan.other || 0,
+      salary,
+      other,
       expense,
       depInt,
       income,
       saving,
       isCurrent: month0 === month0Now,
+      fromLedger,
     };
   });
   return { rows, yearIncome, yearExpense, yearSaving, asOfIncome, asOfExpense, asOfSaving };

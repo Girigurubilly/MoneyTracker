@@ -11,16 +11,19 @@ export function YearlyPage() {
   const plans = useApp((s) => s.yearlyPlans);
   const deposits = useApp((s) => s.deposits);
   const rates = useApp((s) => s.fxRates);
+  const txs = useApp((s) => s.transactions);
+  const cats = useApp((s) => s.categories);
   const setYearlyCell = useApp((s) => s.setYearlyCell);
   const today = todayISO();
   const year = Number(today.slice(0, 4));
   const month0 = Number(today.slice(5, 7)) - 1;
-  const data = yearlyProjection(plans, deposits, rates, year, month0);
+  const data = yearlyProjection(plans, deposits, rates, year, month0, txs, cats);
   const months = locale === "zh-HK" ? MONTHS_ZH : MONTHS_EN;
 
   return (
     <div className="pb-10">
       <ScreenHeader title={t.reports.yearly} backTo="/reports" />
+      <p className="px-5 pb-3 text-xs text-muted">{t.reports.yearlyPastHint}</p>
       <div className="mx-4 grid grid-cols-2 gap-2">
         <Metric label={t.reports.yearlyEarn} value={money(data.yearIncome, "HKD")} tone="income" />
         <Metric label={t.reports.yearlyExpense} value={money(data.yearExpense, "HKD")} tone="expense" />
@@ -49,16 +52,28 @@ export function YearlyPage() {
                   {months[row.month0]}
                   {row.isCurrent ? <span className="ml-1 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-on-accent">{t.reports.nowBadge}</span> : null}
                 </td>
-                <td className="px-2 py-1">
-                  <NumCell value={row.salary} onChange={(n) => void setYearlyCell(year, row.month0, "salary", n)} />
+                <td className="px-2 py-1 text-right">
+                  {row.fromLedger ? (
+                    <LedgerNum value={row.salary} />
+                  ) : (
+                    <NumCell value={row.salary} onChange={(n) => void setYearlyCell(year, row.month0, "salary", n)} />
+                  )}
                 </td>
                 <td className="px-2 py-2 text-right tabular-nums text-income">{row.depInt ? money(row.depInt, "HKD") : "—"}</td>
-                <td className="px-2 py-1">
-                  <NumCell value={row.other} onChange={(n) => void setYearlyCell(year, row.month0, "other", n)} />
+                <td className="px-2 py-1 text-right">
+                  {row.fromLedger ? (
+                    <LedgerNum value={row.other} />
+                  ) : (
+                    <NumCell value={row.other} onChange={(n) => void setYearlyCell(year, row.month0, "other", n)} />
+                  )}
                 </td>
                 <td className="px-2 py-2 text-right font-medium tabular-nums">{row.income ? money(row.income, "HKD") : "—"}</td>
-                <td className="px-2 py-1">
-                  <NumCell value={row.expense} onChange={(n) => void setYearlyCell(year, row.month0, "expense", n)} />
+                <td className="px-2 py-1 text-right">
+                  {row.fromLedger ? (
+                    <LedgerNum value={row.expense} />
+                  ) : (
+                    <NumCell value={row.expense} onChange={(n) => void setYearlyCell(year, row.month0, "expense", n)} />
+                  )}
                 </td>
                 <td className={cn("px-2 py-2 text-right font-semibold tabular-nums", row.saving >= 0 ? "text-income" : "text-expense")}>
                   {money(row.saving, "HKD")}
@@ -79,6 +94,10 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: "
       <div className={`mt-1 text-sm font-semibold tabular-nums ${tone === "income" ? "text-income" : tone === "expense" ? "text-expense" : ""}`}>{value}</div>
     </div>
   );
+}
+
+function LedgerNum({ value }: { value: number }) {
+  return <span className="inline-block h-9 min-w-[108px] py-2 tabular-nums">{value ? money(value, "HKD") : "—"}</span>;
 }
 
 function NumCell({ value, onChange }: { value: number; onChange: (n: number) => void }) {

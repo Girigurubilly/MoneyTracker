@@ -294,6 +294,7 @@ export const messages = {
       expectedExpense: "Expected expense",
       saving: "Saving",
       nowBadge: "Now",
+      yearlyPastHint: "Closed months use posted salary, other income, and expenses from the ledger.",
     },
     more: {
       title: "More",
@@ -674,6 +675,7 @@ export const messages = {
       expectedExpense: "預期開支",
       saving: "儲蓄",
       nowBadge: "本月",
+      yearlyPastHint: "已過月份的薪金、其他收入和開支取自已入帳交易。",
     },
     more: {
       title: "更多",

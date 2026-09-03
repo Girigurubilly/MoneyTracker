@@ -3,15 +3,23 @@ import assert from "node:assert/strict";
 import {
   depositDayCount,
   getMonthlyDepositInterest,
+  monthActualsFromTxs,
   suggestedInterest,
   summarizeDeposits,
   yearlyProjection,
   yearMonthKey,
 } from "./deposits.ts";
-import type { FxRate, TimeSaving } from "../types.ts";
+import type { Category, FxRate, TimeSaving, Transaction } from "../types.ts";
 
 const rates: FxRate[] = [
   { currency: "USD", perHkd: 7.8, asOf: "2026-09-01", source: "test" },
+];
+
+const cats: Category[] = [
+  { id: "salary", name: "Salary", nameZh: "薪金", theme: "other", kind: "income", icon: "briefcase" },
+  { id: "interest-inc", name: "Interest income", nameZh: "利息收入", theme: "other", kind: "income", icon: "coins" },
+  { id: "gift", name: "Gift", nameZh: "禮物", theme: "other", kind: "income", icon: "gift" },
+  { id: "dining", name: "Dining", nameZh: "飲食", theme: "living", kind: "expense", icon: "utensils" },
 ];
 
 const dep = (partial: Partial<TimeSaving> & Pick<TimeSaving, "id" | "endDate">): TimeSaving => ({
@@ -24,6 +32,16 @@ const dep = (partial: Partial<TimeSaving> & Pick<TimeSaving, "id" | "endDate">):
   accountId: "cash",
   ...partial,
 });
+
+function tx(partial: Partial<Transaction> & Pick<Transaction, "id" | "type" | "amount" | "date">): Transaction {
+  return {
+    currency: "HKD",
+    accountId: "cash",
+    payee: partial.payee ?? partial.id,
+    payeeZh: partial.payeeZh ?? partial.payee ?? partial.id,
+    ...partial,
+  };
+}
 
 describe("deposits", () => {
   it("counts inclusive-exclusive calendar days between ISO dates", () => {
@@ -67,11 +85,34 @@ describe("deposits", () => {
     const list = [dep({ id: "d", endDate: "2026-09-20", interest: 200 })];
     const y = yearlyProjection(plans, list, rates, 2026, 8);
     assert.equal(y.rows.length, 12);
+    assert.equal(y.rows[0].fromLedger, true);
+    assert.equal(y.rows[0].salary, 0);
+    assert.equal(y.rows[8].fromLedger, false);
     assert.equal(y.rows[8].income, 10700);
     assert.equal(y.rows[8].saving, 6700);
     assert.equal(y.rows[8].isCurrent, true);
-    assert.equal(y.yearIncome, 10000 + 10700);
-    assert.equal(y.asOfIncome, 10000 + 10700);
-    assert.equal(y.asOfExpense, 8000);
+    assert.equal(y.yearIncome, 10700);
+    assert.equal(y.asOfIncome, 10700);
+    assert.equal(y.asOfExpense, 4000);
+  });
+
+  it("fills passed months from posted transactions instead of the plan", () => {
+    const plans = [{ id: "2026-01", salary: 99999, other: 99999, expense: 99999 }];
+    const txs = [
+      tx({ id: "s", type: "income", amount: 72000, date: "2026-01-28", categoryId: "salary" }),
+      tx({ id: "g", type: "income", amount: 500, date: "2026-01-10", categoryId: "gift" }),
+      tx({ id: "int", type: "income", amount: 200, date: "2026-01-15", categoryId: "interest-inc", depositId: "d1" }),
+      tx({ id: "e", type: "expense", amount: 8000, date: "2026-01-12", categoryId: "dining" }),
+      tx({ id: "plan", type: "income", amount: 1000, date: "2026-01-20", categoryId: "gift", planned: true }),
+    ];
+    const actuals = monthActualsFromTxs(txs, cats, rates, 2026);
+    assert.deepEqual(actuals.get("2026-01"), { salary: 72000, other: 500, expense: 8000 });
+    const y = yearlyProjection(plans, [dep({ id: "d1", endDate: "2026-01-15", interest: 200 })], rates, 2026, 8, txs, cats);
+    assert.equal(y.rows[0].fromLedger, true);
+    assert.equal(y.rows[0].salary, 72000);
+    assert.equal(y.rows[0].other, 500);
+    assert.equal(y.rows[0].expense, 8000);
+    assert.equal(y.rows[0].depInt, 200);
+    assert.equal(y.rows[0].income, 72700);
   });
 });
