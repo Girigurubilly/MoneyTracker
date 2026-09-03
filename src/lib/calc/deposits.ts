@@ -91,12 +91,20 @@ export function isSalaryCategory(cat: Category | undefined): boolean {
   return /薪金|薪水|工資|工资|salary|payroll/i.test(`${cat.name} ${cat.nameZh}`);
 }
 
-export function isDepositInterestIncome(tx: Transaction, cat: Category | undefined): boolean {
+function incomeHaystack(tx: Transaction, cat: Category | undefined, categories: Category[]): string {
+  const parent = cat?.parentId ? categories.find((c) => c.id === cat.parentId) : undefined;
+  return [tx.categoryId, tx.payee, tx.payeeZh, cat?.id, cat?.name, cat?.nameZh, parent?.name, parent?.nameZh]
+    .filter(Boolean)
+    .join(" ");
+}
+
+export function isDepositInterestIncome(tx: Transaction, cat: Category | undefined, categories: Category[] = []): boolean {
   if (tx.type !== "income") return false;
   if (tx.depositId) return true;
   if (tx.categoryId === "interest-inc") return true;
-  if (!cat) return false;
-  return /利息收入|存款利息|定期利息|deposit interest|interest income|\binterest\b/i.test(`${cat.name} ${cat.nameZh}`);
+  const hay = incomeHaystack(tx, cat, categories);
+  if (/按揭|mortgage/i.test(hay)) return false;
+  return /利息|interest income|deposit interest|\binterest\b/i.test(hay);
 }
 
 export type MonthActuals = { salary: number; other: number; expense: number; interest: number };
@@ -125,8 +133,10 @@ export function monthActualsFromTxs(
       row.expense += hkd;
       continue;
     }
-    const cat = categories.find((c) => c.id === tx.categoryId);
-    if (isDepositInterestIncome(tx, cat)) {
+    const cat =
+      categories.find((c) => c.id === tx.categoryId) ??
+      categories.find((c) => c.name === tx.categoryId || c.nameZh === tx.categoryId);
+    if (isDepositInterestIncome(tx, cat, categories)) {
       row.interest += hkd;
       continue;
     }

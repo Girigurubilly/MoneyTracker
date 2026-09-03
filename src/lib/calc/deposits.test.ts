@@ -136,4 +136,13 @@ describe("deposits", () => {
     assert.equal(y.rows[1].other, 8000 + 3270 + 1220);
     assert.equal(y.rows[1].income, 148471.7);
   });
+
+  it("treats 利息收入 payee as deposit interest when the category row is missing", () => {
+    const txs = [
+      tx({ id: "i", type: "income", amount: 8707.7, date: "2026-02-01", payee: "利息收入", payeeZh: "利息收入" }),
+    ];
+    const y = yearlyProjection([], [], rates, 2026, 8, txs, []);
+    assert.equal(y.rows[1].depInt, 8707.7);
+    assert.equal(y.rows[1].other, 0);
+  });
 });
