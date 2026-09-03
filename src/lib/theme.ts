@@ -1,28 +1,72 @@
 export const THEME_IDS = ["normal", "dark", "pinky", "anime", "cyberpunk"] as const;
 export type ThemeId = (typeof THEME_IDS)[number];
 
+export const FONT_IDS = ["theme", "system", "nunito", "zen-maru", "rajdhani", "noto", "serif"] as const;
+export type FontId = (typeof FONT_IDS)[number];
+
+export const FONT_SIZE_IDS = ["sm", "md", "lg", "xl"] as const;
+export type FontSizeId = (typeof FONT_SIZE_IDS)[number];
+
+export const FONT_SIZE_PX: Record<FontSizeId, string> = {
+  sm: "14px",
+  md: "16px",
+  lg: "18px",
+  xl: "20px",
+};
+
+export const FONT_STACKS: Record<Exclude<FontId, "theme">, string> = {
+  system: '"SF Pro Text", "PingFang HK", "Noto Sans TC", "Segoe UI", system-ui, sans-serif',
+  nunito: 'Nunito, ui-rounded, "Hiragino Maru Gothic ProN", "PingFang HK", "Noto Sans TC", system-ui, sans-serif',
+  "zen-maru": '"Zen Maru Gothic", "Hiragino Maru Gothic ProN", "PingFang HK", "Noto Sans TC", system-ui, sans-serif',
+  rajdhani: 'Rajdhani, "Segoe UI", "PingFang HK", "Noto Sans TC", system-ui, sans-serif',
+  noto: '"Noto Sans TC", "PingFang HK", "Hiragino Sans", "Segoe UI", system-ui, sans-serif',
+  serif: '"Noto Serif TC", "Songti SC", "PingFang HK", Georgia, "Times New Roman", serif',
+};
+
+export type ThemeColorKey = "background" | "foreground" | "elevated" | "muted" | "accent";
+
 export type ThemeCustom = {
   background?: string;
   foreground?: string;
+  elevated?: string;
+  muted?: string;
   accent?: string;
+  fontId?: FontId;
+  fontSize?: FontSizeId;
 };
 
 export const THEME_KEY = "hk-life-money-theme";
 export const THEME_CUSTOM_KEY = "hk-life-money-theme-custom";
 
+export const COLOR_CSS: Record<ThemeColorKey, string> = {
+  background: "--color-background",
+  foreground: "--color-foreground",
+  elevated: "--color-elevated",
+  muted: "--color-muted",
+  accent: "--color-accent",
+};
+
 export const THEME_PRESETS: Record<
   ThemeId,
-  { background: string; foreground: string; accent: string; elevated: string }
+  { background: string; foreground: string; elevated: string; muted: string; accent: string }
 > = {
-  normal: { background: "#f2f2f7", foreground: "#1c1c1e", accent: "#007aff", elevated: "#ffffff" },
-  dark: { background: "#000000", foreground: "#f5f5f7", accent: "#0a84ff", elevated: "#1c1c1e" },
-  pinky: { background: "#fdf2f8", foreground: "#4a044e", accent: "#db2777", elevated: "#ffffff" },
-  anime: { background: "#fff1f5", foreground: "#2b1638", accent: "#ff5d8f", elevated: "#ffffff" },
-  cyberpunk: { background: "#090414", foreground: "#d8f3ff", accent: "#00e5ff", elevated: "#140c28" },
+  normal: { background: "#f2f2f7", foreground: "#1c1c1e", elevated: "#ffffff", muted: "#8e8e93", accent: "#007aff" },
+  dark: { background: "#000000", foreground: "#f5f5f7", elevated: "#1c1c1e", muted: "#98989d", accent: "#0a84ff" },
+  pinky: { background: "#fdf2f8", foreground: "#4a044e", elevated: "#ffffff", muted: "#a15a86", accent: "#db2777" },
+  anime: { background: "#fff1f5", foreground: "#2b1638", elevated: "#ffffff", muted: "#8b6b90", accent: "#ff5d8f" },
+  cyberpunk: { background: "#090414", foreground: "#d8f3ff", elevated: "#140c28", muted: "#7aa8c4", accent: "#00e5ff" },
 };
 
 export function isThemeId(v: string | null): v is ThemeId {
   return THEME_IDS.includes(v as ThemeId);
+}
+
+export function isFontId(v: string | null | undefined): v is FontId {
+  return FONT_IDS.includes(v as FontId);
+}
+
+export function isFontSizeId(v: string | null | undefined): v is FontSizeId {
+  return FONT_SIZE_IDS.includes(v as FontSizeId);
 }
 
 export function readSavedTheme(): ThemeId {
@@ -43,11 +87,22 @@ export function readSavedCustom(): ThemeCustom {
     return {
       background: normalizeHex(parsed.background),
       foreground: normalizeHex(parsed.foreground),
+      elevated: normalizeHex(parsed.elevated),
+      muted: normalizeHex(parsed.muted),
       accent: normalizeHex(parsed.accent),
+      fontId: isFontId(parsed.fontId) ? parsed.fontId : undefined,
+      fontSize: isFontSizeId(parsed.fontSize) ? parsed.fontSize : undefined,
     };
   } catch {
     return {};
   }
+}
+
+export function colorsOnly(custom: ThemeCustom): ThemeCustom {
+  return {
+    fontId: custom.fontId,
+    fontSize: custom.fontSize,
+  };
 }
 
 export function normalizeHex(v: string | undefined): string | undefined {
@@ -95,15 +150,11 @@ export function applyTheme(theme: ThemeId, custom: ThemeCustom = {}): void {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
   root.setAttribute("data-theme", theme);
-  const pairs: [keyof ThemeCustom, string][] = [
-    ["background", "--color-background"],
-    ["foreground", "--color-foreground"],
-    ["accent", "--color-accent"],
-  ];
-  for (const [key, css] of pairs) {
+  const keys = Object.keys(COLOR_CSS) as ThemeColorKey[];
+  for (const key of keys) {
     const hex = normalizeHex(custom[key]);
-    if (hex) root.style.setProperty(css, hex);
-    else root.style.removeProperty(css);
+    if (hex) root.style.setProperty(COLOR_CSS[key], hex);
+    else root.style.removeProperty(COLOR_CSS[key]);
   }
   const accent = normalizeHex(custom.accent);
   if (accent) {
@@ -112,6 +163,25 @@ export function applyTheme(theme: ThemeId, custom: ThemeCustom = {}): void {
   } else {
     root.style.removeProperty("--color-on-accent");
     root.style.removeProperty("--color-accent-soft");
+  }
+  const fontId = isFontId(custom.fontId) ? custom.fontId : "theme";
+  if (fontId === "theme") {
+    root.removeAttribute("data-font");
+    root.style.removeProperty("--font-sans");
+    root.style.removeProperty("--font-display");
+  } else {
+    root.setAttribute("data-font", fontId);
+    const stack = FONT_STACKS[fontId];
+    root.style.setProperty("--font-sans", stack);
+    root.style.setProperty("--font-display", stack);
+  }
+  const size = isFontSizeId(custom.fontSize) ? custom.fontSize : "md";
+  if (size === "md") {
+    root.removeAttribute("data-font-size");
+    root.style.removeProperty("font-size");
+  } else {
+    root.setAttribute("data-font-size", size);
+    root.style.setProperty("font-size", FONT_SIZE_PX[size]);
   }
   const bg = normalizeHex(custom.background) ?? THEME_PRESETS[theme].background;
   const meta = document.querySelector('meta[name="theme-color"]');

@@ -16,7 +16,7 @@ import { convertAmount, parseErApi, parseFrankfurter } from "./fx.ts";
 import { MONTH_TOTAL_BUDGET_ID } from "../types.ts";
 import type { AdhocBudget, Budget, Category, Recurring, Transaction } from "../types.ts";
 import { monthlyLivingEssentials, monthlyHousingCost, isPrincipalRegular, housingRegularRows, housingMonthLines } from "./housing.ts";
-import { periodCategoryTotals, periodCategoryTxs, periodRange } from "./period.ts";
+import { periodCategoryTotals, periodCategoryTxs, periodRange, yearCategoryCompare, yearCompareRanges } from "./period.ts";
 import { runRetirement, sustainableMonthly } from "./retirement.ts";
 
 function rec(partial: Partial<Recurring> & Pick<Recurring, "id" | "type" | "amount" | "chargedDay">): Recurring {
@@ -377,6 +377,38 @@ describe("period merge", () => {
     const r = periodRange("this-year", "2026-08-28");
     assert.equal(r.from, "2026-01-01");
     assert.equal(r.to, "2026-12-31");
+  });
+});
+
+describe("year compare", () => {
+  it("same-stage uses this date last year", () => {
+    const r = yearCompareRanges("2026-09-03", "same-stage");
+    assert.equal(r.thisFrom, "2026-01-01");
+    assert.equal(r.thisTo, "2026-09-03");
+    assert.equal(r.lastFrom, "2025-01-01");
+    assert.equal(r.lastTo, "2025-09-03");
+  });
+  it("full last year keeps this year as-of today", () => {
+    const r = yearCompareRanges("2026-09-03", "full-last-year");
+    assert.equal(r.lastTo, "2025-12-31");
+    assert.equal(r.thisTo, "2026-09-03");
+  });
+  it("compares parent categories across years", () => {
+    const cats: Category[] = [
+      { id: "food", name: "Food", nameZh: "食", parentId: undefined, theme: "other", kind: "expense", icon: "utensils" },
+      { id: "dine", name: "Dining", nameZh: "餐", parentId: "food", theme: "other", kind: "expense", icon: "utensils" },
+    ];
+    const txs: Transaction[] = [
+      tx({ id: "a", type: "expense", amount: 100, date: "2026-02-01", categoryId: "dine" }),
+      tx({ id: "b", type: "expense", amount: 40, date: "2025-02-01", categoryId: "dine" }),
+      tx({ id: "c", type: "expense", amount: 10, date: "2025-11-01", categoryId: "dine" }),
+    ];
+    const same = yearCategoryCompare(txs, cats, [], "2026-09-03", "same-stage", "expense", true);
+    assert.equal(same.rows[0].thisYear, 100);
+    assert.equal(same.rows[0].lastYear, 40);
+    assert.equal(same.rows[0].delta, 60);
+    const full = yearCategoryCompare(txs, cats, [], "2026-09-03", "full-last-year", "expense", true);
+    assert.equal(full.rows[0].lastYear, 50);
   });
 });
 

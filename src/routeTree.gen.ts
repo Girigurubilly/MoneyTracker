@@ -25,6 +25,7 @@ import { Route as MoreOtherRouteImport } from './routes/more.other'
 import { Route as MoreSecurityRouteImport } from './routes/more.security'
 import { Route as ReportsIndexRouteImport } from './routes/reports.index'
 import { Route as ReportsCashflowRouteImport } from './routes/reports.cashflow'
+import { Route as ReportsCompareRouteImport } from './routes/reports.compare'
 import { Route as ReportsDashboardRouteImport } from './routes/reports.dashboard'
 import { Route as ReportsHistoryRouteImport } from './routes/reports.history'
 import { Route as ReportsLivingRouteImport } from './routes/reports.living'
@@ -114,6 +115,11 @@ const ReportsCashflowRoute = ReportsCashflowRouteImport.update({
   path: '/cashflow',
   getParentRoute: () => ReportsRoute,
 } as any)
+const ReportsCompareRoute = ReportsCompareRouteImport.update({
+  id: '/compare',
+  path: '/compare',
+  getParentRoute: () => ReportsRoute,
+} as any)
 const ReportsDashboardRoute = ReportsDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -170,6 +176,7 @@ export interface FileRoutesByFullPath {
   '/more/other': typeof MoreOtherRoute
   '/more/security': typeof MoreSecurityRoute
   '/reports/cashflow': typeof ReportsCashflowRoute
+  '/reports/compare': typeof ReportsCompareRoute
   '/reports/dashboard': typeof ReportsDashboardRoute
   '/reports/history': typeof ReportsHistoryRoute
   '/reports/living': typeof ReportsLivingRoute
@@ -194,6 +201,7 @@ export interface FileRoutesByTo {
   '/more/other': typeof MoreOtherRoute
   '/more/security': typeof MoreSecurityRoute
   '/reports/cashflow': typeof ReportsCashflowRoute
+  '/reports/compare': typeof ReportsCompareRoute
   '/reports/dashboard': typeof ReportsDashboardRoute
   '/reports/history': typeof ReportsHistoryRoute
   '/reports/living': typeof ReportsLivingRoute
@@ -220,6 +228,7 @@ export interface FileRoutesById {
   '/more/other': typeof MoreOtherRoute
   '/more/security': typeof MoreSecurityRoute
   '/reports/cashflow': typeof ReportsCashflowRoute
+  '/reports/compare': typeof ReportsCompareRoute
   '/reports/dashboard': typeof ReportsDashboardRoute
   '/reports/history': typeof ReportsHistoryRoute
   '/reports/living': typeof ReportsLivingRoute
@@ -248,6 +257,7 @@ export interface FileRouteTypes {
     | '/more/other'
     | '/more/security'
     | '/reports/cashflow'
+    | '/reports/compare'
     | '/reports/dashboard'
     | '/reports/history'
     | '/reports/living'
@@ -272,6 +282,7 @@ export interface FileRouteTypes {
     | '/more/other'
     | '/more/security'
     | '/reports/cashflow'
+    | '/reports/compare'
     | '/reports/dashboard'
     | '/reports/history'
     | '/reports/living'
@@ -297,6 +308,7 @@ export interface FileRouteTypes {
     | '/more/other'
     | '/more/security'
     | '/reports/cashflow'
+    | '/reports/compare'
     | '/reports/dashboard'
     | '/reports/history'
     | '/reports/living'
@@ -432,6 +444,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReportsCashflowRouteImport
       parentRoute: typeof ReportsRoute
     }
+    '/reports/compare': {
+      id: '/reports/compare'
+      path: '/compare'
+      fullPath: '/reports/compare'
+      preLoaderRoute: typeof ReportsCompareRouteImport
+      parentRoute: typeof ReportsRoute
+    }
     '/reports/dashboard': {
       id: '/reports/dashboard'
       path: '/dashboard'
@@ -531,6 +550,7 @@ const ReportsTravelRouteWithChildren = ReportsTravelRoute._addFileChildren(
 
 interface ReportsRouteChildren {
   ReportsCashflowRoute: typeof ReportsCashflowRoute
+  ReportsCompareRoute: typeof ReportsCompareRoute
   ReportsDashboardRoute: typeof ReportsDashboardRoute
   ReportsHistoryRoute: typeof ReportsHistoryRoute
   ReportsLivingRoute: typeof ReportsLivingRoute
@@ -542,6 +562,7 @@ interface ReportsRouteChildren {
 
 const ReportsRouteChildren: ReportsRouteChildren = {
   ReportsCashflowRoute: ReportsCashflowRoute,
+  ReportsCompareRoute: ReportsCompareRoute,
   ReportsDashboardRoute: ReportsDashboardRoute,
   ReportsHistoryRoute: ReportsHistoryRoute,
   ReportsLivingRoute: ReportsLivingRoute,

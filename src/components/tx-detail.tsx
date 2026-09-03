@@ -79,6 +79,12 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
 
   function changeType(next: TxType) {
     setType(next);
+    if (next === "transfer") {
+      setCategoryId("");
+      setDoSplit(false);
+      setPickCat(false);
+      return;
+    }
     if (next !== "miles") setPickCat(true);
   }
 
@@ -248,7 +254,14 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
           kind={type === "income" ? "income" : "expense"}
           selectedId={categoryId || undefined}
           txType={type === "miles" ? "expense" : type}
-          onTxTypeChange={(next) => setType(next)}
+          onTxTypeChange={(next) => {
+            setType(next);
+            if (next === "transfer") {
+              setCategoryId("");
+              setDoSplit(false);
+              setPickCat(false);
+            }
+          }}
           onClose={() => setPickCat(false)}
           onSelect={onPickCategory}
         />
@@ -270,7 +283,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
             <span className="text-xs text-muted">{t.add.date}</span>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3" />
           </label>
-          {type !== "miles" ? (
+          {type !== "miles" && type !== "transfer" ? (
             <label className="block py-2">
               <span className="text-xs text-muted">{t.add.category}</span>
               <button type="button" className="mt-1 flex h-11 w-full items-center rounded-lg bg-elevated px-3 text-left" onClick={() => setPickCat(true)}>

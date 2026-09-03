@@ -82,7 +82,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
   const [categoryId, setCategoryId] = useState("");
   const [tripId, setTripId] = useState("");
   const [payee, setPayee] = useState("");
-  const [pickCat, setPickCat] = useState(initialType !== "miles");
+  const [pickCat, setPickCat] = useState(initialType !== "miles" && initialType !== "transfer");
   const pickedCat = useRef(false);
   const [principal, setPrincipal] = useState("");
   const [interest, setInterest] = useState("");
@@ -102,8 +102,12 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
 
   function changeType(next: TxType) {
     setType(next);
-    if (next === "miles") {
+    if (next === "miles" || next === "transfer") {
       setPickCat(false);
+      if (next === "transfer") {
+        setCategoryId("");
+        setDoSplit(false);
+      }
       return;
     }
     setPickCat(true);
@@ -233,7 +237,13 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
         txType={type === "miles" ? "expense" : type}
         onTxTypeChange={(next) => {
           setType(next);
-          if (next === "miles") setPickCat(false);
+          if (next === "miles" || next === "transfer") {
+            setPickCat(false);
+            if (next === "transfer") {
+              setCategoryId("");
+              setDoSplit(false);
+            }
+          }
         }}
         onClose={onPickerClose}
         onSelect={onPickCategory}
@@ -259,7 +269,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
         <span className="text-xs text-muted">{t.add.date}</span>
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3" />
       </label>
-      {type !== "miles" ? (
+      {type !== "miles" && type !== "transfer" ? (
         <label className="block py-2">
           <span className="text-xs text-muted">{t.add.category}</span>
           <button type="button" className="mt-1 flex h-11 w-full items-center rounded-lg bg-elevated px-3 text-left" onClick={() => setPickCat(true)}>

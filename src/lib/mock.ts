@@ -164,4 +164,9 @@ export const transactions: Transaction[] = [
   t({ id: "tx-tokyo-air", type: "expense", amount: 2484, currency: "HKD", accountId: "bochk", categoryId: "flights", date: "2026-08-26", payee: "Air travel", payeeZh: "空中交通", tripId: "tokyo-aug" }),
   t({ id: "tx-tokyo-gift", type: "expense", amount: 1645, currency: "JPY", accountId: "yen-cash", categoryId: "souvenirs", date: "2026-08-07", payee: "Souvenirs", payeeZh: "手信", tripId: "tokyo-aug" }),
   t({ id: "tx-salary-jul", type: "income", amount: 72000, currency: "HKD", accountId: "bochk", categoryId: "salary", date: "2026-07-28", payee: "Employer", payeeZh: "公司薪金" }),
+  t({ id: "tx-25-dine", type: "expense", amount: 6800, currency: "HKD", accountId: "hsbc-visa", categoryId: "dining", date: "2025-06-18", payee: "Dining 2025", payeeZh: "2025 外出就餐" }),
+  t({ id: "tx-25-groc", type: "expense", amount: 3900, currency: "HKD", accountId: "hsbc-visa", categoryId: "groceries", date: "2025-05-12", payee: "Groceries 2025", payeeZh: "2025 超市" }),
+  t({ id: "tx-25-mtr", type: "expense", amount: 620, currency: "HKD", accountId: "octopus", categoryId: "mtr", date: "2025-04-20", payee: "MTR 2025", payeeZh: "2025 港鐵" }),
+  t({ id: "tx-25-ins", type: "expense", amount: 1860, currency: "HKD", accountId: "hsbc-visa", categoryId: "insurance", date: "2025-08-05", payee: "Life insurance", payeeZh: "人壽保險" }),
+  t({ id: "tx-25-travel", type: "expense", amount: 9800, currency: "HKD", accountId: "hsbc-visa", categoryId: "flights", date: "2025-11-08", payee: "Autumn flight", payeeZh: "秋季機票" }),
 ];

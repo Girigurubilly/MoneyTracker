@@ -4,10 +4,14 @@ import { todayISO } from "@/lib/format";
 import { messages, type Messages } from "@/lib/i18n";
 import {
   applyTheme,
+  colorsOnly,
   readSavedCustom,
   readSavedTheme,
   THEME_CUSTOM_KEY,
   THEME_KEY,
+  type FontId,
+  type FontSizeId,
+  type ThemeColorKey,
   type ThemeCustom,
   type ThemeId,
 } from "@/lib/theme";
@@ -39,7 +43,9 @@ type UiState = {
   onboarded: boolean;
   setLocale: (l: Locale) => void;
   setTheme: (t: ThemeId) => void;
-  setCustomColor: (key: keyof ThemeCustom, hex: string | undefined) => void;
+  setCustomColor: (key: ThemeColorKey, hex: string | undefined) => void;
+  setFontId: (id: FontId) => void;
+  setFontSize: (id: FontSizeId) => void;
   resetCustomColors: () => void;
   setSelectedDate: (iso: string) => void;
   setTodayView: (v: TodayView) => void;
@@ -86,19 +92,34 @@ export const useUi = create<UiState>((set, get) => ({
     set({ locale: l });
   },
   setTheme: (t) => {
+    const kept = colorsOnly(get().customColors);
+    persistCustom(kept);
     try {
       localStorage.setItem(THEME_KEY, t);
-      localStorage.setItem(THEME_CUSTOM_KEY, "{}");
     } catch {
       /* ignore */
     }
-    applyTheme(t, {});
-    set({ theme: t, customColors: {} });
+    applyTheme(t, kept);
+    set({ theme: t, customColors: kept });
   },
   setCustomColor: (key, hex) => {
     const next = { ...get().customColors };
     if (hex) next[key] = hex;
     else delete next[key];
+    persistCustom(next);
+    applyTheme(get().theme, next);
+    set({ customColors: next });
+  },
+  setFontId: (id) => {
+    const next = { ...get().customColors, fontId: id === "theme" ? undefined : id };
+    if (id === "theme") delete next.fontId;
+    persistCustom(next);
+    applyTheme(get().theme, next);
+    set({ customColors: next });
+  },
+  setFontSize: (id) => {
+    const next = { ...get().customColors, fontSize: id === "md" ? undefined : id };
+    if (id === "md") delete next.fontSize;
     persistCustom(next);
     applyTheme(get().theme, next);
     set({ customColors: next });

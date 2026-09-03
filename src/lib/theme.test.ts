@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { isThemeId, normalizeHex, onAccentFor, relativeLuminance } from "./theme.ts";
+import { colorsOnly, isFontId, isFontSizeId, isThemeId, normalizeHex, onAccentFor, relativeLuminance } from "./theme.ts";
 
 describe("theme helpers", () => {
   it("normalizes 3- and 6-digit hex", () => {
@@ -12,6 +12,20 @@ describe("theme helpers", () => {
   it("known theme ids", () => {
     assert.equal(isThemeId("pinky"), true);
     assert.equal(isThemeId("neon"), false);
+  });
+
+  it("known font and size ids", () => {
+    assert.equal(isFontId("nunito"), true);
+    assert.equal(isFontId("comic"), false);
+    assert.equal(isFontSizeId("lg"), true);
+    assert.equal(isFontSizeId("xxl"), false);
+  });
+
+  it("keeps type settings when clearing colours", () => {
+    const next = colorsOnly({ background: "#111111", fontId: "noto", fontSize: "lg" });
+    assert.equal(next.background, undefined);
+    assert.equal(next.fontId, "noto");
+    assert.equal(next.fontSize, "lg");
   });
 
   it("picks dark on-accent for bright highlights", () => {

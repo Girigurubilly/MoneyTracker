@@ -25,6 +25,7 @@ export function ReportsHub() {
   const items = [
     { to: "/reports/dashboard", title: t.reports.dashboard },
     { to: "/reports/spending", title: t.reports.spending },
+    { to: "/reports/compare", title: t.reports.yearCompare },
     { to: "/reports/cashflow", title: t.reports.cashflow },
     { to: "/reports/living", title: t.reports.living },
     { to: "/reports/travel", title: t.reports.travel },

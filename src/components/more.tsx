@@ -14,7 +14,7 @@ import type { Category } from "@/lib/types";
 import { CURRENCIES } from "@/lib/types";
 import { useApp, type AppSnapshot } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
-import { THEME_IDS, THEME_PRESETS, normalizeHex, type ThemeId } from "@/lib/theme";
+import { THEME_IDS, THEME_PRESETS, FONT_IDS, FONT_SIZE_IDS, normalizeHex, type FontId, type FontSizeId, type ThemeId } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
 export function MoreScreen() {
@@ -324,6 +324,8 @@ export function AppearancePage() {
   const custom = useUi((s) => s.customColors);
   const setTheme = useUi((s) => s.setTheme);
   const setCustomColor = useUi((s) => s.setCustomColor);
+  const setFontId = useUi((s) => s.setFontId);
+  const setFontSize = useUi((s) => s.setFontSize);
   const resetCustomColors = useUi((s) => s.resetCustomColors);
   const labels: Record<ThemeId, string> = {
     normal: t.more.themeNormal,
@@ -332,7 +334,24 @@ export function AppearancePage() {
     anime: t.more.themeAnime,
     cyberpunk: t.more.themeCyberpunk,
   };
+  const fontLabels: Record<FontId, string> = {
+    theme: t.more.fontTheme,
+    system: t.more.fontSystem,
+    nunito: t.more.fontNunito,
+    "zen-maru": t.more.fontZen,
+    rajdhani: t.more.fontRajdhani,
+    noto: t.more.fontNoto,
+    serif: t.more.fontSerif,
+  };
+  const sizeLabels: Record<FontSizeId, string> = {
+    sm: t.more.sizeSm,
+    md: t.more.sizeMd,
+    lg: t.more.sizeLg,
+    xl: t.more.sizeXl,
+  };
   const preset = THEME_PRESETS[theme];
+  const fontId = custom.fontId ?? "theme";
+  const fontSize = custom.fontSize ?? "md";
   return (
     <div className="pb-10">
       <ScreenHeader title={t.more.appearance} backTo="/more" />
@@ -362,30 +381,83 @@ export function AppearancePage() {
           );
         })}
       </div>
-      <div className="pt-6">
-        <Group>
-          <ColorRow
-            label={t.more.colorBackground}
-            value={custom.background}
-            fallback={preset.background}
-            onChange={(hex) => setCustomColor("background", hex)}
-          />
-          <Hairline />
-          <ColorRow
-            label={t.more.colorFont}
-            value={custom.foreground}
-            fallback={preset.foreground}
-            onChange={(hex) => setCustomColor("foreground", hex)}
-          />
-          <Hairline />
-          <ColorRow
-            label={t.more.colorHighlight}
-            value={custom.accent}
-            fallback={preset.accent}
-            onChange={(hex) => setCustomColor("accent", hex)}
-          />
-        </Group>
-      </div>
+      <h2 className="px-5 pb-2 pt-6 text-sm font-medium text-muted">{t.more.typography}</h2>
+      <Group>
+        <div className="px-4 py-3">
+          <div className="text-sm">{t.more.fontType}</div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {FONT_IDS.map((id) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setFontId(id)}
+                className={cn(
+                  "h-8 rounded-full px-3 text-sm",
+                  fontId === id ? "bg-accent text-on-accent" : "bg-background text-foreground ring-1 ring-line",
+                )}
+              >
+                {fontLabels[id]}
+              </button>
+            ))}
+          </div>
+        </div>
+        <Hairline />
+        <div className="px-4 py-3">
+          <div className="text-sm">{t.more.fontSize}</div>
+          <div className="mt-2 grid grid-cols-4 gap-2">
+            {FONT_SIZE_IDS.map((id) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setFontSize(id)}
+                className={cn(
+                  "h-11 rounded-xl text-sm font-medium",
+                  fontSize === id ? "bg-accent text-on-accent" : "bg-background ring-1 ring-line",
+                )}
+              >
+                {sizeLabels[id]}
+              </button>
+            ))}
+          </div>
+        </div>
+      </Group>
+      <h2 className="px-5 pb-2 pt-6 text-sm font-medium text-muted">{t.more.colors}</h2>
+      <Group>
+        <ColorRow
+          label={t.more.colorBackground}
+          value={custom.background}
+          fallback={preset.background}
+          onChange={(hex) => setCustomColor("background", hex)}
+        />
+        <Hairline />
+        <ColorRow
+          label={t.more.colorElevated}
+          value={custom.elevated}
+          fallback={preset.elevated}
+          onChange={(hex) => setCustomColor("elevated", hex)}
+        />
+        <Hairline />
+        <ColorRow
+          label={t.more.colorFont}
+          value={custom.foreground}
+          fallback={preset.foreground}
+          onChange={(hex) => setCustomColor("foreground", hex)}
+        />
+        <Hairline />
+        <ColorRow
+          label={t.more.colorMuted}
+          value={custom.muted}
+          fallback={preset.muted}
+          onChange={(hex) => setCustomColor("muted", hex)}
+        />
+        <Hairline />
+        <ColorRow
+          label={t.more.colorHighlight}
+          value={custom.accent}
+          fallback={preset.accent}
+          onChange={(hex) => setCustomColor("accent", hex)}
+        />
+      </Group>
       <div className="px-5 pt-4">
         <button type="button" className="h-11 w-full rounded-xl bg-elevated text-sm" onClick={resetCustomColors}>
           {t.more.resetColors}

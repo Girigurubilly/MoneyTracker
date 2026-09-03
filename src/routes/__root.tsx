@@ -28,7 +28,7 @@ export const Route = createRootRoute({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem("hk-life-money-theme");if(t)document.documentElement.setAttribute("data-theme",t);var c=JSON.parse(localStorage.getItem("hk-life-money-theme-custom")||"{}");var s=document.documentElement.style;if(c.background)s.setProperty("--color-background",c.background);if(c.foreground)s.setProperty("--color-foreground",c.foreground);if(c.accent)s.setProperty("--color-accent",c.accent);}catch(e){}})();`,
+            __html: `(function(){try{var r=document.documentElement;var t=localStorage.getItem("hk-life-money-theme");if(t)r.setAttribute("data-theme",t);var c=JSON.parse(localStorage.getItem("hk-life-money-theme-custom")||"{}");var s=r.style;var m={background:"--color-background",foreground:"--color-foreground",elevated:"--color-elevated",muted:"--color-muted",accent:"--color-accent"};for(var k in m){if(c[k])s.setProperty(m[k],c[k]);}if(c.fontId&&c.fontId!=="theme")r.setAttribute("data-font",c.fontId);if(c.fontSize&&c.fontSize!=="md")r.setAttribute("data-font-size",c.fontSize);}catch(e){}})();`,
           }}
         />
         <HeadContent />

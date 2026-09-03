@@ -125,9 +125,85 @@ export function periodCategoryTxs(
     if (side === "none") continue;
     if (tab === "expense" && side !== "expense") continue;
     if (tab === "income" && side !== "income") continue;
-    if (periodBucketId(tx, categories, mergeParents) !== categoryId) continue;
-    rows.push(tx);
+    const id = periodBucketId(tx, categories, mergeParents);
+    if (id === categoryId) rows.push(tx);
   }
   rows.sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
   return rows;
+}
+
+export function yearCompareRanges(
+  today: string,
+  mode: "same-stage" | "full-last-year",
+): { thisFrom: string; thisTo: string; lastFrom: string; lastTo: string } {
+  const y = Number(today.slice(0, 4));
+  const rest = today.slice(4);
+  if (mode === "full-last-year") {
+    return {
+      thisFrom: `${y}-01-01`,
+      thisTo: today,
+      lastFrom: `${y - 1}-01-01`,
+      lastTo: `${y - 1}-12-31`,
+    };
+  }
+  return {
+    thisFrom: `${y}-01-01`,
+    thisTo: today,
+    lastFrom: `${y - 1}-01-01`,
+    lastTo: `${y - 1}${rest}`,
+  };
+}
+
+export type YearCompareRow = {
+  id: string;
+  name: string;
+  nameZh: string;
+  thisYear: number;
+  lastYear: number;
+  delta: number;
+  pct: number | null;
+  colorIndex: number;
+};
+
+export function yearCategoryCompare(
+  txs: Transaction[],
+  categories: Category[],
+  rates: FxRate[],
+  today: string,
+  mode: "same-stage" | "full-last-year",
+  tab: PeriodTab,
+  mergeParents: boolean,
+): { rows: YearCompareRow[]; thisTotal: number; lastTotal: number } {
+  const range = yearCompareRanges(today, mode);
+  const current = periodCategoryTotals(txs, categories, rates, range.thisFrom, range.thisTo, tab, mergeParents);
+  const prior = periodCategoryTotals(txs, categories, rates, range.lastFrom, range.lastTo, tab, mergeParents);
+  const ids = new Set([...current.rows.map((r) => r.id), ...prior.rows.map((r) => r.id)]);
+  const priorMap = new Map(prior.rows.map((r) => [r.id, r]));
+  const currentMap = new Map(current.rows.map((r) => [r.id, r]));
+  const rows: YearCompareRow[] = [];
+  for (const id of ids) {
+    const a = currentMap.get(id);
+    const b = priorMap.get(id);
+    const thisYear = a?.value ?? 0;
+    const lastYear = b?.value ?? 0;
+    const src = a ?? b;
+    if (!src) continue;
+    rows.push({
+      id,
+      name: src.name,
+      nameZh: src.nameZh,
+      thisYear,
+      lastYear,
+      delta: thisYear - lastYear,
+      pct: lastYear > 0 ? (thisYear - lastYear) / lastYear : thisYear > 0 ? null : 0,
+      colorIndex: 0,
+    });
+  }
+  rows.sort((x, y) => Math.max(y.thisYear, y.lastYear) - Math.max(x.thisYear, x.lastYear));
+  rows.forEach((r, i) => {
+    r.colorIndex = i % 8;
+  });
+  const thisTotal = tab === "income" ? current.income : current.expense;
+  const lastTotal = tab === "income" ? prior.income : prior.expense;
+  return { rows, thisTotal, lastTotal };
 }
