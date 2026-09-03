@@ -27,11 +27,13 @@ import { Route as ReportsIndexRouteImport } from './routes/reports.index'
 import { Route as ReportsCashflowRouteImport } from './routes/reports.cashflow'
 import { Route as ReportsCompareRouteImport } from './routes/reports.compare'
 import { Route as ReportsDashboardRouteImport } from './routes/reports.dashboard'
+import { Route as ReportsDepositsRouteImport } from './routes/reports.deposits'
 import { Route as ReportsHistoryRouteImport } from './routes/reports.history'
 import { Route as ReportsLivingRouteImport } from './routes/reports.living'
 import { Route as ReportsRetirementRouteImport } from './routes/reports.retirement'
 import { Route as ReportsSpendingRouteImport } from './routes/reports.spending'
 import { Route as ReportsTravelRouteImport } from './routes/reports.travel'
+import { Route as ReportsYearlyRouteImport } from './routes/reports.yearly'
 import { Route as ReportsTravelIndexRouteImport } from './routes/reports.travel.index'
 import { Route as ReportsTravelIdRouteImport } from './routes/reports.travel.$id'
 
@@ -125,6 +127,11 @@ const ReportsDashboardRoute = ReportsDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => ReportsRoute,
 } as any)
+const ReportsDepositsRoute = ReportsDepositsRouteImport.update({
+  id: '/deposits',
+  path: '/deposits',
+  getParentRoute: () => ReportsRoute,
+} as any)
 const ReportsHistoryRoute = ReportsHistoryRouteImport.update({
   id: '/history',
   path: '/history',
@@ -148,6 +155,11 @@ const ReportsSpendingRoute = ReportsSpendingRouteImport.update({
 const ReportsTravelRoute = ReportsTravelRouteImport.update({
   id: '/travel',
   path: '/travel',
+  getParentRoute: () => ReportsRoute,
+} as any)
+const ReportsYearlyRoute = ReportsYearlyRouteImport.update({
+  id: '/yearly',
+  path: '/yearly',
   getParentRoute: () => ReportsRoute,
 } as any)
 const ReportsTravelIndexRoute = ReportsTravelIndexRouteImport.update({
@@ -178,11 +190,13 @@ export interface FileRoutesByFullPath {
   '/reports/cashflow': typeof ReportsCashflowRoute
   '/reports/compare': typeof ReportsCompareRoute
   '/reports/dashboard': typeof ReportsDashboardRoute
+  '/reports/deposits': typeof ReportsDepositsRoute
   '/reports/history': typeof ReportsHistoryRoute
   '/reports/living': typeof ReportsLivingRoute
   '/reports/retirement': typeof ReportsRetirementRoute
   '/reports/spending': typeof ReportsSpendingRoute
   '/reports/travel': typeof ReportsTravelRouteWithChildren
+  '/reports/yearly': typeof ReportsYearlyRoute
   '/more/': typeof MoreIndexRoute
   '/reports/': typeof ReportsIndexRoute
   '/reports/travel/$id': typeof ReportsTravelIdRoute
@@ -203,10 +217,12 @@ export interface FileRoutesByTo {
   '/reports/cashflow': typeof ReportsCashflowRoute
   '/reports/compare': typeof ReportsCompareRoute
   '/reports/dashboard': typeof ReportsDashboardRoute
+  '/reports/deposits': typeof ReportsDepositsRoute
   '/reports/history': typeof ReportsHistoryRoute
   '/reports/living': typeof ReportsLivingRoute
   '/reports/retirement': typeof ReportsRetirementRoute
   '/reports/spending': typeof ReportsSpendingRoute
+  '/reports/yearly': typeof ReportsYearlyRoute
   '/more': typeof MoreIndexRoute
   '/reports': typeof ReportsIndexRoute
   '/reports/travel/$id': typeof ReportsTravelIdRoute
@@ -230,11 +246,13 @@ export interface FileRoutesById {
   '/reports/cashflow': typeof ReportsCashflowRoute
   '/reports/compare': typeof ReportsCompareRoute
   '/reports/dashboard': typeof ReportsDashboardRoute
+  '/reports/deposits': typeof ReportsDepositsRoute
   '/reports/history': typeof ReportsHistoryRoute
   '/reports/living': typeof ReportsLivingRoute
   '/reports/retirement': typeof ReportsRetirementRoute
   '/reports/spending': typeof ReportsSpendingRoute
   '/reports/travel': typeof ReportsTravelRouteWithChildren
+  '/reports/yearly': typeof ReportsYearlyRoute
   '/more/': typeof MoreIndexRoute
   '/reports/': typeof ReportsIndexRoute
   '/reports/travel/$id': typeof ReportsTravelIdRoute
@@ -259,11 +277,13 @@ export interface FileRouteTypes {
     | '/reports/cashflow'
     | '/reports/compare'
     | '/reports/dashboard'
+    | '/reports/deposits'
     | '/reports/history'
     | '/reports/living'
     | '/reports/retirement'
     | '/reports/spending'
     | '/reports/travel'
+    | '/reports/yearly'
     | '/more/'
     | '/reports/'
     | '/reports/travel/$id'
@@ -284,10 +304,12 @@ export interface FileRouteTypes {
     | '/reports/cashflow'
     | '/reports/compare'
     | '/reports/dashboard'
+    | '/reports/deposits'
     | '/reports/history'
     | '/reports/living'
     | '/reports/retirement'
     | '/reports/spending'
+    | '/reports/yearly'
     | '/more'
     | '/reports'
     | '/reports/travel/$id'
@@ -310,11 +332,13 @@ export interface FileRouteTypes {
     | '/reports/cashflow'
     | '/reports/compare'
     | '/reports/dashboard'
+    | '/reports/deposits'
     | '/reports/history'
     | '/reports/living'
     | '/reports/retirement'
     | '/reports/spending'
     | '/reports/travel'
+    | '/reports/yearly'
     | '/more/'
     | '/reports/'
     | '/reports/travel/$id'
@@ -458,6 +482,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReportsDashboardRouteImport
       parentRoute: typeof ReportsRoute
     }
+    '/reports/deposits': {
+      id: '/reports/deposits'
+      path: '/deposits'
+      fullPath: '/reports/deposits'
+      preLoaderRoute: typeof ReportsDepositsRouteImport
+      parentRoute: typeof ReportsRoute
+    }
     '/reports/history': {
       id: '/reports/history'
       path: '/history'
@@ -491,6 +522,13 @@ declare module '@tanstack/react-router' {
       path: '/travel'
       fullPath: '/reports/travel'
       preLoaderRoute: typeof ReportsTravelRouteImport
+      parentRoute: typeof ReportsRoute
+    }
+    '/reports/yearly': {
+      id: '/reports/yearly'
+      path: '/yearly'
+      fullPath: '/reports/yearly'
+      preLoaderRoute: typeof ReportsYearlyRouteImport
       parentRoute: typeof ReportsRoute
     }
     '/reports/travel/': {
@@ -552,11 +590,13 @@ interface ReportsRouteChildren {
   ReportsCashflowRoute: typeof ReportsCashflowRoute
   ReportsCompareRoute: typeof ReportsCompareRoute
   ReportsDashboardRoute: typeof ReportsDashboardRoute
+  ReportsDepositsRoute: typeof ReportsDepositsRoute
   ReportsHistoryRoute: typeof ReportsHistoryRoute
   ReportsLivingRoute: typeof ReportsLivingRoute
   ReportsRetirementRoute: typeof ReportsRetirementRoute
   ReportsSpendingRoute: typeof ReportsSpendingRoute
   ReportsTravelRoute: typeof ReportsTravelRouteWithChildren
+  ReportsYearlyRoute: typeof ReportsYearlyRoute
   ReportsIndexRoute: typeof ReportsIndexRoute
 }
 
@@ -564,11 +604,13 @@ const ReportsRouteChildren: ReportsRouteChildren = {
   ReportsCashflowRoute: ReportsCashflowRoute,
   ReportsCompareRoute: ReportsCompareRoute,
   ReportsDashboardRoute: ReportsDashboardRoute,
+  ReportsDepositsRoute: ReportsDepositsRoute,
   ReportsHistoryRoute: ReportsHistoryRoute,
   ReportsLivingRoute: ReportsLivingRoute,
   ReportsRetirementRoute: ReportsRetirementRoute,
   ReportsSpendingRoute: ReportsSpendingRoute,
   ReportsTravelRoute: ReportsTravelRouteWithChildren,
+  ReportsYearlyRoute: ReportsYearlyRoute,
   ReportsIndexRoute: ReportsIndexRoute,
 }
 

@@ -11,8 +11,10 @@ import type {
   Mortgage,
   OneOff,
   Recurring,
+  TimeSaving,
   Transaction,
   Trip,
+  YearlyPlan,
 } from "./types";
 import type { RetirementInputs } from "./calc/retirement";
 
@@ -42,6 +44,8 @@ export class HKLifeDB extends Dexie {
   allowances!: EntityTable<Allowance, "id">;
   oneOffs!: EntityTable<OneOff, "id">;
   adhocBudgets!: EntityTable<AdhocBudget, "id">;
+  deposits!: EntityTable<TimeSaving, "id">;
+  yearlyPlans!: EntityTable<YearlyPlan, "id">;
   fxRates!: EntityTable<FxRate, "currency">;
   meta!: EntityTable<MetaRow, "key">;
   snapshots!: EntityTable<SnapshotRow, "month">;
@@ -66,6 +70,10 @@ export class HKLifeDB extends Dexie {
     });
     this.version(2).stores({
       adhocBudgets: "id, month, date",
+    });
+    this.version(3).stores({
+      deposits: "id, endDate",
+      yearlyPlans: "id",
     });
   }
 }

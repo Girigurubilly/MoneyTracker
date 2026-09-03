@@ -8,8 +8,10 @@ import type {
   Mortgage,
   OneOff,
   Recurring,
+  TimeSaving,
   Transaction,
   Trip,
+  YearlyPlan,
 } from "./types";
 import type { RetirementInputs } from "./calc/retirement";
 import { MONTH_TOTAL_BUDGET_ID } from "./types";
@@ -169,4 +171,38 @@ export const transactions: Transaction[] = [
   t({ id: "tx-25-mtr", type: "expense", amount: 620, currency: "HKD", accountId: "octopus", categoryId: "mtr", date: "2025-04-20", payee: "MTR 2025", payeeZh: "2025 港鐵" }),
   t({ id: "tx-25-ins", type: "expense", amount: 1860, currency: "HKD", accountId: "hsbc-visa", categoryId: "insurance", date: "2025-08-05", payee: "Life insurance", payeeZh: "人壽保險" }),
   t({ id: "tx-25-travel", type: "expense", amount: 9800, currency: "HKD", accountId: "hsbc-visa", categoryId: "flights", date: "2025-11-08", payee: "Autumn flight", payeeZh: "秋季機票" }),
+  t({
+    id: "tx-dep-hsb",
+    type: "income",
+    amount: 5726.03,
+    currency: "HKD",
+    accountId: "hsb-save",
+    categoryId: "interest-inc",
+    date: "2026-12-15",
+    payee: "Hang Seng deposit interest",
+    payeeZh: "恒生 存款利息",
+    planned: true,
+    depositId: "dep-hsb-2026",
+  }),
 ];
+
+export const deposits: TimeSaving[] = [
+  {
+    id: "dep-hsb-2026",
+    bank: "Hang Seng",
+    startDate: "2026-03-15",
+    endDate: "2026-12-15",
+    rate: 3.8,
+    currency: "HKD",
+    amount: 200000,
+    interest: 5726.03,
+    accountId: "hsb-save",
+  },
+];
+
+export const yearlyPlans: YearlyPlan[] = Array.from({ length: 12 }, (_, mo) => ({
+  id: `2026-${String(mo + 1).padStart(2, "0")}`,
+  salary: 72000,
+  other: 0,
+  expense: mo === 6 || mo === 11 ? 48000 : 38000,
+}));

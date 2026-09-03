@@ -207,6 +207,7 @@ export type Transaction = {
   milesType?: "earn" | "burn" | "adjust" | "expiry";
   planned?: boolean;
   recurringId?: string;
+  depositId?: string;
   countsAsExpense?: boolean;
   housing?: boolean;
   fxToHkd?: number;
@@ -232,6 +233,25 @@ export type Recurring = {
   housing?: boolean;
   splitWithId?: string;
   destAmount?: number;
+};
+
+export type TimeSaving = {
+  id: string;
+  bank: string;
+  startDate: string;
+  endDate: string;
+  rate: number;
+  currency: Currency;
+  amount: number;
+  interest: number;
+  accountId: string;
+};
+
+export type YearlyPlan = {
+  id: string;
+  salary: number;
+  other: number;
+  expense: number;
 };
 
 export type AdhocBudget = {
