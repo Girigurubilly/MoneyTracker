@@ -14,6 +14,7 @@ import type {
   TimeSaving,
   Transaction,
   Trip,
+  WishItem,
   YearlyPlan,
 } from "./types";
 import type { RetirementInputs } from "./calc/retirement";
@@ -46,6 +47,7 @@ export class HKLifeDB extends Dexie {
   adhocBudgets!: EntityTable<AdhocBudget, "id">;
   deposits!: EntityTable<TimeSaving, "id">;
   yearlyPlans!: EntityTable<YearlyPlan, "id">;
+  wishlist!: EntityTable<WishItem, "id">;
   fxRates!: EntityTable<FxRate, "currency">;
   meta!: EntityTable<MetaRow, "key">;
   snapshots!: EntityTable<SnapshotRow, "month">;
@@ -74,6 +76,9 @@ export class HKLifeDB extends Dexie {
     this.version(3).stores({
       deposits: "id, endDate",
       yearlyPlans: "id",
+    });
+    this.version(4).stores({
+      wishlist: "id",
     });
   }
 }

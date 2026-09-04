@@ -10,6 +10,7 @@ export function AccountSelect({
   excludeId,
   allowEmpty,
   emptyLabel,
+  className,
 }: {
   accounts: Account[];
   value: string;
@@ -17,6 +18,7 @@ export function AccountSelect({
   excludeId?: string;
   allowEmpty?: boolean;
   emptyLabel?: string;
+  className?: string;
 }) {
   const t = useT();
   const locale = useUi((s) => s.locale);
@@ -34,7 +36,7 @@ export function AccountSelect({
   })).filter((g) => g.items.length);
 
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3">
+    <select value={value} onChange={(e) => onChange(e.target.value)} className={className ?? "mt-1 h-11 w-full rounded-lg bg-elevated px-3"}>
       {allowEmpty ? <option value="">{emptyLabel ?? t.common.none}</option> : null}
       {groups.map((g) => (
         <optgroup key={g.group} label={labels[g.group]}>

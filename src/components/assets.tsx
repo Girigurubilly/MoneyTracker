@@ -1,21 +1,77 @@
-import { useState } from "react";
-import { ChevronDown, ChevronUp, Plus } from "lucide-react";
-import { Group, Hairline, Overlay, ScreenHeader, SectionLabel, TransactionRow } from "@/components/shared";
+import { useState, type ReactNode } from "react";
+import {
+  Building2,
+  ChevronDown,
+  ChevronUp,
+  CreditCard,
+  Globe,
+  Home,
+  Landmark,
+  PiggyBank,
+  Plane,
+  Plus,
+  TrendingUp,
+  Wallet,
+} from "lucide-react";
+import { Hairline, Overlay, ScreenHeader, SectionLabel, TransactionRow } from "@/components/shared";
 import { AmountWithHkd } from "@/components/currency-field";
 import { money } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { netWorthNow } from "@/lib/calc/networth";
+import { toHkd } from "@/lib/calc/fx";
 import { accountsInGroup, BALANCE_GROUP_ORDER, nextSortOrder } from "@/lib/accounts";
 import {
   ACCOUNT_TYPE_OPTIONS,
   CURRENCIES,
   groupForType,
   type Account,
+  type AccountGroup,
   type AccountType,
   type MoneyUnit,
 } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
+
+const TYPE_TONE: Record<AccountType, string> = {
+  cash: "bg-[#e8f8ee] text-[#1f7a3a]",
+  current: "bg-[#e8f1ff] text-[#0b63ce]",
+  savings: "bg-[#e8f8ee] text-[#1f7a3a]",
+  fx: "bg-[#f3e8ff] text-[#7a3db8]",
+  ewallet: "bg-[#fff4e0] text-[#b86a00]",
+  credit: "bg-[#ffecec] text-[#c0122a]",
+  loan: "bg-[#ffecec] text-[#c0122a]",
+  investment: "bg-[#e8f1ff] text-[#0b63ce]",
+  mpf: "bg-[#eef0ff] text-[#3d4ecf]",
+  property: "bg-[#fff4e0] text-[#b86a00]",
+  mortgage: "bg-[#ffecec] text-[#c0122a]",
+  miles: "bg-[#e8f8f8] text-[#0f7a7a]",
+  other_asset: "bg-accent-soft text-accent",
+};
+
+function TypeGlyph({ type }: { type: AccountType }) {
+  const cls = "size-5";
+  const map: Record<AccountType, ReactNode> = {
+    cash: <Wallet className={cls} />,
+    current: <Landmark className={cls} />,
+    savings: <PiggyBank className={cls} />,
+    fx: <Globe className={cls} />,
+    ewallet: <Wallet className={cls} />,
+    credit: <CreditCard className={cls} />,
+    loan: <Landmark className={cls} />,
+    investment: <TrendingUp className={cls} />,
+    mpf: <Building2 className={cls} />,
+    property: <Home className={cls} />,
+    mortgage: <Home className={cls} />,
+    miles: <Plane className={cls} />,
+    other_asset: <Wallet className={cls} />,
+  };
+  return map[type];
+}
+
+function isForeign(a: Account) {
+  return a.currency !== "HKD" && a.currency !== "MILES";
+}
 
 export function AssetsScreen() {
   const t = useT();
@@ -26,14 +82,23 @@ export function AssetsScreen() {
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [reorder, setReorder] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
-  const labels: Record<Account["group"], string> = {
+  const labels: Record<AccountGroup, string> = {
     cash: t.assets.cash,
     credit: t.assets.credit,
     assets: t.assets.investments,
     housing: t.assets.housing,
     loyalty: t.assets.loyalty,
   };
+  const visible = accounts.filter((a) => !a.hidden);
+  const hiddenRows = accounts.filter((a) => a.hidden);
+  const fxRows = visible.filter(isForeign);
+  const fxIds = new Set(fxRows.map((a) => a.id));
   const groups = BALANCE_GROUP_ORDER.map((id) => ({ id, label: labels[id] }));
+
+  function openAccount(id: string) {
+    setViewingId(id);
+  }
+
   return (
     <div className="pb-10">
       <ScreenHeader
@@ -50,42 +115,72 @@ export function AssetsScreen() {
           </div>
         }
       />
-      <div className="mx-4 mb-4 rounded-xl bg-elevated px-4 py-4">
+      <div className="mx-4 mb-5 overflow-hidden rounded-2xl bg-elevated px-4 py-5 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
         <div className="text-sm text-muted">{t.assets.netWorth}</div>
-        <div className="mt-1 text-2xl font-semibold tabular-nums">{money(nw.net, "HKD")}</div>
-        <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted">
-          <span>
-            {t.assets.totalAssets} {money(nw.assets, "HKD")}
-          </span>
-          <span>
-            {t.assets.totalLiab} {money(nw.liab, "HKD")}
-          </span>
+        <div className="mt-1 text-3xl font-semibold tracking-tight tabular-nums">{money(nw.net, "HKD")}</div>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="rounded-xl bg-success-soft px-3 py-2">
+            <div className="text-[11px] text-income">{t.assets.totalAssets}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums text-income">{money(nw.assets, "HKD")}</div>
+          </div>
+          <div className="rounded-xl bg-expense-soft px-3 py-2">
+            <div className="text-[11px] text-expense">{t.assets.totalLiab}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums text-expense">{money(nw.liab, "HKD")}</div>
+          </div>
         </div>
       </div>
       {groups.map((g) => {
-        const rows = accountsInGroup(accounts, g.id).filter((a) => showHidden || !a.hidden);
+        const rows = accountsInGroup(visible, g.id).filter((a) => !fxIds.has(a.id));
         if (!rows.length) return null;
+        const total = rows.reduce((s, a) => s + toHkd(a.balance, a.currency, rates), 0);
         return (
-          <div key={g.id} className="mb-4">
-            <h2 className="px-5 pb-1 text-sm font-medium text-muted">{g.label}</h2>
-            <Group>
-              {rows.map((a, i) => (
-                <AccountRow
-                  key={a.id}
-                  a={a}
-                  reorder={reorder}
-                  canUp={i > 0 && rows[i - 1].type === a.type}
-                  canDown={i < rows.length - 1 && rows[i + 1].type === a.type}
-                  onEdit={() => setViewingId(a.id)}
-                />
-              ))}
-            </Group>
-          </div>
+          <AssetSection key={g.id} label={g.label} total={total} currencyHint="HKD">
+            {rows.map((a, i) => (
+              <AccountCard
+                key={a.id}
+                a={a}
+                reorder={reorder}
+                canUp={i > 0 && rows[i - 1].type === a.type}
+                canDown={i < rows.length - 1 && rows[i + 1].type === a.type}
+                onEdit={() => openAccount(a.id)}
+              />
+            ))}
+          </AssetSection>
         );
       })}
-      <button type="button" className="mx-5 mt-2 text-sm text-accent" onClick={() => setShowHidden((v) => !v)}>
-        {showHidden ? t.assets.hideHidden : t.assets.showHidden}
-      </button>
+      {fxRows.length ? (
+        <AssetSection
+          label={t.assets.foreign}
+          total={fxRows.reduce((s, a) => s + toHkd(a.balance, a.currency, rates), 0)}
+          currencyHint="HKD"
+        >
+          {fxRows.map((a) => (
+            <AccountCard key={a.id} a={a} reorder={false} canUp={false} canDown={false} onEdit={() => openAccount(a.id)} />
+          ))}
+        </AssetSection>
+      ) : null}
+      {hiddenRows.length ? (
+        <div className="mb-4">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between px-5 pb-2 pt-1 text-left"
+            onClick={() => setShowHidden((v) => !v)}
+          >
+            <span className="text-sm font-medium text-muted">
+              {t.assets.hiddenSection}
+              <span className="ml-2 text-xs">{hiddenRows.length}</span>
+            </span>
+            <ChevronDown className={cn("size-4 text-faint transition", showHidden && "rotate-180")} />
+          </button>
+          {showHidden ? (
+            <div className="space-y-2 px-4">
+              {hiddenRows.map((a) => (
+                <AccountCard key={a.id} a={a} reorder={false} canUp={false} canDown={false} onEdit={() => openAccount(a.id)} />
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {viewingId && !editingId ? (
         <AccountDetail
           account={accounts.find((a) => a.id === viewingId) ?? null}
@@ -103,7 +198,29 @@ export function AssetsScreen() {
   );
 }
 
-function AccountRow({
+function AssetSection({
+  label,
+  total,
+  currencyHint,
+  children,
+}: {
+  label: string;
+  total: number;
+  currencyHint: MoneyUnit;
+  children: ReactNode;
+}) {
+  return (
+    <div className="mb-5">
+      <div className="flex items-baseline justify-between px-5 pb-2">
+        <h2 className="text-sm font-medium text-muted">{label}</h2>
+        <span className="text-xs tabular-nums text-muted">{money(total, currencyHint)}</span>
+      </div>
+      <div className="space-y-2 px-4">{children}</div>
+    </div>
+  );
+}
+
+function AccountCard({
   a,
   reorder,
   canUp,
@@ -119,21 +236,36 @@ function AccountRow({
   const locale = useUi((s) => s.locale);
   const move = useApp((s) => s.moveAccount);
   const rates = useApp((s) => s.fxRates);
+  const typeLabel = ACCOUNT_TYPE_OPTIONS.find((o) => o.id === a.type);
+  const tone = TYPE_TONE[a.type] ?? "bg-accent-soft text-accent";
+  const negative = a.balance < 0;
   return (
-    <div className="flex items-center">
-      <button type="button" className="flex min-w-0 flex-1 items-center justify-between gap-3 px-4 py-3 text-left" onClick={onEdit}>
-        <span className="min-w-0">
-          <span className="block truncate text-sm">{pickName(locale, a.name, a.nameZh)}</span>
-          {a.hidden ? <span className="text-xs text-muted">{locale === "zh-HK" ? "已隱藏" : "Hidden"}</span> : null}
+    <div className="flex items-stretch overflow-hidden rounded-2xl bg-elevated shadow-[0_6px_18px_rgba(15,23,42,0.05)]">
+      <button type="button" className="flex min-w-0 flex-1 items-center gap-3 px-3 py-3 text-left" onClick={onEdit}>
+        <span className={cn("grid size-11 shrink-0 place-items-center rounded-2xl", tone)}>
+          <TypeGlyph type={a.type} />
         </span>
-        <AmountWithHkd amount={a.balance} currency={a.currency} rates={rates} className="text-sm font-semibold" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold">{pickName(locale, a.name, a.nameZh)}</span>
+          <span className="mt-0.5 block truncate text-[11px] text-muted">
+            {typeLabel ? (locale === "zh-HK" ? typeLabel.zh : typeLabel.en) : a.type}
+            {a.currency !== "HKD" ? ` · ${a.currency}` : ""}
+            {a.hidden ? (locale === "zh-HK" ? " · 已隱藏" : " · Hidden") : ""}
+          </span>
+        </span>
+        <AmountWithHkd
+          amount={a.balance}
+          currency={a.currency}
+          rates={rates}
+          className={cn("text-base font-semibold", negative ? "text-expense" : "")}
+        />
       </button>
       {reorder ? (
-        <div className="flex pr-2">
-          <button type="button" aria-label="up" disabled={!canUp} className="grid size-11 place-items-center text-accent disabled:text-faint" onClick={() => void move(a.id, -1)}>
+        <div className="flex flex-col justify-center border-l border-line pr-1">
+          <button type="button" aria-label="up" disabled={!canUp} className="grid size-10 place-items-center text-accent disabled:text-faint" onClick={() => void move(a.id, -1)}>
             <ChevronUp className="size-5" />
           </button>
-          <button type="button" aria-label="down" disabled={!canDown} className="grid size-11 place-items-center text-accent disabled:text-faint" onClick={() => void move(a.id, 1)}>
+          <button type="button" aria-label="down" disabled={!canDown} className="grid size-10 place-items-center text-accent disabled:text-faint" onClick={() => void move(a.id, 1)}>
             <ChevronDown className="size-5" />
           </button>
         </div>
@@ -141,6 +273,7 @@ function AccountRow({
     </div>
   );
 }
+
 
 function AccountDetail({
   account,

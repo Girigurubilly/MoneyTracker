@@ -15,6 +15,7 @@ import type {
   TimeSaving,
   Transaction,
   Trip,
+  WishItem,
   YearlyPlan,
 } from "@/lib/types";
 import type { RetirementInputs } from "@/lib/calc/retirement";
@@ -34,6 +35,7 @@ import {
   trips as seedTrips,
   deposits as seedDeposits,
   yearlyPlans as seedYearly,
+  wishlist as seedWishlist,
   annualTravelBudget as seedTravelBudget,
   netWorthSeries as seedNw,
 } from "@/lib/mock";
@@ -67,6 +69,7 @@ export type AppSnapshot = {
   adhocBudgets?: AdhocBudget[];
   deposits?: TimeSaving[];
   yearlyPlans?: YearlyPlan[];
+  wishlist?: WishItem[];
   defaultCurrency?: Currency;
   lastFxSyncAt?: string;
 };
@@ -133,6 +136,9 @@ type Dispatchers = {
   updateDeposit: (row: TimeSaving) => Promise<void>;
   deleteDeposit: (id: string) => Promise<void>;
   setYearlyCell: (year: number, month0: number, field: "salary" | "other" | "expense", value: number) => Promise<void>;
+  addWishItem: (row: WishItem) => Promise<void>;
+  updateWishItem: (row: WishItem) => Promise<void>;
+  deleteWishItem: (id: string) => Promise<void>;
   replaceAll: (snap: AppSnapshot) => Promise<void>;
   exportSnapshot: () => AppSnapshot;
   resetSample: () => Promise<void>;
@@ -155,6 +161,7 @@ type AppState = {
   adhocBudgets: AdhocBudget[];
   deposits: TimeSaving[];
   yearlyPlans: YearlyPlan[];
+  wishlist: WishItem[];
   fxRates: FxRate[];
   snapshots: SnapshotRow[];
   annualTravelBudget: number;
@@ -179,6 +186,7 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     adhocBudgets,
     deposits,
     yearlyPlans,
+    wishlist,
     fxRates,
     snapshots,
     meta,
@@ -197,6 +205,7 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     idb().adhocBudgets.toArray(),
     idb().deposits.toArray(),
     idb().yearlyPlans.toArray(),
+    idb().wishlist.toArray(),
     idb().fxRates.toArray(),
     idb().snapshots.toArray(),
     idb().meta.get("settings"),
@@ -216,6 +225,7 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     adhocBudgets,
     deposits,
     yearlyPlans,
+    wishlist,
     fxRates,
     snapshots,
     annualTravelBudget: meta?.annualTravelBudget ?? seedTravelBudget,
@@ -286,6 +296,7 @@ async function seedDb() {
     await idb().oneOffs.bulkAdd(seedOneOffs);
     await idb().deposits.bulkAdd(seedDeposits);
     await idb().yearlyPlans.bulkAdd(seedYearly);
+    await idb().wishlist.bulkAdd(seedWishlist);
     await idb().fxRates.bulkAdd(seedFx);
     await idb().snapshots.bulkAdd(
       seedNw.map((s) => ({ month: s.month, net: s.value, assets: s.value + 2_858_240, liab: 2_858_240 })),
@@ -577,6 +588,7 @@ export const useApp = create<AppState>((set, get) => ({
   adhocBudgets: [],
   deposits: [],
   yearlyPlans: [],
+  wishlist: [],
   fxRates: seedFx,
   snapshots: [],
   annualTravelBudget: seedTravelBudget,
@@ -864,6 +876,21 @@ export const useApp = create<AppState>((set, get) => ({
         : [...get().yearlyPlans, next],
     });
   },
+  addWishItem: async (row) => {
+    await idb().wishlist.put(row);
+    set({
+      wishlist: get().wishlist.some((x) => x.id === row.id)
+        ? get().wishlist.map((x) => (x.id === row.id ? row : x))
+        : [...get().wishlist, row],
+    });
+  },
+  updateWishItem: async (row) => {
+    await get().addWishItem(row);
+  },
+  deleteWishItem: async (id) => {
+    await idb().wishlist.delete(id);
+    set({ wishlist: get().wishlist.filter((x) => x.id !== id) });
+  },
   replaceAll: async (snap) => {
     await idb().transaction("rw", idb().tables, async () => {
       await Promise.all(idb().tables.map((t) => t.clear()));
@@ -881,6 +908,7 @@ export const useApp = create<AppState>((set, get) => ({
       await bulkChunk((rows) => idb().adhocBudgets.bulkAdd(rows), snap.adhocBudgets ?? []);
       await bulkChunk((rows) => idb().deposits.bulkAdd(rows), snap.deposits ?? []);
       await bulkChunk((rows) => idb().yearlyPlans.bulkAdd(rows), snap.yearlyPlans ?? []);
+      await bulkChunk((rows) => idb().wishlist.bulkAdd(rows), snap.wishlist ?? []);
       await idb().fxRates.bulkPut(snap.fxRates.length ? snap.fxRates : seedFx);
       if (snap.snapshots.length) await idb().snapshots.bulkPut(snap.snapshots);
       await idb().meta.put({
@@ -918,6 +946,7 @@ export const useApp = create<AppState>((set, get) => ({
       adhocBudgets: s.adhocBudgets,
       deposits: s.deposits,
       yearlyPlans: s.yearlyPlans,
+      wishlist: s.wishlist,
       defaultCurrency: s.defaultCurrency,
       lastFxSyncAt: s.lastFxSyncAt,
     };

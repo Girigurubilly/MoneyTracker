@@ -1,9 +1,20 @@
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { AccountSelect } from "@/components/account-select";
-import { AmountCurrencyRow, CurrencySelect, asFiat, autoDestAmount } from "@/components/currency-field";
 import { Overlay } from "@/components/shared";
+import { CategoryIcon } from "@/components/category-icon";
 import { CategoryPicker, TypeSwitch } from "@/components/category-picker";
+import {
+  AccountLine,
+  ActiveKeypad,
+  ComposerShell,
+  DatePaidRow,
+  ExtraIconBar,
+  LineRow,
+  NoteSheet,
+  TripSheet,
+  type AmountField,
+} from "@/components/txn-composer";
+import { asFiat, autoDestAmount } from "@/components/currency-field";
 import { todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { defaultMortgageAccountId, moneyAccountsForPicker } from "@/lib/accounts";
@@ -11,6 +22,7 @@ import { canSplitMortgage, categoryPath, mortgageEntryKind, resolvedDefaultAccou
 import { captureFxToHkd } from "@/lib/calc/fx";
 import { isTripActive } from "@/lib/calc/trips";
 import { applyTxRules, infersHousing, splitMortgageAmounts } from "@/lib/tx-rules";
+import { resolveAmountInput } from "@/lib/money-expr";
 import type { Category, Currency, MoneyUnit, TxType } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -88,6 +100,9 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
   const [interest, setInterest] = useState("");
   const [doSplit, setDoSplit] = useState(false);
   const [housing, setHousing] = useState(false);
+  const [paid, setPaid] = useState(true);
+  const [field, setField] = useState<AmountField>("amount");
+  const [extra, setExtra] = useState<"note" | "trip" | null>(null);
   const cat = categories.find((c) => c.id === categoryId);
   const mortgageKind = mortgageEntryKind(cat, categories);
   const canSplit = type !== "income" && type !== "miles" && canSplitMortgage(mortgageKind);
@@ -96,7 +111,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
   const destDefault = defaultMortgageAccountId(accounts) ?? toAccountId;
   const destAcc = accounts.find((a) => a.id === (toAccountId || destDefault));
   const destCcy: Currency = destAcc ? asFiat(destAcc.currency, currency) : currency;
-  const autoDest = autoDestAmount(Number(amount) || 0, currency, destCcy, rates);
+  const autoDest = autoDestAmount(resolveAmountInput(amount), currency, destCcy, rates);
   const destN = destLocked ? Number(destAmount) || 0 : autoDest;
   const ctx = { categories, accounts };
 
@@ -138,13 +153,13 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
   }
 
   async function save() {
-    const amt = Number(amount) || 0;
+    const amt = resolveAmountInput(amount);
     const parts = splitMortgageAmounts(principal, interest, amount, mortgageKind);
     if (amt <= 0 && !(canSplit && doSplit && (parts.principal > 0 || parts.interest > 0))) {
       toast(t.add.needAmount);
       return;
     }
-    const planned = date > todayISO();
+    const planned = !paid;
     const pCat = categories.find((c) => mortgageEntryKind(c, categories) === "principal");
     const iCat = categories.find((c) => mortgageEntryKind(c, categories) === "interest");
     const ccy: MoneyUnit = type === "miles" ? "MILES" : currency;
@@ -252,97 +267,55 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
   }
 
   return (
-    <div className="pb-8">
-      <header className="flex items-center justify-between px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <button type="button" className="h-11 min-w-11 px-2 text-sm text-accent" onClick={onClose}>
-          {t.add.cancel}
-        </button>
-        <div className="min-w-0 flex-1 text-center">
-          <TypeSwitch value={type} onChange={changeType} includeMiles />
-        </div>
-        <button type="button" className="h-11 min-w-11 px-2 text-sm font-medium text-accent" onClick={() => void save()}>
-          {t.add.save}
-        </button>
-      </header>
-      <div className="px-5">
-      <label className="block py-2">
-        <span className="text-xs text-muted">{t.add.date}</span>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3" />
-      </label>
-      {type !== "miles" && type !== "transfer" ? (
-        <label className="block py-2">
-          <span className="text-xs text-muted">{t.add.category}</span>
-          <button type="button" className="mt-1 flex h-11 w-full items-center rounded-lg bg-elevated px-3 text-left" onClick={() => setPickCat(true)}>
-            {cat ? categoryPath(cat, categories, locale) : t.add.pickCategory}
+    <ComposerShell
+      header={
+        <header className="flex items-center justify-between px-3 pt-[max(0.5rem,env(safe-area-inset-top))]">
+          <button type="button" className="h-11 min-w-11 px-2 text-sm text-accent" onClick={onClose}>
+            {t.add.cancel}
           </button>
-        </label>
-      ) : null}
-      <label className="block py-2">
-        <span className="text-xs text-muted">{type === "transfer" ? t.add.from : t.add.account}</span>
-        <AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} />
-      </label>
-      {canSplit ? (
-        <label className="flex items-center gap-2 py-2 text-sm">
-          <input
-            type="checkbox"
-            checked={doSplit}
-            onChange={(e) => {
-              const on = e.target.checked;
-              setDoSplit(on);
-              if (on && !principal && !interest && amount) {
-                if (mortgageKind === "interest") setInterest(amount);
-                else setPrincipal(amount);
-              }
-              if (!on && !amount) {
-                const sum = (Number(principal) || 0) + (Number(interest) || 0);
-                if (sum > 0) setAmount(String(sum));
-              }
-            }}
-          />
-          {t.add.split}
-        </label>
-      ) : null}
-      {canSplit && doSplit ? (
-        <div>
-          <p className="text-xs text-muted">{t.add.splitHint}</p>
-          <div className="mt-1 flex justify-end">
-            <CurrencySelect value={currency} onChange={setCurrency} />
+          <div className="min-w-0 flex-1 text-center">
+            <TypeSwitch value={type} onChange={changeType} includeMiles />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block py-2">
-              <span className="text-xs text-muted">{t.add.principal}</span>
-              <input inputMode="decimal" value={principal} onChange={(e) => setPrincipal(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3" />
-            </label>
-            <label className="block py-2">
-              <span className="text-xs text-muted">{t.add.interest}</span>
-              <input inputMode="decimal" value={interest} onChange={(e) => setInterest(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3" />
-            </label>
-          </div>
-        </div>
-      ) : type === "miles" ? (
-        <label className="block py-2">
-          <span className="text-xs text-muted">{t.add.amount}</span>
-          <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none" />
-        </label>
-      ) : (
-        <label className="block py-2">
-          <span className="text-xs text-muted">{t.add.amount}</span>
-          <AmountCurrencyRow
+          <button type="button" className="h-11 min-w-11 px-2 text-sm font-medium text-accent" onClick={() => void save()}>
+            {t.add.save}
+          </button>
+        </header>
+      }
+      keypad={
+        <ActiveKeypad
+          field={field}
+          amount={amount}
+          dest={destLocked ? destAmount : String(autoDest || "")}
+          principal={principal}
+          interest={interest}
+          setAmount={setAmount}
+          setDest={(v) => {
+            setDestLocked(true);
+            setDestAmount(v);
+          }}
+          setPrincipal={setPrincipal}
+          setInterest={setInterest}
+          currency={field === "dest" ? destCcy : currency}
+          onCurrency={(c) => {
+            if (field === "dest") return;
+            setCurrency(c);
+            setDestLocked(false);
+          }}
+        />
+      }
+    >
+      {type === "transfer" ? (
+        <>
+          <AccountLine
+            accounts={accounts}
+            value={accountId}
+            onChange={setAccountId}
+            placeholder={t.add.from}
             amount={amount}
-            currency={currency}
-            onAmount={setAmount}
-            onCurrency={(c) => {
-              setCurrency(c);
-              setDestLocked(false);
-            }}
-            rates={rates}
+            active={field === "amount"}
+            onFocusAmount={() => setField("amount")}
           />
-        </label>
-      )}
-      {showDest ? (
-        <label className="block py-2">
-          <span className="text-xs text-muted">{(canSplit && doSplit) || principalOnly ? t.add.mortgageTo : t.add.to}</span>
-          <AccountSelect
+          <AccountLine
             accounts={accounts}
             value={toAccountId || destDefault}
             onChange={(id) => {
@@ -350,57 +323,93 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
               setDestLocked(false);
             }}
             excludeId={accountId}
+            placeholder={t.add.to}
+            amount={destLocked ? destAmount : String(autoDest || amount || "0")}
+            active={field === "dest"}
+            onFocusAmount={() => setField("dest")}
           />
-        </label>
-      ) : null}
-      {showDest && !(canSplit && doSplit) ? (
-        <label className="block py-2">
-          <span className="text-xs text-muted">{t.add.destAmount}</span>
-          <AmountCurrencyRow
-            amount={destLocked ? destAmount : String(autoDest || "")}
-            currency={destCcy}
-            onAmount={(v) => {
-              setDestLocked(true);
-              setDestAmount(v);
-            }}
-            onCurrency={() => undefined}
-            rates={rates}
-            currencyDisabled
+        </>
+      ) : (
+        <>
+          <AccountLine accounts={accounts} value={accountId} onChange={setAccountId} placeholder={t.add.account} />
+          {type !== "miles" ? (
+            <LineRow
+              leading={
+                cat ? (
+                  <span className="grid size-8 place-items-center rounded-full bg-elevated">
+                    <CategoryIcon name={cat.icon} />
+                  </span>
+                ) : null
+              }
+              label={cat ? categoryPath(cat, categories, locale) : ""}
+              placeholder={t.add.pickCategory}
+              amount={canSplit && doSplit ? undefined : amount}
+              active={field === "amount"}
+              onFocusAmount={canSplit && doSplit ? undefined : () => setField("amount")}
+              onPressLabel={() => setPickCat(true)}
+            />
+          ) : (
+            <LineRow
+              label={t.add.miles}
+              amount={amount}
+              active={field === "amount"}
+              onFocusAmount={() => setField("amount")}
+            />
+          )}
+        </>
+      )}
+      {canSplit && doSplit ? (
+        <>
+          <LineRow
+            label={t.add.principal}
+            amount={principal}
+            active={field === "principal"}
+            onFocusAmount={() => setField("principal")}
           />
-          <span className="mt-1 block text-xs text-faint">{t.add.destAmountHint}</span>
-        </label>
+          <LineRow
+            label={t.add.interest}
+            amount={interest}
+            active={field === "interest"}
+            onFocusAmount={() => setField("interest")}
+          />
+          <AccountLine
+            accounts={accounts}
+            value={toAccountId || destDefault}
+            onChange={setToAccountId}
+            placeholder={t.add.mortgageTo}
+          />
+        </>
       ) : null}
-      {type === "expense" ? (
-        <label className="block py-2">
-          <span className="text-xs text-muted">{t.add.trip}</span>
-          <select value={tripId} onChange={(e) => setTripId(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3">
-            <option value="">{t.reports.noneTrip}</option>
-            {trips.filter((tr) => isTripActive(tr, todayISO())).map((tr) => (
-              <option key={tr.id} value={tr.id}>
-                {pickName(locale, tr.name, tr.nameZh)}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
-      <label className="block py-2">
-        <span className="text-xs text-muted">{t.add.note}</span>
-        <input value={payee} onChange={(e) => setPayee(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3" />
-      </label>
-      {type !== "miles" ? (
-        <label className="flex items-center gap-2 py-2 text-sm">
-          <input type="checkbox" checked={housing} onChange={(e) => setHousing(e.target.checked)} />
-          {t.add.housing}
-        </label>
-      ) : null}
-      <button
-        type="button"
-        className="mt-4 h-12 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent"
-        onClick={() => void save()}
-      >
-        {t.add.save}
-      </button>
-      </div>
-    </div>
+      <DatePaidRow date={date} paid={paid} onDate={setDate} onPaid={setPaid} />
+      <ExtraIconBar
+        noteOn={!!payee}
+        tripOn={!!tripId}
+        housingOn={housing}
+        splitOn={doSplit}
+        showTrip={type === "expense"}
+        showHousing={type !== "miles"}
+        showSplit={canSplit}
+        onNote={() => setExtra("note")}
+        onTrip={() => setExtra("trip")}
+        onHousing={() => setHousing((v) => !v)}
+        onSplit={() => {
+          const on = !doSplit;
+          setDoSplit(on);
+          if (on && !principal && !interest && amount) {
+            if (mortgageKind === "interest") setInterest(amount);
+            else setPrincipal(amount);
+            setField("principal");
+          }
+        }}
+      />
+      <NoteSheet open={extra === "note"} value={payee} onChange={setPayee} onClose={() => setExtra(null)} />
+      <TripSheet
+        open={extra === "trip"}
+        value={tripId}
+        options={trips.filter((tr) => isTripActive(tr, todayISO())).map((tr) => ({ id: tr.id, label: pickName(locale, tr.name, tr.nameZh) }))}
+        onChange={setTripId}
+        onClose={() => setExtra(null)}
+      />
+    </ComposerShell>
   );
 }

@@ -3,6 +3,7 @@ import { CURRENCIES } from "@/lib/types";
 import { money } from "@/lib/format";
 import { convertAmount, toHkd } from "@/lib/calc/fx";
 import { roundMoney } from "@/lib/calc/ledger";
+import { commitAmountExpr, parseMoneyExpr } from "@/lib/money-expr";
 import { cn } from "@/lib/utils";
 import { useUi } from "@/store/ui";
 
@@ -98,22 +99,32 @@ export function AmountCurrencyRow({
   placeholder?: string;
   currencyDisabled?: boolean;
 }) {
-  const n = Number(amount) || 0;
+  const n = parseMoneyExpr(amount);
+  const shown = n == null ? Number(amount) || 0 : Math.abs(n);
   const locale = useUi((s) => s.locale);
-  const remark = hkdSupplement(n, currency, rates, fxToHkd, locale);
+  const remark = hkdSupplement(shown, currency, rates, fxToHkd, locale);
+  const tHint = locale === "zh-HK" ? "可輸入 + − × ÷" : "+ − × ÷ ok";
   return (
     <div>
       <div className="mt-1 flex gap-2">
         <input
-          inputMode="decimal"
+          inputMode="text"
+          autoComplete="off"
+          autoCorrect="off"
           value={amount}
           placeholder={placeholder}
           onChange={(e) => onAmount(e.target.value)}
+          onBlur={() => onAmount(commitAmountExpr(amount))}
           className="h-11 min-w-0 flex-1 rounded-lg bg-elevated px-3 outline-none"
         />
         <CurrencySelect value={currency} onChange={onCurrency} disabled={currencyDisabled} />
       </div>
       {remark ? <p className="mt-1 text-xs tabular-nums text-muted">{remark}</p> : null}
+      {amount && /[+\-*/×÷()]/.test(amount) && n != null ? (
+        <p className="mt-1 text-xs tabular-nums text-accent">= {money(shown, currency)}</p>
+      ) : amount.includes("+") || amount.includes("-") || amount.includes("*") ? (
+        <p className="mt-1 text-xs text-faint">{tHint}</p>
+      ) : null}
     </div>
   );
 }

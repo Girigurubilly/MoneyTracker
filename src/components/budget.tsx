@@ -16,6 +16,7 @@ import type { AdhocBudget, Currency, Recurring, TxType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
+import { WishlistBlock } from "@/components/wishlist";
 import { defaultMortgageAccountId, moneyAccountsForPicker } from "@/lib/accounts";
 import { categoryPath, canSplitMortgage, isMortgageInterestCategory, isMortgagePrincipalCategory, mortgageEntryKind, resolvedDefaultAccountId } from "@/lib/categories";
 import { applyTxRules } from "@/lib/tx-rules";
@@ -204,6 +205,8 @@ export function BudgetScreen() {
           </div>
         );
       })}
+
+      <WishlistBlock compact />
 
       <Overlay open={editCap} onClose={() => setEditCap(false)} title={t.budget.monthlyTotal}>
         <div className="px-5 pb-8">

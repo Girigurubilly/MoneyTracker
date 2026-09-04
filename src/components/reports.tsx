@@ -28,11 +28,9 @@ export function ReportsHub() {
     { to: "/reports/compare", title: t.reports.yearCompare },
     { to: "/reports/deposits", title: t.reports.deposits },
     { to: "/reports/yearly", title: t.reports.yearly },
-    { to: "/reports/cashflow", title: t.reports.cashflow },
     { to: "/reports/living", title: t.reports.living },
     { to: "/reports/travel", title: t.reports.travel },
     { to: "/reports/retirement", title: t.reports.retirement },
-    { to: "/reports/history", title: t.reports.history },
   ] as const;
   return (
     <div className="pb-10">

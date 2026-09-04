@@ -11,6 +11,7 @@ import type {
   TimeSaving,
   Transaction,
   Trip,
+  WishItem,
   YearlyPlan,
 } from "./types";
 import type { RetirementInputs } from "./calc/retirement";
@@ -126,6 +127,11 @@ export const oneOffs: OneOff[] = [];
 
 export const goals: Goal[] = [
   { id: "nw", name: "Net worth", nameZh: "淨資產", current: 0, target: 8_000_000, currency: "HKD" },
+];
+
+export const wishlist: WishItem[] = [
+  { id: "wish-airpods", name: "AirPods Pro", price: 1849, currency: "HKD" },
+  { id: "wish-kindle", name: "Kindle", price: 149, currency: "USD" },
 ];
 
 export const trips: Trip[] = [

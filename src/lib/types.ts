@@ -290,6 +290,14 @@ export type Trip = {
   monthlyCash: number;
 };
 
+export type WishItem = {
+  id: string;
+  name: string;
+  price: number;
+  currency: Currency;
+  note?: string;
+};
+
 export type Goal = {
   id: string;
   name: string;
