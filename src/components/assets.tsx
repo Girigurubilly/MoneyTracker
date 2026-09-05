@@ -507,16 +507,15 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
           />
         ) : null}
         <ExtraIconBar
+          extra={extra}
+          onExtra={(v) => setExtra(v === "note" ? "note" : extra)}
           noteOn={!!notes}
           housingOn={include}
-          tripOn={hidden}
-          showTrip
           showHousing
-          onNote={() => setExtra("note")}
-          onTrip={() => setHidden((v) => !v)}
           onHousing={() => setInclude((v) => !v)}
+          noteValue={notes}
+          onNoteChange={setNotes}
         />
-        <NoteSheet open={extra === "note"} value={notes} onChange={setNotes} onClose={() => setExtra(null)} />
       </ComposerShell>
     </Overlay>
   );

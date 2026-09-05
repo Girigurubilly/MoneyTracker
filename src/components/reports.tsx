@@ -10,7 +10,7 @@ import { asiaMilesBalance, nextTrip, travelSpendYtd, tripCashSpent } from "@/lib
 import { effectiveRate, monthlyPayment } from "@/lib/calc/mortgage";
 import { housingStatus, monthlyHousingCost } from "@/lib/calc/housing";
 import { investableNow } from "@/lib/calc/networth";
-import { retirementStatus, runRetirement, savingsLast12Months, sustainableMonthly } from "@/lib/calc/retirement";
+import { ageFromBirthday, retirementStatus, runRetirement, savingsLast12Months, sustainableMonthly } from "@/lib/calc/retirement";
 import { monthKey } from "@/lib/calc/ledger";
 import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -22,30 +22,41 @@ export { RetirementPage } from "@/components/reports-retire";
 
 export function ReportsHub() {
   const t = useT();
+  const access = useUi((s) => s.accessMode);
   const items = [
-    { to: "/reports/dashboard", title: t.reports.dashboard },
-    { to: "/reports/spending", title: t.reports.spending },
-    { to: "/reports/compare", title: t.reports.yearCompare },
-    { to: "/reports/deposits", title: t.reports.deposits },
-    { to: "/reports/yearly", title: t.reports.yearly },
-    { to: "/reports/living", title: t.reports.living },
-    { to: "/reports/travel", title: t.reports.travel },
-    { to: "/reports/retirement", title: t.reports.retirement },
-  ] as const;
+    { to: "/reports/dashboard", title: t.reports.dashboard, modes: ["standard", "elderly"] },
+    { to: "/reports/spending", title: t.reports.spending, modes: ["standard", "elderly", "kid"] },
+    { to: "/reports/compare", title: t.reports.yearCompare, modes: ["standard"] },
+    { to: "/reports/deposits", title: t.reports.deposits, modes: ["standard", "elderly"] },
+    { to: "/reports/yearly", title: t.reports.yearly, modes: ["standard"] },
+    { to: "/reports/living", title: t.reports.living, modes: ["standard", "elderly"] },
+    { to: "/reports/travel", title: t.reports.travel, modes: ["standard", "elderly", "kid"] },
+    { to: "/reports/retirement", title: t.reports.retirement, modes: ["standard", "elderly"] },
+  ].filter((it) => it.modes.includes(access));
+  const groups = [
+    { id: "flow", title: t.reports.groupFlow, items: items.filter((it) => ["/reports/dashboard", "/reports/spending", "/reports/compare"].includes(it.to)) },
+    { id: "save", title: t.reports.groupSave, items: items.filter((it) => ["/reports/deposits", "/reports/yearly"].includes(it.to)) },
+    { id: "life", title: t.reports.groupLife, items: items.filter((it) => ["/reports/living", "/reports/travel", "/reports/retirement"].includes(it.to)) },
+  ].filter((g) => g.items.length);
   return (
     <div className="pb-10">
       <ScreenHeader title={t.reports.title} large />
-      <Group>
-        {items.map((it, i) => (
-          <div key={it.to}>
-            {i > 0 ? <Hairline /> : null}
-            <Link to={it.to} className="flex items-center justify-between px-4 py-3.5">
-              <span className="text-sm">{it.title}</span>
-              <ChevronRight className="size-4 text-faint" />
-            </Link>
-          </div>
-        ))}
-      </Group>
+      {groups.map((g) => (
+        <div key={g.id} className="mb-4">
+          <h2 className="px-5 pb-1 text-xs font-semibold uppercase tracking-wide text-muted">{g.title}</h2>
+          <Group>
+            {g.items.map((it, i) => (
+              <div key={it.to}>
+                {i > 0 ? <Hairline /> : null}
+                <Link to={it.to} className="flex items-center justify-between px-4 py-3.5">
+                  <span className="text-sm">{it.title}</span>
+                  <ChevronRight className="size-4 text-faint" />
+                </Link>
+              </div>
+            ))}
+          </Group>
+        </div>
+      ))}
     </div>
   );
 }
@@ -73,7 +84,7 @@ export function DashboardPage() {
   const nxt = nextTrip(trips, today);
   const avg = savingsLast12Months(txs, rates, monthKey(today));
   const inputs = {
-    currentAge: ret?.currentAge ?? 40,
+    currentAge: ret?.birthday ? ageFromBirthday(ret.birthday, today) : ret?.currentAge ?? 40,
     retireAge: ret?.retireAge ?? 65,
     deathAge: ret?.deathAge ?? 90,
     monthlyIncomeNow: ret?.monthlyIncomeNow || avg.monthlyIncome,

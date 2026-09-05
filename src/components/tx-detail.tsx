@@ -11,8 +11,6 @@ import {
   DatePaidRow,
   ExtraIconBar,
   LineRow,
-  NoteSheet,
-  TripSheet,
   type AmountField,
 } from "@/components/txn-composer";
 import { todayISO } from "@/lib/format";
@@ -79,7 +77,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
   );
   const [paid, setPaid] = useState(!tx.planned);
   const [field, setField] = useState<AmountField>("amount");
-  const [extra, setExtra] = useState<"note" | "trip" | null>(null);
+  const [extra, setExtra] = useState<"note" | "trip" | "housing" | "split" | null>(null);
   const cat = categories.find((c) => c.id === categoryId);
   const mortgageKind = mortgageEntryKind(cat, categories);
   const canSplit = type !== "income" && type !== "miles" && canSplitMortgage(mortgageKind);
@@ -376,6 +374,8 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
         ) : null}
         <DatePaidRow date={date} paid={paid} onDate={setDate} onPaid={setPaid} />
         <ExtraIconBar
+          extra={extra}
+          onExtra={setExtra}
           noteOn={!!payee}
           tripOn={!!tripId}
           housingOn={housing}
@@ -383,8 +383,6 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
           showTrip={type === "expense"}
           showHousing={moneyTx}
           showSplit={canSplit}
-          onNote={() => setExtra("note")}
-          onTrip={() => setExtra("trip")}
           onHousing={() => setHousing((v) => !v)}
           onSplit={() => {
             const on = !doSplit;
@@ -395,6 +393,11 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
               setField("principal");
             }
           }}
+          noteValue={payee}
+          onNoteChange={setPayee}
+          tripValue={tripId}
+          tripOptions={trips.filter((tr) => isTripActive(tr, todayISO())).map((tr) => ({ id: tr.id, label: pickName(locale, tr.name, tr.nameZh) }))}
+          onTripChange={setTripId}
         />
         <div className="px-4 pb-2">
           <button
@@ -416,14 +419,6 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
             {t.tx.delete}
           </button>
         </div>
-        <NoteSheet open={extra === "note"} value={payee} onChange={setPayee} onClose={() => setExtra(null)} />
-        <TripSheet
-          open={extra === "trip"}
-          value={tripId}
-          options={activeTrips.map((tr) => ({ id: tr.id, label: pickName(locale, tr.name, tr.nameZh) }))}
-          onChange={setTripId}
-          onClose={() => setExtra(null)}
-        />
       </ComposerShell>
     </>
   );

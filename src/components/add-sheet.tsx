@@ -10,8 +10,6 @@ import {
   DatePaidRow,
   ExtraIconBar,
   LineRow,
-  NoteSheet,
-  TripSheet,
   type AmountField,
 } from "@/components/txn-composer";
 import { asFiat, autoDestAmount } from "@/components/currency-field";
@@ -45,26 +43,34 @@ export function AddFlow() {
 
 function AddTypePicker({ onPick, onClose }: { onPick: (t: TxType) => void; onClose: () => void }) {
   const t = useT();
-  const opts: TxType[] = ["expense", "income", "transfer", "miles"];
+  const opts: { id: TxType; tone: string }[] = [
+    { id: "expense", tone: "bg-expense-soft text-expense" },
+    { id: "income", tone: "bg-success-soft text-income" },
+    { id: "transfer", tone: "bg-accent-soft text-accent" },
+    { id: "miles", tone: "bg-background text-foreground" },
+  ];
   return (
-    <Overlay open onClose={onClose} variant="sheet">
-      <div className="px-4 pb-4 pt-2">
-        <div className="mb-3 text-center text-sm font-medium text-muted">{t.add.chooseType}</div>
-        <div className="overflow-hidden rounded-xl bg-elevated">
+    <Overlay open onClose={onClose} variant="page">
+      <div className="px-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <div className="flex items-center justify-between">
+          <button type="button" className="h-11 px-2 text-sm text-accent" onClick={onClose}>
+            {t.add.cancel}
+          </button>
+          <h1 className="text-base font-semibold">{t.add.chooseType}</h1>
+          <span className="inline-block min-w-11" />
+        </div>
+        <div className="mt-6 grid grid-cols-2 gap-3">
           {opts.map((k) => (
             <button
-              key={k}
+              key={k.id}
               type="button"
-              className="flex h-12 w-full items-center justify-center border-t border-line text-base font-medium text-accent first:border-0"
-              onClick={() => onPick(k)}
+              className={`flex min-h-28 flex-col items-center justify-center rounded-2xl text-base font-semibold ${k.tone}`}
+              onClick={() => onPick(k.id)}
             >
-              {t.add[k]}
+              {t.add[k.id]}
             </button>
           ))}
         </div>
-        <button type="button" className="mt-3 h-12 w-full rounded-xl bg-elevated text-base font-medium" onClick={onClose}>
-          {t.add.cancel}
-        </button>
       </div>
     </Overlay>
   );
@@ -102,7 +108,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
   const [housing, setHousing] = useState(false);
   const [paid, setPaid] = useState(true);
   const [field, setField] = useState<AmountField>("amount");
-  const [extra, setExtra] = useState<"note" | "trip" | null>(null);
+  const [extra, setExtra] = useState<"note" | "trip" | "housing" | "split" | null>(null);
   const cat = categories.find((c) => c.id === categoryId);
   const mortgageKind = mortgageEntryKind(cat, categories);
   const canSplit = type !== "income" && type !== "miles" && canSplitMortgage(mortgageKind);
@@ -382,6 +388,8 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
       ) : null}
       <DatePaidRow date={date} paid={paid} onDate={setDate} onPaid={setPaid} />
       <ExtraIconBar
+        extra={extra}
+        onExtra={setExtra}
         noteOn={!!payee}
         tripOn={!!tripId}
         housingOn={housing}
@@ -389,8 +397,6 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
         showTrip={type === "expense"}
         showHousing={type !== "miles"}
         showSplit={canSplit}
-        onNote={() => setExtra("note")}
-        onTrip={() => setExtra("trip")}
         onHousing={() => setHousing((v) => !v)}
         onSplit={() => {
           const on = !doSplit;
@@ -401,14 +407,11 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
             setField("principal");
           }
         }}
-      />
-      <NoteSheet open={extra === "note"} value={payee} onChange={setPayee} onClose={() => setExtra(null)} />
-      <TripSheet
-        open={extra === "trip"}
-        value={tripId}
-        options={trips.filter((tr) => isTripActive(tr, todayISO())).map((tr) => ({ id: tr.id, label: pickName(locale, tr.name, tr.nameZh) }))}
-        onChange={setTripId}
-        onClose={() => setExtra(null)}
+        noteValue={payee}
+        onNoteChange={setPayee}
+        tripValue={tripId}
+        tripOptions={trips.filter((tr) => isTripActive(tr, todayISO())).map((tr) => ({ id: tr.id, label: pickName(locale, tr.name, tr.nameZh) }))}
+        onTripChange={setTripId}
       />
     </ComposerShell>
   );

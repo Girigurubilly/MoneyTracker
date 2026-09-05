@@ -135,7 +135,7 @@ export function LineRow({
           type="button"
           onClick={onFocusAmount}
           className={cn(
-            "min-w-[5.5rem] text-right text-lg font-semibold tabular-nums",
+            "min-w-[6.5rem] text-right text-2xl font-bold tabular-nums tracking-tight",
             active ? "text-accent" : "text-foreground",
           )}
         >
@@ -219,6 +219,8 @@ export function DatePaidRow({
 }
 
 export function ExtraIconBar({
+  extra,
+  onExtra,
   noteOn,
   tripOn,
   housingOn,
@@ -226,11 +228,16 @@ export function ExtraIconBar({
   showTrip,
   showHousing,
   showSplit,
-  onNote,
-  onTrip,
   onHousing,
   onSplit,
+  noteValue,
+  onNoteChange,
+  tripValue,
+  tripOptions,
+  onTripChange,
 }: {
+  extra?: "note" | "trip" | "housing" | "split" | null;
+  onExtra?: (v: "note" | "trip" | "housing" | "split" | null) => void;
   noteOn?: boolean;
   tripOn?: boolean;
   housingOn?: boolean;
@@ -238,32 +245,76 @@ export function ExtraIconBar({
   showTrip?: boolean;
   showHousing?: boolean;
   showSplit?: boolean;
-  onNote?: () => void;
-  onTrip?: () => void;
   onHousing?: () => void;
   onSplit?: () => void;
+  noteValue?: string;
+  onNoteChange?: (v: string) => void;
+  tripValue?: string;
+  tripOptions?: { id: string; label: string }[];
+  onTripChange?: (id: string) => void;
 }) {
+  const t = useT();
+  function toggle(id: "note" | "trip" | "housing" | "split") {
+    if (id === "housing") {
+      onHousing?.();
+      onExtra?.(extra === "housing" ? null : "housing");
+      return;
+    }
+    if (id === "split") {
+      onSplit?.();
+      onExtra?.(extra === "split" ? null : "split");
+      return;
+    }
+    onExtra?.(extra === id ? null : id);
+  }
   return (
-    <div className="flex items-center gap-1 px-3 py-2">
-      {onNote ? (
-        <IconBtn active={noteOn} label="note" onClick={onNote}>
-          <MessageSquare className="size-5" />
-        </IconBtn>
+    <div className="border-b border-line">
+      <div className="flex items-start justify-around px-2 py-2">
+        {onNoteChange ? (
+          <IconBtn active={noteOn || extra === "note"} label={t.add.note} onClick={() => toggle("note")}>
+            <MessageSquare className="size-5" />
+          </IconBtn>
+        ) : null}
+        {showTrip ? (
+          <IconBtn active={tripOn || extra === "trip"} label={t.add.trip} onClick={() => toggle("trip")}>
+            <Plane className="size-5" />
+          </IconBtn>
+        ) : null}
+        {showHousing ? (
+          <IconBtn active={housingOn} label={t.add.housing} onClick={() => toggle("housing")}>
+            <Home className="size-5" />
+          </IconBtn>
+        ) : null}
+        {showSplit ? (
+          <IconBtn active={splitOn} label={t.add.split} onClick={() => toggle("split")}>
+            <Hash className="size-5" />
+          </IconBtn>
+        ) : null}
+      </div>
+      {extra === "note" && onNoteChange ? (
+        <div className="px-4 pb-3">
+          <p className="pb-1.5 text-[11px] text-muted">{t.add.noteHint}</p>
+          <input value={noteValue ?? ""} onChange={(e) => onNoteChange(e.target.value)} placeholder={t.add.note} className="h-11 w-full rounded-lg bg-elevated px-3 text-sm outline-none" />
+        </div>
       ) : null}
-      {showTrip ? (
-        <IconBtn active={tripOn} label="trip" onClick={onTrip}>
-          <Plane className="size-5" />
-        </IconBtn>
+      {extra === "trip" && onTripChange ? (
+        <div className="px-4 pb-3">
+          <p className="pb-1.5 text-[11px] text-muted">{t.add.tripHint}</p>
+          <select value={tripValue ?? ""} onChange={(e) => onTripChange(e.target.value)} className="h-11 w-full rounded-lg bg-elevated px-3 text-sm">
+            <option value="">{t.reports.noneTrip}</option>
+            {(tripOptions ?? []).map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
       ) : null}
-      {showHousing ? (
-        <IconBtn active={housingOn} label="housing" onClick={onHousing}>
-          <Home className="size-5" />
-        </IconBtn>
+      {extra === "housing" || housingOn ? (
+        <p className="px-4 pb-3 text-[11px] leading-relaxed text-muted">{t.add.housingHint}</p>
       ) : null}
-      {showSplit ? (
-        <IconBtn active={splitOn} label="split" onClick={onSplit}>
-          <Hash className="size-5" />
-        </IconBtn>
+      {extra === "split" || splitOn ? (
+        extra === "split" ? <p className="px-4 pb-3 text-[11px] leading-relaxed text-muted">{t.add.splitHint}</p> : null
       ) : null}
     </div>
   );
@@ -281,13 +332,9 @@ function IconBtn({
   label: string;
 }) {
   return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={onClick}
-      className={cn("grid size-11 place-items-center rounded-lg", active ? "text-accent" : "text-faint")}
-    >
-      {children}
+    <button type="button" onClick={onClick} className={cn("flex w-16 flex-col items-center gap-1 py-1", active ? "text-accent" : "text-faint")}>
+      <span className="grid size-11 place-items-center rounded-lg">{children}</span>
+      <span className="max-w-full truncate text-center text-[10px] leading-tight">{label}</span>
     </button>
   );
 }
