@@ -190,7 +190,8 @@ export function retirementSleeves(
   for (const a of accounts) {
     if (a.hidden || a.currency === "MILES") continue;
     const amount = toHkd(a.balance, a.currency, rates);
-    if (a.type === "property") {
+    const group = a.group || (a.type === "property" || a.type === "mortgage" ? "housing" : a.type === "investment" || a.type === "mpf" || a.type === "other_asset" ? "assets" : a.type === "credit" || a.type === "loan" ? "credit" : a.type === "miles" ? "loyalty" : "cash");
+    if (group === "housing" && a.type !== "mortgage" && a.type !== "loan") {
       property += Math.max(0, amount);
       sleeves.push({
         id: a.id,
@@ -201,11 +202,9 @@ export function retirementSleeves(
       });
       continue;
     }
-    if (a.type === "mortgage" || a.type === "loan" || a.type === "credit") continue;
-    if (!a.includeInNetWorth) continue;
-    const cashLike = a.type === "cash" || a.type === "current" || a.type === "savings" || a.type === "ewallet" || a.type === "fx";
-    const kind: AssetSleeve["kind"] = cashLike ? "cash" : "invest";
-    const annualReturn = a.expectedReturn ?? (cashLike ? fallbackCash : fallbackInvest);
+    if (group === "credit" || group === "loyalty" || a.type === "mortgage" || a.type === "loan") continue;
+    const kind: AssetSleeve["kind"] = group === "assets" ? "invest" : "cash";
+    const annualReturn = a.expectedReturn ?? (kind === "cash" ? fallbackCash : fallbackInvest);
     if (kind === "cash") cash += amount;
     else invest += amount;
     sleeves.push({ id: a.id, label: a.nameZh || a.name, amount, annualReturn, kind });

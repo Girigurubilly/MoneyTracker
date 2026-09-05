@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Area, AreaChart, ResponsiveContainer, XAxis } from "recharts";
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { Hairline, InfoButton, ScreenHeader, SectionLabel, StatusChip } from "@/components/shared";
 import { money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
@@ -114,6 +114,7 @@ export function RetirementPage() {
   ]);
   const surplus = sustain - base.targetMonthly;
   const status = retirementStatus(result.depletes, sustain, base.targetMonthly, result.series);
+  const [chartPoint, setChartPoint] = useState<{ age: number; corpus: number } | null>(null);
 
   function persist(patch: Partial<RetirementInputs>) {
     void update({ ...base, ...patch, id: ret?.id ?? "base" });
@@ -157,6 +158,22 @@ export function RetirementPage() {
         </div>
         <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
           <div>
+            <div className="text-xs text-muted">{t.reports.fireNow}</div>
+            <div className="mt-0.5 font-semibold tabular-nums">{money(fire.current, "HKD")}</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted">{t.reports.fireGap}</div>
+            <div className="mt-0.5 font-semibold tabular-nums">{money(Math.max(0, fire.fireNumber - fire.current), "HKD")}</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted">{t.reports.cashAccounts}</div>
+            <div className="mt-0.5 font-semibold tabular-nums">{money(pack.cash, "HKD")}</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted">{t.reports.investAccounts}</div>
+            <div className="mt-0.5 font-semibold tabular-nums">{money(pack.invest, "HKD")}</div>
+          </div>
+          <div>
             <div className="text-xs text-muted">{t.reports.fireNeed}</div>
             <div className="mt-0.5 font-semibold tabular-nums">{money(fire.annualNeed, "HKD")}</div>
           </div>
@@ -177,14 +194,38 @@ export function RetirementPage() {
       </div>
 
       <SectionLabel>{t.reports.assetsByAge}</SectionLabel>
-      <div className="h-48 px-2">
+      <div className="h-52 px-2">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={result.series} margin={{ top: 8, right: 12, left: 8, bottom: 0 }}>
+          <AreaChart
+            data={result.series}
+            margin={{ top: 8, right: 12, left: 8, bottom: 0 }}
+            onMouseMove={(state) => {
+              const p = state?.activePayload?.[0]?.payload as { age?: number; corpus?: number } | undefined;
+              if (p && typeof p.age === "number") setChartPoint({ age: p.age, corpus: p.corpus ?? 0 });
+            }}
+            onMouseLeave={() => setChartPoint(null)}
+          >
             <XAxis dataKey="age" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} interval={1} />
+            <Tooltip
+              cursor={{ stroke: "var(--color-accent)", strokeWidth: 1 }}
+              formatter={(value) => [money(Number(value) || 0, "HKD"), t.reports.corpusAtRetire]}
+              labelFormatter={(age) => `${t.reports.atAge} ${age}`}
+              contentStyle={{
+                borderRadius: 12,
+                border: "1px solid var(--color-line)",
+                background: "var(--color-elevated)",
+                fontSize: 12,
+              }}
+            />
             <Area type="monotone" dataKey="corpus" stroke="var(--color-accent)" fill="var(--color-accent-soft)" strokeWidth={2} />
           </AreaChart>
         </ResponsiveContainer>
       </div>
+      <p className="px-5 pb-2 text-center text-xs text-muted">
+        {chartPoint
+          ? `${t.reports.atAge} ${chartPoint.age} · ${money(chartPoint.corpus, "HKD")}`
+          : t.reports.chartTapHint}
+      </p>
 
       <SectionLabel>{t.reports.timeline}</SectionLabel>
       <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
