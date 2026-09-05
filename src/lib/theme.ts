@@ -25,7 +25,7 @@ export const FONT_STACKS: Record<Exclude<FontId, "theme">, string> = {
   serif: '"Noto Serif TC", "Songti SC", "PingFang HK", Georgia, "Times New Roman", serif',
 };
 
-export type ThemeColorKey = "background" | "foreground" | "elevated" | "muted" | "accent";
+export type ThemeColorKey = "background" | "foreground" | "elevated" | "muted" | "accent" | "income" | "expense" | "line" | "onAccent";
 
 export type ThemeCustom = {
   background?: string;
@@ -33,6 +33,10 @@ export type ThemeCustom = {
   elevated?: string;
   muted?: string;
   accent?: string;
+  income?: string;
+  expense?: string;
+  line?: string;
+  onAccent?: string;
   fontId?: FontId;
   fontSize?: FontSizeId;
   wallpaper?: string;
@@ -73,21 +77,25 @@ export const COLOR_CSS: Record<ThemeColorKey, string> = {
   elevated: "--color-elevated",
   muted: "--color-muted",
   accent: "--color-accent",
+  income: "--color-income",
+  expense: "--color-expense",
+  line: "--color-line",
+  onAccent: "--color-on-accent",
 };
 
 export const THEME_PRESETS: Record<
   ThemeId,
-  { background: string; foreground: string; elevated: string; muted: string; accent: string }
+  Record<ThemeColorKey, string>
 > = {
-  normal: { background: "#f2f2f7", foreground: "#1c1c1e", elevated: "#ffffff", muted: "#8e8e93", accent: "#007aff" },
-  dark: { background: "#000000", foreground: "#f5f5f7", elevated: "#1c1c1e", muted: "#98989d", accent: "#0a84ff" },
-  pinky: { background: "#fdf2f8", foreground: "#4a044e", elevated: "#ffffff", muted: "#a15a86", accent: "#db2777" },
-  anime: { background: "#fff1f5", foreground: "#2b1638", elevated: "#ffffff", muted: "#8b6b90", accent: "#ff5d8f" },
-  cyberpunk: { background: "#090414", foreground: "#d8f3ff", elevated: "#140c28", muted: "#7aa8c4", accent: "#00e5ff" },
-  shiba: { background: "#fff4e5", foreground: "#4a2a12", elevated: "#fffaf3", muted: "#b07a4a", accent: "#e67a2e" },
-  cat: { background: "#f7efe6", foreground: "#3b2a24", elevated: "#fffdf9", muted: "#9c7b6e", accent: "#d97757" },
-  panda: { background: "#f3f6f1", foreground: "#1f2a22", elevated: "#ffffff", muted: "#6f7f72", accent: "#3f7a4e" },
-  hongkong: { background: "#1a0c10", foreground: "#ffe9c8", elevated: "#2a1218", muted: "#c08a6a", accent: "#e23d3d" },
+  normal: { background: "#f2f2f7", foreground: "#1c1c1e", elevated: "#ffffff", muted: "#8e8e93", accent: "#007aff", income: "#248a3d", expense: "#d70015", line: "#e5e5ea", onAccent: "#ffffff" },
+  dark: { background: "#000000", foreground: "#f5f5f7", elevated: "#1c1c1e", muted: "#98989d", accent: "#0a84ff", income: "#30d158", expense: "#ff453a", line: "#38383a", onAccent: "#ffffff" },
+  pinky: { background: "#fdf2f8", foreground: "#4a044e", elevated: "#ffffff", muted: "#a15a86", accent: "#db2777", income: "#0f766e", expense: "#be123c", line: "#f5d0e4", onAccent: "#ffffff" },
+  anime: { background: "#fff1f5", foreground: "#2b1638", elevated: "#ffffff", muted: "#8b6b90", accent: "#ff5d8f", income: "#2a9d8f", expense: "#e11d48", line: "#ffd6e5", onAccent: "#ffffff" },
+  cyberpunk: { background: "#090414", foreground: "#d8f3ff", elevated: "#140c28", muted: "#7aa8c4", accent: "#00e5ff", income: "#5cff8d", expense: "#ff2e97", line: "#2a1848", onAccent: "#041018" },
+  shiba: { background: "#fff4e5", foreground: "#4a2a12", elevated: "#fffaf3", muted: "#b07a4a", accent: "#e67a2e", income: "#2f9e6a", expense: "#c2410c", line: "#f0dcc4", onAccent: "#ffffff" },
+  cat: { background: "#f7efe6", foreground: "#3b2a24", elevated: "#fffdf9", muted: "#9c7b6e", accent: "#d97757", income: "#3d8b6e", expense: "#b45309", line: "#eadcd4", onAccent: "#ffffff" },
+  panda: { background: "#f3f6f1", foreground: "#1f2a22", elevated: "#ffffff", muted: "#6f7f72", accent: "#3f7a4e", income: "#3f7a4e", expense: "#b42318", line: "#d7e0d8", onAccent: "#ffffff" },
+  hongkong: { background: "#1a0c10", foreground: "#ffe9c8", elevated: "#2a1218", muted: "#c08a6a", accent: "#e23d3d", income: "#f0c14b", expense: "#ff6b6b", line: "#4a1c24", onAccent: "#ffffff" },
 };
 
 export function isThemeId(v: string | null): v is ThemeId {
@@ -123,6 +131,10 @@ export function readSavedCustom(): ThemeCustom {
       elevated: normalizeHex(parsed.elevated),
       muted: normalizeHex(parsed.muted),
       accent: normalizeHex(parsed.accent),
+      income: normalizeHex(parsed.income),
+      expense: normalizeHex(parsed.expense),
+      line: normalizeHex(parsed.line),
+      onAccent: normalizeHex(parsed.onAccent),
       fontId: isFontId(parsed.fontId) ? parsed.fontId : undefined,
       fontSize: isFontSizeId(parsed.fontSize) ? parsed.fontSize : undefined,
       wallpaper: typeof parsed.wallpaper === "string" ? parsed.wallpaper : undefined,
@@ -209,11 +221,13 @@ export function applyTheme(theme: ThemeId, custom: ThemeCustom = {}): void {
     else root.style.removeProperty(COLOR_CSS[key]);
   }
   const accent = normalizeHex(custom.accent);
+  const onAccent = normalizeHex(custom.onAccent);
   if (accent) {
-    root.style.setProperty("--color-on-accent", onAccentFor(accent));
+    root.style.setProperty("--color-on-accent", onAccent ?? onAccentFor(accent));
     root.style.setProperty("--color-accent-soft", `color-mix(in srgb, ${accent} 18%, var(--color-elevated))`);
   } else {
-    root.style.removeProperty("--color-on-accent");
+    if (onAccent) root.style.setProperty("--color-on-accent", onAccent);
+    else root.style.removeProperty("--color-on-accent");
     root.style.removeProperty("--color-accent-soft");
   }
   const fontId = isFontId(custom.fontId) ? custom.fontId : "theme";

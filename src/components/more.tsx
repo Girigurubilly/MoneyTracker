@@ -13,7 +13,8 @@ import { CURRENCIES } from "@/lib/types";
 import { useApp, type AppSnapshot } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 import { ACCESS_MODES, THEME_IDS, THEME_PRESETS, FONT_IDS, FONT_SIZE_IDS, normalizeHex, type FontId, type FontSizeId, type ThemeId } from "@/lib/theme";
-import { persistPwaIcon, readSavedPwaIcon, resizeImageFile } from "@/lib/pwa-icon";
+import { persistPwaIcon, readSavedPwaIcon, resizeImageFile, resizeWallpaperFile } from "@/lib/pwa-icon";
+import { assetUrl } from "@/lib/base";
 import { cn } from "@/lib/utils";
 
 export function MoreScreen() {
@@ -370,6 +371,7 @@ export function AppearancePage() {
       <h2 className="px-5 pb-2 text-sm font-medium text-muted">{t.more.appIcon}</h2>
       <AppIconPicker />
       <h2 className="px-5 pb-2 pt-6 text-sm font-medium text-muted">{t.more.theme}</h2>
+      <p className="px-5 pb-3 text-xs text-muted">{t.more.themeHint}</p>
       <div className="grid grid-cols-2 gap-3 px-4">
         {THEME_IDS.map((id) => {
           const swatch = THEME_PRESETS[id];
@@ -379,22 +381,25 @@ export function AppearancePage() {
               key={id}
               type="button"
               onClick={() => setTheme(id)}
-              className={cn(
-                "min-h-16 rounded-xl px-3 py-3 text-left",
-                on ? "ring-2 ring-accent" : "ring-1 ring-line",
-              )}
-              style={{ background: swatch.elevated, color: swatch.foreground }}
+              className={cn("overflow-hidden rounded-2xl text-left ring-1", on ? "ring-2 ring-accent" : "ring-line")}
             >
-              <span className="flex items-center gap-2">
-                <span className="size-4 rounded-full" style={{ background: swatch.background }} />
-                <span className="size-4 rounded-full" style={{ background: swatch.accent }} />
+              <span
+                className="block h-20 bg-cover bg-center"
+                style={{ backgroundImage: `url("${assetUrl(`wallpapers/${id}.jpg`)}")`, backgroundColor: swatch.background }}
+              />
+              <span className="flex items-center justify-between gap-2 bg-elevated px-3 py-2">
+                <span className="text-sm font-medium">{labels[id]}</span>
+                <span className="flex items-center gap-1">
+                  <span className="size-3 rounded-full" style={{ background: swatch.accent }} />
+                  <span className="size-3 rounded-full" style={{ background: swatch.income }} />
+                </span>
               </span>
-              <span className="mt-2 block text-sm font-medium">{labels[id]}</span>
             </button>
           );
         })}
       </div>
       <h2 className="px-5 pb-2 pt-6 text-sm font-medium text-muted">{t.more.wallpaper}</h2>
+      <p className="px-5 pb-3 text-xs text-muted">{t.more.wallpaperHint}</p>
       <div className="mx-4 mb-2 grid grid-cols-3 gap-2">
         {(["theme", "none", "custom"] as const).map((id) => (
           <button
@@ -413,25 +418,28 @@ export function AppearancePage() {
           </button>
         ))}
       </div>
-      <div className="px-4 pb-2">
-        <label className="inline-flex h-11 items-center rounded-xl bg-elevated px-3 text-sm">
+      <div className="mx-4 mb-3 rounded-2xl bg-elevated p-4">
+        <div className="text-sm font-medium">{t.more.chooseWallpaper}</div>
+        <p className="mt-1 text-xs leading-5 text-muted">{t.more.wallpaperSizeHint}</p>
+        <label className="mt-3 inline-flex h-11 items-center rounded-xl bg-background px-4 text-sm font-medium ring-1 ring-line">
           {t.more.chooseWallpaper}
           <input
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp"
             className="hidden"
             onChange={async (e) => {
               const file = e.target.files?.[0];
               e.target.value = "";
               if (!file) return;
-              const data = await resizeImageFile(file, 720);
+              const data = await resizeWallpaperFile(file);
               setWallpaper("custom", data);
             }}
           />
         </label>
-      </div>
-      <div className="mx-4 mb-3 rounded-2xl bg-elevated px-4 py-3">
-        <div className="flex items-center justify-between text-sm">
+        {custom.wallpaperMode === "custom" && custom.wallpaper ? (
+          <div className="mt-3 h-28 overflow-hidden rounded-xl bg-background bg-cover bg-center" style={{ backgroundImage: `url("${custom.wallpaper}")` }} />
+        ) : null}
+        <div className="mt-3 flex items-center justify-between text-sm">
           <span>{t.more.wallpaperOpacity}</span>
           <span className="tabular-nums text-muted">{custom.wallpaperOpacity ?? 40}%</span>
         </div>
@@ -485,41 +493,27 @@ export function AppearancePage() {
         </div>
       </Group>
       <h2 className="px-5 pb-2 pt-6 text-sm font-medium text-muted">{t.more.colors}</h2>
+      <p className="px-5 pb-3 text-xs text-muted">{t.more.colorsHint}</p>
       <Group>
-        <ColorRow
-          label={t.more.colorBackground}
-          value={custom.background}
-          fallback={preset.background}
-          onChange={(hex) => setCustomColor("background", hex)}
-        />
+        <ColorRow label={t.more.colorBackground} value={custom.background} fallback={preset.background} onChange={(hex) => setCustomColor("background", hex)} />
         <Hairline />
-        <ColorRow
-          label={t.more.colorElevated}
-          value={custom.elevated}
-          fallback={preset.elevated}
-          onChange={(hex) => setCustomColor("elevated", hex)}
-        />
+        <ColorRow label={t.more.colorElevated} value={custom.elevated} fallback={preset.elevated} onChange={(hex) => setCustomColor("elevated", hex)} />
         <Hairline />
-        <ColorRow
-          label={t.more.colorFont}
-          value={custom.foreground}
-          fallback={preset.foreground}
-          onChange={(hex) => setCustomColor("foreground", hex)}
-        />
+        <ColorRow label={t.more.colorFont} value={custom.foreground} fallback={preset.foreground} onChange={(hex) => setCustomColor("foreground", hex)} />
         <Hairline />
-        <ColorRow
-          label={t.more.colorMuted}
-          value={custom.muted}
-          fallback={preset.muted}
-          onChange={(hex) => setCustomColor("muted", hex)}
-        />
+        <ColorRow label={t.more.colorMuted} value={custom.muted} fallback={preset.muted} onChange={(hex) => setCustomColor("muted", hex)} />
         <Hairline />
-        <ColorRow
-          label={t.more.colorHighlight}
-          value={custom.accent}
-          fallback={preset.accent}
-          onChange={(hex) => setCustomColor("accent", hex)}
-        />
+        <ColorRow label={t.more.colorLine} value={custom.line} fallback={preset.line} onChange={(hex) => setCustomColor("line", hex)} />
+      </Group>
+      <h2 className="px-5 pb-2 pt-6 text-sm font-medium text-muted">{t.more.colorAccentGroup}</h2>
+      <Group>
+        <ColorRow label={t.more.colorHighlight} value={custom.accent} fallback={preset.accent} onChange={(hex) => setCustomColor("accent", hex)} />
+        <Hairline />
+        <ColorRow label={t.more.colorOnAccent} value={custom.onAccent} fallback={preset.onAccent} onChange={(hex) => setCustomColor("onAccent", hex)} />
+        <Hairline />
+        <ColorRow label={t.more.colorIncome} value={custom.income} fallback={preset.income} onChange={(hex) => setCustomColor("income", hex)} />
+        <Hairline />
+        <ColorRow label={t.more.colorExpense} value={custom.expense} fallback={preset.expense} onChange={(hex) => setCustomColor("expense", hex)} />
       </Group>
       <div className="px-5 pt-4">
         <button type="button" className="h-11 w-full rounded-xl bg-elevated text-sm" onClick={resetCustomColors}>
@@ -588,20 +582,31 @@ function ColorRow({
 }) {
   const shown = normalizeHex(value) ?? fallback;
   return (
-    <label className="flex min-h-11 items-center justify-between gap-3 px-4 py-2">
-      <span className="text-sm">{label}</span>
-      <span className="relative size-11 shrink-0 overflow-hidden rounded-lg ring-1 ring-line">
-        <span className="absolute inset-0" style={{ background: shown }} />
+    <label className="flex min-h-12 items-center justify-between gap-3 px-4 py-2">
+      <span className="min-w-0 text-sm">{label}</span>
+      <span className="flex shrink-0 items-center gap-2">
         <input
-          type="color"
           value={shown}
-          aria-label={label}
           onChange={(e) => {
             const hex = normalizeHex(e.target.value);
             if (hex) onChange(hex);
           }}
-          className="absolute inset-0 size-full cursor-pointer opacity-0"
+          className="h-9 w-[5.6rem] rounded-lg bg-background px-2 font-mono text-xs uppercase ring-1 ring-line"
+          spellCheck={false}
         />
+        <span className="relative size-10 overflow-hidden rounded-lg ring-1 ring-line">
+          <span className="absolute inset-0" style={{ background: shown }} />
+          <input
+            type="color"
+            value={shown}
+            aria-label={label}
+            onChange={(e) => {
+              const hex = normalizeHex(e.target.value);
+              if (hex) onChange(hex);
+            }}
+            className="absolute inset-0 size-full cursor-pointer opacity-0"
+          />
+        </span>
       </span>
     </label>
   );
