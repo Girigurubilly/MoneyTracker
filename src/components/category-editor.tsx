@@ -4,7 +4,7 @@ import { Overlay } from "@/components/shared";
 import { CategoryIcon } from "@/components/category-icon";
 import { AccountSelect } from "@/components/account-select";
 import { pickName } from "@/lib/i18n";
-import { CATEGORY_ICONS, type Category, type CategoryIconName, type LifeTheme } from "@/lib/types";
+import { CATEGORY_ICON_GROUPS, type Category, type CategoryIconName, type LifeTheme } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 import { cn } from "@/lib/utils";
@@ -128,20 +128,27 @@ function CategoryEditorBody({
       </label>
       <div className="py-2">
         <span className="text-xs text-muted">{t.add.icon}</span>
-        <div className="mt-2 grid grid-cols-6 gap-2">
-          {CATEGORY_ICONS.map((id) => (
-            <button
-              key={id}
-              type="button"
-              aria-label={id}
-              onClick={() => setIcon(id)}
-              className={cn(
-                "grid size-11 place-items-center rounded-full bg-elevated",
-                icon === id && "ring-2 ring-accent text-accent",
-              )}
-            >
-              <CategoryIcon name={id} className="size-5" />
-            </button>
+        <div className="mt-2 space-y-3">
+          {CATEGORY_ICON_GROUPS.map((g) => (
+            <div key={g.id}>
+              <div className="pb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">{t.add.iconGroups[g.id]}</div>
+              <div className="grid grid-cols-6 gap-2">
+                {g.icons.map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-label={id}
+                    onClick={() => setIcon(id)}
+                    className={cn(
+                      "grid size-11 place-items-center rounded-full bg-elevated",
+                      icon === id && "ring-2 ring-accent text-accent",
+                    )}
+                  >
+                    <CategoryIcon name={id} className="size-5" />
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </div>

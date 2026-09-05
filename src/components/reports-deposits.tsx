@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Plus, RefreshCw, Trash2 } from "lucide-react";
-import { Group, Hairline, Overlay, ScreenHeader } from "@/components/shared";
+import { Group, Hairline, Overlay, ScreenHeader, SectionLabel } from "@/components/shared";
 import { moneyAccountsForPicker } from "@/lib/accounts";
 import { MONTHS_S, suggestedInterest, summarizeDeposits } from "@/lib/calc/deposits";
 import { money, todayISO } from "@/lib/format";
@@ -33,7 +33,17 @@ export function DepositsPage() {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const summary = useMemo(() => summarizeDeposits(deposits, today, rates), [deposits, today, rates]);
-  const sorted = useMemo(() => [...deposits].sort((a, b) => (a.endDate || "").localeCompare(b.endDate || "")), [deposits]);
+  const grouped = useMemo(() => {
+    const map = new Map<string, typeof deposits>();
+    const rows = [...deposits].sort((a, b) => (a.endDate || a.startDate || "").localeCompare(b.endDate || b.startDate || "") || a.id.localeCompare(b.id));
+    for (const r of rows) {
+      const key = (r.endDate || r.startDate || "").slice(0, 4) || "—";
+      const list = map.get(key) ?? [];
+      list.push(r);
+      map.set(key, list);
+    }
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [deposits]);
 
   async function fetchFx() {
     setBusy(true);
@@ -60,40 +70,45 @@ export function DepositsPage() {
       />
 
       <h2 className="px-5 pb-2 text-xs font-semibold uppercase tracking-wide text-muted">{t.reports.depositRecords}</h2>
-      {sorted.length === 0 ? (
+      {grouped.length === 0 ? (
         <p className="px-5 text-sm text-muted">{t.reports.noDepositsHint}</p>
       ) : (
-        <Group>
-          {sorted.map((r, i) => {
-            const realized = !!r.endDate && r.endDate <= today;
-            const d = r.endDate ? new Date(`${r.endDate}T00:00:00`) : null;
-            const rm = d && !Number.isNaN(d.getTime()) ? `${MONTHS_S[d.getMonth()]} ${d.getFullYear()}` : "—";
-            const tone = realized ? "text-income" : d && d.getFullYear() === year ? "text-accent" : "text-muted";
-            return (
-              <div key={r.id}>
-                {i > 0 ? <Hairline /> : null}
-                <div className="flex items-start gap-3 px-4 py-3">
-                  <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setEditing(r)}>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-semibold">{r.bank}</span>
-                      <span className={`text-xs font-medium ${tone}`}>{rm}</span>
+        grouped.map(([yr, rows]) => (
+          <div key={yr} className="mb-4">
+            <SectionLabel>{yr}</SectionLabel>
+            <Group>
+              {rows.map((r, i) => {
+                const realized = !!r.endDate && r.endDate <= today;
+                const d = r.endDate ? new Date(`${r.endDate}T00:00:00`) : null;
+                const rm = d && !Number.isNaN(d.getTime()) ? `${MONTHS_S[d.getMonth()]} ${d.getFullYear()}` : "—";
+                const tone = realized ? "text-income" : d && d.getFullYear() === year ? "text-accent" : "text-muted";
+                return (
+                  <div key={r.id}>
+                    {i > 0 ? <Hairline /> : null}
+                    <div className="flex items-start gap-3 px-4 py-3">
+                      <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setEditing(r)}>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate text-sm font-semibold">{r.bank}</span>
+                          <span className={`text-xs font-medium ${tone}`}>{rm}</span>
+                        </div>
+                        <div className="mt-1 text-xs text-muted">
+                          {money(r.amount, r.currency)} · {(r.rate || 0).toFixed(2)}% · {r.startDate} → {r.endDate}
+                        </div>
+                        <div className="mt-1 flex justify-between text-sm tabular-nums">
+                          <span className="text-income">+{money(r.interest, r.currency)}</span>
+                          <span>{money((r.amount || 0) + (r.interest || 0), r.currency)}</span>
+                        </div>
+                      </button>
+                      <button type="button" className="mt-1 text-expense" onClick={() => void deleteDeposit(r.id)} aria-label={locale === "zh-HK" ? "刪除" : "Delete"}>
+                        <Trash2 className="size-4" />
+                      </button>
                     </div>
-                    <div className="mt-1 text-xs text-muted">
-                      {money(r.amount, r.currency)} · {(r.rate || 0).toFixed(2)}% · {r.startDate} → {r.endDate}
-                    </div>
-                    <div className="mt-1 flex justify-between text-sm tabular-nums">
-                      <span className="text-income">+{money(r.interest, r.currency)}</span>
-                      <span>{money((r.amount || 0) + (r.interest || 0), r.currency)}</span>
-                    </div>
-                  </button>
-                  <button type="button" className="mt-1 text-expense" onClick={() => void deleteDeposit(r.id)} aria-label={locale === "zh-HK" ? "刪除" : "Delete"}>
-                    <Trash2 className="size-4" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </Group>
+                  </div>
+                );
+              })}
+            </Group>
+          </div>
+        ))
       )}
 
       <div className="mt-6 flex items-center justify-between px-5">

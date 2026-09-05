@@ -108,6 +108,7 @@ export type Account = {
   sortOrder?: number;
   linkedAccountId?: string;
   expectedReturn?: number;
+  retireInclude?: boolean;
 };
 
 export type CategoryIconName =
@@ -146,46 +147,166 @@ export type CategoryIconName =
   | "book"
   | "file"
   | "clock"
-  | "dollar";
+  | "dollar"
+  | "card"
+  | "banknote"
+  | "receipt"
+  | "percent"
+  | "calculator"
+  | "vault"
+  | "cart"
+  | "store"
+  | "tag"
+  | "package"
+  | "barcode"
+  | "pizza"
+  | "icecream"
+  | "wine"
+  | "beer"
+  | "cake"
+  | "apple"
+  | "sandwich"
+  | "salad"
+  | "sofa"
+  | "key"
+  | "lamp"
+  | "hammer"
+  | "droplets"
+  | "bed"
+  | "bath"
+  | "plug"
+  | "paw"
+  | "bird"
+  | "fish"
+  | "cat"
+  | "dog"
+  | "rabbit"
+  | "bone"
+  | "baby"
+  | "milk"
+  | "palmtree"
+  | "luggage"
+  | "ferris"
+  | "sun"
+  | "snow"
+  | "moon"
+  | "pill"
+  | "activity"
+  | "stethoscope"
+  | "pulse"
+  | "cross"
+  | "bus"
+  | "bike"
+  | "ship"
+  | "fuel"
+  | "factory"
+  | "hotel"
+  | "shirt"
+  | "glasses"
+  | "watch"
+  | "gem"
+  | "scissors"
+  | "users"
+  | "handshake"
+  | "presentation"
+  | "scale"
+  | "gavel"
+  | "drama"
+  | "clapper"
+  | "popcorn"
+  | "phone"
+  | "laptop"
+  | "tv"
+  | "headphones"
+  | "speaker"
+  | "printer"
+  | "battery"
+  | "tablet"
+  | "cpu"
+  | "palette"
+  | "library"
+  | "church"
+  | "dice"
+  | "puzzle"
+  | "joystick"
+  | "music"
+  | "mic"
+  | "disc"
+  | "radio"
+  | "guitar"
+  | "globe"
+  | "signal"
+  | "cloud"
+  | "mail"
+  | "share"
+  | "camera"
+  | "image"
+  | "aperture"
+  | "trophy"
+  | "medal"
+  | "run"
+  | "dumbbell"
+  | "calendar"
+  | "hourglass"
+  | "timer"
+  | "alarm"
+  | "bell"
+  | "newspaper"
+  | "podcast"
+  | "play"
+  | "crown"
+  | "rss";
 
-export const CATEGORY_ICONS: CategoryIconName[] = [
-  "utensils",
-  "shopping",
-  "train",
-  "car",
-  "home",
-  "wrench",
-  "zap",
-  "wifi",
-  "heart",
-  "shield",
-  "graduation",
-  "film",
-  "sparkles",
-  "plane",
-  "building",
-  "map",
-  "ticket",
-  "umbrella",
-  "bag",
-  "landmark",
-  "piggy",
-  "repeat",
-  "wallet",
-  "gift",
-  "coins",
-  "trending",
-  "briefcase",
-  "gamepad",
-  "user",
-  "broom",
-  "tent",
-  "cup",
-  "book",
-  "file",
-  "clock",
-  "dollar",
+export type CategoryIconGroupId =
+  | "financial"
+  | "ecommerce"
+  | "food"
+  | "house"
+  | "animal"
+  | "baby"
+  | "holiday"
+  | "health"
+  | "transport"
+  | "city"
+  | "clothes"
+  | "business"
+  | "drama"
+  | "devices"
+  | "culture"
+  | "gaming"
+  | "music"
+  | "network"
+  | "photo"
+  | "sport"
+  | "times"
+  | "subscriptions";
+
+export const CATEGORY_ICON_GROUPS: { id: CategoryIconGroupId; icons: CategoryIconName[] }[] = [
+  { id: "financial", icons: ["wallet", "coins", "dollar", "piggy", "landmark", "trending", "card", "banknote", "receipt", "percent", "calculator", "vault"] },
+  { id: "ecommerce", icons: ["shopping", "bag", "gift", "cart", "store", "tag", "package", "barcode"] },
+  { id: "food", icons: ["utensils", "cup", "pizza", "icecream", "wine", "beer", "cake", "apple", "sandwich", "salad"] },
+  { id: "house", icons: ["home", "wrench", "zap", "broom", "sofa", "key", "lamp", "hammer", "droplets", "bed", "bath", "plug"] },
+  { id: "animal", icons: ["paw", "bird", "fish", "cat", "dog", "rabbit", "bone"] },
+  { id: "baby", icons: ["baby", "milk", "user"] },
+  { id: "holiday", icons: ["plane", "tent", "ticket", "sparkles", "umbrella", "palmtree", "luggage", "ferris", "sun", "snow", "moon"] },
+  { id: "health", icons: ["heart", "shield", "pill", "activity", "stethoscope", "pulse", "cross"] },
+  { id: "transport", icons: ["train", "car", "bus", "bike", "ship", "fuel"] },
+  { id: "city", icons: ["building", "map", "factory", "hotel"] },
+  { id: "clothes", icons: ["shirt", "glasses", "watch", "gem", "scissors"] },
+  { id: "business", icons: ["briefcase", "file", "users", "handshake", "presentation", "scale", "gavel"] },
+  { id: "drama", icons: ["film", "drama", "clapper", "popcorn"] },
+  { id: "devices", icons: ["phone", "laptop", "tv", "headphones", "speaker", "printer", "battery", "tablet", "cpu"] },
+  { id: "culture", icons: ["graduation", "book", "palette", "library", "church"] },
+  { id: "gaming", icons: ["gamepad", "dice", "puzzle", "joystick"] },
+  { id: "music", icons: ["music", "mic", "disc", "radio", "guitar"] },
+  { id: "network", icons: ["wifi", "globe", "signal", "cloud", "mail", "share"] },
+  { id: "photo", icons: ["camera", "image", "aperture"] },
+  { id: "sport", icons: ["trophy", "medal", "run", "dumbbell"] },
+  { id: "times", icons: ["clock", "calendar", "hourglass", "timer", "alarm", "bell"] },
+  { id: "subscriptions", icons: ["repeat", "newspaper", "podcast", "play", "crown", "rss"] },
 ];
+
+export const CATEGORY_ICONS: CategoryIconName[] = CATEGORY_ICON_GROUPS.flatMap((g) => g.icons);
 
 export type Category = {
   id: string;

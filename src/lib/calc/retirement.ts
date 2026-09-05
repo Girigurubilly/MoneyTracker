@@ -23,6 +23,7 @@ export type AssetSleeve = {
   amount: number;
   annualReturn: number;
   kind: "cash" | "invest" | "property";
+  included: boolean;
 };
 
 export type RetirementCtx = {
@@ -65,7 +66,7 @@ export function savingsLast12Months(txs: Transaction[], rates: FxRate[], asOfMon
 
 export function runRetirement(inputs: RetirementInputs, ctx: RetirementCtx) {
   const years = Math.max(1, inputs.deathAge - inputs.currentAge);
-  const sleeves = (ctx.sleeves ?? []).filter((s) => s.kind !== "property").map((s) => ({ ...s }));
+  const sleeves = (ctx.sleeves ?? []).filter((s) => s.kind !== "property" && s.included !== false).map((s) => ({ ...s }));
   let corpus = sleeves.length ? sleeves.reduce((s, x) => s + x.amount, 0) : ctx.investableNow;
   const series: { age: number; corpus: number }[] = [];
   let depletes = false;
@@ -82,7 +83,7 @@ export function runRetirement(inputs: RetirementInputs, ctx: RetirementCtx) {
 
     if (sleeves.length) {
       for (const s of sleeves) {
-        const r = s.annualReturn || (retired ? fallbackPost : fallbackPre);
+        const r = s.annualReturn ?? (retired ? fallbackPost : fallbackPre);
         s.amount = s.amount * (1 + r);
       }
       corpus = sleeves.reduce((s, x) => s + x.amount, 0);
@@ -145,11 +146,10 @@ export function firePlan(inputs: RetirementInputs, ctx: RetirementCtx) {
   const swr = inputs.fireSwr && inputs.fireSwr > 0 ? inputs.fireSwr : 0.04;
   const annualNeed = inputs.targetMonthly * 12 + (inputs.travelInRetirement || 0);
   const fireNumber = swr > 0 ? annualNeed / swr : 0;
-  const current = ctx.investableNow;
+  const current = (ctx.sleeves ?? []).filter((s) => s.kind !== "property" && s.included !== false).reduce((s, x) => s + x.amount, 0) || ctx.investableNow;
   const property = ctx.propertyEquity ?? 0;
-  const r =
-    weightedSleeveReturn((ctx.sleeves ?? []).filter((s) => s.kind !== "property"), inputs.preReturn) ||
-    inputs.preReturn;
+  const used = (ctx.sleeves ?? []).filter((s) => s.kind !== "property" && s.included !== false);
+  const r = weightedSleeveReturn(used, inputs.preReturn);
   const annualSave = Math.max(0, inputs.monthlyIncomeNow - inputs.monthlySpendNow) * 12;
   let corpus = current;
   let years = 0;
@@ -174,7 +174,7 @@ export function firePlan(inputs: RetirementInputs, ctx: RetirementCtx) {
 export function weightedSleeveReturn(sleeves: AssetSleeve[], fallback: number): number {
   const total = sleeves.reduce((s, x) => s + Math.max(0, x.amount), 0);
   if (total <= 0) return fallback;
-  return sleeves.reduce((s, x) => s + Math.max(0, x.amount) * (x.annualReturn || fallback), 0) / total;
+  return sleeves.reduce((s, x) => s + Math.max(0, x.amount) * (x.annualReturn ?? fallback), 0) / total;
 }
 
 export function retirementSleeves(
@@ -197,17 +197,21 @@ export function retirementSleeves(
         id: a.id,
         label: a.nameZh || a.name,
         amount: Math.max(0, amount),
-        annualReturn: a.expectedReturn ?? 0,
+        annualReturn: typeof a.expectedReturn === "number" ? a.expectedReturn : 0,
         kind: "property",
+        included: a.retireInclude !== false,
       });
       continue;
     }
     if (group === "credit" || group === "loyalty" || a.type === "mortgage" || a.type === "loan") continue;
     const kind: AssetSleeve["kind"] = group === "assets" ? "invest" : "cash";
-    const annualReturn = a.expectedReturn ?? (kind === "cash" ? fallbackCash : fallbackInvest);
-    if (kind === "cash") cash += amount;
-    else invest += amount;
-    sleeves.push({ id: a.id, label: a.nameZh || a.name, amount, annualReturn, kind });
+    const annualReturn = typeof a.expectedReturn === "number" ? a.expectedReturn : kind === "cash" ? fallbackCash : fallbackInvest;
+    const included = a.retireInclude !== false;
+    if (included) {
+      if (kind === "cash") cash += amount;
+      else invest += amount;
+    }
+    sleeves.push({ id: a.id, label: a.nameZh || a.name, amount, annualReturn, kind, included });
   }
   return { sleeves, cash, invest, property };
 }
