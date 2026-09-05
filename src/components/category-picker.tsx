@@ -247,7 +247,7 @@ export function CategoryPicker({
         open={editOpen}
         onClose={() => setEditOpen(false)}
         initial={editInitial}
-        defaultParentId={parent?.id}
+        defaultParentId={editInitial ? undefined : parent?.id}
         defaultKind={kind}
       />
     </div>

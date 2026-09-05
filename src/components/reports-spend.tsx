@@ -33,6 +33,7 @@ export function SpendingPage() {
   const [customFrom, setCustomFrom] = useState(`${today.slice(0, 4)}-01-01`);
   const [customTo, setCustomTo] = useState(today);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [focusParent, setFocusParent] = useState<string | null>(null);
   const range = periodRange(preset, today, customFrom, customTo);
   const from = preset === "custom" ? customFrom : range.from;
   const to = preset === "custom" ? customTo : range.to;
@@ -55,7 +56,26 @@ export function SpendingPage() {
     { id: "income", label: t.reports.income },
     { id: "both", label: t.reports.both },
   ];
-  const openRow = totals.rows.find((r) => r.id === openId) ?? null;
+  const childTotals = useMemo(() => {
+    if (!focusParent) return null;
+    const raw = periodCategoryTotals(txs, cats, rates, from, to, tab, false);
+    const allow = new Set(cats.filter((c) => c.id === focusParent || c.parentId === focusParent).map((c) => c.id));
+    return { ...raw, rows: raw.rows.filter((r) => allow.has(r.id)) };
+  }, [txs, cats, rates, from, to, tab, focusParent]);
+  const view = childTotals ?? totals;
+  const openRow = view.rows.find((r) => r.id === openId) ?? totals.rows.find((r) => r.id === openId) ?? null;
+  const focusCat = cats.find((c) => c.id === focusParent);
+
+  function openBucket(id: string) {
+    if (merge && !focusParent) {
+      const hasKids = cats.some((c) => c.parentId === id);
+      if (hasKids) {
+        setFocusParent(id);
+        return;
+      }
+    }
+    setOpenId(id);
+  }
 
   return (
     <div className="pb-10">
@@ -130,29 +150,38 @@ export function SpendingPage() {
           {t.reports.mergeParents}
         </button>
       </div>
+      {focusParent ? (
+        <div className="flex items-center justify-between px-5 pt-3">
+          <button type="button" className="text-sm text-accent" onClick={() => setFocusParent(null)}>
+            {t.common.back}
+          </button>
+          <span className="text-sm font-semibold">{focusCat ? pickName(locale, focusCat.name, focusCat.nameZh) : ""}</span>
+          <span className="min-w-8" />
+        </div>
+      ) : null}
       <div className="relative mx-auto h-56 w-56">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
-              data={totals.rows.length ? totals.rows : [{ id: "empty", value: 1, name: "—" }]}
+              data={view.rows.length ? view.rows : [{ id: "empty", value: 1, name: "—" }]}
               dataKey="value"
               nameKey="name"
               innerRadius="62%"
               outerRadius="88%"
               stroke="none"
-              paddingAngle={totals.rows.length > 1 ? 1.2 : 0}
+              paddingAngle={view.rows.length > 1 ? 1.2 : 0}
               onClick={(_, index) => {
-                const row = totals.rows[index];
-                if (row) setOpenId(row.id);
+                const row = view.rows[index];
+                if (row) openBucket(row.id);
               }}
             >
-              {(totals.rows.length ? totals.rows : [{ id: "empty", colorIndex: 0 }]).map((r) => (
+              {(view.rows.length ? view.rows : [{ id: "empty", colorIndex: 0 }]).map((r) => (
                 <Cell
                   key={r.id}
                   fill={CHART[r.colorIndex]}
                   className={r.id === "empty" ? undefined : "cursor-pointer outline-none"}
                   onClick={() => {
-                    if (r.id !== "empty") setOpenId(r.id);
+                    if (r.id !== "empty") openBucket(r.id);
                   }}
                 />
               ))}
@@ -167,24 +196,29 @@ export function SpendingPage() {
         </div>
       </div>
       <div className="px-5 pt-2">
-        {totals.rows.map((r) => (
+        {view.rows.map((r) => {
+          const cat = cats.find((c) => c.id === r.id);
+          const parent = !merge && cat?.parentId ? cats.find((c) => c.id === cat.parentId) : null;
+          const label = parent ? `${pickName(locale, parent.name, parent.nameZh)} · ${pickName(locale, r.name, r.nameZh)}` : pickName(locale, r.name, r.nameZh);
+          return (
           <button
             key={r.id}
             type="button"
-            onClick={() => setOpenId(r.id)}
+            onClick={() => openBucket(r.id)}
             className="flex min-h-11 w-full items-center justify-between gap-3 py-2.5 text-left"
           >
             <div className="flex min-w-0 items-center gap-2.5">
               <span className="size-2.5 shrink-0 rounded-full" style={{ background: CHART[r.colorIndex] }} />
-              <span className="truncate text-sm">{pickName(locale, r.name, r.nameZh)}</span>
+              <span className="truncate text-sm">{label}</span>
             </div>
             <span className="flex shrink-0 items-center gap-1">
               <span className="text-sm tabular-nums text-muted">{money(r.value, "HKD")}</span>
               <ChevronRight className="size-4 text-faint" />
             </span>
           </button>
-        ))}
-        {totals.rows.length === 0 ? <p className="py-6 text-center text-sm text-muted">{t.common.none}</p> : null}
+          );
+        })}
+        {view.rows.length === 0 ? <p className="py-6 text-center text-sm text-muted">{t.common.none}</p> : null}
       </div>
       {openRow ? (
         <CategoryTxList
@@ -192,7 +226,7 @@ export function SpendingPage() {
           from={from}
           to={to}
           tab={tab}
-          merge={merge}
+          merge={Boolean(focusParent) ? false : merge}
           onClose={() => setOpenId(null)}
         />
       ) : null}

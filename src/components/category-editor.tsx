@@ -58,7 +58,9 @@ function CategoryEditorBody({
   const parents = cats.filter((c) => !c.parentId);
   const [name, setName] = useState(initial ? pickName(locale, initial.name, initial.nameZh) : "");
   const [kind, setKind] = useState<"expense" | "income">(initial?.kind ?? defaultKind ?? "expense");
-  const [parentId, setParentId] = useState(initial?.parentId ?? defaultParentId ?? "");
+  const [parentId, setParentId] = useState(
+    initial?.parentId && initial.parentId !== initial.id ? initial.parentId : initial ? "" : (defaultParentId ?? ""),
+  );
   const [icon, setIcon] = useState<CategoryIconName>(initial?.icon ?? "wallet");
   const [defaultAccountId, setDefaultAccountId] = useState(
     initial?.defaultAccountId ?? cats.find((c) => c.id === (initial?.parentId ?? defaultParentId))?.defaultAccountId ?? "",
@@ -67,7 +69,8 @@ function CategoryEditorBody({
   async function save() {
     const n = name.trim();
     if (!n) return;
-    const parent = parents.find((p) => p.id === parentId);
+    const nextParentId = parentId && parentId !== (initial?.id ?? "") ? parentId : undefined;
+    const parent = parents.find((p) => p.id === nextParentId);
     const theme: LifeTheme = parent?.theme ?? (kind === "income" ? "other" : "living");
     const row: Category = {
       id: initial?.id ?? newId(),
@@ -76,7 +79,7 @@ function CategoryEditorBody({
       theme,
       kind: parent?.kind ?? kind,
       icon,
-      parentId: parentId || undefined,
+      parentId: nextParentId,
       essential: initial?.essential,
       defaultAccountId: defaultAccountId || undefined,
     };

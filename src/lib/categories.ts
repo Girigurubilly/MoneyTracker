@@ -88,7 +88,7 @@ export function collapseRepeatedLabel(raw: string): string {
 }
 
 export function pickerGroups(categories: Category[]): { parent: Category; children: Category[] }[] {
-  const parents = categories.filter((c) => !c.parentId);
+  const parents = categories.filter((c) => !c.parentId || c.parentId === c.id);
   const housing = parents.find((c) => isHousingGroup(c));
   const groups: { parent: Category; children: Category[] }[] = [];
   for (const p of parents) {
