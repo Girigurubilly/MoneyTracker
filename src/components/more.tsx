@@ -312,6 +312,7 @@ export function AppearancePage() {
   const setCustomColor = useUi((s) => s.setCustomColor);
   const setFontId = useUi((s) => s.setFontId);
   const setFontSize = useUi((s) => s.setFontSize);
+  const setWallpaper = useUi((s) => s.setWallpaper);
   const setAccessMode = useUi((s) => s.setAccessMode);
   const accessMode = useUi((s) => s.accessMode);
   const resetCustomColors = useUi((s) => s.resetCustomColors);
@@ -321,6 +322,10 @@ export function AppearancePage() {
     pinky: t.more.themePinky,
     anime: t.more.themeAnime,
     cyberpunk: t.more.themeCyberpunk,
+    shiba: t.more.themeShiba,
+    cat: t.more.themeCat,
+    panda: t.more.themePanda,
+    hongkong: t.more.themeHongkong,
   };
   const fontLabels: Record<FontId, string> = {
     theme: t.more.fontTheme,
@@ -388,7 +393,43 @@ export function AppearancePage() {
           );
         })}
       </div>
-      <h2 className="px-5 pb-2 pt-6 text-sm font-medium text-muted">{t.more.typography}</h2>
+      <h2 className="px-5 pb-2 pt-6 text-sm font-medium text-muted">{t.more.wallpaper}</h2>
+      <div className="mx-4 mb-2 grid grid-cols-3 gap-2">
+        {(["theme", "none", "custom"] as const).map((id) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => {
+              if (id === "custom") return;
+              setWallpaper(id);
+            }}
+            className={cn(
+              "h-11 rounded-xl text-sm font-medium",
+              (custom.wallpaperMode ?? "theme") === id ? "bg-accent text-on-accent" : "bg-elevated",
+            )}
+          >
+            {id === "theme" ? t.more.wallpaperTheme : id === "none" ? t.more.wallpaperNone : t.more.wallpaperCustom}
+          </button>
+        ))}
+      </div>
+      <div className="px-4 pb-2">
+        <label className="inline-flex h-11 items-center rounded-xl bg-elevated px-3 text-sm">
+          {t.more.chooseWallpaper}
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (!file) return;
+              const data = await resizeImageFile(file, 720);
+              setWallpaper("custom", data);
+            }}
+          />
+        </label>
+      </div>
+      <h2 className="px-5 pb-2 pt-4 text-sm font-medium text-muted">{t.more.typography}</h2>
       <Group>
         <div className="px-4 py-3">
           <div className="text-sm">{t.more.fontType}</div>

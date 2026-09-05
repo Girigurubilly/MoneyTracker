@@ -19,6 +19,7 @@ export { SpendingPage } from "@/components/reports-spend";
 export { LivingPage } from "@/components/reports-living";
 export { TravelPage, TripDetailPage } from "@/components/reports-travel";
 export { RetirementPage } from "@/components/reports-retire";
+export { BalancePage } from "@/components/reports-balance";
 
 export function ReportsHub() {
   const t = useT();
@@ -27,6 +28,7 @@ export function ReportsHub() {
     { to: "/reports/dashboard", title: t.reports.dashboard, modes: ["standard", "elderly"] },
     { to: "/reports/spending", title: t.reports.spending, modes: ["standard", "elderly", "kid"] },
     { to: "/reports/compare", title: t.reports.yearCompare, modes: ["standard"] },
+    { to: "/reports/balance", title: t.reports.balance, modes: ["standard", "elderly"] },
     { to: "/reports/deposits", title: t.reports.deposits, modes: ["standard", "elderly"] },
     { to: "/reports/yearly", title: t.reports.yearly, modes: ["standard"] },
     { to: "/reports/living", title: t.reports.living, modes: ["standard", "elderly"] },
@@ -35,7 +37,7 @@ export function ReportsHub() {
   ].filter((it) => it.modes.includes(access));
   const groups = [
     { id: "flow", title: t.reports.groupFlow, items: items.filter((it) => ["/reports/dashboard", "/reports/spending", "/reports/compare"].includes(it.to)) },
-    { id: "save", title: t.reports.groupSave, items: items.filter((it) => ["/reports/deposits", "/reports/yearly"].includes(it.to)) },
+    { id: "save", title: t.reports.groupSave, items: items.filter((it) => ["/reports/balance", "/reports/deposits", "/reports/yearly"].includes(it.to)) },
     { id: "life", title: t.reports.groupLife, items: items.filter((it) => ["/reports/living", "/reports/travel", "/reports/retirement"].includes(it.to)) },
   ].filter((g) => g.items.length);
   return (

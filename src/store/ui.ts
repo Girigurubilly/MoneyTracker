@@ -51,6 +51,7 @@ type UiState = {
   setCustomColor: (key: ThemeColorKey, hex: string | undefined) => void;
   setFontId: (id: FontId) => void;
   setFontSize: (id: FontSizeId) => void;
+  setWallpaper: (mode: "none" | "theme" | "custom", dataUrl?: string) => void;
   resetCustomColors: () => void;
   setSelectedDate: (iso: string) => void;
   setTodayView: (v: TodayView) => void;
@@ -128,6 +129,13 @@ export const useUi = create<UiState>((set, get) => ({
   setFontSize: (id) => {
     const next = { ...get().customColors, fontSize: id === "md" ? undefined : id };
     if (id === "md") delete next.fontSize;
+    persistCustom(next);
+    applyTheme(get().theme, next);
+    set({ customColors: next });
+  },
+  setWallpaper: (mode, dataUrl) => {
+    const next = { ...get().customColors, wallpaperMode: mode, wallpaper: mode === "custom" ? dataUrl : undefined };
+    if (mode !== "custom") delete next.wallpaper;
     persistCustom(next);
     applyTheme(get().theme, next);
     set({ customColors: next });

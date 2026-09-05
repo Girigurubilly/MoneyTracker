@@ -1,4 +1,4 @@
-export const THEME_IDS = ["normal", "dark", "pinky", "anime", "cyberpunk"] as const;
+export const THEME_IDS = ["normal", "dark", "pinky", "anime", "cyberpunk", "shiba", "cat", "panda", "hongkong"] as const;
 export type ThemeId = (typeof THEME_IDS)[number];
 
 export const FONT_IDS = ["theme", "system", "nunito", "zen-maru", "rajdhani", "noto", "serif"] as const;
@@ -33,6 +33,8 @@ export type ThemeCustom = {
   accent?: string;
   fontId?: FontId;
   fontSize?: FontSizeId;
+  wallpaper?: string;
+  wallpaperMode?: "none" | "theme" | "custom";
 };
 
 export const ACCESS_MODES = ["standard", "elderly", "kid"] as const;
@@ -79,6 +81,10 @@ export const THEME_PRESETS: Record<
   pinky: { background: "#fdf2f8", foreground: "#4a044e", elevated: "#ffffff", muted: "#a15a86", accent: "#db2777" },
   anime: { background: "#fff1f5", foreground: "#2b1638", elevated: "#ffffff", muted: "#8b6b90", accent: "#ff5d8f" },
   cyberpunk: { background: "#090414", foreground: "#d8f3ff", elevated: "#140c28", muted: "#7aa8c4", accent: "#00e5ff" },
+  shiba: { background: "#fff4e5", foreground: "#4a2a12", elevated: "#fffaf3", muted: "#b07a4a", accent: "#e67a2e" },
+  cat: { background: "#f7efe6", foreground: "#3b2a24", elevated: "#fffdf9", muted: "#9c7b6e", accent: "#d97757" },
+  panda: { background: "#f3f6f1", foreground: "#1f2a22", elevated: "#ffffff", muted: "#6f7f72", accent: "#3f7a4e" },
+  hongkong: { background: "#1a0c10", foreground: "#ffe9c8", elevated: "#2a1218", muted: "#c08a6a", accent: "#e23d3d" },
 };
 
 export function isThemeId(v: string | null): v is ThemeId {
@@ -116,6 +122,8 @@ export function readSavedCustom(): ThemeCustom {
       accent: normalizeHex(parsed.accent),
       fontId: isFontId(parsed.fontId) ? parsed.fontId : undefined,
       fontSize: isFontSizeId(parsed.fontSize) ? parsed.fontSize : undefined,
+      wallpaper: typeof parsed.wallpaper === "string" ? parsed.wallpaper : undefined,
+      wallpaperMode: parsed.wallpaperMode === "none" || parsed.wallpaperMode === "custom" || parsed.wallpaperMode === "theme" ? parsed.wallpaperMode : undefined,
     };
   } catch {
     return {};
@@ -126,6 +134,8 @@ export function colorsOnly(custom: ThemeCustom): ThemeCustom {
   return {
     fontId: custom.fontId,
     fontSize: custom.fontSize,
+    wallpaper: custom.wallpaper,
+    wallpaperMode: custom.wallpaperMode,
   };
 }
 
@@ -167,7 +177,7 @@ export function onAccentFor(hex: string): string {
 }
 
 export function isDarkTheme(theme: ThemeId): boolean {
-  return theme === "dark" || theme === "cyberpunk";
+  return theme === "dark" || theme === "cyberpunk" || theme === "hongkong";
 }
 
 export function applyTheme(theme: ThemeId, custom: ThemeCustom = {}): void {
@@ -210,4 +220,15 @@ export function applyTheme(theme: ThemeId, custom: ThemeCustom = {}): void {
   const bg = normalizeHex(custom.background) ?? THEME_PRESETS[theme].background;
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute("content", bg);
+  const mode = custom.wallpaperMode ?? (custom.wallpaper ? "custom" : "theme");
+  if (mode === "none") {
+    root.setAttribute("data-wallpaper", "none");
+    root.style.removeProperty("--app-wallpaper");
+  } else if (mode === "custom" && custom.wallpaper) {
+    root.setAttribute("data-wallpaper", "custom");
+    root.style.setProperty("--app-wallpaper", `url("${custom.wallpaper}")`);
+  } else {
+    root.setAttribute("data-wallpaper", "theme");
+    root.style.removeProperty("--app-wallpaper");
+  }
 }

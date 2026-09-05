@@ -255,7 +255,17 @@ export type CategoryIconName =
   | "podcast"
   | "play"
   | "crown"
-  | "rss";
+  | "rss"
+  | "leaf"
+  | "tree"
+  | "mountain"
+  | "flower"
+  | "waves"
+  | "tram"
+  | "taxi"
+  | "parking"
+  | "cookie"
+  | "soup";
 
 export type CategoryIconGroupId =
   | "financial"
@@ -279,18 +289,19 @@ export type CategoryIconGroupId =
   | "photo"
   | "sport"
   | "times"
-  | "subscriptions";
+  | "subscriptions"
+  | "nature";
 
 export const CATEGORY_ICON_GROUPS: { id: CategoryIconGroupId; icons: CategoryIconName[] }[] = [
   { id: "financial", icons: ["wallet", "coins", "dollar", "piggy", "landmark", "trending", "card", "banknote", "receipt", "percent", "calculator", "vault"] },
   { id: "ecommerce", icons: ["shopping", "bag", "gift", "cart", "store", "tag", "package", "barcode"] },
-  { id: "food", icons: ["utensils", "cup", "pizza", "icecream", "wine", "beer", "cake", "apple", "sandwich", "salad"] },
+  { id: "food", icons: ["utensils", "cup", "pizza", "icecream", "wine", "beer", "cake", "apple", "sandwich", "salad", "cookie", "soup"] },
   { id: "house", icons: ["home", "wrench", "zap", "broom", "sofa", "key", "lamp", "hammer", "droplets", "bed", "bath", "plug"] },
   { id: "animal", icons: ["paw", "bird", "fish", "cat", "dog", "rabbit", "bone"] },
   { id: "baby", icons: ["baby", "milk", "user"] },
   { id: "holiday", icons: ["plane", "tent", "ticket", "sparkles", "umbrella", "palmtree", "luggage", "ferris", "sun", "snow", "moon"] },
   { id: "health", icons: ["heart", "shield", "pill", "activity", "stethoscope", "pulse", "cross"] },
-  { id: "transport", icons: ["train", "car", "bus", "bike", "ship", "fuel"] },
+  { id: "transport", icons: ["train", "car", "bus", "bike", "ship", "fuel", "tram", "taxi", "parking"] },
   { id: "city", icons: ["building", "map", "factory", "hotel"] },
   { id: "clothes", icons: ["shirt", "glasses", "watch", "gem", "scissors"] },
   { id: "business", icons: ["briefcase", "file", "users", "handshake", "presentation", "scale", "gavel"] },
@@ -304,6 +315,7 @@ export const CATEGORY_ICON_GROUPS: { id: CategoryIconGroupId; icons: CategoryIco
   { id: "sport", icons: ["trophy", "medal", "run", "dumbbell"] },
   { id: "times", icons: ["clock", "calendar", "hourglass", "timer", "alarm", "bell"] },
   { id: "subscriptions", icons: ["repeat", "newspaper", "podcast", "play", "crown", "rss"] },
+  { id: "nature", icons: ["leaf", "tree", "mountain", "flower", "waves"] },
 ];
 
 export const CATEGORY_ICONS: CategoryIconName[] = CATEGORY_ICON_GROUPS.flatMap((g) => g.icons);

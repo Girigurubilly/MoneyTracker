@@ -25,6 +25,7 @@ import { Route as MoreOtherRouteImport } from './routes/more.other'
 import { Route as MoreSecurityRouteImport } from './routes/more.security'
 import { Route as MoreWishlistRouteImport } from './routes/more.wishlist'
 import { Route as ReportsIndexRouteImport } from './routes/reports.index'
+import { Route as ReportsBalanceRouteImport } from './routes/reports.balance'
 import { Route as ReportsCashflowRouteImport } from './routes/reports.cashflow'
 import { Route as ReportsCompareRouteImport } from './routes/reports.compare'
 import { Route as ReportsDashboardRouteImport } from './routes/reports.dashboard'
@@ -118,6 +119,11 @@ const ReportsIndexRoute = ReportsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => ReportsRoute,
 } as any)
+const ReportsBalanceRoute = ReportsBalanceRouteImport.update({
+  id: '/balance',
+  path: '/balance',
+  getParentRoute: () => ReportsRoute,
+} as any)
 const ReportsCashflowRoute = ReportsCashflowRouteImport.update({
   id: '/cashflow',
   path: '/cashflow',
@@ -194,6 +200,7 @@ export interface FileRoutesByFullPath {
   '/more/other': typeof MoreOtherRoute
   '/more/security': typeof MoreSecurityRoute
   '/more/wishlist': typeof MoreWishlistRoute
+  '/reports/balance': typeof ReportsBalanceRoute
   '/reports/cashflow': typeof ReportsCashflowRoute
   '/reports/compare': typeof ReportsCompareRoute
   '/reports/dashboard': typeof ReportsDashboardRoute
@@ -222,6 +229,7 @@ export interface FileRoutesByTo {
   '/more/other': typeof MoreOtherRoute
   '/more/security': typeof MoreSecurityRoute
   '/more/wishlist': typeof MoreWishlistRoute
+  '/reports/balance': typeof ReportsBalanceRoute
   '/reports/cashflow': typeof ReportsCashflowRoute
   '/reports/compare': typeof ReportsCompareRoute
   '/reports/dashboard': typeof ReportsDashboardRoute
@@ -252,6 +260,7 @@ export interface FileRoutesById {
   '/more/other': typeof MoreOtherRoute
   '/more/security': typeof MoreSecurityRoute
   '/more/wishlist': typeof MoreWishlistRoute
+  '/reports/balance': typeof ReportsBalanceRoute
   '/reports/cashflow': typeof ReportsCashflowRoute
   '/reports/compare': typeof ReportsCompareRoute
   '/reports/dashboard': typeof ReportsDashboardRoute
@@ -284,6 +293,7 @@ export interface FileRouteTypes {
     | '/more/other'
     | '/more/security'
     | '/more/wishlist'
+    | '/reports/balance'
     | '/reports/cashflow'
     | '/reports/compare'
     | '/reports/dashboard'
@@ -312,6 +322,7 @@ export interface FileRouteTypes {
     | '/more/other'
     | '/more/security'
     | '/more/wishlist'
+    | '/reports/balance'
     | '/reports/cashflow'
     | '/reports/compare'
     | '/reports/dashboard'
@@ -341,6 +352,7 @@ export interface FileRouteTypes {
     | '/more/other'
     | '/more/security'
     | '/more/wishlist'
+    | '/reports/balance'
     | '/reports/cashflow'
     | '/reports/compare'
     | '/reports/dashboard'
@@ -480,6 +492,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReportsIndexRouteImport
       parentRoute: typeof ReportsRoute
     }
+    '/reports/balance': {
+      id: '/reports/balance'
+      path: '/balance'
+      fullPath: '/reports/balance'
+      preLoaderRoute: typeof ReportsBalanceRouteImport
+      parentRoute: typeof ReportsRoute
+    }
     '/reports/cashflow': {
       id: '/reports/cashflow'
       path: '/cashflow'
@@ -608,6 +627,7 @@ const ReportsTravelRouteWithChildren = ReportsTravelRoute._addFileChildren(
 )
 
 interface ReportsRouteChildren {
+  ReportsBalanceRoute: typeof ReportsBalanceRoute
   ReportsCashflowRoute: typeof ReportsCashflowRoute
   ReportsCompareRoute: typeof ReportsCompareRoute
   ReportsDashboardRoute: typeof ReportsDashboardRoute
@@ -622,6 +642,7 @@ interface ReportsRouteChildren {
 }
 
 const ReportsRouteChildren: ReportsRouteChildren = {
+  ReportsBalanceRoute: ReportsBalanceRoute,
   ReportsCashflowRoute: ReportsCashflowRoute,
   ReportsCompareRoute: ReportsCompareRoute,
   ReportsDashboardRoute: ReportsDashboardRoute,
