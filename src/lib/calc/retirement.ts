@@ -1,4 +1,4 @@
-import type { Allowance, OneOff, Transaction, FxRate } from "../types.ts";
+import type { Account, Allowance, OneOff, Transaction, FxRate } from "../types.ts";
 import { cashflowSide, inMonth } from "./ledger.ts";
 import { toHkd } from "./fx.ts";
 
@@ -13,6 +13,16 @@ export type RetirementInputs = {
   postReturn: number;
   inflation: number;
   travelInRetirement: number;
+  reverseMortgageLtv?: number;
+  fireSwr?: number;
+};
+
+export type AssetSleeve = {
+  id: string;
+  label: string;
+  amount: number;
+  annualReturn: number;
+  kind: "cash" | "invest" | "property";
 };
 
 export type RetirementCtx = {
@@ -22,6 +32,9 @@ export type RetirementCtx = {
   housingAfterPayoff: number;
   oneOffs: OneOff[];
   allowances?: Allowance[];
+  sleeves?: AssetSleeve[];
+  propertyEquity?: number;
+  reverseMortgageMonthly?: number;
 };
 
 export function savingsLast12Months(txs: Transaction[], rates: FxRate[], asOfMonth: string): {
@@ -52,18 +65,30 @@ export function savingsLast12Months(txs: Transaction[], rates: FxRate[], asOfMon
 
 export function runRetirement(inputs: RetirementInputs, ctx: RetirementCtx) {
   const years = Math.max(1, inputs.deathAge - inputs.currentAge);
-  let corpus = ctx.investableNow;
+  const sleeves = (ctx.sleeves ?? []).filter((s) => s.kind !== "property").map((s) => ({ ...s }));
+  let corpus = sleeves.length ? sleeves.reduce((s, x) => s + x.amount, 0) : ctx.investableNow;
   const series: { age: number; corpus: number }[] = [];
   let depletes = false;
   let depletionAge: number | undefined;
   let corpusAtRetire = corpus;
+  const fallbackPre = inputs.preReturn;
+  const fallbackPost = inputs.postReturn;
+  const rm = ctx.reverseMortgageMonthly ?? 0;
 
   for (let i = 0; i <= years; i++) {
     const age = inputs.currentAge + i;
     const inf = (1 + inputs.inflation) ** i;
     const retired = age >= inputs.retireAge;
-    const r = retired ? inputs.postReturn : inputs.preReturn;
-    corpus = corpus * (1 + r);
+
+    if (sleeves.length) {
+      for (const s of sleeves) {
+        const r = s.annualReturn || (retired ? fallbackPost : fallbackPre);
+        s.amount = s.amount * (1 + r);
+      }
+      corpus = sleeves.reduce((s, x) => s + x.amount, 0);
+    } else {
+      corpus = corpus * (1 + (retired ? fallbackPost : fallbackPre));
+    }
 
     let inc = 0;
     let spend = 0;
@@ -75,6 +100,7 @@ export function runRetirement(inputs: RetirementInputs, ctx: RetirementCtx) {
       spend += inputs.travelInRetirement * inf;
       if (age < ctx.mortgagePayoffAge) spend += ctx.mortgageMonthly * 12;
       else spend += ctx.housingAfterPayoff * 12;
+      inc += rm * 12;
     }
     for (const a of ctx.allowances ?? []) {
       if (age < a.startAge) continue;
@@ -84,7 +110,18 @@ export function runRetirement(inputs: RetirementInputs, ctx: RetirementCtx) {
     for (const o of ctx.oneOffs) {
       if (o.age === age) inc += o.amount;
     }
-    corpus += inc - spend;
+    const net = inc - spend;
+    if (sleeves.length) {
+      const total = sleeves.reduce((s, x) => s + Math.max(0, x.amount), 0);
+      if (total > 0) {
+        for (const s of sleeves) s.amount += net * (Math.max(0, s.amount) / total);
+      } else if (sleeves[0]) {
+        sleeves[0].amount += net;
+      }
+      corpus = sleeves.reduce((s, x) => s + x.amount, 0);
+    } else {
+      corpus += net;
+    }
     if (age === inputs.retireAge) corpusAtRetire = corpus;
     series.push({ age, corpus });
     if (corpus < 0 && !depletes) {
@@ -102,6 +139,83 @@ export function runRetirement(inputs: RetirementInputs, ctx: RetirementCtx) {
     requiredCorpus: corpusAtRetire,
     depletionAge,
   };
+}
+
+export function firePlan(inputs: RetirementInputs, ctx: RetirementCtx) {
+  const swr = inputs.fireSwr && inputs.fireSwr > 0 ? inputs.fireSwr : 0.04;
+  const annualNeed = inputs.targetMonthly * 12 + (inputs.travelInRetirement || 0);
+  const fireNumber = swr > 0 ? annualNeed / swr : 0;
+  const current = ctx.investableNow;
+  const property = ctx.propertyEquity ?? 0;
+  const r =
+    weightedSleeveReturn((ctx.sleeves ?? []).filter((s) => s.kind !== "property"), inputs.preReturn) ||
+    inputs.preReturn;
+  const annualSave = Math.max(0, inputs.monthlyIncomeNow - inputs.monthlySpendNow) * 12;
+  let corpus = current;
+  let years = 0;
+  const cap = Math.max(0, inputs.deathAge - inputs.currentAge);
+  while (fireNumber > 0 && corpus < fireNumber && years < cap) {
+    corpus = corpus * (1 + r) + annualSave;
+    years += 1;
+  }
+  return {
+    swr,
+    annualNeed,
+    fireNumber,
+    current,
+    property,
+    progress: fireNumber > 0 ? current / fireNumber : 0,
+    years,
+    fireAge: inputs.currentAge + years,
+    reachable: fireNumber <= 0 || corpus >= fireNumber,
+  };
+}
+
+export function weightedSleeveReturn(sleeves: AssetSleeve[], fallback: number): number {
+  const total = sleeves.reduce((s, x) => s + Math.max(0, x.amount), 0);
+  if (total <= 0) return fallback;
+  return sleeves.reduce((s, x) => s + Math.max(0, x.amount) * (x.annualReturn || fallback), 0) / total;
+}
+
+export function retirementSleeves(
+  accounts: Account[],
+  rates: FxRate[],
+  fallbackCash: number,
+  fallbackInvest: number,
+): { sleeves: AssetSleeve[]; cash: number; invest: number; property: number } {
+  const sleeves: AssetSleeve[] = [];
+  let cash = 0;
+  let invest = 0;
+  let property = 0;
+  for (const a of accounts) {
+    if (a.hidden || a.currency === "MILES") continue;
+    const amount = toHkd(a.balance, a.currency, rates);
+    if (a.type === "property") {
+      property += Math.max(0, amount);
+      sleeves.push({
+        id: a.id,
+        label: a.nameZh || a.name,
+        amount: Math.max(0, amount),
+        annualReturn: a.expectedReturn ?? 0,
+        kind: "property",
+      });
+      continue;
+    }
+    if (a.type === "mortgage" || a.type === "loan" || a.type === "credit") continue;
+    if (!a.includeInNetWorth) continue;
+    const cashLike = a.type === "cash" || a.type === "current" || a.type === "savings" || a.type === "ewallet" || a.type === "fx";
+    const kind: AssetSleeve["kind"] = cashLike ? "cash" : "invest";
+    const annualReturn = a.expectedReturn ?? (cashLike ? fallbackCash : fallbackInvest);
+    if (kind === "cash") cash += amount;
+    else invest += amount;
+    sleeves.push({ id: a.id, label: a.nameZh || a.name, amount, annualReturn, kind });
+  }
+  return { sleeves, cash, invest, property };
+}
+
+export function reverseMortgageMonthly(propertyEquity: number, ltv: number, years: number): number {
+  if (propertyEquity <= 0 || ltv <= 0 || years <= 0) return 0;
+  return (propertyEquity * ltv) / (years * 12);
 }
 
 export function sustainableMonthly(inputs: RetirementInputs, ctx: RetirementCtx): number {

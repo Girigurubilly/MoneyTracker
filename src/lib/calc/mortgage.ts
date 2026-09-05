@@ -60,6 +60,28 @@ export function remainingPayments(remainingMonths: number, paymentDay: number, t
   return Math.max(0, remainingMonths - 1);
 }
 
-export function paymentDayOf(m: { paymentDay?: number }): number {
-  return Math.min(28, Math.max(1, m.paymentDay || 1));
+export function monthsBetween(fromIso: string, toIso: string): number {
+  if (!fromIso || !toIso) return 0;
+  const [fy, fm] = fromIso.split("-").map(Number);
+  const [ty, tm] = toIso.split("-").map(Number);
+  if (!fy || !fm || !ty || !tm) return 0;
+  return Math.max(0, (ty - fy) * 12 + (tm - fm));
+}
+
+export function originalTermMonths(m: { startDate?: string; remainingMonths: number }, today: string): number {
+  const elapsed = m.startDate ? monthsBetween(m.startDate, today) : 0;
+  return Math.max(m.remainingMonths, elapsed + m.remainingMonths);
+}
+
+export function originalPrincipal(m: { original?: number; outstanding: number }): number {
+  return m.original && m.original > 0 ? m.original : m.outstanding;
+}
+
+export function amortizeFrom(principal: number, annualRate: number, months: number, skip: number, take = 12) {
+  const full = amortize(principal, annualRate, months, months);
+  const start = Math.max(0, Math.min(skip, full.rows.length));
+  return {
+    payment: full.payment,
+    rows: full.rows.slice(start, start + take).map((r, i) => ({ ...r, n: i + 1 })),
+  };
 }

@@ -107,6 +107,7 @@ export type Account = {
   notesZh?: string;
   sortOrder?: number;
   linkedAccountId?: string;
+  expectedReturn?: number;
 };
 
 export type CategoryIconName =
@@ -326,6 +327,7 @@ export type Mortgage = {
   nameZh: string;
   accountId: string;
   original: number;
+  startDate?: string;
   outstanding: number;
   rate: number;
   pRate?: number;

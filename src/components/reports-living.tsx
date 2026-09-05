@@ -99,6 +99,10 @@ export function LivingPage() {
             <Hairline />
             <Kv label={t.reports.propertyValue} value={property ? money(property.balance, "HKD") : "—"} />
             <Hairline />
+            <Kv label={t.reports.originalLoan} value={money(m.original || m.outstanding, "HKD")} />
+            <Hairline />
+            <Kv label={t.reports.loanStart} value={m.startDate || "—"} />
+            <Hairline />
             <Kv label={t.reports.owedBank} value={money(m.outstanding, "HKD")} />
             <Hairline />
             <Kv label={t.reports.loan} value={loan ? pickName(locale, loan.name, loan.nameZh) : pickName(locale, m.name, m.nameZh)} />
@@ -181,6 +185,8 @@ function MortgageEditor({ open, onClose }: { open: boolean; onClose: () => void 
   const properties = accounts.filter((a) => a.type === "property");
   const loans = accounts.filter((a) => a.type === "mortgage" || a.type === "loan");
   const [outstanding, setOutstanding] = useState(String(m?.outstanding ?? 0));
+  const [original, setOriginal] = useState(String(m?.original ?? m?.outstanding ?? 0));
+  const [startDate, setStartDate] = useState(m?.startDate ?? "");
   const [months, setMonths] = useState(String(m?.remainingMonths ?? 240));
   const [pRate, setPRate] = useState(String(((m?.pRate ?? m?.rate ?? 0.05) * 100).toFixed(2)));
   const [spread, setSpread] = useState(String(((m?.spread ?? 0) * 100).toFixed(2)));
@@ -224,6 +230,14 @@ function MortgageEditor({ open, onClose }: { open: boolean; onClose: () => void 
               </option>
             ))}
           </select>
+        </label>
+        <label className="block py-2 text-xs text-muted">
+          {t.reports.originalLoan}
+          <input inputMode="decimal" value={original} onChange={(e) => setOriginal(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
+        </label>
+        <label className="block py-2 text-xs text-muted">
+          {t.reports.loanStart}
+          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
         </label>
         <label className="block py-2 text-xs text-muted">
           {t.reports.owedBank}
@@ -278,7 +292,8 @@ function MortgageEditor({ open, onClose }: { open: boolean; onClose: () => void 
               name: m?.name ?? "Mortgage",
               nameZh: m?.nameZh ?? "按揭",
               accountId: accountId || m?.accountId || "mortgage",
-              original: m?.original ?? (Number(outstanding) || 0),
+              original: Number(original) || Number(outstanding) || 0,
+              startDate: startDate || undefined,
               outstanding: Number(outstanding) || 0,
               rate: type === "fixed" ? fx : p + sp,
               pRate: type === "fixed" ? undefined : p,

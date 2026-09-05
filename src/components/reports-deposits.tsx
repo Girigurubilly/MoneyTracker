@@ -1,11 +1,20 @@
 import { useMemo, useState } from "react";
 import { Plus, RefreshCw, Trash2 } from "lucide-react";
-import { AccountSelect } from "@/components/account-select";
-import { Group, Hairline, ScreenHeader } from "@/components/shared";
+import { Group, Hairline, Overlay, ScreenHeader } from "@/components/shared";
 import { moneyAccountsForPicker } from "@/lib/accounts";
 import { MONTHS_S, suggestedInterest, summarizeDeposits } from "@/lib/calc/deposits";
 import { money, todayISO } from "@/lib/format";
-import { CURRENCIES, type Currency } from "@/lib/types";
+import { resolveAmountInput } from "@/lib/money-expr";
+import { CURRENCIES, type Currency, type TimeSaving } from "@/lib/types";
+import {
+  AccountLine,
+  ActiveKeypad,
+  ComposerHeader,
+  ComposerShell,
+  LineRow,
+  SelectLine,
+  TextLine,
+} from "@/components/txn-composer";
 import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 
@@ -16,73 +25,15 @@ export function DepositsPage() {
   const accounts = useApp((s) => s.accounts);
   const rates = useApp((s) => s.fxRates);
   const lastFx = useApp((s) => s.lastFxSyncAt);
-  const addDeposit = useApp((s) => s.addDeposit);
   const deleteDeposit = useApp((s) => s.deleteDeposit);
   const refreshFx = useApp((s) => s.refreshFx);
-  const picker = moneyAccountsForPicker(accounts);
   const today = todayISO();
   const year = Number(today.slice(0, 4));
-  const [form, setForm] = useState({
-    bank: "",
-    startDate: today,
-    endDate: "",
-    rate: "",
-    currency: "HKD" as Currency,
-    amount: "",
-    interest: "",
-    accountId: picker[0]?.id ?? "",
-    interestTouched: false,
-  });
+  const [editing, setEditing] = useState<TimeSaving | null | "new">(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const summary = useMemo(() => summarizeDeposits(deposits, today, rates), [deposits, today, rates]);
   const sorted = useMemo(() => [...deposits].sort((a, b) => (a.endDate || "").localeCompare(b.endDate || "")), [deposits]);
-
-  function patch<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
-    setForm((prev) => {
-      const next = { ...prev, [key]: value };
-      if ((key === "amount" || key === "rate" || key === "startDate" || key === "endDate") && !prev.interestTouched) {
-        next.interest = String(
-          suggestedInterest(parseFloat(String(next.amount)) || 0, parseFloat(String(next.rate)) || 0, next.startDate, next.endDate) || "",
-        );
-      }
-      return next;
-    });
-  }
-
-  async function add() {
-    const amount = parseFloat(form.amount) || 0;
-    if (!form.bank.trim() || !form.startDate || !form.endDate || amount <= 0 || !form.accountId) {
-      setNote(t.reports.depositNeedFields);
-      return;
-    }
-    let interest = parseFloat(form.interest) || 0;
-    if (!interest && form.rate) {
-      interest = suggestedInterest(amount, parseFloat(form.rate) || 0, form.startDate, form.endDate);
-    }
-    await addDeposit({
-      bank: form.bank.trim(),
-      startDate: form.startDate,
-      endDate: form.endDate,
-      rate: parseFloat(form.rate) || 0,
-      currency: form.currency,
-      amount,
-      interest,
-      accountId: form.accountId,
-    });
-    setForm({
-      bank: "",
-      startDate: today,
-      endDate: "",
-      rate: "",
-      currency: "HKD",
-      amount: "",
-      interest: "",
-      accountId: form.accountId,
-      interestTouched: false,
-    });
-    setNote("");
-  }
 
   async function fetchFx() {
     setBusy(true);
@@ -98,80 +49,17 @@ export function DepositsPage() {
 
   return (
     <div className="pb-10">
-      <ScreenHeader title={t.reports.deposits} backTo="/reports" />
-      <h2 className="px-5 pb-2 text-xs font-semibold uppercase tracking-wide text-muted">{t.reports.addDeposit}</h2>
-      <Group>
-        <label className="block px-4 py-3">
-          <span className="text-xs text-muted">{t.reports.bank}</span>
-          <input value={form.bank} placeholder="HSBC" onChange={(e) => patch("bank", e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-background px-3" />
-        </label>
-        <Hairline />
-        <label className="block px-4 py-3">
-          <span className="text-xs text-muted">{t.reports.startDate}</span>
-          <input type="date" value={form.startDate} onChange={(e) => patch("startDate", e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-background px-3" />
-        </label>
-        <Hairline />
-        <label className="block px-4 py-3">
-          <span className="text-xs text-muted">{t.reports.endDate}</span>
-          <input type="date" value={form.endDate} onChange={(e) => patch("endDate", e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-background px-3" />
-        </label>
-        <Hairline />
-        <label className="block px-4 py-3">
-          <span className="text-xs text-muted">{t.reports.ratePct}</span>
-          <input type="number" step="0.01" value={form.rate} placeholder="3.80" onChange={(e) => patch("rate", e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-background px-3" />
-        </label>
-        <Hairline />
-        <label className="block px-4 py-3">
-          <span className="text-xs text-muted">{t.reports.currency}</span>
-          <select value={form.currency} onChange={(e) => patch("currency", e.target.value as Currency)} className="mt-1 h-11 w-full rounded-lg bg-background px-3">
-            {CURRENCIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </label>
-        <Hairline />
-        <label className="block px-4 py-3">
-          <span className="text-xs text-muted">{t.reports.depositAmount}</span>
-          <input type="number" step="0.01" value={form.amount} placeholder="100000" onChange={(e) => patch("amount", e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-background px-3" />
-        </label>
-        <Hairline />
-        <label className="block px-4 py-3">
-          <span className="text-xs text-muted">{t.reports.interest}</span>
-          <input
-            type="number"
-            step="0.01"
-            value={form.interest}
-            placeholder="0"
-            onChange={(e) => setForm((prev) => ({ ...prev, interest: e.target.value, interestTouched: true }))}
-            className="mt-1 h-11 w-full rounded-lg bg-background px-3"
-          />
-          <button
-            type="button"
-            className="mt-2 text-xs font-medium text-accent"
-            onClick={() => {
-              const value = suggestedInterest(parseFloat(form.amount) || 0, parseFloat(form.rate) || 0, form.startDate, form.endDate);
-              setForm((prev) => ({ ...prev, interest: value ? String(value) : "", interestTouched: false }));
-            }}
-          >
-            {t.reports.suggestInterest}
+      <ScreenHeader
+        title={t.reports.deposits}
+        backTo="/reports"
+        right={
+          <button type="button" aria-label={t.reports.addDeposit} className="grid size-11 place-items-center text-accent" onClick={() => setEditing("new")}>
+            <Plus className="size-6" />
           </button>
-        </label>
-        <Hairline />
-        <label className="block px-4 py-3">
-          <span className="text-xs text-muted">{t.reports.creditAccount}</span>
-          <AccountSelect accounts={accounts} value={form.accountId} onChange={(id) => patch("accountId", id)} />
-        </label>
-      </Group>
-      <div className="px-4 pt-3">
-        <button type="button" onClick={() => void add()} className="flex h-11 w-full items-center justify-center gap-1 rounded-xl bg-accent text-sm font-semibold text-on-accent">
-          <Plus className="size-4" />
-          {t.reports.addRecord}
-        </button>
-      </div>
+        }
+      />
 
-      <h2 className="px-5 pb-2 pt-6 text-xs font-semibold uppercase tracking-wide text-muted">{t.reports.depositRecords}</h2>
+      <h2 className="px-5 pb-2 text-xs font-semibold uppercase tracking-wide text-muted">{t.reports.depositRecords}</h2>
       {sorted.length === 0 ? (
         <p className="px-5 text-sm text-muted">{t.reports.noDepositsHint}</p>
       ) : (
@@ -185,7 +73,7 @@ export function DepositsPage() {
               <div key={r.id}>
                 {i > 0 ? <Hairline /> : null}
                 <div className="flex items-start gap-3 px-4 py-3">
-                  <div className="min-w-0 flex-1">
+                  <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setEditing(r)}>
                     <div className="flex items-center justify-between gap-2">
                       <span className="truncate text-sm font-semibold">{r.bank}</span>
                       <span className={`text-xs font-medium ${tone}`}>{rm}</span>
@@ -197,7 +85,7 @@ export function DepositsPage() {
                       <span className="text-income">+{money(r.interest, r.currency)}</span>
                       <span>{money((r.amount || 0) + (r.interest || 0), r.currency)}</span>
                     </div>
-                  </div>
+                  </button>
                   <button type="button" className="mt-1 text-expense" onClick={() => void deleteDeposit(r.id)} aria-label={locale === "zh-HK" ? "刪除" : "Delete"}>
                     <Trash2 className="size-4" />
                   </button>
@@ -223,7 +111,101 @@ export function DepositsPage() {
         <Metric label={t.reports.interestAfterYear.replace("{year}", String(year))} value={money(summary.unrealizedAfterYearHKD, "HKD")} />
       </div>
       {note || lastFx ? <p className="px-5 pt-3 text-xs text-muted">{note || lastFx}</p> : null}
+
+      <DepositEditor
+        key={editing === "new" ? "new" : editing?.id ?? "closed"}
+        open={editing !== null}
+        initial={editing === "new" ? null : editing}
+        onClose={() => setEditing(null)}
+      />
     </div>
+  );
+}
+
+function DepositEditor({ open, initial, onClose }: { open: boolean; initial: TimeSaving | null; onClose: () => void }) {
+  const t = useT();
+  const accounts = useApp((s) => s.accounts);
+  const addDeposit = useApp((s) => s.addDeposit);
+  const updateDeposit = useApp((s) => s.updateDeposit);
+  const picker = moneyAccountsForPicker(accounts);
+  const today = todayISO();
+  const [bank, setBank] = useState(initial?.bank ?? "");
+  const [startDate, setStartDate] = useState(initial?.startDate ?? today);
+  const [endDate, setEndDate] = useState(initial?.endDate ?? "");
+  const [rate, setRate] = useState(initial ? String(initial.rate) : "");
+  const [currency, setCurrency] = useState<Currency>(initial?.currency ?? "HKD");
+  const [amount, setAmount] = useState(initial ? String(initial.amount) : "");
+  const [interest, setInterest] = useState(initial ? String(initial.interest) : "");
+  const [accountId, setAccountId] = useState(initial?.accountId ?? picker[0]?.id ?? "");
+  const [interestTouched, setInterestTouched] = useState(Boolean(initial));
+  const [field, setField] = useState<"amount" | "dest" | "principal" | "interest">("amount");
+
+  function suggest(nextAmt = amount, nextRate = rate, nextStart = startDate, nextEnd = endDate) {
+    return suggestedInterest(resolveAmountInput(nextAmt), parseFloat(nextRate) || 0, nextStart, nextEnd);
+  }
+
+  async function save() {
+    const amt = resolveAmountInput(amount);
+    if (!bank.trim() || !startDate || !endDate || amt <= 0 || !accountId) return;
+    let int = resolveAmountInput(interest);
+    if (!int) int = suggest();
+    const row = {
+      bank: bank.trim(),
+      startDate,
+      endDate,
+      rate: parseFloat(rate) || 0,
+      currency,
+      amount: amt,
+      interest: int,
+      accountId,
+    };
+    if (initial) await updateDeposit({ ...initial, ...row });
+    else await addDeposit(row);
+    onClose();
+  }
+
+  return (
+    <Overlay open={open} onClose={onClose} variant="page">
+      <ComposerShell
+        header={<ComposerHeader onClose={onClose} onSave={() => void save()} title={initial ? t.common.edit : t.reports.addDeposit} />}
+        keypad={
+          <ActiveKeypad
+            field={field === "interest" ? "interest" : "amount"}
+            amount={amount}
+            dest=""
+            principal=""
+            interest={interest}
+            setAmount={(v) => {
+              setAmount(v);
+              if (!interestTouched) setInterest(String(suggest(v) || ""));
+            }}
+            setDest={() => undefined}
+            setPrincipal={() => undefined}
+            setInterest={(v) => {
+              setInterestTouched(true);
+              setInterest(v);
+            }}
+            currency={currency}
+            onCurrency={setCurrency}
+          />
+        }
+      >
+        <TextLine value={bank} onChange={setBank} placeholder={t.reports.bank} />
+        <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+          <span className="text-sm text-muted">{t.reports.startDate}</span>
+          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
+        </div>
+        <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+          <span className="text-sm text-muted">{t.reports.endDate}</span>
+          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
+        </div>
+        <TextLine value={rate} onChange={setRate} placeholder={t.reports.ratePct} />
+        <SelectLine label={t.reports.currency} value={currency} onChange={(v) => setCurrency(v as Currency)} options={CURRENCIES.map((c) => ({ id: c, label: c }))} />
+        <LineRow label={t.reports.depositAmount} amount={amount} active={field === "amount"} onFocusAmount={() => setField("amount")} />
+        <LineRow label={t.reports.interest} amount={interest} active={field === "interest"} onFocusAmount={() => setField("interest")} />
+        <AccountLine accounts={accounts} value={accountId} onChange={setAccountId} placeholder={t.reports.creditAccount} />
+      </ComposerShell>
+    </Overlay>
   );
 }
 

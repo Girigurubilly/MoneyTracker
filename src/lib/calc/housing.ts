@@ -2,7 +2,8 @@ import type { Account, Category, FxRate, Locale, Mortgage, Recurring, Transactio
 import { isMortgagePrincipalCategory, housingParentId, isMortgageInterestCategory } from "../categories.ts";
 import { isSpendLike, inMonth } from "./ledger.ts";
 import { monthlyExpenseRegulars, hkdOfRegular, coverRegulars } from "./budget.ts";
-import { monthlyPayment, remainingInterest, effectiveRate, amortize } from "./mortgage.ts";
+import { monthlyPayment, remainingInterest, effectiveRate, originalPrincipal, originalTermMonths, amortizeFrom, monthsBetween } from "./mortgage.ts";
+import { todayISO } from "../format.ts";
 import { toHkd } from "./fx.ts";
 
 export type LivingMode = NonNullable<Mortgage["livingMode"]>;
@@ -14,7 +15,10 @@ export function livingModeOf(m: Mortgage | null): LivingMode {
 
 export function installmentOf(m: Mortgage): number {
   if (m.paymentOverride && m.paymentOverride > 0) return m.paymentOverride;
-  return monthlyPayment(m.outstanding, effectiveRate(m), m.remainingMonths);
+  const today = todayISO();
+  const orig = originalPrincipal(m);
+  const term = originalTermMonths(m, today);
+  return monthlyPayment(orig, effectiveRate(m), term);
 }
 
 export function isPrincipalRegular(r: Recurring, categories: Category[]): boolean {
@@ -219,15 +223,21 @@ export function monthsAgoIso(fromIso: string, months: number): string {
 
 export function stressRows(m: Mortgage): { shock: number; payment: number; interest: number }[] {
   const rate = effectiveRate(m);
+  const orig = originalPrincipal(m);
+  const term = originalTermMonths(m, todayISO());
   return [0.005, 0.01, 0.02].map((shock) => ({
     shock,
-    payment: monthlyPayment(m.outstanding, rate + shock, m.remainingMonths),
-    interest: remainingInterest(m.outstanding, rate + shock, m.remainingMonths),
+    payment: monthlyPayment(orig, rate + shock, term),
+    interest: remainingInterest(orig, rate + shock, term),
   }));
 }
 
 export function projection12(m: Mortgage) {
-  return amortize(m.outstanding, effectiveRate(m), m.remainingMonths, 12);
+  const today = todayISO();
+  const orig = originalPrincipal(m);
+  const term = originalTermMonths(m, today);
+  const skip = m.startDate ? monthsBetween(m.startDate, today) : Math.max(0, term - m.remainingMonths);
+  return amortizeFrom(orig, effectiveRate(m), term, skip, 12);
 }
 
 export function linkedProperty(accounts: Account[], m: Mortgage | null): Account | undefined {

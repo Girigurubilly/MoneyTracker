@@ -5,8 +5,16 @@ import { money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { livingEssentials } from "@/lib/calc/budget";
 import { monthlyPayment, effectiveRate } from "@/lib/calc/mortgage";
-import { investableNow } from "@/lib/calc/networth";
-import { retirementStatus, runRetirement, savingsLast12Months, sustainableMonthly, type RetirementInputs } from "@/lib/calc/retirement";
+import {
+  firePlan,
+  retirementSleeves,
+  retirementStatus,
+  reverseMortgageMonthly,
+  runRetirement,
+  savingsLast12Months,
+  sustainableMonthly,
+  type RetirementInputs,
+} from "@/lib/calc/retirement";
 import { monthKey } from "@/lib/calc/ledger";
 import type { Allowance } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -24,6 +32,7 @@ export function RetirementPage() {
   const allowances = useApp((s) => s.allowances);
   const oneOffs = useApp((s) => s.oneOffs);
   const mortgage = useApp((s) => s.mortgage);
+  const updateAccount = useApp((s) => s.updateAccount);
   const avg = savingsLast12Months(txs, rates, monthKey(todayISO()));
   const base: RetirementInputs = {
     currentAge: ret?.currentAge ?? 40,
@@ -36,14 +45,22 @@ export function RetirementPage() {
     postReturn: ret?.postReturn ?? 0.035,
     inflation: ret?.inflation ?? 0.025,
     travelInRetirement: ret?.travelInRetirement ?? 0,
+    reverseMortgageLtv: ret?.reverseMortgageLtv ?? 0.4,
+    fireSwr: ret?.fireSwr ?? 0.04,
   };
+  const pack = retirementSleeves(accounts, rates, 0.02, base.preReturn);
+  const yearsRetired = Math.max(1, base.deathAge - base.retireAge);
+  const rmMonthly = reverseMortgageMonthly(pack.property, base.reverseMortgageLtv ?? 0, yearsRetired);
   const ctx = {
-    investableNow: investableNow(accounts, rates),
+    investableNow: pack.cash + pack.invest,
     mortgageMonthly: mortgage ? monthlyPayment(mortgage.outstanding, effectiveRate(mortgage), mortgage.remainingMonths) : 0,
     mortgagePayoffAge: base.currentAge + Math.round((mortgage?.remainingMonths ?? 0) / 12),
     housingAfterPayoff: livingEssentials(rec.filter((r) => r.living && r.categoryId !== "mortgage-p" && r.categoryId !== "mortgage-i")),
     oneOffs,
     allowances,
+    sleeves: pack.sleeves,
+    propertyEquity: pack.property,
+    reverseMortgageMonthly: rmMonthly,
   };
   const result = useMemo(() => runRetirement(base, ctx), [
     base.currentAge,
@@ -76,9 +93,24 @@ export function RetirementPage() {
     ctx.investableNow,
     ctx.mortgageMonthly,
     ctx.mortgagePayoffAge,
-    ctx.housingAfterPayoff,
+    ctx.reverseMortgageMonthly,
+    pack.sleeves,
     oneOffs,
     allowances,
+  ]);
+  const fire = useMemo(() => firePlan(base, ctx), [
+    base.currentAge,
+    base.retireAge,
+    base.deathAge,
+    base.monthlyIncomeNow,
+    base.monthlySpendNow,
+    base.targetMonthly,
+    base.preReturn,
+    base.travelInRetirement,
+    base.fireSwr,
+    ctx.investableNow,
+    ctx.propertyEquity,
+    pack.sleeves,
   ]);
   const surplus = sustain - base.targetMonthly;
   const status = retirementStatus(result.depletes, sustain, base.targetMonthly, result.series);
@@ -116,6 +148,34 @@ export function RetirementPage() {
         <p className="mt-3 text-xs leading-relaxed text-muted">{t.reports.retireHint}</p>
       </div>
 
+      <SectionLabel>{t.reports.fireTitle}</SectionLabel>
+      <div className="mx-4 rounded-xl bg-elevated p-4">
+        <div className="text-xs text-muted">{t.reports.fireNumber}</div>
+        <div className="mt-1 text-2xl font-semibold tabular-nums">{money(fire.fireNumber, "HKD")}</div>
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-ring-track">
+          <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, Math.max(0, fire.progress * 100))}%` }} />
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <div className="text-xs text-muted">{t.reports.fireNeed}</div>
+            <div className="mt-0.5 font-semibold tabular-nums">{money(fire.annualNeed, "HKD")}</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted">{t.reports.fireProgress}</div>
+            <div className="mt-0.5 font-semibold tabular-nums">{Math.round(fire.progress * 100)}%</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted">{t.reports.fireAge}</div>
+            <div className="mt-0.5 font-semibold tabular-nums">{fire.reachable ? fire.fireAge : "—"}</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted">{t.reports.fireYears}</div>
+            <div className="mt-0.5 font-semibold tabular-nums">{fire.reachable ? fire.years : "—"}</div>
+          </div>
+        </div>
+        {!fire.reachable ? <p className="mt-2 text-xs text-muted">{t.reports.fireUnreachable}</p> : null}
+      </div>
+
       <SectionLabel>{t.reports.assetsByAge}</SectionLabel>
       <div className="h-48 px-2">
         <ResponsiveContainer width="100%" height="100%">
@@ -149,8 +209,48 @@ export function RetirementPage() {
         <Hairline />
         <NumRow label={`${t.reports.inflation} (%)`} value={+(base.inflation * 100).toFixed(2)} onCommit={(n) => persist({ inflation: n / 100 })} />
         <Hairline />
+        <NumRow label={`${t.reports.fireSwr} (%)`} value={+((base.fireSwr ?? 0.04) * 100).toFixed(2)} onCommit={(n) => persist({ fireSwr: n / 100 })} />
+        <Hairline />
+        <NumRow label={`${t.reports.reverseLtv} (%)`} value={+((base.reverseMortgageLtv ?? 0) * 100).toFixed(2)} onCommit={(n) => persist({ reverseMortgageLtv: n / 100 })} />
+        <Hairline />
         <NumRow label={t.reports.travelRetired} value={base.travelInRetirement} money onCommit={(n) => persist({ travelInRetirement: n })} />
       </div>
+
+      <SectionLabel>{t.reports.propertiesOwned}</SectionLabel>
+      <div className="mx-4 rounded-xl bg-elevated p-4">
+        <div className="text-xs text-muted">{t.reports.propertyEquity}</div>
+        <div className="mt-1 text-lg font-semibold tabular-nums">{money(pack.property, "HKD")}</div>
+        <div className="mt-3 text-xs text-muted">{t.reports.reverseMonthly}</div>
+        <div className="mt-1 text-lg font-semibold tabular-nums">{money(rmMonthly, "HKD")}</div>
+      </div>
+      {pack.sleeves.filter((s) => s.kind === "property").length ? (
+        <div className="mx-4 mt-3 overflow-hidden rounded-xl bg-elevated">
+          {pack.sleeves
+            .filter((s) => s.kind === "property")
+            .map((s, i) => (
+              <div key={s.id}>
+                {i > 0 ? <Hairline /> : null}
+                <div className="flex items-center justify-between px-4 py-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm">{s.label}</div>
+                    <div className="text-xs tabular-nums text-muted">{money(s.amount, "HKD")}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+        </div>
+      ) : (
+        <p className="px-5 pt-2 text-xs text-muted">{t.common.none}</p>
+      )}
+
+      <SleeveReturns title={t.reports.cashAccounts} rows={pack.sleeves.filter((s) => s.kind === "cash")} fallback={0.02} onSave={(id, annualReturn) => {
+        const acc = accounts.find((a) => a.id === id);
+        if (acc) void updateAccount({ ...acc, expectedReturn: annualReturn });
+      }} />
+      <SleeveReturns title={t.reports.investAccounts} rows={pack.sleeves.filter((s) => s.kind === "invest")} fallback={base.preReturn} onSave={(id, annualReturn) => {
+        const acc = accounts.find((a) => a.id === id);
+        if (acc) void updateAccount({ ...acc, expectedReturn: annualReturn });
+      }} />
 
       <AllowanceSection />
 
@@ -204,6 +304,49 @@ function NumRow({
         </span>
       )}
     </button>
+  );
+}
+
+function SleeveReturns({
+  title,
+  rows,
+  fallback,
+  onSave,
+}: {
+  title: string;
+  rows: { id: string; label: string; amount: number; annualReturn: number }[];
+  fallback: number;
+  onSave: (id: string, annualReturn: number) => void;
+}) {
+  const t = useT();
+  return (
+    <>
+      <SectionLabel>{title}</SectionLabel>
+      {rows.length === 0 ? (
+        <p className="px-5 pb-2 text-xs text-muted">{t.common.none}</p>
+      ) : (
+        <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
+          {rows.map((s, i) => (
+            <div key={s.id}>
+              {i > 0 ? <Hairline /> : null}
+              <div className="px-4 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm">{s.label}</div>
+                    <div className="text-xs tabular-nums text-muted">{money(s.amount, "HKD")}</div>
+                  </div>
+                </div>
+                <NumRow
+                  label={`${t.reports.expectedReturn} (%)`}
+                  value={+((s.annualReturn || fallback) * 100).toFixed(2)}
+                  onCommit={(n) => onSave(s.id, n / 100)}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
