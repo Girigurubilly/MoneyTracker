@@ -17,7 +17,7 @@ import {
   remainingMonthsLabel,
   stressRows,
 } from "@/lib/calc/housing";
-import { effectiveRate, endDateFromRemaining, remainingInterest } from "@/lib/calc/mortgage";
+import { effectiveRate, endDateFromRemaining, remainingFromStart, remainingInterest } from "@/lib/calc/mortgage";
 import type { Mortgage } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
@@ -50,8 +50,9 @@ export function LivingPage() {
   const loan = linkedLoan(accounts, m);
   const pmt = m ? installmentOf(m) : 0;
   const rate = m ? effectiveRate(m) : 0;
-  const interest = m ? remainingInterest(m.outstanding, rate, m.remainingMonths) : 0;
-  const end = m ? endDateFromRemaining(today, m.remainingMonths, m.paymentDay) : "";
+  const left = m ? remainingFromStart(m, today) : null;
+  const interest = m ? remainingInterest(m.outstanding, rate, left?.remainingMonths ?? m.remainingMonths) : 0;
+  const end = m ? endDateFromRemaining(today, left?.remainingMonths ?? m.remainingMonths, m.paymentDay) : "";
   const proj = m ? projection12(m) : null;
   const stress = m ? stressRows(m) : [];
   const paidPct = m ? loanTimeProgress(m, today) : 0;
@@ -146,7 +147,11 @@ export function LivingPage() {
             <Hairline />
             <Kv label={t.reports.mortgageEnd} value={end} />
             <Hairline />
-            <Kv label={t.reports.remainingMonths} value={remainingMonthsLabel(m.remainingMonths, locale)} />
+            <Kv label={t.reports.remainingYears} value={left ? String(left.remainingYears) : "—"} />
+            <Hairline />
+            <Kv label={t.reports.remainingPayments} value={left ? String(left.paymentsLeft) : "—"} />
+            <Hairline />
+            <Kv label={t.reports.remainingMonths} value={remainingMonthsLabel(left?.remainingMonths ?? m.remainingMonths, locale)} />
             <Hairline />
             <Kv label={t.reports.remainingInterest} value={money(interest, "HKD")} last />
           </div>
@@ -233,7 +238,7 @@ function MortgageEditor({ open, onClose }: { open: boolean; onClose: () => void 
   const [outstanding, setOutstanding] = useState(String(m?.outstanding ?? 0));
   const [original, setOriginal] = useState(String(m?.original ?? m?.outstanding ?? 0));
   const [startDate, setStartDate] = useState(m?.startDate ?? "");
-  const [months, setMonths] = useState(String(m?.remainingMonths ?? 240));
+  const [termYears, setTermYears] = useState(String(m?.termYears ?? Math.round((m?.remainingMonths ?? 240) / 12)));
   const [pRate, setPRate] = useState(String(((m?.pRate ?? m?.rate ?? 0.05) * 100).toFixed(2)));
   const [spread, setSpread] = useState(String(((m?.spread ?? 0) * 100).toFixed(2)));
   const [fixed, setFixed] = useState(String(((m?.rate ?? 0.0375) * 100).toFixed(2)));
@@ -243,6 +248,10 @@ function MortgageEditor({ open, onClose }: { open: boolean; onClose: () => void 
   const [accountId, setAccountId] = useState(m?.accountId ?? loans[0]?.id ?? "");
   const [day, setDay] = useState(String(m?.paymentDay ?? 1));
   const [override, setOverride] = useState(m?.paymentOverride ? String(m.paymentOverride) : "");
+  const preview = remainingFromStart(
+    { startDate, remainingMonths: Number(termYears) * 12 || 240, termYears: Number(termYears) || undefined, paymentDay: Number(day) || 1 },
+    todayISO(),
+  );
 
   return (
     <Overlay open={open} onClose={onClose} title={t.reports.updateMortgage} variant="page">
@@ -290,9 +299,19 @@ function MortgageEditor({ open, onClose }: { open: boolean; onClose: () => void 
           <input inputMode="decimal" value={outstanding} onChange={(e) => setOutstanding(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
         </label>
         <label className="block py-2 text-xs text-muted">
-          {t.reports.remainingMonths}
-          <input inputMode="numeric" value={months} onChange={(e) => setMonths(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
+          {t.reports.termYears}
+          <input inputMode="decimal" value={termYears} onChange={(e) => setTermYears(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
         </label>
+        <div className="grid grid-cols-2 gap-3 py-2">
+          <div className="rounded-xl bg-elevated px-3 py-2">
+            <div className="text-[11px] text-muted">{t.reports.remainingYears}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{preview.remainingYears}</div>
+          </div>
+          <div className="rounded-xl bg-elevated px-3 py-2">
+            <div className="text-[11px] text-muted">{t.reports.remainingPayments}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{preview.paymentsLeft}</div>
+          </div>
+        </div>
         <label className="block py-2 text-xs text-muted">
           {locale === "zh-HK" ? "利率類型" : "Rate type"}
           <select value={type} onChange={(e) => setType(e.target.value as Mortgage["type"])} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground">
@@ -340,11 +359,12 @@ function MortgageEditor({ open, onClose }: { open: boolean; onClose: () => void 
               accountId: accountId || m?.accountId || "mortgage",
               original: Number(original) || Number(outstanding) || 0,
               startDate: startDate || undefined,
+              termYears: Number(termYears) || undefined,
               outstanding: Number(outstanding) || 0,
               rate: type === "fixed" ? fx : p + sp,
               pRate: type === "fixed" ? undefined : p,
               spread: type === "fixed" ? undefined : sp,
-              remainingMonths: Math.max(1, Math.round(Number(months) || 1)),
+              remainingMonths: Math.max(0, preview.remainingMonths),
               paymentDay: Math.min(28, Math.max(1, Number(day) || 1)),
               type,
               livingMode: mode,

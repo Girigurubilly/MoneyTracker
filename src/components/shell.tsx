@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { Link, Navigate, useRouterState } from "@tanstack/react-router";
-import { BarChart3, MoreHorizontal, PieChart, Wallet, WalletCards } from "lucide-react";
+import { BarChart3, Bone, Building2, Cat, Cpu, Fish, Heart, Home, Landmark, Leaf, Moon, MoreHorizontal, PawPrint, PieChart, Sparkles, TreePine, Wallet, WalletCards } from "lucide-react";
 import { Toaster } from "sonner";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
@@ -57,12 +57,31 @@ function Nav() {
   const t = useT();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const access = useUi((s) => s.accessMode);
+  const theme = useUi((s) => s.theme);
+  const pack =
+    theme === "shiba"
+      ? { today: PawPrint, assets: Bone, budget: Heart, reports: Home, more: MoreHorizontal }
+      : theme === "cat"
+        ? { today: Cat, assets: Fish, budget: Heart, reports: Home, more: MoreHorizontal }
+        : theme === "panda"
+          ? { today: Leaf, assets: TreePine, budget: Heart, reports: Home, more: MoreHorizontal }
+          : theme === "hongkong"
+            ? { today: Landmark, assets: Building2, budget: PieChart, reports: BarChart3, more: MoreHorizontal }
+            : theme === "anime"
+              ? { today: Sparkles, assets: Heart, budget: PieChart, reports: BarChart3, more: MoreHorizontal }
+              : theme === "pinky"
+                ? { today: Heart, assets: WalletCards, budget: PieChart, reports: BarChart3, more: MoreHorizontal }
+                : theme === "cyberpunk"
+                  ? { today: Cpu, assets: WalletCards, budget: PieChart, reports: BarChart3, more: MoreHorizontal }
+                  : theme === "dark"
+                    ? { today: Moon, assets: WalletCards, budget: PieChart, reports: BarChart3, more: MoreHorizontal }
+                    : { today: Wallet, assets: WalletCards, budget: PieChart, reports: BarChart3, more: MoreHorizontal };
   const all = [
-    { to: "/", label: t.nav.today, icon: Wallet, match: (p: string) => p === "/" },
-    { to: "/assets", label: t.nav.assets, icon: WalletCards, match: (p: string) => p.startsWith("/assets") },
-    { to: "/budget", label: t.nav.budget, icon: PieChart, match: (p: string) => p.startsWith("/budget") },
-    { to: "/reports", label: t.nav.reports, icon: BarChart3, match: (p: string) => p.startsWith("/reports") },
-    { to: "/more", label: t.nav.more, icon: MoreHorizontal, match: (p: string) => p.startsWith("/more") },
+    { to: "/", label: t.nav.today, icon: pack.today, match: (p: string) => p === "/" },
+    { to: "/assets", label: t.nav.assets, icon: pack.assets, match: (p: string) => p.startsWith("/assets") },
+    { to: "/budget", label: t.nav.budget, icon: pack.budget, match: (p: string) => p.startsWith("/budget") },
+    { to: "/reports", label: t.nav.reports, icon: pack.reports, match: (p: string) => p.startsWith("/reports") },
+    { to: "/more", label: t.nav.more, icon: pack.more, match: (p: string) => p.startsWith("/more") },
   ] as const;
   const items = access === "kid" ? all.filter((it) => it.to !== "/reports" && it.to !== "/assets") : all;
   const cols = items.length === 3 ? "grid-cols-3" : "grid-cols-5";

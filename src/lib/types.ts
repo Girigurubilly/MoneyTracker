@@ -461,6 +461,7 @@ export type Mortgage = {
   accountId: string;
   original: number;
   startDate?: string;
+  termYears?: number;
   outstanding: number;
   rate: number;
   pRate?: number;

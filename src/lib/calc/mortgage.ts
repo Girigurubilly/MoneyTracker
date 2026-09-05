@@ -68,9 +68,27 @@ export function monthsBetween(fromIso: string, toIso: string): number {
   return Math.max(0, (ty - fy) * 12 + (tm - fm));
 }
 
-export function originalTermMonths(m: { startDate?: string; remainingMonths: number }, today: string): number {
+export function originalTermMonths(
+  m: { startDate?: string; remainingMonths: number; termYears?: number },
+  today: string,
+): number {
+  if (m.termYears && m.termYears > 0) return Math.max(1, Math.round(m.termYears * 12));
   const elapsed = m.startDate ? monthsBetween(m.startDate, today) : 0;
   return Math.max(m.remainingMonths, elapsed + m.remainingMonths);
+}
+
+export function remainingFromStart(
+  m: { startDate?: string; remainingMonths: number; termYears?: number; paymentDay?: number },
+  today: string,
+): { remainingMonths: number; remainingYears: number; paymentsLeft: number } {
+  const term = originalTermMonths(m, today);
+  const elapsed = m.startDate ? monthsBetween(m.startDate, today) : Math.max(0, term - m.remainingMonths);
+  const remainingMonths = Math.max(0, term - elapsed);
+  return {
+    remainingMonths,
+    remainingYears: Math.round((remainingMonths / 12) * 10) / 10,
+    paymentsLeft: remainingPayments(remainingMonths, m.paymentDay ?? 1, today),
+  };
 }
 
 export function originalPrincipal(m: { original?: number; outstanding: number }): number {
