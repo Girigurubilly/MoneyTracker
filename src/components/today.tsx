@@ -1,5 +1,5 @@
-import { ChevronLeft, ChevronRight, Plus, Search, Wallet } from "lucide-react";
-import { Hairline, InfoButton, Metric, ProgressRing, SectionLabel, Segmented, TransactionRow } from "@/components/shared";
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, Search, Wallet } from "lucide-react";
+import { Hairline, InfoButton, ProgressRing, SectionLabel, TransactionRow } from "@/components/shared";
 import { AmountWithHkd } from "@/components/currency-field";
 import { longDate, money, monthGrid, monthTitle, shiftMonth, todayISO, weekdayLabels } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
@@ -10,7 +10,7 @@ import { asOfForMonth, chargedDayOf, forecastTone, upcomingExpenseRegulars } fro
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { useT, useUi, readSavedLocale } from "@/store/ui";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export function TodayScreen() {
   const t = useT();
@@ -20,8 +20,6 @@ export function TodayScreen() {
   const setSelected = useUi((s) => s.setSelectedDate);
   const openAdd = useUi((s) => s.openAddPicker);
   const setSearch = useUi((s) => s.setSearchOpen);
-  const todayView = useUi((s) => (s.todayView === "week" ? "month" : s.todayView));
-  const setTodayView = useUi((s) => s.setTodayView);
   const today = todayISO();
   const onThisMonth = selected.slice(0, 7) === today.slice(0, 7);
 
@@ -68,16 +66,6 @@ export function TodayScreen() {
             <ChevronRight className="size-6" />
           </button>
         </div>
-        <div className="-mx-4 mt-3">
-          <Segmented<"day" | "month">
-            value={todayView}
-            onChange={(v) => setTodayView(v)}
-            options={[
-              { id: "day", label: t.views.day },
-              { id: "month", label: t.views.month },
-            ]}
-          />
-        </div>
       </header>
       <TodayBody />
     </div>
@@ -89,7 +77,6 @@ function TodayBody() {
   const locale = useUi((s) => s.locale);
   const selected = useUi((s) => s.selectedDate);
   const setSelected = useUi((s) => s.setSelectedDate);
-  const todayView = useUi((s) => (s.todayView === "week" ? "month" : s.todayView));
   const firstDay = useUi((s) => s.firstDayOfWeek);
   const setTx = useUi((s) => s.setTxDetailId);
   const transactions = useApp((s) => s.transactions);
@@ -113,11 +100,11 @@ function TodayBody() {
   const active = activityDates(transactions);
   const plannedDays = plannedIso(transactions);
   const weekdays = weekdayLabels(locale, firstDay);
+  const [showSummary, setShowSummary] = useState(false);
 
   return (
     <div className="pb-10">
-      {todayView === "month" ? (
-        <div className="mx-4 mb-4 rounded-xl bg-elevated px-2 py-3">
+      <div className="mx-4 mb-4 rounded-xl bg-elevated px-2 py-3">
           <div className="grid grid-cols-7 text-center text-xs text-muted">
             {weekdays.map((w) => (
               <div key={w} className="py-1">
@@ -151,34 +138,36 @@ function TodayBody() {
             )}
           </div>
         </div>
-      ) : null}
 
-      <div className="mx-4 mb-4 grid grid-cols-3 gap-3 rounded-xl bg-elevated px-4 py-3">
-        <Metric label={t.today.incomeMonth} value={money(stats.flow.income, "HKD")} tone="income" />
-        <Metric label={t.today.expenseMonth} value={money(stats.flow.expense, "HKD")} tone="expense" />
-        <Metric label={t.today.netMonth} value={money(stats.flow.net, "HKD", { sign: true })} tone={stats.flow.net >= 0 ? "income" : "expense"} />
-      </div>
+      <button
+        type="button"
+        className="mx-4 mb-2 flex w-[calc(100%-2rem)] items-center justify-center gap-1 text-xs font-medium text-accent"
+        onClick={() => setShowSummary((v) => !v)}
+      >
+        {showSummary ? t.today.hideSummary : t.today.showSummary}
+        <ChevronDown className={cn("size-3.5 transition", showSummary && "rotate-180")} />
+      </button>
+      {showSummary ? (
+        <>
+          <div className="mx-4 mb-4 rounded-xl bg-elevated px-4 py-1">
+            <SummaryRow label={t.today.incomeMonth} value={money(stats.flow.income, "HKD")} tone="income" />
+            <SummaryRow label={t.today.expenseMonth} value={money(stats.flow.expense, "HKD")} tone="expense" />
+            <SummaryRow label={t.today.netMonth} value={money(stats.flow.net, "HKD", { sign: true })} tone={stats.flow.net >= 0 ? "income" : "expense"} />
+          </div>
+          {onThisMonth ? (
+            <>
+              <div className="mx-4 mb-2 rounded-xl bg-elevated px-4 py-1">
+                <SummaryRow label={t.today.remainingBudget} value={money(stats.remainingBudget, "HKD")} />
+                <SummaryRow label={t.today.remainingDisc} value={money(stats.remainingDisc, "HKD")} info="disc" />
+                <SummaryRow label={t.today.dailySpend} value={money(stats.daily.daily, "HKD")} info="daily" />
+              </div>
+              <p className="px-5 pb-2 text-xs text-faint">{t.today.guidance}</p>
+            </>
+          ) : null}
+        </>
+      ) : null}
       {onThisMonth ? (
         <>
-          <div className="mx-4 mb-2 grid grid-cols-3 gap-3 rounded-xl bg-elevated px-4 py-3">
-            <Metric label={t.today.remainingBudget} value={money(stats.remainingBudget, "HKD")} />
-            <div className="min-w-0">
-              <div className="flex items-center gap-1 text-xs text-muted">
-                {t.today.remainingDisc}
-                <InfoButton k="disc" />
-              </div>
-              <div className="mt-1 truncate text-base font-semibold tabular-nums">{money(stats.remainingDisc, "HKD")}</div>
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1 text-xs text-muted">
-                {t.today.dailySpend}
-                <InfoButton k="daily" />
-              </div>
-              <div className="mt-1 truncate text-base font-semibold tabular-nums">{money(stats.daily.daily, "HKD")}</div>
-            </div>
-          </div>
-          <p className="px-5 pb-2 text-xs text-faint">{t.today.guidance}</p>
-
           <SectionLabel>{t.today.goals}</SectionLabel>
           <Hairline />
           <Link to="/budget" className="flex w-full items-center gap-3 px-5 py-3.5 text-left">
@@ -262,6 +251,38 @@ function TodayBody() {
           ) : null}
         </>
       )}
+    </div>
+  );
+}
+
+function SummaryRow({
+  label,
+  value,
+  tone,
+  info,
+}: {
+  label: string;
+  value: string;
+  tone?: "income" | "expense";
+  info?: "disc" | "daily";
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 border-t border-line py-3 first:border-t-0">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1 text-xs leading-snug text-muted">
+          <span>{label}</span>
+          {info ? <InfoButton k={info} /> : null}
+        </div>
+      </div>
+      <div
+        className={cn(
+          "shrink-0 text-right text-base font-semibold tabular-nums",
+          tone === "income" && "text-income",
+          tone === "expense" && "text-expense",
+        )}
+      >
+        {value}
+      </div>
     </div>
   );
 }

@@ -78,6 +78,8 @@ export const messages = {
       dayTx: "This date",
       reservedRegulars: "Reserved regulars",
       goals: "This month",
+      showSummary: "Show month summary",
+      hideSummary: "Hide month summary",
     },
     tx: { edit: "Edit", delete: "Delete", undo: "Undo", deleted: "Deleted", undone: "Restored" },
     assets: {
@@ -220,6 +222,7 @@ export const messages = {
       annualTravel: "Annual travel budget",
       milesNote: "Miles are counted only — they are not converted into Hong Kong dollars.",
       trips: "Trips",
+      pastTrips: "Past trips",
       tripSpent: "Spent on this trip",
       budgetUsed: "Budget used",
       remaining: "Remaining",
@@ -483,6 +486,8 @@ export const messages = {
       dayTx: "當日交易",
       reservedRegulars: "已預留定期項目",
       goals: "本月目標",
+      showSummary: "顯示本月摘要",
+      hideSummary: "隱藏本月摘要",
     },
     tx: { edit: "編輯", delete: "刪除", undo: "還原", deleted: "已刪除", undone: "已還原" },
     assets: {
@@ -623,6 +628,7 @@ export const messages = {
       annualTravel: "全年旅遊預算",
       milesNote: "里數只記數量，不會換算成港元。",
       trips: "旅程",
+      pastTrips: "過往旅程",
       tripSpent: "此旅程已花費",
       budgetUsed: "預算已用",
       remaining: "尚欠",

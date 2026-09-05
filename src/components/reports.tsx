@@ -1,12 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ChevronRight } from "lucide-react";
-import { Disclaimer, Group, Hairline, ScreenHeader, StatusChip } from "@/components/shared";
+import { Disclaimer, Group, Hairline, ScreenHeader, StatusChip, BudgetChip } from "@/components/shared";
 import { compactHkd, milesLabel, money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { cashflowSeries, monthKeysBack, monthLabel } from "@/lib/derived";
 import { livingEssentials, monthCashflowForecast } from "@/lib/calc/budget";
-import { asiaMilesBalance, nextTrip, spendStatus, travelSpendYtd, tripCashSpent } from "@/lib/calc/trips";
+import { asiaMilesBalance, nextTrip, travelSpendYtd, tripCashSpent } from "@/lib/calc/trips";
 import { effectiveRate, monthlyPayment } from "@/lib/calc/mortgage";
 import { housingStatus, monthlyHousingCost } from "@/lib/calc/housing";
 import { investableNow } from "@/lib/calc/networth";
@@ -71,7 +71,6 @@ export function DashboardPage() {
   const ytd = travelSpendYtd(txs, Number(today.slice(0, 4)), travelIds, rates);
   const miles = asiaMilesBalance(accounts);
   const nxt = nextTrip(trips, today);
-  const travelStatus = spendStatus(ytd, annual);
   const avg = savingsLast12Months(txs, rates, monthKey(today));
   const inputs = {
     currentAge: ret?.currentAge ?? 40,
@@ -121,7 +120,7 @@ export function DashboardPage() {
       <Link to="/reports/travel" className="mx-4 mt-3 block rounded-xl bg-elevated p-4">
         <div className="flex items-start justify-between gap-2">
           <h2 className="text-base font-semibold">{t.reports.travel}</h2>
-          <StatusChip status={travelStatus} />
+          <BudgetChip over={annual > 0 && ytd > annual} />
         </div>
         <div className="mt-4 grid grid-cols-2 gap-4">
           <div>

@@ -199,6 +199,28 @@ export function Overlay({
   return createPortal(sheet, document.body);
 }
 
+export function BudgetChip({ over }: { over: boolean }) {
+  const locale = useUi((s) => s.locale);
+  const label = over
+    ? locale === "zh-HK"
+      ? "超支"
+      : "Over budget"
+    : locale === "zh-HK"
+      ? "預算內"
+      : "Within budget";
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+        over ? "bg-expense-soft text-expense" : "bg-success-soft text-income",
+      )}
+    >
+      <span className={cn("size-1.5 rounded-full", over ? "bg-expense" : "bg-income")} />
+      {label}
+    </span>
+  );
+}
+
 export function StatusChip({ status }: { status: "on-track" | "watch" | "at-risk" }) {
   const locale = useUi((s) => s.locale);
   const label =

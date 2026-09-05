@@ -1,14 +1,12 @@
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
-import { Hairline, InfoButton, Overlay, ProgressBar, ScreenHeader, SectionLabel, StatusChip } from "@/components/shared";
+import { Hairline, InfoButton, Overlay, ProgressBar, ScreenHeader, SectionLabel, BudgetChip } from "@/components/shared";
 import { AmountWithHkd } from "@/components/currency-field";
 import { mdLabel, milesLabel, money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import {
   asiaMilesBalance,
-  isTripActive,
-  spendStatus,
   travelSpendYtd,
   tripBudgetUsed,
   tripCashSpent,
@@ -32,10 +30,12 @@ export function TravelPage() {
   const travelIds = new Set(cats.filter((c) => c.theme === "travel").map((c) => c.id));
   const ytd = travelSpendYtd(txs, Number(todayISO().slice(0, 4)), travelIds, rates);
   const miles = asiaMilesBalance(accounts);
-  const yearStatus = spendStatus(ytd, annual);
+  const yearOver = annual > 0 && ytd > annual;
   const [adding, setAdding] = useState(false);
   const [editAnnual, setEditAnnual] = useState(false);
-  const active = trips.filter((tr) => isTripActive(tr, todayISO()));
+  const visible = trips.filter((tr) => tr.status !== "cancelled");
+  const current = visible.filter((tr) => tr.end >= todayISO());
+  const past = visible.filter((tr) => tr.end < todayISO());
 
   return (
     <div className="pb-10">
@@ -61,49 +61,68 @@ export function TravelPage() {
           {loc === "zh-HK" ? "亞洲萬里通" : "Asia Miles"}: {milesLabel(miles, loc)}
         </div>
         <p className="mt-2 text-xs text-muted">{t.reports.milesNote}</p>
-        <ProgressBar value={annual > 0 ? ytd / annual : 0} tone={yearStatus === "at-risk" ? "expense" : yearStatus === "watch" ? "watch" : "income"} />
+        <ProgressBar value={annual > 0 ? ytd / annual : 0} tone={yearOver ? "expense" : "income"} />
+        <div className="mt-2 flex justify-end">
+          <BudgetChip over={yearOver} />
+        </div>
       </div>
       <SectionLabel>{t.reports.trips}</SectionLabel>
-      {active.map((tr) => {
-        const spent = tripCashSpent(txs, tr.id, rates);
-        const used = tripBudgetUsed(spent, tr.cashBudget);
-        const st = spendStatus(spent, tr.cashBudget);
-        return (
-          <Link key={tr.id} to="/reports/travel/$id" params={{ id: tr.id }} className="mx-4 mb-3 block rounded-xl bg-elevated p-4">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="text-base font-semibold">{pickName(loc, tr.name, tr.nameZh)}</div>
-                <div className="mt-0.5 text-xs text-muted">
-                  {tr.destination} · {tr.start} → {tr.end}
-                </div>
-              </div>
-              <StatusChip status={st} />
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              <div>
-                <div className="text-xs text-muted">{t.reports.tripSpent}</div>
-                <div className="mt-1 text-sm font-semibold tabular-nums">
-                  {money(spent, "HKD")} / {money(tr.cashBudget, "HKD")}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs text-muted">{t.reports.budgetUsed}</div>
-                <div className="mt-1 text-sm font-semibold tabular-nums">{Math.round(used.pct * 100)}%</div>
-              </div>
-            </div>
-            <ProgressBar value={used.pct} tone={st === "at-risk" ? "expense" : "income"} />
-            <div className="mt-2 text-xs text-muted">
-              {loc === "zh-HK" ? "亞洲萬里通" : "Asia Miles"}: {milesLabel(tr.milesSaved, loc)} / {milesLabel(tr.milesTarget, loc)}
-            </div>
-          </Link>
-        );
-      })}
-      {active.length === 0 ? <p className="px-5 py-6 text-center text-sm text-muted">{t.common.none}</p> : null}
+      {current.map((tr) => (
+        <TripCard key={tr.id} trip={tr} />
+      ))}
+      {current.length === 0 ? <p className="px-5 py-6 text-center text-sm text-muted">{t.common.none}</p> : null}
+      {past.length ? (
+        <>
+          <SectionLabel>{t.reports.pastTrips}</SectionLabel>
+          {past.map((tr) => (
+            <TripCard key={tr.id} trip={tr} />
+          ))}
+        </>
+      ) : null}
       <TripEditor key={adding ? "new-trip" : "new-idle"} open={adding} onClose={() => setAdding(false)} />
       <Overlay open={editAnnual} onClose={() => setEditAnnual(false)} title={t.reports.annualTravel}>
         <AnnualEditor current={annual} onSave={async (n) => { await setAnnual(n); setEditAnnual(false); }} onClose={() => setEditAnnual(false)} />
       </Overlay>
     </div>
+  );
+}
+
+function TripCard({ trip }: { trip: Trip }) {
+  const t = useT();
+  const loc = useUi((s) => s.locale);
+  const txs = useApp((s) => s.transactions);
+  const rates = useApp((s) => s.fxRates);
+  const spent = tripCashSpent(txs, trip.id, rates);
+  const used = tripBudgetUsed(spent, trip.cashBudget);
+  const over = trip.cashBudget > 0 && spent > trip.cashBudget;
+  return (
+    <Link to="/reports/travel/$id" params={{ id: trip.id }} className="mx-4 mb-3 block rounded-xl bg-elevated p-4">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-base font-semibold">{pickName(loc, trip.name, trip.nameZh)}</div>
+          <div className="mt-0.5 text-xs text-muted">
+            {trip.destination} · {trip.start} → {trip.end}
+          </div>
+        </div>
+        <BudgetChip over={over} />
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <div>
+          <div className="text-xs text-muted">{t.reports.tripSpent}</div>
+          <div className="mt-1 text-sm font-semibold tabular-nums">
+            {money(spent, "HKD")} / {money(trip.cashBudget, "HKD")}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs text-muted">{t.reports.budgetUsed}</div>
+          <div className="mt-1 text-sm font-semibold tabular-nums">{Math.round(used.pct * 100)}%</div>
+        </div>
+      </div>
+      <ProgressBar value={used.pct} tone={over ? "expense" : "income"} />
+      <div className="mt-2 text-xs text-muted">
+        {loc === "zh-HK" ? "亞洲萬里通" : "Asia Miles"}: {milesLabel(trip.milesSaved, loc)} / {milesLabel(trip.milesTarget, loc)}
+      </div>
+    </Link>
   );
 }
 
@@ -139,7 +158,7 @@ export function TripDetailPage({ id }: { id: string }) {
   const spent = tripCashSpent(txs, trip.id, rates);
   const used = tripBudgetUsed(spent, trip.cashBudget);
   const linked = tripLinkedTxs(txs, trip.id);
-  const st = spendStatus(spent, trip.cashBudget);
+  const over = trip.cashBudget > 0 && spent > trip.cashBudget;
 
   return (
     <div className="pb-10">
@@ -153,9 +172,14 @@ export function TripDetailPage({ id }: { id: string }) {
         }
       />
       <div className="mx-4 rounded-xl bg-elevated p-4">
-        <div className="text-sm">{trip.destination}</div>
-        <div className="mt-0.5 text-sm text-muted">
-          {trip.start} → {trip.end}
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <div className="text-sm">{trip.destination}</div>
+            <div className="mt-0.5 text-sm text-muted">
+              {trip.start} → {trip.end}
+            </div>
+          </div>
+          <BudgetChip over={over} />
         </div>
         <div className="mt-4 grid grid-cols-2 gap-4">
           <div>
@@ -175,7 +199,7 @@ export function TripDetailPage({ id }: { id: string }) {
             <div className="mt-1 text-lg font-semibold tabular-nums">{money(used.remaining, "HKD")}</div>
           </div>
         </div>
-        <ProgressBar value={used.pct} tone={st === "at-risk" ? "expense" : "income"} />
+        <ProgressBar value={used.pct} tone={over ? "expense" : "income"} />
       </div>
       <SectionLabel>{t.reports.related}</SectionLabel>
       <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
