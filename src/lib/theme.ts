@@ -35,8 +35,32 @@ export type ThemeCustom = {
   fontSize?: FontSizeId;
 };
 
+export const ACCESS_MODES = ["standard", "elderly", "kid"] as const;
+export type AccessMode = (typeof ACCESS_MODES)[number];
+export const ACCESS_KEY = "hk-life-money-access";
 export const THEME_KEY = "hk-life-money-theme";
 export const THEME_CUSTOM_KEY = "hk-life-money-theme-custom";
+
+export function isAccessMode(v: string | null | undefined): v is AccessMode {
+  return ACCESS_MODES.includes(v as AccessMode);
+}
+
+export function readSavedAccess(): AccessMode {
+  try {
+    const v = localStorage.getItem(ACCESS_KEY);
+    if (isAccessMode(v)) return v;
+  } catch {
+    /* ignore */
+  }
+  return "standard";
+}
+
+export function applyAccess(mode: AccessMode) {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  if (mode === "standard") root.removeAttribute("data-access");
+  else root.setAttribute("data-access", mode);
+}
 
 export const COLOR_CSS: Record<ThemeColorKey, string> = {
   background: "--color-background",

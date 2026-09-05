@@ -28,7 +28,7 @@ export const Route = createRootRoute({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var r=document.documentElement;var t=localStorage.getItem("hk-life-money-theme");if(t)r.setAttribute("data-theme",t);var c=JSON.parse(localStorage.getItem("hk-life-money-theme-custom")||"{}");var s=r.style;var m={background:"--color-background",foreground:"--color-foreground",elevated:"--color-elevated",muted:"--color-muted",accent:"--color-accent"};for(var k in m){if(c[k])s.setProperty(m[k],c[k]);}if(c.fontId&&c.fontId!=="theme")r.setAttribute("data-font",c.fontId);if(c.fontSize&&c.fontSize!=="md")r.setAttribute("data-font-size",c.fontSize);}catch(e){}})();`,
+            __html: `(function(){try{var r=document.documentElement;var t=localStorage.getItem("hk-life-money-theme");if(t)r.setAttribute("data-theme",t);var a=localStorage.getItem("hk-life-money-access");if(a)r.setAttribute("data-access",a);var c=JSON.parse(localStorage.getItem("hk-life-money-theme-custom")||"{}");var s=r.style;var m={background:"--color-background",foreground:"--color-foreground",elevated:"--color-elevated",muted:"--color-muted",accent:"--color-accent"};for(var k in m){if(c[k])s.setProperty(m[k],c[k]);}if(c.fontId&&c.fontId!=="theme")r.setAttribute("data-font",c.fontId);if(c.fontSize&&c.fontSize!=="md")r.setAttribute("data-font-size",c.fontSize);}catch(e){}})();`,
           }}
         />
         <HeadContent />

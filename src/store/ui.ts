@@ -3,12 +3,16 @@ import type { Locale, TodayView, TxType } from "@/lib/types";
 import { todayISO } from "@/lib/format";
 import { messages, type Messages } from "@/lib/i18n";
 import {
+  applyAccess,
   applyTheme,
   colorsOnly,
+  readSavedAccess,
   readSavedCustom,
   readSavedTheme,
+  ACCESS_KEY,
   THEME_CUSTOM_KEY,
   THEME_KEY,
+  type AccessMode,
   type FontId,
   type FontSizeId,
   type ThemeColorKey,
@@ -41,6 +45,7 @@ type UiState = {
   txDetailId: string | null;
   infoKey: string | null;
   onboarded: boolean;
+  accessMode: AccessMode;
   setLocale: (l: Locale) => void;
   setTheme: (t: ThemeId) => void;
   setCustomColor: (key: ThemeColorKey, hex: string | undefined) => void;
@@ -56,6 +61,7 @@ type UiState = {
   setTxDetailId: (id: string | null) => void;
   setInfoKey: (k: string | null) => void;
   setOnboarded: (v: boolean) => void;
+  setAccessMode: (mode: AccessMode) => void;
 };
 
 function persistCustom(next: ThemeCustom) {
@@ -68,6 +74,7 @@ function persistCustom(next: ThemeCustom) {
 
 if (typeof window !== "undefined") {
   applyTheme(readSavedTheme(), readSavedCustom());
+  applyAccess(readSavedAccess());
 }
 
 export const useUi = create<UiState>((set, get) => ({
@@ -83,6 +90,7 @@ export const useUi = create<UiState>((set, get) => ({
   txDetailId: null,
   infoKey: null,
   onboarded: typeof window === "undefined" ? false : readOnboarded(),
+  accessMode: typeof window === "undefined" ? "standard" : readSavedAccess(),
   setLocale: (l) => {
     try {
       localStorage.setItem(LOCALE_KEY, l);
@@ -144,6 +152,23 @@ export const useUi = create<UiState>((set, get) => ({
       /* ignore */
     }
     set({ onboarded: v });
+  },
+  setAccessMode: (mode) => {
+    try {
+      localStorage.setItem(ACCESS_KEY, mode);
+    } catch {
+      /* ignore */
+    }
+    applyAccess(mode);
+    const custom = get().customColors;
+    if (mode === "elderly") {
+      const next = { ...custom, fontSize: "xl" as const };
+      persistCustom(next);
+      applyTheme(get().theme, next);
+      set({ accessMode: mode, customColors: next });
+      return;
+    }
+    set({ accessMode: mode });
   },
 }));
 

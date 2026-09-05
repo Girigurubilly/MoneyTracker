@@ -88,6 +88,22 @@ html[data-font-size="xl"] {
   font-size: 20px;
 }
 
+html[data-access="elderly"] {
+  font-size: 20px;
+}
+html[data-access="elderly"] button,
+html[data-access="elderly"] a,
+html[data-access="elderly"] input,
+html[data-access="elderly"] select {
+  min-height: 2.75rem;
+}
+html[data-access="kid"] {
+  --color-accent: #ff7a59;
+}
+html[data-access="kid"] .mx-auto.min-h-dvh {
+  letter-spacing: 0.01em;
+}
+
 html[data-theme="dark"] {
   color-scheme: dark;
   --font-sans: "SF Pro Text", "PingFang HK", "Noto Sans TC", "Segoe UI", system-ui, sans-serif;

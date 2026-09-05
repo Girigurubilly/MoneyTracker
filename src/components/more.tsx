@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Archive, FolderTree, Globe, Lock, Palette, PiggyBank, Repeat, Settings2, ShoppingBag, Upload, Wallet } from "lucide-react";
+import { Archive, FolderTree, Globe, Palette, PiggyBank, Repeat, Settings2, ShoppingBag, Upload, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
 import { Disclaimer, Group, Hairline, Overlay, Row, ScreenHeader } from "@/components/shared";
@@ -14,42 +14,54 @@ import type { Category } from "@/lib/types";
 import { CURRENCIES } from "@/lib/types";
 import { useApp, type AppSnapshot } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
-import { THEME_IDS, THEME_PRESETS, FONT_IDS, FONT_SIZE_IDS, normalizeHex, type FontId, type FontSizeId, type ThemeId } from "@/lib/theme";
+import { ACCESS_MODES, THEME_IDS, THEME_PRESETS, FONT_IDS, FONT_SIZE_IDS, normalizeHex, type FontId, type FontSizeId, type ThemeId } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
 export function MoreScreen() {
   const t = useT();
   const locale = useUi((s) => s.locale);
   const setLocale = useUi((s) => s.setLocale);
+  const access = useUi((s) => s.accessMode);
+  const kid = access === "kid";
   return (
     <div className="pb-10">
       <ScreenHeader title={t.more.title} large />
       <h2 className="px-5 pb-1 text-sm font-medium text-muted">{t.more.setup}</h2>
       <Group>
-        <Row icon={<FolderTree className="size-4" />} title={t.more.categories} to="/more/categories" chevron />
-        <Hairline />
-        <Row icon={<Repeat className="size-4" />} title={t.more.recurring} to="/budget" chevron />
-        <Hairline />
+        {kid ? null : (
+          <>
+            <Row icon={<FolderTree className="size-4" />} title={t.more.categories} to="/more/categories" chevron />
+            <Hairline />
+            <Row icon={<Repeat className="size-4" />} title={t.more.recurring} to="/budget" chevron />
+            <Hairline />
+          </>
+        )}
         <Row icon={<Wallet className="size-4" />} title={t.more.budgets} to="/budget" chevron />
         <Hairline />
         <Row icon={<ShoppingBag className="size-4" />} title={t.more.wishlist} to="/more/wishlist" chevron />
-        <Hairline />
-        <Row icon={<PiggyBank className="size-4" />} title={t.more.deposits} to="/reports/deposits" chevron />
-        <Hairline />
-        <Row icon={<Globe className="size-4" />} title={t.more.fx} to="/more/fx" chevron />
+        {kid ? null : (
+          <>
+            <Hairline />
+            <Row icon={<PiggyBank className="size-4" />} title={t.more.deposits} to="/reports/deposits" chevron />
+            <Hairline />
+            <Row icon={<Globe className="size-4" />} title={t.more.fx} to="/more/fx" chevron />
+          </>
+        )}
         <Hairline />
         <Row icon={<Palette className="size-4" />} title={t.more.appearance} to="/more/appearance" chevron />
       </Group>
-      <h2 className="px-5 pb-1 pt-6 text-sm font-medium text-muted">{t.more.data}</h2>
-      <Group>
-        <Row icon={<Upload className="size-4" />} title={t.more.import} to="/more/import" chevron />
-        <Hairline />
-        <Row icon={<Archive className="size-4" />} title={t.more.backup} to="/more/backup" chevron />
-        <Hairline />
-        <Row icon={<Lock className="size-4" />} title={t.more.security} to="/more/security" chevron />
-        <Hairline />
-        <Row icon={<Settings2 className="size-4" />} title={t.more.other} to="/more/other" chevron />
-      </Group>
+      {kid ? null : (
+        <>
+          <h2 className="px-5 pb-1 pt-6 text-sm font-medium text-muted">{t.more.data}</h2>
+          <Group>
+            <Row icon={<Upload className="size-4" />} title={t.more.import} to="/more/import" chevron />
+            <Hairline />
+            <Row icon={<Archive className="size-4" />} title={t.more.backup} to="/more/backup" chevron />
+            <Hairline />
+            <Row icon={<Settings2 className="size-4" />} title={t.more.other} to="/more/other" chevron />
+          </Group>
+        </>
+      )}
       <div className="px-5 pt-6">
         <button type="button" className="h-11 w-full rounded-xl bg-elevated text-sm" onClick={() => setLocale(locale === "zh-HK" ? "en" : "zh-HK")}>
           {t.more.language}: {locale === "zh-HK" ? "繁體中文" : "English"}
@@ -165,12 +177,37 @@ export function FxPage() {
   const syncedLabel = lastFxSyncAt
     ? formatFxSync(lastFxSyncAt, locale)
     : t.fx.lastSyncedNever;
+  const flags: Record<string, string> = {
+    HKD: "🇭🇰",
+    USD: "🇺🇸",
+    JPY: "🇯🇵",
+    CNY: "🇨🇳",
+    TWD: "🇹🇼",
+    THB: "🇹🇭",
+    GBP: "🇬🇧",
+    EUR: "🇪🇺",
+    AUD: "🇦🇺",
+    SGD: "🇸🇬",
+    CHF: "🇨🇭",
+    MOP: "🇲🇴",
+    KRW: "🇰🇷",
+    CAD: "🇨🇦",
+    NZD: "🇳🇿",
+    INR: "🇮🇳",
+  };
   return (
     <div className="pb-10">
-      <ScreenHeader title={t.fx.title} />
+      <ScreenHeader
+        title={t.fx.title}
+        right={
+          <button type="button" disabled={busy} className="h-11 px-3 text-sm font-medium text-accent disabled:opacity-50" onClick={() => void onRefresh()}>
+            {t.fx.refresh}
+          </button>
+        }
+      />
       <p className="px-5 pb-3 text-xs text-muted">{t.fx.hint}</p>
-      <div className="mx-4 mb-4 rounded-xl bg-elevated px-4 py-4">
-        <div className="text-sm font-medium">{t.fx.defaultCurrency}</div>
+      <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
+        <div className="text-xs font-medium text-accent">{t.fx.defaultCurrency}</div>
         <p className="mt-1 text-xs text-muted">{t.fx.defaultHint}</p>
         <div className="mt-3">
           <CurrencySelect
@@ -179,26 +216,27 @@ export function FxPage() {
             className="h-11 w-full rounded-lg bg-background px-3 text-sm"
           />
         </div>
+        <p className="mt-3 text-xs text-muted">
+          {asOf ? `${t.fx.asOf} ${asOf}` : null}
+          {asOf ? " · " : null}
+          {t.fx.lastSynced}: {syncedLabel}
+        </p>
       </div>
-      {shown.map((r) => (
-        <div key={r.currency} className="flex justify-between px-5 py-2 text-sm">
-          <span>{r.currency}</span>
-          <span className="tabular-nums">{r.perHkd.toPrecision(4)}</span>
-        </div>
-      ))}
-      <p className="px-5 pt-3 text-xs text-muted">
-        {asOf ? `${t.fx.asOf} ${asOf}` : null}
-        {asOf ? " · " : null}
-        {t.fx.lastSynced}: {syncedLabel}
-      </p>
-      <button
-        type="button"
-        disabled={busy}
-        className="mx-5 mt-4 h-11 w-[calc(100%-2.5rem)] rounded-xl bg-accent text-sm font-semibold text-on-accent disabled:opacity-60"
-        onClick={() => void onRefresh()}
-      >
-        {t.fx.refresh}
-      </button>
+      <div className="mx-4 space-y-2">
+        {shown.map((r) => (
+          <div key={r.currency} className="flex items-center gap-3 rounded-2xl bg-elevated px-4 py-3">
+            <span className="grid size-11 place-items-center rounded-2xl bg-background text-lg">{flags[r.currency] ?? "💱"}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold">{r.currency}</span>
+              <span className="text-xs text-muted">1 {r.currency} → HKD</span>
+            </span>
+            <span className="text-right">
+              <span className="block text-base font-semibold tabular-nums">{r.perHkd.toPrecision(4)}</span>
+              <span className="text-[11px] text-muted">HKD</span>
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -332,6 +370,8 @@ export function AppearancePage() {
   const setCustomColor = useUi((s) => s.setCustomColor);
   const setFontId = useUi((s) => s.setFontId);
   const setFontSize = useUi((s) => s.setFontSize);
+  const setAccessMode = useUi((s) => s.setAccessMode);
+  const accessMode = useUi((s) => s.accessMode);
   const resetCustomColors = useUi((s) => s.resetCustomColors);
   const labels: Record<ThemeId, string> = {
     normal: t.more.themeNormal,
@@ -362,6 +402,23 @@ export function AppearancePage() {
     <div className="pb-10">
       <ScreenHeader title={t.more.appearance} backTo="/more" />
       <p className="px-5 pb-3 text-sm text-muted">{t.more.appearanceHint}</p>
+      <h2 className="px-5 pb-2 text-sm font-medium text-muted">{t.more.accessMode}</h2>
+      <div className="mx-4 mb-5 grid grid-cols-3 gap-2">
+        {ACCESS_MODES.map((id) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setAccessMode(id)}
+            className={cn(
+              "min-h-16 rounded-2xl px-2 py-3 text-center text-sm font-medium",
+              accessMode === id ? "bg-accent text-on-accent" : "bg-elevated ring-1 ring-line",
+            )}
+          >
+            {id === "elderly" ? t.more.modeElderly : id === "kid" ? t.more.modeKid : t.more.modeStandard}
+          </button>
+        ))}
+      </div>
+      <p className="px-5 pb-4 text-xs text-muted">{t.more.accessHint}</p>
       <h2 className="px-5 pb-2 text-sm font-medium text-muted">{t.more.theme}</h2>
       <div className="grid grid-cols-2 gap-3 px-4">
         {THEME_IDS.map((id) => {

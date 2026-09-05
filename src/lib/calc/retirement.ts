@@ -15,6 +15,7 @@ export type RetirementInputs = {
   travelInRetirement: number;
   reverseMortgageLtv?: number;
   fireSwr?: number;
+  birthday?: string;
 };
 
 export type AssetSleeve = {
@@ -219,6 +220,15 @@ export function retirementSleeves(
 export function reverseMortgageMonthly(propertyEquity: number, ltv: number, years: number): number {
   if (propertyEquity <= 0 || ltv <= 0 || years <= 0) return 0;
   return (propertyEquity * ltv) / (years * 12);
+}
+
+export function ageFromBirthday(birthday: string, today: string): number {
+  const [y, m, d] = birthday.split("-").map(Number);
+  const [ty, tm, td] = today.split("-").map(Number);
+  if (!y || !m || !ty) return 0;
+  let age = ty - y;
+  if (tm < m || (tm === m && td < (d || 1))) age -= 1;
+  return Math.max(0, Math.min(120, age));
 }
 
 export function sustainableMonthly(inputs: RetirementInputs, ctx: RetirementCtx): number {

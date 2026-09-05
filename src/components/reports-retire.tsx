@@ -13,6 +13,7 @@ import {
   runRetirement,
   savingsLast12Months,
   sustainableMonthly,
+  ageFromBirthday,
   type RetirementInputs,
 } from "@/lib/calc/retirement";
 import { monthKey } from "@/lib/calc/ledger";
@@ -34,8 +35,10 @@ export function RetirementPage() {
   const mortgage = useApp((s) => s.mortgage);
   const updateAccount = useApp((s) => s.updateAccount);
   const avg = savingsLast12Months(txs, rates, monthKey(todayISO()));
+  const born = ret?.birthday;
+  const derivedAge = born ? ageFromBirthday(born, todayISO()) : ret?.currentAge ?? 40;
   const base: RetirementInputs = {
-    currentAge: ret?.currentAge ?? 40,
+    currentAge: derivedAge,
     retireAge: ret?.retireAge ?? 65,
     deathAge: ret?.deathAge ?? 90,
     monthlyIncomeNow: ret?.monthlyIncomeNow || avg.monthlyIncome,
@@ -47,6 +50,7 @@ export function RetirementPage() {
     travelInRetirement: ret?.travelInRetirement ?? 0,
     reverseMortgageLtv: ret?.reverseMortgageLtv ?? 0.4,
     fireSwr: ret?.fireSwr ?? 0.04,
+    birthday: ret?.birthday,
   };
   const pack = retirementSleeves(accounts, rates, 0.02, base.preReturn);
   const yearsRetired = Math.max(1, base.deathAge - base.retireAge);
@@ -228,7 +232,20 @@ export function RetirementPage() {
 
       <SectionLabel>{t.reports.timeline}</SectionLabel>
       <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
-        <NumRow label={t.reports.currentAge} value={base.currentAge} onCommit={(n) => persist({ currentAge: n })} />
+        <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+          <span className="text-sm">{t.reports.birthday}</span>
+          <input
+            type="date"
+            value={base.birthday ?? ""}
+            onChange={(e) => {
+              const birthday = e.target.value || undefined;
+              persist({ birthday, currentAge: birthday ? ageFromBirthday(birthday, todayISO()) : base.currentAge });
+            }}
+            className="h-10 bg-transparent text-sm text-accent outline-none"
+          />
+        </div>
+        <Hairline />
+        <NumRow label={t.reports.currentAge} value={base.currentAge} onCommit={(n) => persist({ currentAge: n, birthday: undefined })} />
         <Hairline />
         <NumRow label={t.reports.retireAge} value={base.retireAge} onCommit={(n) => persist({ retireAge: n })} />
         <Hairline />

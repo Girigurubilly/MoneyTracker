@@ -54,20 +54,23 @@ export function AppGate({ children }: { children: ReactNode }) {
 function Nav() {
   const t = useT();
   const path = useRouterState({ select: (s) => s.location.pathname });
-  const items = [
+  const access = useUi((s) => s.accessMode);
+  const all = [
     { to: "/", label: t.nav.today, icon: Wallet, match: (p: string) => p === "/" },
     { to: "/assets", label: t.nav.assets, icon: WalletCards, match: (p: string) => p.startsWith("/assets") },
     { to: "/budget", label: t.nav.budget, icon: PieChart, match: (p: string) => p.startsWith("/budget") },
     { to: "/reports", label: t.nav.reports, icon: BarChart3, match: (p: string) => p.startsWith("/reports") },
     { to: "/more", label: t.nav.more, icon: MoreHorizontal, match: (p: string) => p.startsWith("/more") },
   ] as const;
+  const items = access === "kid" ? all.filter((it) => it.to !== "/reports" && it.to !== "/assets") : all;
+  const cols = items.length === 3 ? "grid-cols-3" : "grid-cols-5";
   return (
     <>
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-elevated pb-[env(safe-area-inset-bottom)] lg:hidden">
-        <div className="mx-auto grid max-w-lg grid-cols-5">
+        <div className={cn("mx-auto grid max-w-lg", cols)}>
           {items.map((it) => (
-            <Link key={it.to} to={it.to} className={cn("flex h-16 flex-col items-center justify-center gap-0.5 text-xs", it.match(path) ? "text-accent" : "text-muted")}>
-              <it.icon className="size-5" />
+            <Link key={it.to} to={it.to} className={cn("flex h-16 flex-col items-center justify-center gap-0.5 text-xs", access === "elderly" && "h-[4.5rem] text-sm", it.match(path) ? "text-accent" : "text-muted")}>
+              <it.icon className={access === "elderly" ? "size-6" : "size-5"} />
               {it.label}
             </Link>
           ))}
