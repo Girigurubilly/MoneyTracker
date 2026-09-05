@@ -120,16 +120,16 @@ export function CategoryPicker({
   }
 
   function onTile(c: Category) {
-    if (editMode || manageOnly) {
-      openEditCat(c);
-      return;
-    }
     if (!parent) {
       const g = groups.find((x) => x.parent.id === c.id);
       if (g && g.children.length) {
         setParent(c);
         return;
       }
+    }
+    if (editMode || manageOnly) {
+      openEditCat(c);
+      return;
     }
     pick(c);
   }
@@ -193,7 +193,7 @@ export function CategoryPicker({
                 </span>
               </BudgetRing>
             </button>
-            <button type="button" className="flex min-w-0 items-center gap-2" onClick={() => (editMode ? openEditCat(parent) : pick(parent))}>
+            <button type="button" className="flex min-w-0 items-center gap-2" onClick={() => (editMode || manageOnly ? openEditCat(parent) : pick(parent))}>
               <span className="grid size-10 place-items-center">
                 <CategoryIcon name={parent.icon} />
               </span>

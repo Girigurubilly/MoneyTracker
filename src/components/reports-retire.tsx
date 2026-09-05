@@ -132,7 +132,10 @@ export function RetirementPage() {
           <div className="min-w-0">
             <div className="text-xs font-medium text-accent">{t.reports.fireTitle}</div>
             <div className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{money(fire.fireNumber, "HKD")}</div>
-            <div className="mt-1 text-xs text-muted">{t.reports.fireNumber}</div>
+            <div className="mt-1 text-xs text-muted">
+              {t.reports.fireAge}: {fire.reachable ? fire.fireAge : "—"}
+              {base.birthday ? ` · ${t.reports.currentAge} ${base.currentAge}` : ""}
+            </div>
           </div>
           <div className="relative shrink-0">
             <ProgressRing value={fire.progress} size={64} stroke={5} tone={fire.progress >= 1 ? "income" : fire.progress >= 0.6 ? "watch" : "expense"} />
@@ -141,7 +144,7 @@ export function RetirementPage() {
             </span>
           </div>
         </div>
-        <div className="mt-4 grid grid-cols-2 gap-2">
+        <div className="mt-3 grid grid-cols-2 gap-2">
           <div className="rounded-xl bg-accent-soft px-3 py-2">
             <div className="text-[11px] text-accent">{t.reports.fireNow}</div>
             <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(fire.current, "HKD")}</div>
@@ -151,41 +154,19 @@ export function RetirementPage() {
             <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(Math.max(0, fire.fireNumber - fire.current), "HKD")}</div>
           </div>
           <div className="rounded-xl bg-background px-3 py-2">
-            <div className="text-[11px] text-muted">{t.reports.cashAccounts}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(pack.cash, "HKD")}</div>
+            <div className="text-[11px] text-muted">{t.reports.corpusAtRetire}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(result.corpusAtRetire, "HKD")}</div>
           </div>
           <div className="rounded-xl bg-background px-3 py-2">
-            <div className="text-[11px] text-muted">{t.reports.investAccounts}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(pack.invest, "HKD")}</div>
+            <div className="text-[11px] text-muted">{t.reports.surplus}</div>
+            <div className={cn("mt-0.5 text-sm font-semibold tabular-nums", surplus >= 0 ? "text-income" : "text-expense")}>{money(surplus, "HKD", { sign: true })}</div>
           </div>
         </div>
-        <div className="mt-3 flex items-center justify-between text-xs text-muted">
-          <span>{t.reports.fireAge}: {fire.reachable ? fire.fireAge : "—"}</span>
-          <span>{t.reports.fireYears}: {fire.reachable ? fire.years : "—"}</span>
-        </div>
-        {!fire.reachable ? <p className="mt-2 text-xs text-muted">{t.reports.fireUnreachable}</p> : null}
-      </div>
-
-      <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <div className="text-xs text-muted">{t.reports.corpusAtRetire}</div>
-            <div className="mt-1 text-xl font-semibold tabular-nums">{money(result.corpusAtRetire, "HKD")}</div>
-          </div>
+        <div className="mt-2 flex items-center justify-between text-xs text-muted">
+          <span>{t.reports.avgSave12}: {money(avg.monthlySave, "HKD")}</span>
           <StatusChip status={status} />
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-          <div>
-            <div className="text-[11px] text-muted">{t.reports.avgSave12}</div>
-            <div className="mt-0.5 font-semibold tabular-nums">{money(avg.monthlySave, "HKD")}</div>
-          </div>
-          <div>
-            <div className="text-[11px] text-muted">{t.reports.surplus}</div>
-            <div className={cn("mt-0.5 font-semibold tabular-nums", surplus >= 0 ? "text-income" : "text-expense")}>
-              {money(surplus, "HKD", { sign: true })}
-            </div>
-          </div>
-        </div>
+        {!fire.reachable ? <p className="mt-2 text-xs text-muted">{t.reports.fireUnreachable}</p> : null}
       </div>
 
       <SectionLabel>{t.reports.assetsByAge}</SectionLabel>
@@ -231,7 +212,7 @@ export function RetirementPage() {
       </div>
 
       <SectionLabel>{t.reports.timeline}</SectionLabel>
-      <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
+      <div className="mx-4 overflow-hidden rounded-2xl bg-elevated">
         <div className="flex items-center justify-between gap-3 px-4 py-3.5">
           <span className="text-sm">{t.reports.birthday}</span>
           <input
@@ -244,8 +225,20 @@ export function RetirementPage() {
             className="h-10 bg-transparent text-sm text-accent outline-none"
           />
         </div>
-        <Hairline />
-        <NumRow label={t.reports.currentAge} value={base.currentAge} onCommit={(n) => persist({ currentAge: n, birthday: undefined })} />
+        {base.birthday ? (
+          <>
+            <Hairline />
+            <div className="flex items-center justify-between px-4 py-3.5">
+              <span className="text-sm">{t.reports.currentAge}</span>
+              <span className="text-sm tabular-nums text-muted">{base.currentAge}</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <Hairline />
+            <NumRow label={t.reports.currentAge} value={base.currentAge} onCommit={(n) => persist({ currentAge: n })} />
+          </>
+        )}
         <Hairline />
         <NumRow label={t.reports.retireAge} value={base.retireAge} onCommit={(n) => persist({ retireAge: n })} />
         <Hairline />
@@ -253,52 +246,37 @@ export function RetirementPage() {
       </div>
 
       <SectionLabel>{t.reports.assumptions}</SectionLabel>
-      <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
-        <NumRow label={t.reports.salaryNow} value={base.monthlyIncomeNow} money onCommit={(n) => persist({ monthlyIncomeNow: n })} />
-        <Hairline />
-        <NumRow label={t.reports.spendNow} value={base.monthlySpendNow} money onCommit={(n) => persist({ monthlySpendNow: n })} />
-        <Hairline />
+      <div className="mx-4 overflow-hidden rounded-2xl bg-elevated">
         <NumRow label={t.reports.spendRetired} value={base.targetMonthly} money onCommit={(n) => persist({ targetMonthly: n })} />
         <Hairline />
-        <NumRow label={`${t.reports.preReturn} (%)`} value={+(base.preReturn * 100).toFixed(2)} onCommit={(n) => persist({ preReturn: n / 100 })} />
-        <Hairline />
-        <NumRow label={`${t.reports.postReturn} (%)`} value={+(base.postReturn * 100).toFixed(2)} onCommit={(n) => persist({ postReturn: n / 100 })} />
+        <NumRow label={t.reports.travelRetired} value={base.travelInRetirement} money onCommit={(n) => persist({ travelInRetirement: n })} />
         <Hairline />
         <NumRow label={`${t.reports.inflation} (%)`} value={+(base.inflation * 100).toFixed(2)} onCommit={(n) => persist({ inflation: n / 100 })} />
         <Hairline />
         <NumRow label={`${t.reports.fireSwr} (%)`} value={+((base.fireSwr ?? 0.04) * 100).toFixed(2)} onCommit={(n) => persist({ fireSwr: n / 100 })} />
         <Hairline />
         <NumRow label={`${t.reports.reverseLtv} (%)`} value={+((base.reverseMortgageLtv ?? 0) * 100).toFixed(2)} onCommit={(n) => persist({ reverseMortgageLtv: n / 100 })} />
-        <Hairline />
-        <NumRow label={t.reports.travelRetired} value={base.travelInRetirement} money onCommit={(n) => persist({ travelInRetirement: n })} />
       </div>
 
       <SectionLabel>{t.reports.propertiesOwned}</SectionLabel>
-      <div className="mx-4 rounded-xl bg-elevated p-4">
-        <div className="text-xs text-muted">{t.reports.propertyEquity}</div>
-        <div className="mt-1 text-lg font-semibold tabular-nums">{money(pack.property, "HKD")}</div>
-        <div className="mt-3 text-xs text-muted">{t.reports.reverseMonthly}</div>
-        <div className="mt-1 text-lg font-semibold tabular-nums">{money(rmMonthly, "HKD")}</div>
-      </div>
-      {pack.sleeves.filter((s) => s.kind === "property").length ? (
-        <div className="mx-4 mt-3 overflow-hidden rounded-xl bg-elevated">
-          {pack.sleeves
-            .filter((s) => s.kind === "property")
-            .map((s, i) => (
-              <div key={s.id}>
-                {i > 0 ? <Hairline /> : null}
-                <div className="flex items-center justify-between px-4 py-3">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm">{s.label}</div>
-                    <div className="text-xs tabular-nums text-muted">{money(s.amount, "HKD")}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
+      <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-xl bg-success-soft px-3 py-2">
+            <div className="text-[11px] text-income">{t.reports.propertyEquity}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(pack.property, "HKD")}</div>
+          </div>
+          <div className="rounded-xl bg-background px-3 py-2">
+            <div className="text-[11px] text-muted">{t.reports.reverseMonthly}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(rmMonthly, "HKD")}</div>
+          </div>
         </div>
-      ) : (
-        <p className="px-5 pt-2 text-xs text-muted">{t.common.none}</p>
-      )}
+        {pack.sleeves.filter((s) => s.kind === "property").map((s) => (
+          <div key={s.id} className="mt-2 flex items-center justify-between text-sm">
+            <span className="truncate text-muted">{s.label}</span>
+            <span className="tabular-nums">{money(s.amount, "HKD")}</span>
+          </div>
+        ))}
+      </div>
 
       <SleeveReturns
         title={t.reports.cashAccounts}
