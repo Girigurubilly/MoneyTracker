@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { money } from "@/lib/format";
+import { money, monthTitle } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { cashflowSide } from "@/lib/calc/ledger";
 import { AmountWithHkd } from "@/components/currency-field";
@@ -310,6 +310,46 @@ export function TransactionRow({ tx, onClick, showDate }: { tx: Transaction; onC
         />
       </span>
     </button>
+  );
+}
+
+export function TxGroupedList({
+  txs,
+  onClick,
+  empty,
+}: {
+  txs: Transaction[];
+  onClick?: (tx: Transaction) => void;
+  empty?: string;
+}) {
+  const locale = useUi((s) => s.locale);
+  const t = useT();
+  const sorted = [...txs].sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+  const groups: { key: string; rows: Transaction[] }[] = [];
+  for (const tx of sorted) {
+    const key = tx.date.slice(0, 7);
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) last.rows.push(tx);
+    else groups.push({ key, rows: [tx] });
+  }
+  if (!sorted.length) {
+    return <p className="px-5 py-6 text-sm text-muted">{empty ?? t.common.none}</p>;
+  }
+  return (
+    <>
+      {groups.map((g) => (
+        <div key={g.key}>
+          <SectionLabel>{monthTitle(`${g.key}-01`, locale)}</SectionLabel>
+          <Hairline />
+          {g.rows.map((tx, i) => (
+            <div key={tx.id}>
+              {i > 0 ? <Hairline /> : null}
+              <TransactionRow tx={tx} showDate onClick={onClick ? () => onClick(tx) : undefined} />
+            </div>
+          ))}
+        </div>
+      ))}
+    </>
   );
 }
 

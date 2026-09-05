@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
-import { Hairline, InfoButton, Overlay, ProgressBar, ScreenHeader, SectionLabel, BudgetChip } from "@/components/shared";
+import { Hairline, InfoButton, Overlay, ProgressBar, ScreenHeader, SectionLabel, BudgetChip, TxGroupedList } from "@/components/shared";
 import { AmountWithHkd } from "@/components/currency-field";
-import { mdLabel, milesLabel, money, todayISO } from "@/lib/format";
+import { milesLabel, money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import {
   asiaMilesBalance,
@@ -12,7 +12,6 @@ import {
   tripCashSpent,
   tripLinkedTxs,
 } from "@/lib/calc/trips";
-import { cashflowSide } from "@/lib/calc/ledger";
 import type { Trip } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -150,8 +149,6 @@ export function TripDetailPage({ id }: { id: string }) {
   const del = useApp((s) => s.deleteTrip);
   const txs = useApp((s) => s.transactions);
   const rates = useApp((s) => s.fxRates);
-  const cats = useApp((s) => s.categories);
-  const accs = useApp((s) => s.accounts);
   const setTx = useUi((s) => s.setTxDetailId);
   const [edit, setEdit] = useState(false);
   if (!trip) return <div className="p-5 text-sm text-muted">—</div>;
@@ -201,45 +198,7 @@ export function TripDetailPage({ id }: { id: string }) {
         </div>
         <ProgressBar value={used.pct} tone={over ? "expense" : "income"} />
       </div>
-      <SectionLabel>{t.reports.related}</SectionLabel>
-      <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
-        {linked.length === 0 ? (
-          <p className="px-4 py-6 text-center text-sm text-muted">{t.common.none}</p>
-        ) : (
-          linked.map((tx, i) => {
-            const cat = cats.find((c) => c.id === tx.categoryId);
-            const acc = accs.find((a) => a.id === tx.accountId);
-            const spend = cashflowSide(tx) === "expense" || tx.type === "expense";
-            return (
-              <div key={tx.id}>
-                {i > 0 ? <Hairline /> : null}
-                <button type="button" onClick={() => setTx(tx.id)} className="flex w-full items-center gap-3 px-4 py-3 text-left">
-                  <div className="grid size-11 shrink-0 place-items-center rounded-full border border-line text-muted">
-                    <span className="text-sm">{(cat ? pickName(loc, cat.name, cat.nameZh) : "·").slice(0, 1)}</span>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium">
-                      {cat ? pickName(loc, cat.name, cat.nameZh) : pickName(loc, tx.payee, tx.payeeZh)}
-                    </div>
-                    <div className="truncate text-xs text-muted">
-                      {mdLabel(tx.date, loc)}
-                      {acc ? ` · ${pickName(loc, acc.name, acc.nameZh)}` : ""}
-                    </div>
-                  </div>
-                  <AmountWithHkd
-                    amount={spend ? -Math.abs(tx.amount) : tx.amount}
-                    currency={tx.currency}
-                    rates={rates}
-                    fxToHkd={tx.fxToHkd}
-                    sign
-                    className="text-sm font-medium text-expense"
-                  />
-                </button>
-              </div>
-            );
-          })
-        )}
-      </div>
+      <TxGroupedList txs={linked} onClick={(tx) => setTx(tx.id)} empty={t.common.none} />
       <p className="px-5 pt-4 text-xs text-muted">{t.reports.milesNote}</p>
       <TripEditor
         key={edit ? trip.id : "edit-idle"}

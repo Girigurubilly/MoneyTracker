@@ -80,6 +80,18 @@ export function groupForType(type: AccountType): AccountGroup {
   return "cash";
 }
 
+export function defaultTypeForGroup(group: AccountGroup): AccountType {
+  if (group === "credit") return "credit";
+  if (group === "assets") return "investment";
+  if (group === "housing") return "property";
+  if (group === "loyalty") return "miles";
+  return "current";
+}
+
+export function typesInGroup(group: AccountGroup): AccountType[] {
+  return ACCOUNT_TYPE_OPTIONS.map((o) => o.id).filter((id) => groupForType(id) === group);
+}
+
 export type Account = {
   id: string;
   name: string;

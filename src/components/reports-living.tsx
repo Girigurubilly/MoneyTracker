@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Hairline, InfoButton, Overlay, ScreenHeader, SectionLabel, TransactionRow } from "@/components/shared";
+import { Hairline, InfoButton, Overlay, ScreenHeader, SectionLabel, TxGroupedList } from "@/components/shared";
 import { money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import {
@@ -157,19 +157,7 @@ export function LivingPage() {
         </>
       ) : null}
 
-      <SectionLabel>{t.reports.housingTx}</SectionLabel>
-      <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
-        {related.length === 0 ? (
-          <p className="px-4 py-6 text-center text-sm text-muted">{t.common.none}</p>
-        ) : (
-          related.slice(0, 24).map((tx, i) => (
-            <div key={tx.id}>
-              {i > 0 ? <Hairline /> : null}
-              <TransactionRow tx={tx} onClick={() => setTx(tx.id)} />
-            </div>
-          ))
-        )}
-      </div>
+      <TxGroupedList txs={related} onClick={(tx) => setTx(tx.id)} empty={t.common.none} />
       <MortgageEditor key={edit ? m?.id ?? "new" : "closed"} open={edit} onClose={() => setEdit(false)} />
     </div>
   );

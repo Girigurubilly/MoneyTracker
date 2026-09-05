@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { getDb } from "@/lib/idb";
 import type {
   Account,
+  AccountGroup,
   AdhocBudget,
   Allowance,
   Budget,
@@ -18,6 +19,7 @@ import type {
   WishItem,
   YearlyPlan,
 } from "@/lib/types";
+import { defaultTypeForGroup, groupForType } from "@/lib/types";
 import type { RetirementInputs } from "@/lib/calc/retirement";
 import type { MetaRow, SnapshotRow } from "@/lib/idb";
 import {
@@ -110,6 +112,7 @@ type Dispatchers = {
   addAccount: (a: Account) => Promise<void>;
   updateAccount: (a: Account) => Promise<void>;
   moveAccount: (id: string, dir: number) => Promise<void>;
+  moveAccountToGroup: (id: string, group: AccountGroup) => Promise<void>;
   addCategory: (c: Category) => Promise<void>;
   updateCategory: (c: Category) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;
@@ -709,7 +712,6 @@ export const useApp = create<AppState>((set, get) => ({
     const i = rows.findIndex((a) => a.id === id);
     if (i < 0) return;
     let j = i + dir;
-    while (j >= 0 && j < rows.length && rows[j].type !== acc.type) j += dir;
     if (j < 0 || j >= rows.length) return;
     const next = [...rows];
     const swap = next[i];
@@ -721,6 +723,22 @@ export const useApp = create<AppState>((set, get) => ({
     });
     const map = new Map(patched.map((a) => [a.id, a]));
     set({ accounts: accounts.map((a) => map.get(a.id) ?? a) });
+  },
+  moveAccountToGroup: async (id, group) => {
+    const accounts = get().accounts;
+    const acc = accounts.find((a) => a.id === id);
+    if (!acc || acc.group === group) return;
+    const type = groupForType(acc.type) === group ? acc.type : defaultTypeForGroup(group);
+    const row: Account = {
+      ...acc,
+      group,
+      type,
+      currency: type === "miles" ? "MILES" : acc.currency === "MILES" ? "HKD" : acc.currency,
+      includeInNetWorth: type === "miles" ? false : acc.includeInNetWorth,
+      sortOrder: nextSortOrder(accounts, group),
+    };
+    await idb().accounts.put(row);
+    set({ accounts: accounts.map((a) => (a.id === id ? row : a)) });
   },
   addCategory: async (c) => {
     await idb().categories.add(c);

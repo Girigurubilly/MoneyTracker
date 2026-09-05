@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import { ChevronRight } from "lucide-react";
-import { Hairline, Overlay, ScreenHeader, SectionLabel, TransactionRow } from "@/components/shared";
+import { Overlay, ScreenHeader, TxGroupedList } from "@/components/shared";
 import { money, shortDate, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { periodCategoryTotals, periodCategoryTxs, periodRange, type PeriodPreset, type PeriodTab } from "@/lib/calc/period";
@@ -239,18 +239,7 @@ function CategoryTxList({
         </div>
         <div className="mt-1 text-2xl font-semibold tabular-nums">{money(row.value, "HKD")}</div>
       </div>
-      <SectionLabel>{t.reports.transactions}</SectionLabel>
-      <Hairline />
-      {rows.length === 0 ? (
-        <p className="px-5 py-6 text-sm text-muted">{t.reports.noTransactions}</p>
-      ) : (
-        rows.map((tx, i) => (
-          <div key={tx.id}>
-            {i > 0 ? <Hairline /> : null}
-            <TransactionRow tx={tx} showDate onClick={() => setTx(tx.id)} />
-          </div>
-        ))
-      )}
+      <TxGroupedList txs={rows} onClick={(tx) => setTx(tx.id)} empty={t.reports.noTransactions} />
     </Overlay>
   );
 }

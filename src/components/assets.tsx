@@ -13,7 +13,7 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
-import { Hairline, Overlay, ScreenHeader, SectionLabel, TransactionRow } from "@/components/shared";
+import { Hairline, Overlay, ScreenHeader, SectionLabel, TxGroupedList } from "@/components/shared";
 import { AmountWithHkd } from "@/components/currency-field";
 import { money } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
@@ -35,6 +35,7 @@ import {
   ACCOUNT_TYPE_OPTIONS,
   CURRENCIES,
   groupForType,
+  typesInGroup,
   type Account,
   type AccountGroup,
   type AccountType,
@@ -152,8 +153,8 @@ export function AssetsScreen() {
                 key={a.id}
                 a={a}
                 reorder={reorder}
-                canUp={i > 0 && rows[i - 1].type === a.type}
-                canDown={i < rows.length - 1 && rows[i + 1].type === a.type}
+                canUp={i > 0}
+                canDown={i < rows.length - 1}
                 onEdit={() => openAccount(a.id)}
               />
             ))}
@@ -167,7 +168,7 @@ export function AssetsScreen() {
           currencyHint="HKD"
         >
           {fxRows.map((a) => (
-            <AccountCard key={a.id} a={a} reorder={false} canUp={false} canDown={false} onEdit={() => openAccount(a.id)} />
+            <AccountCard key={a.id} a={a} reorder={reorder} canUp={false} canDown={false} onEdit={() => openAccount(a.id)} />
           ))}
         </AssetSection>
       ) : null}
@@ -246,9 +247,19 @@ function AccountCard({
   onEdit: () => void;
 }) {
   const locale = useUi((s) => s.locale);
+  const t = useT();
   const move = useApp((s) => s.moveAccount);
+  const moveTo = useApp((s) => s.moveAccountToGroup);
   const rates = useApp((s) => s.fxRates);
+  const groupLabels: Record<AccountGroup, string> = {
+    cash: t.assets.cash,
+    credit: t.assets.credit,
+    assets: t.assets.investments,
+    housing: t.assets.housing,
+    loyalty: t.assets.loyalty,
+  };
   const typeLabel = ACCOUNT_TYPE_OPTIONS.find((o) => o.id === a.type);
+  const groupLabel = groupLabels[a.group];
   const tone = TYPE_TONE[a.type] ?? "bg-accent-soft text-accent";
   const negative = a.balance < 0;
   return (
@@ -260,7 +271,8 @@ function AccountCard({
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-semibold">{pickName(locale, a.name, a.nameZh)}</span>
           <span className="mt-0.5 block truncate text-[11px] text-muted">
-            {typeLabel ? (locale === "zh-HK" ? typeLabel.zh : typeLabel.en) : a.type}
+            {groupLabel}
+            {typeLabel ? ` · ${locale === "zh-HK" ? typeLabel.zh : typeLabel.en}` : ""}
             {a.currency !== "HKD" ? ` · ${a.currency}` : ""}
             {a.hidden ? (locale === "zh-HK" ? " · 已隱藏" : " · Hidden") : ""}
           </span>
@@ -273,11 +285,23 @@ function AccountCard({
         />
       </button>
       {reorder ? (
-        <div className="flex flex-col justify-center border-l border-line pr-1">
-          <button type="button" aria-label="up" disabled={!canUp} className="grid size-10 place-items-center text-accent disabled:text-faint" onClick={() => void move(a.id, -1)}>
+        <div className="flex flex-col justify-center gap-1 border-l border-line px-1 py-1">
+          <select
+            aria-label={t.assets.moveTo}
+            value={a.group}
+            onChange={(e) => void moveTo(a.id, e.target.value as AccountGroup)}
+            className="h-8 max-w-[5.5rem] rounded-md bg-background px-1 text-[10px] text-accent outline-none"
+          >
+            {(Object.keys(groupLabels) as AccountGroup[]).map((g) => (
+              <option key={g} value={g}>
+                {groupLabels[g]}
+              </option>
+            ))}
+          </select>
+          <button type="button" aria-label="up" disabled={!canUp} className="grid size-8 place-items-center text-accent disabled:text-faint" onClick={() => void move(a.id, -1)}>
             <ChevronUp className="size-5" />
           </button>
-          <button type="button" aria-label="down" disabled={!canDown} className="grid size-10 place-items-center text-accent disabled:text-faint" onClick={() => void move(a.id, 1)}>
+          <button type="button" aria-label="down" disabled={!canDown} className="grid size-8 place-items-center text-accent disabled:text-faint" onClick={() => void move(a.id, 1)}>
             <ChevronDown className="size-5" />
           </button>
         </div>
@@ -306,6 +330,16 @@ function AccountDetail({
     .filter((x) => x.accountId === account.id || x.toAccountId === account.id)
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
   const typeLabel = ACCOUNT_TYPE_OPTIONS.find((o) => o.id === account.type);
+  const groupLabel =
+    account.group === "cash"
+      ? t.assets.cash
+      : account.group === "credit"
+        ? t.assets.credit
+        : account.group === "assets"
+          ? t.assets.investments
+          : account.group === "housing"
+            ? t.assets.housing
+            : t.assets.loyalty;
   return (
     <Overlay open onClose={onClose} variant="page">
       <header className="flex items-center justify-between px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
@@ -318,24 +352,16 @@ function AccountDetail({
         </button>
       </header>
       <div className="mx-4 mb-4 mt-2 rounded-xl bg-elevated px-4 py-4">
-        <div className="text-xs text-muted">{typeLabel ? (locale === "zh-HK" ? typeLabel.zh : typeLabel.en) : account.type}</div>
+        <div className="text-xs text-muted">
+          {groupLabel}
+          {typeLabel ? ` · ${locale === "zh-HK" ? typeLabel.zh : typeLabel.en}` : ""}
+        </div>
         <div className="mt-1">
           <AmountWithHkd amount={account.balance} currency={account.currency} rates={rates} align="start" className="text-2xl font-semibold" />
         </div>
         {account.hidden ? <div className="mt-1 text-xs text-muted">{t.assets.hidden}</div> : null}
       </div>
-      <SectionLabel>{t.assets.transactions}</SectionLabel>
-      <Hairline />
-      {rows.length === 0 ? (
-        <p className="px-5 py-6 text-sm text-muted">{t.assets.noTransactions}</p>
-      ) : (
-        rows.map((tx, i) => (
-          <div key={tx.id}>
-            {i > 0 ? <Hairline /> : null}
-            <TransactionRow tx={tx} showDate onClick={() => setTx(tx.id)} />
-          </div>
-        ))
-      )}
+      <TxGroupedList txs={rows} onClick={(tx) => setTx(tx.id)} empty={t.assets.noTransactions} />
     </Overlay>
   );
 }
@@ -352,6 +378,7 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
   const loans = accounts.filter((x) => (x.type === "mortgage" || x.type === "loan") && x.id !== account?.id);
   const [name, setName] = useState(account ? pickName(locale, account.name, account.nameZh) : "");
   const [type, setType] = useState<AccountType>(account?.type ?? "current");
+  const [group, setGroup] = useState<AccountGroup>(account?.group ?? groupForType(account?.type ?? "current"));
   const [currency, setCurrency] = useState<MoneyUnit>(account?.currency ?? "HKD");
   const [bal, setBal] = useState(account ? String(account.balance) : "0");
   const [notes, setNotes] = useState(account ? pickName(locale, account.notes ?? "", account.notesZh ?? "") : "");
@@ -425,14 +452,38 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
         <TextLine value={name} onChange={setName} placeholder={t.assets.name} />
         <SelectLine
           label={t.assets.type}
+          value={group}
+          onChange={(v) => {
+            const next = v as AccountGroup;
+            setGroup(next);
+            const keep = typesInGroup(next).includes(type);
+            const nextType = keep ? type : typesInGroup(next)[0];
+            setType(nextType);
+            if (nextType === "miles") setCurrency("MILES");
+            else if (currency === "MILES") setCurrency("HKD");
+          }}
+          options={[
+            { id: "cash", label: t.assets.cash },
+            { id: "credit", label: t.assets.credit },
+            { id: "assets", label: t.assets.investments },
+            { id: "housing", label: t.assets.housing },
+            { id: "loyalty", label: t.assets.loyalty },
+          ]}
+        />
+        <SelectLine
+          label={t.assets.subtype}
           value={type}
           onChange={(v) => {
             const next = v as AccountType;
             setType(next);
+            setGroup(groupForType(next));
             if (next === "miles") setCurrency("MILES");
             else if (currency === "MILES") setCurrency("HKD");
           }}
-          options={ACCOUNT_TYPE_OPTIONS.map((o) => ({ id: o.id, label: locale === "zh-HK" ? o.zh : o.en }))}
+          options={typesInGroup(group).map((id) => {
+            const o = ACCOUNT_TYPE_OPTIONS.find((x) => x.id === id)!;
+            return { id, label: locale === "zh-HK" ? o.zh : o.en };
+          })}
         />
         <LineRow label={t.assets.balance} amount={bal} active onFocusAmount={() => undefined} />
         {linkOptions.length ? (

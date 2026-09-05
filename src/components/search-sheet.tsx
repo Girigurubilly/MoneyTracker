@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Overlay, TransactionRow } from "@/components/shared";
+import { Overlay, TxGroupedList } from "@/components/shared";
 import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 
@@ -12,26 +12,24 @@ export function SearchFlow() {
   const [q, setQ] = useState("");
   const rows = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return txs.slice(0, 40);
-    return txs.filter((tx) => `${tx.payee} ${tx.payeeZh} ${tx.note ?? ""}`.toLowerCase().includes(s)).slice(0, 40);
+    const list = !s
+      ? [...txs]
+      : txs.filter((tx) => `${tx.payee} ${tx.payeeZh} ${tx.note ?? ""}`.toLowerCase().includes(s));
+    return list.sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
   }, [q, txs]);
   return (
     <Overlay open={open} onClose={() => setOpen(false)} title={t.today.search} variant="page">
-      <div className="px-5 pb-8">
+      <div className="px-5 pb-2">
         <input value={q} onChange={(e) => setQ(e.target.value)} className="h-11 w-full rounded-lg bg-elevated px-3" placeholder={t.today.search} />
-        <div className="mt-3">
-          {rows.map((tx) => (
-            <TransactionRow
-              key={tx.id}
-              tx={tx}
-              onClick={() => {
-                setTx(tx.id);
-                setOpen(false);
-              }}
-            />
-          ))}
-        </div>
       </div>
+      <TxGroupedList
+        txs={rows}
+        onClick={(tx) => {
+          setTx(tx.id);
+          setOpen(false);
+        }}
+        empty={t.today.noTxDay}
+      />
     </Overlay>
   );
 }
