@@ -326,10 +326,6 @@ html[data-theme="panda"][data-wallpaper="theme"] body::before {
 html[data-theme="hongkong"][data-wallpaper="theme"] body::before {
   background-image: linear-gradient(180deg, #7f1d1d 0%, #1a0c10 55%), repeating-linear-gradient(90deg, transparent 0 18px, #e23d3d22 18px 19px);
 }
-body > * {
-  position: relative;
-  z-index: 1;
-}
 
 html[data-font="system"] {
   --font-sans: "SF Pro Text", "PingFang HK", "Noto Sans TC", "Segoe UI", system-ui, sans-serif;
