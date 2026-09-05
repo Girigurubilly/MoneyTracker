@@ -112,7 +112,7 @@ type Dispatchers = {
   addAccount: (a: Account) => Promise<void>;
   updateAccount: (a: Account) => Promise<void>;
   moveAccount: (id: string, dir: number) => Promise<void>;
-  moveAccountToGroup: (id: string, group: AccountGroup) => Promise<void>;
+  moveAccountToGroup: (id: string, group: AccountGroup | "fx") => Promise<void>;
   addCategory: (c: Category) => Promise<void>;
   updateCategory: (c: Category) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;
@@ -727,8 +727,24 @@ export const useApp = create<AppState>((set, get) => ({
   moveAccountToGroup: async (id, group) => {
     const accounts = get().accounts;
     const acc = accounts.find((a) => a.id === id);
-    if (!acc || acc.group === group) return;
-    const type = groupForType(acc.type) === group ? acc.type : defaultTypeForGroup(group);
+    if (!acc) return;
+    if (group === "fx") {
+      if (acc.type === "fx") return;
+      const row: Account = {
+        ...acc,
+        type: "fx",
+        group: "cash",
+        currency: acc.currency === "MILES" ? "USD" : acc.currency,
+        includeInNetWorth: acc.includeInNetWorth,
+        sortOrder: nextSortOrder(accounts, "cash"),
+      };
+      await idb().accounts.put(row);
+      set({ accounts: accounts.map((a) => (a.id === id ? row : a)) });
+      return;
+    }
+    const alreadyThere = acc.group === group && acc.type !== "fx";
+    if (alreadyThere) return;
+    const type = groupForType(acc.type) === group && acc.type !== "fx" ? acc.type : defaultTypeForGroup(group);
     const row: Account = {
       ...acc,
       group,

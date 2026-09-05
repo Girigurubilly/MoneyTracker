@@ -82,8 +82,8 @@ function TypeGlyph({ type }: { type: AccountType }) {
   return map[type];
 }
 
-function isForeign(a: Account) {
-  return a.currency !== "HKD" && a.currency !== "MILES";
+function isForeignSection(a: Account) {
+  return a.type === "fx";
 }
 
 export function AssetsScreen() {
@@ -104,7 +104,7 @@ export function AssetsScreen() {
   };
   const visible = accounts.filter((a) => !a.hidden);
   const hiddenRows = accounts.filter((a) => a.hidden);
-  const fxRows = visible.filter(isForeign);
+  const fxRows = visible.filter(isForeignSection);
   const fxIds = new Set(fxRows.map((a) => a.id));
   const groups = BALANCE_GROUP_ORDER.map((id) => ({ id, label: labels[id] }));
 
@@ -259,7 +259,7 @@ function AccountCard({
     loyalty: t.assets.loyalty,
   };
   const typeLabel = ACCOUNT_TYPE_OPTIONS.find((o) => o.id === a.type);
-  const groupLabel = groupLabels[a.group];
+  const groupLabel = a.type === "fx" ? t.assets.foreign : groupLabels[a.group];
   const tone = TYPE_TONE[a.type] ?? "bg-accent-soft text-accent";
   const negative = a.balance < 0;
   return (
@@ -288,8 +288,8 @@ function AccountCard({
         <div className="flex flex-col justify-center gap-1 border-l border-line px-1 py-1">
           <select
             aria-label={t.assets.moveTo}
-            value={a.group}
-            onChange={(e) => void moveTo(a.id, e.target.value as AccountGroup)}
+            value={a.type === "fx" ? "fx" : a.group}
+            onChange={(e) => void moveTo(a.id, e.target.value as AccountGroup | "fx")}
             className="h-8 max-w-[5.5rem] rounded-md bg-background px-1 text-[10px] text-accent outline-none"
           >
             {(Object.keys(groupLabels) as AccountGroup[]).map((g) => (
@@ -297,6 +297,7 @@ function AccountCard({
                 {groupLabels[g]}
               </option>
             ))}
+            <option value="fx">{t.assets.foreign}</option>
           </select>
           <button type="button" aria-label="up" disabled={!canUp} className="grid size-8 place-items-center text-accent disabled:text-faint" onClick={() => void move(a.id, -1)}>
             <ChevronUp className="size-5" />
@@ -452,12 +453,18 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
         <TextLine value={name} onChange={setName} placeholder={t.assets.name} />
         <SelectLine
           label={t.assets.type}
-          value={group}
+          value={type === "fx" ? "fx" : group}
           onChange={(v) => {
+            if (v === "fx") {
+              setGroup("cash");
+              setType("fx");
+              if (currency === "MILES") setCurrency("USD");
+              return;
+            }
             const next = v as AccountGroup;
             setGroup(next);
-            const keep = typesInGroup(next).includes(type);
-            const nextType = keep ? type : typesInGroup(next)[0];
+            const keep = type !== "fx" && typesInGroup(next).includes(type);
+            const nextType = keep ? type : typesInGroup(next).filter((id) => id !== "fx")[0] ?? typesInGroup(next)[0];
             setType(nextType);
             if (nextType === "miles") setCurrency("MILES");
             else if (currency === "MILES") setCurrency("HKD");
@@ -468,23 +475,28 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
             { id: "assets", label: t.assets.investments },
             { id: "housing", label: t.assets.housing },
             { id: "loyalty", label: t.assets.loyalty },
+            { id: "fx", label: t.assets.foreign },
           ]}
         />
-        <SelectLine
-          label={t.assets.subtype}
-          value={type}
-          onChange={(v) => {
-            const next = v as AccountType;
-            setType(next);
-            setGroup(groupForType(next));
-            if (next === "miles") setCurrency("MILES");
-            else if (currency === "MILES") setCurrency("HKD");
-          }}
-          options={typesInGroup(group).map((id) => {
-            const o = ACCOUNT_TYPE_OPTIONS.find((x) => x.id === id)!;
-            return { id, label: locale === "zh-HK" ? o.zh : o.en };
-          })}
-        />
+        {type === "fx" ? null : (
+          <SelectLine
+            label={t.assets.subtype}
+            value={type}
+            onChange={(v) => {
+              const next = v as AccountType;
+              setType(next);
+              setGroup(groupForType(next));
+              if (next === "miles") setCurrency("MILES");
+              else if (currency === "MILES") setCurrency("HKD");
+            }}
+            options={typesInGroup(group)
+              .filter((id) => id !== "fx")
+              .map((id) => {
+                const o = ACCOUNT_TYPE_OPTIONS.find((x) => x.id === id)!;
+                return { id, label: locale === "zh-HK" ? o.zh : o.en };
+              })}
+          />
+        )}
         <LineRow label={t.assets.balance} amount={bal} active onFocusAmount={() => undefined} />
         {linkOptions.length ? (
           <SelectLine
