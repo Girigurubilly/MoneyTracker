@@ -24,87 +24,86 @@ export function YearlyPage() {
     <div className="pb-10">
       <ScreenHeader title={t.reports.yearly} backTo="/reports" />
       <p className="px-5 pb-3 text-xs text-muted">{t.reports.yearlyPastHint}</p>
-      <div className="mx-4 grid grid-cols-2 gap-2">
-        <Metric label={t.reports.yearlyEarn} value={money(data.yearIncome, "HKD")} tone="income" />
-        <Metric label={t.reports.yearlyExpense} value={money(data.yearExpense, "HKD")} tone="expense" />
-        <Metric label={t.reports.yearlySaving} value={money(data.yearSaving, "HKD")} tone={data.yearSaving >= 0 ? "income" : "expense"} />
-        <Metric label={t.reports.earnAsOfNow} value={money(data.asOfIncome, "HKD")} tone="income" />
-        <Metric label={t.reports.expenseAsOfNow} value={money(data.asOfExpense, "HKD")} tone="expense" />
-        <Metric label={t.reports.savingAsOfNow} value={money(data.asOfSaving, "HKD")} tone={data.asOfSaving >= 0 ? "income" : "expense"} />
+      <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
+        <div className="text-xs font-medium text-accent">{t.reports.yearlySaving}</div>
+        <div className={cn("mt-1 text-2xl font-semibold tabular-nums", data.yearSaving >= 0 ? "text-income" : "text-expense")}>
+          {money(data.yearSaving, "HKD")}
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="rounded-xl bg-success-soft px-3 py-2">
+            <div className="text-[11px] text-income">{t.reports.yearlyEarn}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(data.yearIncome, "HKD")}</div>
+          </div>
+          <div className="rounded-xl bg-expense-soft px-3 py-2">
+            <div className="text-[11px] text-expense">{t.reports.yearlyExpense}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(data.yearExpense, "HKD")}</div>
+          </div>
+          <div className="rounded-xl bg-background px-3 py-2">
+            <div className="text-[11px] text-muted">{t.reports.earnAsOfNow}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(data.asOfIncome, "HKD")}</div>
+          </div>
+          <div className="rounded-xl bg-background px-3 py-2">
+            <div className="text-[11px] text-muted">{t.reports.expenseAsOfNow}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(data.asOfExpense, "HKD")}</div>
+          </div>
+        </div>
       </div>
-      <div className="mt-4 overflow-x-auto px-2">
-        <table className="min-w-[720px] w-full text-sm">
-          <thead>
-            <tr className="text-xs text-muted">
-              <th className="px-2 py-2 text-left font-medium">{locale === "zh-HK" ? "月份" : "Month"}</th>
-              <th className="px-2 py-2 text-right font-medium">{t.reports.salary}</th>
-              <th className="px-2 py-2 text-right font-medium">{t.reports.depositInterestHkd}</th>
-              <th className="px-2 py-2 text-right font-medium">{t.reports.otherIncome}</th>
-              <th className="px-2 py-2 text-right font-medium">{t.reports.totalIncome}</th>
-              <th className="px-2 py-2 text-right font-medium">{t.reports.expectedExpense}</th>
-              <th className="px-2 py-2 text-right font-medium">{t.reports.saving}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.rows.map((row) => (
-              <tr key={row.id} className={cn(row.isCurrent && "bg-elevated")}>
-                <td className={cn("whitespace-nowrap px-2 py-2 font-medium", row.isCurrent && "text-accent")}>
-                  {months[row.month0]}
-                  {row.isCurrent ? <span className="ml-1 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-on-accent">{t.reports.nowBadge}</span> : null}
-                </td>
-                <td className="px-2 py-1 text-right">
-                  {row.fromLedger ? (
-                    <LedgerNum value={row.salary} />
-                  ) : (
-                    <NumCell value={row.salary} onChange={(n) => void setYearlyCell(year, row.month0, "salary", n)} />
-                  )}
-                </td>
-                <td className="px-2 py-2 text-right tabular-nums text-income">{row.depInt ? money(row.depInt, "HKD") : "—"}</td>
-                <td className="px-2 py-1 text-right">
-                  {row.fromLedger ? (
-                    <LedgerNum value={row.other} />
-                  ) : (
-                    <NumCell value={row.other} onChange={(n) => void setYearlyCell(year, row.month0, "other", n)} />
-                  )}
-                </td>
-                <td className="px-2 py-2 text-right font-medium tabular-nums">{row.income ? money(row.income, "HKD") : "—"}</td>
-                <td className="px-2 py-1 text-right">
-                  {row.fromLedger ? (
-                    <LedgerNum value={row.expense} />
-                  ) : (
-                    <NumCell value={row.expense} onChange={(n) => void setYearlyCell(year, row.month0, "expense", n)} />
-                  )}
-                </td>
-                <td className={cn("px-2 py-2 text-right font-semibold tabular-nums", row.saving >= 0 ? "text-income" : "text-expense")}>
-                  {money(row.saving, "HKD")}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="mx-4 space-y-2">
+        {data.rows.map((row) => (
+          <div key={row.id} className={cn("rounded-2xl bg-elevated px-3 py-3", row.isCurrent && "ring-1 ring-accent")}>
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm font-semibold">
+                {months[row.month0]}
+                {row.isCurrent ? <span className="ml-1 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-on-accent">{t.reports.nowBadge}</span> : null}
+              </div>
+              <div className={cn("text-sm font-semibold tabular-nums", row.saving >= 0 ? "text-income" : "text-expense")}>{money(row.saving, "HKD")}</div>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <div className="text-muted">{t.reports.salary}</div>
+                {row.fromLedger ? (
+                  <LedgerNum value={row.salary} />
+                ) : (
+                  <NumCell value={row.salary} onChange={(n) => void setYearlyCell(year, row.month0, "salary", n)} />
+                )}
+              </div>
+              <div>
+                <div className="text-muted">{t.reports.depositInterestHkd}</div>
+                <div className="mt-1 h-9 py-2 tabular-nums text-income">{row.depInt ? money(row.depInt, "HKD") : "—"}</div>
+              </div>
+              <div>
+                <div className="text-muted">{t.reports.otherIncome}</div>
+                {row.fromLedger ? (
+                  <LedgerNum value={row.other} />
+                ) : (
+                  <NumCell value={row.other} onChange={(n) => void setYearlyCell(year, row.month0, "other", n)} />
+                )}
+              </div>
+              <div>
+                <div className="text-muted">{t.reports.expectedExpense}</div>
+                {row.fromLedger ? (
+                  <LedgerNum value={row.expense} />
+                ) : (
+                  <NumCell value={row.expense} onChange={(n) => void setYearlyCell(year, row.month0, "expense", n)} />
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
-    </div>
-  );
-}
-
-function Metric({ label, value, tone }: { label: string; value: string; tone?: "income" | "expense" }) {
-  return (
-    <div className="rounded-xl bg-elevated px-3 py-3">
-      <div className="text-[11px] leading-snug text-muted">{label}</div>
-      <div className={`mt-1 text-sm font-semibold tabular-nums ${tone === "income" ? "text-income" : tone === "expense" ? "text-expense" : ""}`}>{value}</div>
     </div>
   );
 }
 
 function LedgerNum({ value }: { value: number }) {
-  return <span className="inline-block h-9 min-w-[108px] py-2 tabular-nums">{value ? money(value, "HKD") : "—"}</span>;
+  return <div className="mt-1 h-9 py-2 tabular-nums">{value ? money(value, "HKD") : "—"}</div>;
 }
 
 function NumCell({ value, onChange }: { value: number; onChange: (n: number) => void }) {
   return (
     <input
       type="number"
-      className="h-9 w-[108px] rounded-lg bg-background px-2 text-right tabular-nums"
+      className="mt-1 h-9 w-full rounded-lg bg-background px-2 text-right tabular-nums"
       value={value || ""}
       placeholder="0"
       onChange={(e) => onChange(parseFloat(e.target.value) || 0)}

@@ -15,10 +15,20 @@ export function livingModeOf(m: Mortgage | null): LivingMode {
 
 export function installmentOf(m: Mortgage): number {
   if (m.paymentOverride && m.paymentOverride > 0) return m.paymentOverride;
+  const rate = effectiveRate(m);
   const today = todayISO();
-  const orig = originalPrincipal(m);
-  const term = originalTermMonths(m, today);
-  return monthlyPayment(orig, effectiveRate(m), term);
+  if (m.startDate && m.original > 0) {
+    return monthlyPayment(m.original, rate, originalTermMonths(m, today));
+  }
+  return monthlyPayment(m.outstanding, rate, Math.max(1, m.remainingMonths));
+}
+
+export function loanTimeProgress(m: Mortgage, today = todayISO()): number {
+  if (!m.startDate || m.remainingMonths <= 0) return m.original > 0 ? Math.max(0, 1 - m.outstanding / m.original) : 0;
+  const elapsed = monthsBetween(m.startDate, today);
+  const total = elapsed + m.remainingMonths;
+  if (total <= 0) return 0;
+  return Math.max(0, Math.min(1, elapsed / total));
 }
 
 export function isPrincipalRegular(r: Recurring, categories: Category[]): boolean {

@@ -128,7 +128,7 @@ function TripCard({ trip }: { trip: Trip }) {
           <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(spent, "HKD")}</div>
         </div>
         <div className="rounded-xl bg-background px-3 py-2">
-          <div className="text-[11px] text-muted">{t.reports.cash}</div>
+          <div className="text-[11px] text-muted">{t.reports.tripBudget}</div>
           <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(trip.cashBudget, "HKD")}</div>
         </div>
       </div>
@@ -202,7 +202,7 @@ export function TripDetailPage({ id }: { id: string }) {
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <div className="rounded-xl bg-background px-3 py-2">
-            <div className="text-[11px] text-muted">{t.reports.cash}</div>
+            <div className="text-[11px] text-muted">{t.reports.tripBudget}</div>
             <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(trip.cashBudget, "HKD")}</div>
           </div>
           <div className="rounded-xl bg-expense-soft px-3 py-2">

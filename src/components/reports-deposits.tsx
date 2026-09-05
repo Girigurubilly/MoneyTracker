@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Plus, RefreshCw, Trash2 } from "lucide-react";
-import { Group, Hairline, Overlay, ScreenHeader, SectionLabel } from "@/components/shared";
+import { Hairline, Overlay, ProgressRing, ScreenHeader, SectionLabel } from "@/components/shared";
 import { moneyAccountsForPicker } from "@/lib/accounts";
 import { MONTHS_S, suggestedInterest, summarizeDeposits } from "@/lib/calc/deposits";
 import { money, todayISO } from "@/lib/format";
@@ -69,6 +69,44 @@ export function DepositsPage() {
         }
       />
 
+      <div className="mx-4 mb-4 overflow-hidden rounded-2xl bg-elevated p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs font-medium text-accent">{t.reports.activeDeposit}</div>
+            <div className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{money(summary.depHKD, "HKD")}</div>
+            <div className="mt-0.5 text-xs text-muted">{t.reports.interestToEarn}: {money(summary.intHKD, "HKD")}</div>
+          </div>
+          <div className="relative shrink-0">
+            <ProgressRing
+              value={summary.intHKD > 0 ? summary.realizedHKD / summary.intHKD : 0}
+              size={64}
+              stroke={5}
+              tone="income"
+            />
+            <span className="pointer-events-none absolute inset-0 grid place-items-center text-[10px] font-semibold tabular-nums">
+              {summary.intHKD > 0 ? `${Math.round((summary.realizedHKD / summary.intHKD) * 100)}%` : "—"}
+            </span>
+          </div>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="rounded-xl bg-success-soft px-3 py-2">
+            <div className="text-[11px] text-income">{t.reports.interestRealized}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(summary.realizedHKD, "HKD")}</div>
+          </div>
+          <div className="rounded-xl bg-background px-3 py-2">
+            <div className="text-[11px] text-muted">{t.reports.unrealizedThisYear}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(summary.unrealizedThisYearHKD, "HKD")}</div>
+          </div>
+        </div>
+        <div className="mt-2 flex items-center justify-between">
+          <span className="text-xs text-muted">{t.reports.interestAfterYear.replace("{year}", String(year))}: {money(summary.unrealizedAfterYearHKD, "HKD")}</span>
+          <button type="button" onClick={() => void fetchFx()} disabled={busy} className="flex items-center gap-1 text-xs font-medium text-accent">
+            <RefreshCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />
+            {t.reports.fetchFx}
+          </button>
+        </div>
+      </div>
+
       <h2 className="px-5 pb-2 text-xs font-semibold uppercase tracking-wide text-muted">{t.reports.depositRecords}</h2>
       {grouped.length === 0 ? (
         <p className="px-5 text-sm text-muted">{t.reports.noDepositsHint}</p>
@@ -76,7 +114,7 @@ export function DepositsPage() {
         grouped.map(([yr, rows]) => (
           <div key={yr} className="mb-4">
             <SectionLabel>{yr}</SectionLabel>
-            <Group>
+            <div className="mx-4 overflow-hidden rounded-2xl bg-elevated">
               {rows.map((r, i) => {
                 const realized = !!r.endDate && r.endDate <= today;
                 const d = r.endDate ? new Date(`${r.endDate}T00:00:00`) : null;
@@ -106,25 +144,11 @@ export function DepositsPage() {
                   </div>
                 );
               })}
-            </Group>
+            </div>
           </div>
         ))
       )}
 
-      <div className="mt-6 flex items-center justify-between px-5">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">{t.reports.hkdSummary}</h2>
-        <button type="button" onClick={() => void fetchFx()} disabled={busy} className="flex items-center gap-1 text-xs font-medium text-accent">
-          <RefreshCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />
-          {t.reports.fetchFx}
-        </button>
-      </div>
-      <div className="mx-4 mt-2 grid grid-cols-2 gap-2">
-        <Metric label={t.reports.activeDeposit} value={money(summary.depHKD, "HKD")} />
-        <Metric label={t.reports.interestToEarn} value={money(summary.intHKD, "HKD")} tone="income" />
-        <Metric label={t.reports.interestRealized} value={money(summary.realizedHKD, "HKD")} tone="income" />
-        <Metric label={t.reports.unrealizedThisYear} value={money(summary.unrealizedThisYearHKD, "HKD")} />
-        <Metric label={t.reports.interestAfterYear.replace("{year}", String(year))} value={money(summary.unrealizedAfterYearHKD, "HKD")} />
-      </div>
       {note || lastFx ? <p className="px-5 pt-3 text-xs text-muted">{note || lastFx}</p> : null}
 
       <DepositEditor
@@ -221,14 +245,5 @@ function DepositEditor({ open, initial, onClose }: { open: boolean; initial: Tim
         <AccountLine accounts={accounts} value={accountId} onChange={setAccountId} placeholder={t.reports.creditAccount} />
       </ComposerShell>
     </Overlay>
-  );
-}
-
-function Metric({ label, value, tone }: { label: string; value: string; tone?: "income" }) {
-  return (
-    <div className="rounded-xl bg-elevated px-3 py-3">
-      <div className="text-[11px] leading-snug text-muted">{label}</div>
-      <div className={`mt-1 text-sm font-semibold tabular-nums ${tone === "income" ? "text-income" : ""}`}>{value}</div>
-    </div>
   );
 }

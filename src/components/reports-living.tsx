@@ -10,6 +10,7 @@ import {
   linkedLoan,
   linkedProperty,
   livingModeOf,
+  loanTimeProgress,
   monthsAgoIso,
   projection12,
   rateLine,
@@ -53,6 +54,7 @@ export function LivingPage() {
   const end = m ? endDateFromRemaining(today, m.remainingMonths, m.paymentDay) : "";
   const proj = m ? projection12(m) : null;
   const stress = m ? stressRows(m) : [];
+  const paidPct = m ? loanTimeProgress(m, today) : 0;
   const related = housingTransactions(txs, cats, monthsAgoIso(today, 12), today);
 
   return (
@@ -79,13 +81,13 @@ export function LivingPage() {
           {m ? (
             <div className="relative shrink-0">
               <ProgressRing
-                value={m.original > 0 ? 1 - m.outstanding / m.original : 0}
+                value={paidPct}
                 size={64}
                 stroke={5}
-                tone={m.outstanding / Math.max(1, m.original || m.outstanding) > 0.7 ? "watch" : "income"}
+                tone={paidPct < 0.3 ? "watch" : "income"}
               />
               <span className="pointer-events-none absolute inset-0 grid place-items-center text-[10px] font-semibold tabular-nums">
-                {m.original > 0 ? `${Math.round((1 - m.outstanding / m.original) * 100)}%` : "—"}
+                {`${Math.round(paidPct * 100)}%`}
               </span>
             </div>
           ) : null}
@@ -171,21 +173,34 @@ export function LivingPage() {
           {proj ? (
             <>
               <SectionLabel>{t.reports.projection12}</SectionLabel>
-              <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
-                <div className="grid grid-cols-4 px-4 py-2 text-xs text-muted">
-                  <span>{t.reports.period}</span>
-                  <span className="text-right">{t.reports.interestCol}</span>
-                  <span className="text-right">{t.reports.principalCol}</span>
-                  <span className="text-right">{t.reports.balanceCol}</span>
-                </div>
-                {proj.rows.map((r) => (
-                  <div key={r.n} className="grid grid-cols-4 border-t border-line px-4 py-2 text-xs tabular-nums">
-                    <span>{r.n}</span>
-                    <span className="text-right">{money(r.interest, "HKD")}</span>
-                    <span className="text-right">{money(r.principal, "HKD")}</span>
-                    <span className="text-right">{money(r.balance, "HKD")}</span>
-                  </div>
-                ))}
+              <div className="mx-4 space-y-2">
+                {proj.rows.map((r, i) => {
+                  const d = new Date(`${today.slice(0, 7)}-01T00:00:00`);
+                  d.setMonth(d.getMonth() + i);
+                  const label = locale === "zh-HK" ? `${d.getMonth() + 1}月` : d.toLocaleString("en", { month: "short" });
+                  return (
+                    <div key={r.n} className="rounded-2xl bg-elevated px-3 py-3">
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-sm font-semibold">{label}</span>
+                        <span className="text-sm font-semibold tabular-nums">{money(proj.payment, "HKD")}</span>
+                      </div>
+                      <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                        <div>
+                          <div className="text-muted">{t.reports.interestCol}</div>
+                          <div className="mt-0.5 tabular-nums">{money(r.interest, "HKD")}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted">{t.reports.principalCol}</div>
+                          <div className="mt-0.5 tabular-nums">{money(r.principal, "HKD")}</div>
+                        </div>
+                        <div>
+                          <div className="text-muted">{t.reports.balanceCol}</div>
+                          <div className="mt-0.5 tabular-nums">{money(r.balance, "HKD")}</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </>
           ) : null}
