@@ -17,6 +17,17 @@ import { Hairline, Overlay, ScreenHeader, SectionLabel, TransactionRow } from "@
 import { AmountWithHkd } from "@/components/currency-field";
 import { money } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
+import { resolveAmountInput } from "@/lib/money-expr";
+import {
+  ActiveKeypad,
+  ComposerHeader,
+  ComposerShell,
+  ExtraIconBar,
+  LineRow,
+  NoteSheet,
+  SelectLine,
+  TextLine,
+} from "@/components/txn-composer";
 import { netWorthNow } from "@/lib/calc/networth";
 import { toHkd } from "@/lib/calc/fx";
 import { accountsInGroup, BALANCE_GROUP_ORDER, nextSortOrder } from "@/lib/accounts";
@@ -27,6 +38,7 @@ import {
   type Account,
   type AccountGroup,
   type AccountType,
+  type Currency,
   type MoneyUnit,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -336,8 +348,8 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
   const add = useApp((s) => s.addAccount);
   const update = useApp((s) => s.updateAccount);
   const updateMortgage = useApp((s) => s.updateMortgage);
-  const properties = accounts.filter((a) => a.type === "property" && a.id !== account?.id);
-  const loans = accounts.filter((a) => (a.type === "mortgage" || a.type === "loan") && a.id !== account?.id);
+  const properties = accounts.filter((x) => x.type === "property" && x.id !== account?.id);
+  const loans = accounts.filter((x) => (x.type === "mortgage" || x.type === "loan") && x.id !== account?.id);
   const [name, setName] = useState(account ? pickName(locale, account.name, account.nameZh) : "");
   const [type, setType] = useState<AccountType>(account?.type ?? "current");
   const [currency, setCurrency] = useState<MoneyUnit>(account?.currency ?? "HKD");
@@ -348,6 +360,7 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
   const [linkedId, setLinkedId] = useState(
     account?.linkedAccountId ?? (account?.type === "mortgage" ? mortgage?.propertyAccountId ?? "" : ""),
   );
+  const [extra, setExtra] = useState<"note" | null>(null);
 
   async function save() {
     const n = name.trim() || (locale === "zh-HK" ? "帳戶" : "Account");
@@ -358,7 +371,7 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
       nameZh: n,
       type,
       currency: type === "miles" ? "MILES" : currency === "MILES" ? "HKD" : currency,
-      balance: Number(bal) || 0,
+      balance: resolveAmountInput(bal),
       includeInNetWorth: type === "miles" ? false : include,
       group,
       hidden,
@@ -383,78 +396,65 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
   }
 
   const linkOptions = type === "property" ? loans : type === "mortgage" || type === "loan" ? properties : [];
+  const ccy = (type === "miles" || currency === "MILES" ? "HKD" : currency) as Currency;
 
   return (
-    <Overlay open={open} onClose={onClose} title={account ? t.common.edit : t.assets.addAccount} variant="page">
-      <div className="px-5 pb-10">
-        <label className="block py-2">
-          <span className="text-xs text-muted">{t.assets.name}</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none" />
-        </label>
-        <label className="block py-2">
-          <span className="text-xs text-muted">{t.assets.type}</span>
-          <select
-            value={type}
-            onChange={(e) => {
-              const next = e.target.value as AccountType;
-              setType(next);
-              if (next === "miles") setCurrency("MILES");
-              else if (currency === "MILES") setCurrency("HKD");
-            }}
-            className="mt-1 h-11 w-full rounded-lg bg-elevated px-3"
-          >
-            {ACCOUNT_TYPE_OPTIONS.map((o) => (
-              <option key={o.id} value={o.id}>
-                {locale === "zh-HK" ? o.zh : o.en}
-              </option>
-            ))}
-          </select>
-        </label>
-        {type !== "miles" ? (
-          <label className="block py-2">
-            <span className="text-xs text-muted">{t.assets.currency}</span>
-            <select value={currency} onChange={(e) => setCurrency(e.target.value as MoneyUnit)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3">
-              {CURRENCIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-        <label className="block py-2">
-          <span className="text-xs text-muted">{t.assets.balance}</span>
-          <input inputMode="decimal" value={bal} onChange={(e) => setBal(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none" />
-        </label>
+    <Overlay open={open} onClose={onClose} variant="page">
+      <ComposerShell
+        header={<ComposerHeader onClose={onClose} onSave={() => void save()} title={account ? t.common.edit : t.assets.addAccount} />}
+        keypad={
+          type === "miles" ? (
+            <div />
+          ) : (
+            <ActiveKeypad
+              field="amount"
+              amount={bal}
+              dest=""
+              principal=""
+              interest=""
+              setAmount={setBal}
+              setDest={() => undefined}
+              setPrincipal={() => undefined}
+              setInterest={() => undefined}
+              currency={ccy}
+              onCurrency={(c) => setCurrency(c)}
+            />
+          )
+        }
+      >
+        <TextLine value={name} onChange={setName} placeholder={t.assets.name} />
+        <SelectLine
+          label={t.assets.type}
+          value={type}
+          onChange={(v) => {
+            const next = v as AccountType;
+            setType(next);
+            if (next === "miles") setCurrency("MILES");
+            else if (currency === "MILES") setCurrency("HKD");
+          }}
+          options={ACCOUNT_TYPE_OPTIONS.map((o) => ({ id: o.id, label: locale === "zh-HK" ? o.zh : o.en }))}
+        />
+        <LineRow label={t.assets.balance} amount={bal} active onFocusAmount={() => undefined} />
         {linkOptions.length ? (
-          <label className="block py-2">
-            <span className="text-xs text-muted">{type === "property" ? t.assets.linkedLoan : t.assets.linkedProperty}</span>
-            <select value={linkedId} onChange={(e) => setLinkedId(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3">
-              <option value="">{t.common.none}</option>
-              {linkOptions.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {pickName(locale, a.name, a.nameZh)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <SelectLine
+            label={type === "property" ? t.assets.linkedLoan : t.assets.linkedProperty}
+            value={linkedId}
+            onChange={setLinkedId}
+            options={[{ id: "", label: t.common.none }, ...linkOptions.map((x) => ({ id: x.id, label: pickName(locale, x.name, x.nameZh) }))]}
+          />
         ) : null}
-        <label className="block py-2">
-          <span className="text-xs text-muted">{t.add.note}</span>
-          <input value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none" />
-        </label>
-        <label className="flex items-center gap-2 py-2 text-sm">
-          <input type="checkbox" checked={include} onChange={(e) => setInclude(e.target.checked)} />
-          {t.assets.include}
-        </label>
-        <label className="flex items-center gap-2 py-2 text-sm">
-          <input type="checkbox" checked={hidden} onChange={(e) => setHidden(e.target.checked)} />
-          {t.assets.hideAccount}
-        </label>
-        <button type="button" className="mt-4 h-12 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={() => void save()}>
-          {t.add.save}
-        </button>
-      </div>
+        <ExtraIconBar
+          noteOn={!!notes}
+          housingOn={include}
+          tripOn={hidden}
+          showTrip
+          showHousing
+          onNote={() => setExtra("note")}
+          onTrip={() => setHidden((v) => !v)}
+          onHousing={() => setInclude((v) => !v)}
+        />
+        <NoteSheet open={extra === "note"} value={notes} onChange={setNotes} onClose={() => setExtra(null)} />
+      </ComposerShell>
     </Overlay>
   );
 }

@@ -140,6 +140,8 @@ export const messages = {
       lastDay: "Last day of the month",
       annualTravel: "Annual travel",
       livingRegular: "Count toward Living / Home essentials",
+      showBreakdown: "Show breakdown",
+      hideBreakdown: "Hide breakdown",
     },
     wish: {
       title: "Buying wishlist",
@@ -542,6 +544,8 @@ export const messages = {
       lastDay: "本月最後一天",
       annualTravel: "全年旅遊",
       livingRegular: "計入居住 / 房屋必要開支",
+      showBreakdown: "顯示明細",
+      hideBreakdown: "隱藏明細",
     },
     wish: {
       title: "購物願望清單",

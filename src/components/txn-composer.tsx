@@ -11,6 +11,83 @@ import { useT, useUi } from "@/store/ui";
 
 export type AmountField = "amount" | "dest" | "principal" | "interest";
 
+export function ComposerHeader({
+  onClose,
+  onSave,
+  title,
+  center,
+}: {
+  onClose: () => void;
+  onSave?: () => void;
+  title?: string;
+  center?: ReactNode;
+}) {
+  const t = useT();
+  return (
+    <header className="flex items-center justify-between px-3 pt-[max(0.5rem,env(safe-area-inset-top))]">
+      <button type="button" className="h-11 min-w-11 px-2 text-sm text-accent" onClick={onClose}>
+        {t.add.cancel}
+      </button>
+      <div className="min-w-0 flex-1 text-center">
+        {center ?? <h1 className="truncate text-base font-semibold">{title}</h1>}
+      </div>
+      {onSave ? (
+        <button type="button" className="h-11 min-w-11 px-2 text-sm font-medium text-accent" onClick={onSave}>
+          {t.add.save}
+        </button>
+      ) : (
+        <span className="inline-block min-w-11" />
+      )}
+    </header>
+  );
+}
+
+export function TextLine({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div className="border-b border-line px-4 py-1.5">
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="h-10 w-full bg-transparent text-sm outline-none placeholder:text-muted"
+      />
+    </div>
+  );
+}
+
+export function SelectLine({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label?: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { id: string; label: string }[];
+}) {
+  return (
+    <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
+      {label ? <span className="shrink-0 text-sm text-muted">{label}</span> : null}
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none">
+        {options.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 export function ComposerShell({
   header,
   children,
@@ -161,16 +238,18 @@ export function ExtraIconBar({
   showTrip?: boolean;
   showHousing?: boolean;
   showSplit?: boolean;
-  onNote: () => void;
+  onNote?: () => void;
   onTrip?: () => void;
   onHousing?: () => void;
   onSplit?: () => void;
 }) {
   return (
     <div className="flex items-center gap-1 px-3 py-2">
-      <IconBtn active={noteOn} label="note" onClick={onNote}>
-        <MessageSquare className="size-5" />
-      </IconBtn>
+      {onNote ? (
+        <IconBtn active={noteOn} label="note" onClick={onNote}>
+          <MessageSquare className="size-5" />
+        </IconBtn>
+      ) : null}
       {showTrip ? (
         <IconBtn active={tripOn} label="trip" onClick={onTrip}>
           <Plane className="size-5" />
