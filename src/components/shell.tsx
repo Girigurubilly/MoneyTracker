@@ -41,7 +41,7 @@ export function AppGate({ children }: { children: ReactNode }) {
     return <div className="grid min-h-dvh place-items-center text-sm text-muted">HK Life Money</div>;
   }
   return (
-    <div className="mx-auto min-h-dvh max-w-lg bg-background pb-[4.25rem] lg:max-w-none lg:pb-0">
+    <div className="mx-auto min-h-dvh max-w-lg bg-background/80 pb-[4.25rem] lg:max-w-none lg:pb-0">
       <div className="lg:ml-56">{children}</div>
       <Nav />
       <AddFlow />

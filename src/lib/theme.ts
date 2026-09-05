@@ -35,6 +35,7 @@ export type ThemeCustom = {
   fontSize?: FontSizeId;
   wallpaper?: string;
   wallpaperMode?: "none" | "theme" | "custom";
+  wallpaperOpacity?: number;
 };
 
 export const ACCESS_MODES = ["standard", "elderly", "kid"] as const;
@@ -124,6 +125,7 @@ export function readSavedCustom(): ThemeCustom {
       fontSize: isFontSizeId(parsed.fontSize) ? parsed.fontSize : undefined,
       wallpaper: typeof parsed.wallpaper === "string" ? parsed.wallpaper : undefined,
       wallpaperMode: parsed.wallpaperMode === "none" || parsed.wallpaperMode === "custom" || parsed.wallpaperMode === "theme" ? parsed.wallpaperMode : undefined,
+      wallpaperOpacity: typeof parsed.wallpaperOpacity === "number" ? parsed.wallpaperOpacity : undefined,
     };
   } catch {
     return {};
@@ -136,7 +138,29 @@ export function colorsOnly(custom: ThemeCustom): ThemeCustom {
     fontSize: custom.fontSize,
     wallpaper: custom.wallpaper,
     wallpaperMode: custom.wallpaperMode,
+    wallpaperOpacity: custom.wallpaperOpacity,
   };
+}
+
+function svgBg(markup: string): string {
+  return `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844">${markup}</svg>`)}")`;
+}
+
+export const THEME_WALLPAPERS: Record<ThemeId, string> = {
+  normal: svgBg('<rect width="390" height="844" fill="#dbeafe"/><circle cx="320" cy="90" r="120" fill="#93c5fd" opacity=".55"/><circle cx="40" cy="720" r="160" fill="#bfdbfe" opacity=".7"/>'),
+  dark: svgBg('<rect width="390" height="844" fill="#020617"/><circle cx="300" cy="80" r="140" fill="#1e3a8a" opacity=".55"/><circle cx="60" cy="760" r="180" fill="#0f172a"/>'),
+  pinky: svgBg('<rect width="390" height="844" fill="#fbcfe8"/><circle cx="70" cy="120" r="130" fill="#f9a8d4" opacity=".8"/><circle cx="340" cy="700" r="170" fill="#f472b6" opacity=".45"/>'),
+  anime: svgBg('<rect width="390" height="844" fill="#ffe4e6"/><circle cx="310" cy="70" r="110" fill="#fda4af"/><circle cx="30" cy="640" r="150" fill="#c4b5fd" opacity=".55"/>'),
+  cyberpunk: svgBg('<rect width="390" height="844" fill="#0b0520"/><rect x="0" y="520" width="390" height="8" fill="#00e5ff" opacity=".5"/><rect x="40" y="200" width="12" height="400" fill="#ff2e97" opacity=".35"/><rect x="300" y="80" width="18" height="520" fill="#00e5ff" opacity=".25"/>'),
+  shiba: svgBg('<rect width="390" height="844" fill="#ffedd5"/><ellipse cx="300" cy="140" rx="90" ry="70" fill="#fdba74"/><circle cx="270" cy="120" r="22" fill="#9a3412"/><circle cx="330" cy="120" r="22" fill="#9a3412"/><circle cx="80" cy="680" r="70" fill="#fb923c" opacity=".55"/>'),
+  cat: svgBg('<rect width="390" height="844" fill="#fae8d4"/><ellipse cx="80" cy="160" rx="70" ry="50" fill="#e7c9a5"/><polygon points="40,130 55,80 80,130" fill="#d6b48e"/><polygon points="90,130 120,75 140,130" fill="#d6b48e"/><circle cx="320" cy="720" r="90" fill="#f3d5b5"/>'),
+  panda: svgBg('<rect width="390" height="844" fill="#ecfdf3"/><rect x="60" y="0" width="18" height="844" fill="#86efac" opacity=".55"/><rect x="200" y="0" width="14" height="844" fill="#4ade80" opacity=".4"/><circle cx="310" cy="150" r="50" fill="#111827"/><circle cx="250" cy="150" r="50" fill="#111827"/><circle cx="280" cy="190" r="48" fill="#f8fafc"/>'),
+  hongkong: svgBg('<rect width="390" height="844" fill="#3f0d12"/><rect x="20" y="480" width="40" height="364" fill="#7f1d1d"/><rect x="80" y="360" width="50" height="484" fill="#991b1b"/><rect x="150" y="420" width="36" height="424" fill="#b91c1c"/><rect x="210" y="300" width="70" height="544" fill="#7f1d1d"/><rect x="300" y="390" width="55" height="454" fill="#991b1b"/><circle cx="320" cy="80" r="36" fill="#fbbf24" opacity=".85"/>'),
+};
+
+export function clampWallpaperOpacity(n: number | undefined): number {
+  if (typeof n !== "number" || Number.isNaN(n)) return 40;
+  return Math.min(80, Math.max(8, Math.round(n)));
 }
 
 export function normalizeHex(v: string | undefined): string | undefined {
@@ -221,6 +245,8 @@ export function applyTheme(theme: ThemeId, custom: ThemeCustom = {}): void {
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute("content", bg);
   const mode = custom.wallpaperMode ?? (custom.wallpaper ? "custom" : "theme");
+  const opacity = clampWallpaperOpacity(custom.wallpaperOpacity) / 100;
+  root.style.setProperty("--wallpaper-opacity", String(opacity));
   if (mode === "none") {
     root.setAttribute("data-wallpaper", "none");
     root.style.removeProperty("--app-wallpaper");
@@ -229,6 +255,6 @@ export function applyTheme(theme: ThemeId, custom: ThemeCustom = {}): void {
     root.style.setProperty("--app-wallpaper", `url("${custom.wallpaper}")`);
   } else {
     root.setAttribute("data-wallpaper", "theme");
-    root.style.removeProperty("--app-wallpaper");
+    root.style.setProperty("--app-wallpaper", THEME_WALLPAPERS[theme]);
   }
 }

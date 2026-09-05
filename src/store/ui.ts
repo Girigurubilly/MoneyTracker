@@ -5,6 +5,7 @@ import { messages, type Messages } from "@/lib/i18n";
 import {
   applyAccess,
   applyTheme,
+  clampWallpaperOpacity,
   colorsOnly,
   readSavedAccess,
   readSavedCustom,
@@ -52,6 +53,7 @@ type UiState = {
   setFontId: (id: FontId) => void;
   setFontSize: (id: FontSizeId) => void;
   setWallpaper: (mode: "none" | "theme" | "custom", dataUrl?: string) => void;
+  setWallpaperOpacity: (n: number) => void;
   resetCustomColors: () => void;
   setSelectedDate: (iso: string) => void;
   setTodayView: (v: TodayView) => void;
@@ -136,6 +138,12 @@ export const useUi = create<UiState>((set, get) => ({
   setWallpaper: (mode, dataUrl) => {
     const next = { ...get().customColors, wallpaperMode: mode, wallpaper: mode === "custom" ? dataUrl : undefined };
     if (mode !== "custom") delete next.wallpaper;
+    persistCustom(next);
+    applyTheme(get().theme, next);
+    set({ customColors: next });
+  },
+  setWallpaperOpacity: (n) => {
+    const next = { ...get().customColors, wallpaperOpacity: clampWallpaperOpacity(n) };
     persistCustom(next);
     applyTheme(get().theme, next);
     set({ customColors: next });

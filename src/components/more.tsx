@@ -313,6 +313,7 @@ export function AppearancePage() {
   const setFontId = useUi((s) => s.setFontId);
   const setFontSize = useUi((s) => s.setFontSize);
   const setWallpaper = useUi((s) => s.setWallpaper);
+  const setWallpaperOpacity = useUi((s) => s.setWallpaperOpacity);
   const setAccessMode = useUi((s) => s.setAccessMode);
   const accessMode = useUi((s) => s.accessMode);
   const resetCustomColors = useUi((s) => s.resetCustomColors);
@@ -428,6 +429,20 @@ export function AppearancePage() {
             }}
           />
         </label>
+      </div>
+      <div className="mx-4 mb-3 rounded-2xl bg-elevated px-4 py-3">
+        <div className="flex items-center justify-between text-sm">
+          <span>{t.more.wallpaperOpacity}</span>
+          <span className="tabular-nums text-muted">{custom.wallpaperOpacity ?? 40}%</span>
+        </div>
+        <input
+          type="range"
+          min={8}
+          max={80}
+          value={custom.wallpaperOpacity ?? 40}
+          onChange={(e) => setWallpaperOpacity(Number(e.target.value))}
+          className="mt-2 w-full accent-[var(--color-accent)]"
+        />
       </div>
       <h2 className="px-5 pb-2 pt-4 text-sm font-medium text-muted">{t.more.typography}</h2>
       <Group>

@@ -292,39 +292,11 @@ html[data-wallpaper="custom"] body::before {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.22;
+  opacity: var(--wallpaper-opacity, 0.4);
+  background-image: var(--app-wallpaper);
   background-size: cover;
   background-position: center;
-}
-html[data-wallpaper="custom"] body::before {
-  background-image: var(--app-wallpaper);
-}
-html[data-theme="normal"][data-wallpaper="theme"] body::before {
-  background-image: linear-gradient(165deg, #dbeafe 0%, #f2f2f7 55%, #e0f2fe 100%);
-}
-html[data-theme="dark"][data-wallpaper="theme"] body::before {
-  background-image: radial-gradient(circle at 20% 0%, #1e3a5f 0%, #000 60%);
-}
-html[data-theme="pinky"][data-wallpaper="theme"] body::before {
-  background-image: linear-gradient(160deg, #fbcfe8 0%, #fdf2f8 50%, #fce7f3 100%);
-}
-html[data-theme="anime"][data-wallpaper="theme"] body::before {
-  background-image: linear-gradient(150deg, #fecdd3 0%, #fff1f5 45%, #e0e7ff 100%);
-}
-html[data-theme="cyberpunk"][data-wallpaper="theme"] body::before {
-  background-image: radial-gradient(circle at 80% 10%, #00e5ff55 0%, transparent 40%), linear-gradient(180deg, #1a0838, #090414);
-}
-html[data-theme="shiba"][data-wallpaper="theme"] body::before {
-  background-image: radial-gradient(circle at 15% 10%, #fdba74 0%, transparent 42%), linear-gradient(180deg, #ffedd5, #fff7ed);
-}
-html[data-theme="cat"][data-wallpaper="theme"] body::before {
-  background-image: radial-gradient(circle at 80% 0%, #fdba74aa 0%, transparent 45%), linear-gradient(180deg, #fae8d4, #f7efe6);
-}
-html[data-theme="panda"][data-wallpaper="theme"] body::before {
-  background-image: linear-gradient(180deg, #dcfce7 0%, #f3f6f1 40%, #e2e8f0 100%);
-}
-html[data-theme="hongkong"][data-wallpaper="theme"] body::before {
-  background-image: linear-gradient(180deg, #7f1d1d 0%, #1a0c10 55%), repeating-linear-gradient(90deg, transparent 0 18px, #e23d3d22 18px 19px);
+  background-repeat: no-repeat;
 }
 
 html[data-font="system"] {
