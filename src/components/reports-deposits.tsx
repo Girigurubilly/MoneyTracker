@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Plus, RefreshCw, Trash2 } from "lucide-react";
-import { Hairline, Overlay, ProgressRing, ScreenHeader, SectionLabel } from "@/components/shared";
+import { Hairline, Overlay, ScreenHeader, SectionLabel } from "@/components/shared";
 import { moneyAccountsForPicker } from "@/lib/accounts";
 import { MONTHS_S, suggestedInterest, summarizeDeposits } from "@/lib/calc/deposits";
 import { money, todayISO } from "@/lib/format";
@@ -76,17 +76,6 @@ export function DepositsPage() {
             <div className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{money(summary.depHKD, "HKD")}</div>
             <div className="mt-0.5 text-xs text-muted">{t.reports.interestToEarn}: {money(summary.intHKD, "HKD")}</div>
           </div>
-          <div className="relative shrink-0">
-            <ProgressRing
-              value={summary.intHKD > 0 ? summary.realizedHKD / summary.intHKD : 0}
-              size={64}
-              stroke={5}
-              tone="income"
-            />
-            <span className="pointer-events-none absolute inset-0 grid place-items-center text-[10px] font-semibold tabular-nums">
-              {summary.intHKD > 0 ? `${Math.round((summary.realizedHKD / summary.intHKD) * 100)}%` : "—"}
-            </span>
-          </div>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <div className="rounded-xl bg-success-soft px-3 py-2">
@@ -130,7 +119,7 @@ export function DepositsPage() {
                           <span className={`text-xs font-medium ${tone}`}>{rm}</span>
                         </div>
                         <div className="mt-1 text-xs text-muted">
-                          {money(r.amount, r.currency)} · {(r.rate || 0).toFixed(2)}% · {r.startDate} → {r.endDate}
+                          {money(r.amount, r.currency)} · {r.startDate} → {r.endDate}
                         </div>
                         <div className="mt-1 flex justify-between text-sm tabular-nums">
                           <span className="text-income">+{money(r.interest, r.currency)}</span>
@@ -238,7 +227,6 @@ function DepositEditor({ open, initial, onClose }: { open: boolean; initial: Tim
           <span className="text-sm text-muted">{t.reports.endDate}</span>
           <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
         </div>
-        <TextLine value={rate} onChange={setRate} placeholder={t.reports.ratePct} />
         <SelectLine label={t.reports.currency} value={currency} onChange={(v) => setCurrency(v as Currency)} options={CURRENCIES.map((c) => ({ id: c, label: c }))} />
         <LineRow label={t.reports.depositAmount} amount={amount} active={field === "amount"} onFocusAmount={() => setField("amount")} />
         <LineRow label={t.reports.interest} amount={interest} active={field === "interest"} onFocusAmount={() => setField("interest")} />

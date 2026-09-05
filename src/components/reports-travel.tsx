@@ -4,10 +4,9 @@ import { Plus } from "lucide-react";
 import { Hairline, InfoButton, Overlay, ProgressBar, ProgressRing, ScreenHeader, SectionLabel, BudgetChip, TxGroupedList } from "@/components/shared";
 import { ComposerHeader, ComposerShell, LineRow, TextLine, ActiveKeypad } from "@/components/txn-composer";
 import { AmountWithHkd } from "@/components/currency-field";
-import { milesLabel, money, todayISO } from "@/lib/format";
+import { money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import {
-  asiaMilesBalance,
   travelSpendYtd,
   tripBudgetUsed,
   tripCashSpent,
@@ -24,12 +23,10 @@ export function TravelPage() {
   const txs = useApp((s) => s.transactions);
   const cats = useApp((s) => s.categories);
   const rates = useApp((s) => s.fxRates);
-  const accounts = useApp((s) => s.accounts);
   const annual = useApp((s) => s.annualTravelBudget);
   const setAnnual = useApp((s) => s.setAnnualTravel);
   const travelIds = new Set(cats.filter((c) => c.theme === "travel").map((c) => c.id));
   const ytd = travelSpendYtd(txs, Number(todayISO().slice(0, 4)), travelIds, rates);
-  const miles = asiaMilesBalance(accounts);
   const yearOver = annual > 0 && ytd > annual;
   const [adding, setAdding] = useState(false);
   const [editAnnual, setEditAnnual] = useState(false);
@@ -67,15 +64,14 @@ export function TravelPage() {
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <div className="rounded-xl bg-background px-3 py-2">
-            <div className="text-[11px] text-muted">{loc === "zh-HK" ? "亞洲萬里通" : "Asia Miles"}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{milesLabel(miles, loc)}</div>
-          </div>
-          <div className="rounded-xl bg-background px-3 py-2">
             <div className="text-[11px] text-muted">{t.reports.trips}</div>
             <div className="mt-0.5 text-sm font-semibold tabular-nums">{current.length}</div>
           </div>
+          <div className="rounded-xl bg-background px-3 py-2">
+            <div className="text-[11px] text-muted">{t.reports.pastTrips}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{past.length}</div>
+          </div>
         </div>
-        <p className="mt-2 text-xs text-muted">{t.reports.milesNote}</p>
       </div>
       <SectionLabel>{t.reports.trips}</SectionLabel>
       {current.map((tr) => (
@@ -132,10 +128,7 @@ function TripCard({ trip }: { trip: Trip }) {
           <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(trip.cashBudget, "HKD")}</div>
         </div>
       </div>
-      <div className="mt-2 flex items-center justify-between">
-        <span className="text-xs text-muted">
-          {loc === "zh-HK" ? "亞洲萬里通" : "Asia Miles"}: {milesLabel(trip.milesSaved, loc)} / {milesLabel(trip.milesTarget, loc)}
-        </span>
+      <div className="mt-2 flex justify-end">
         <BudgetChip over={over} />
       </div>
     </Link>
@@ -220,7 +213,6 @@ export function TripDetailPage({ id }: { id: string }) {
         </div>
       </div>
       <TxGroupedList txs={linked} onClick={(tx) => setTx(tx.id)} empty={t.common.none} />
-      <p className="px-5 pt-4 text-xs text-muted">{t.reports.milesNote}</p>
       <TripEditor
         key={edit ? trip.id : "edit-idle"}
         open={edit}
@@ -255,8 +247,6 @@ function TripEditor({
   const [start, setStart] = useState(trip?.start || today);
   const [end, setEnd] = useState(trip?.end || today);
   const [budget, setBudget] = useState(String(trip?.cashBudget ?? 10000));
-  const [milesT, setMilesT] = useState(String(trip?.milesTarget ?? 0));
-  const [milesS, setMilesS] = useState(String(trip?.milesSaved ?? 0));
   const [monthly, setMonthly] = useState(String(trip?.monthlyCash ?? 0));
 
   const [field, setField] = useState<"amount" | "dest" | "principal" | "interest">("amount");
@@ -274,8 +264,8 @@ function TripEditor({
       status: trip?.status ?? "planning",
       cashBudget: Number(budget) || 0,
       cashSaved: trip?.cashSaved ?? 0,
-      milesTarget: Number(milesT) || 0,
-      milesSaved: Number(milesS) || 0,
+      milesTarget: trip?.milesTarget ?? 0,
+      milesSaved: trip?.milesSaved ?? 0,
       monthlyCash: Number(monthly) || 0,
     };
     if (trip) await update(row);
@@ -314,8 +304,6 @@ function TripEditor({
           <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
         </div>
         <LineRow label={t.reports.cashBudget} amount={budget} active={field === "amount"} onFocusAmount={() => setField("amount")} />
-        <TextLine value={milesT} onChange={setMilesT} placeholder={t.reports.milesTarget} />
-        <TextLine value={milesS} onChange={setMilesS} placeholder={t.reports.milesSaved} />
         <TextLine value={monthly} onChange={setMonthly} placeholder={t.reports.monthlyCash} />
         {trip && onDeleted ? (
           <button type="button" className="mx-4 my-3 h-11 text-sm text-expense" onClick={onDeleted}>

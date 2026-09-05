@@ -106,7 +106,7 @@ export function AssetsScreen() {
   const hiddenRows = accounts.filter((a) => a.hidden);
   const fxRows = visible.filter(isForeignSection);
   const fxIds = new Set(fxRows.map((a) => a.id));
-  const groups = BALANCE_GROUP_ORDER.map((id) => ({ id, label: labels[id] }));
+  const groups = BALANCE_GROUP_ORDER.filter((id) => id !== "loyalty").map((id) => ({ id, label: labels[id] }));
 
   function openAccount(id: string) {
     setViewingId(id);
@@ -474,7 +474,6 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
             { id: "credit", label: t.assets.credit },
             { id: "assets", label: t.assets.investments },
             { id: "housing", label: t.assets.housing },
-            { id: "loyalty", label: t.assets.loyalty },
             { id: "fx", label: t.assets.foreign },
           ]}
         />
@@ -490,7 +489,7 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
               else if (currency === "MILES") setCurrency("HKD");
             }}
             options={typesInGroup(group)
-              .filter((id) => id !== "fx")
+              .filter((id) => id !== "fx" && id !== "miles")
               .map((id) => {
                 const o = ACCOUNT_TYPE_OPTIONS.find((x) => x.id === id)!;
                 return { id, label: locale === "zh-HK" ? o.zh : o.en };

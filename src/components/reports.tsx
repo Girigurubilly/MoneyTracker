@@ -2,11 +2,11 @@ import { Link } from "@tanstack/react-router";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ChevronRight } from "lucide-react";
 import { Disclaimer, Group, Hairline, ScreenHeader, StatusChip, BudgetChip } from "@/components/shared";
-import { compactHkd, milesLabel, money, todayISO } from "@/lib/format";
+import { compactHkd, money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { cashflowSeries, monthKeysBack, monthLabel } from "@/lib/derived";
 import { livingEssentials, monthCashflowForecast } from "@/lib/calc/budget";
-import { asiaMilesBalance, nextTrip, travelSpendYtd, tripCashSpent } from "@/lib/calc/trips";
+import { nextTrip, travelSpendYtd, tripCashSpent } from "@/lib/calc/trips";
 import { effectiveRate, monthlyPayment } from "@/lib/calc/mortgage";
 import { housingStatus, monthlyHousingCost } from "@/lib/calc/housing";
 import { investableNow } from "@/lib/calc/networth";
@@ -80,7 +80,6 @@ export function DashboardPage() {
   const houseStatus = housingStatus(m);
   const travelIds = new Set(cats.filter((c) => c.theme === "travel").map((c) => c.id));
   const ytd = travelSpendYtd(txs, Number(today.slice(0, 4)), travelIds, rates);
-  const miles = asiaMilesBalance(accounts);
   const nxt = nextTrip(trips, today);
   const avg = savingsLast12Months(txs, rates, monthKey(today));
   const inputs = {
@@ -141,7 +140,7 @@ export function DashboardPage() {
               <span className="block text-sm font-normal text-muted">/ {money(annual, "HKD")}</span>
             </div>
           </div>
-          <Metric label={loc === "zh-HK" ? "亞洲萬里通" : "Asia Miles"} value={milesLabel(miles, loc)} />
+          <Metric label={t.reports.nextTrip} value={nxt ? pickName(loc, nxt.name, nxt.nameZh) : t.common.none} />
         </div>
         {nxt ? (
           <div className="mt-3 text-sm text-muted">

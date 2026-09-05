@@ -4,17 +4,16 @@ import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
 import { Disclaimer, Group, Hairline, Overlay, Row, ScreenHeader } from "@/components/shared";
 import { CurrencySelect } from "@/components/currency-field";
-import { CategoryIcon } from "@/components/category-icon";
-import { CategoryEditor } from "@/components/category-editor";
+import { CategoryPicker } from "@/components/category-picker";
 import { pickName } from "@/lib/i18n";
 import { decryptSnapshot, downloadBlob, encryptSnapshot } from "@/lib/backup";
 import { transactionsToCsv } from "@/lib/derived";
 import { convertBtp, isAppSnapshot, isBtpFile } from "@/lib/import-btp";
-import type { Category } from "@/lib/types";
 import { CURRENCIES } from "@/lib/types";
 import { useApp, type AppSnapshot } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 import { ACCESS_MODES, THEME_IDS, THEME_PRESETS, FONT_IDS, FONT_SIZE_IDS, normalizeHex, type FontId, type FontSizeId, type ThemeId } from "@/lib/theme";
+import { persistPwaIcon, readSavedPwaIcon, resizeImageFile } from "@/lib/pwa-icon";
 import { cn } from "@/lib/utils";
 
 export function MoreScreen() {
@@ -73,77 +72,20 @@ export function MoreScreen() {
 
 export function CategoriesPage() {
   const t = useT();
-  const locale = useUi((s) => s.locale);
   const cats = useApp((s) => s.categories);
-  const accounts = useApp((s) => s.accounts);
-  const [edit, setEdit] = useState<Category | null | "new-main" | "new-sub">(null);
-  const [subParent, setSubParent] = useState<string>("");
-  const parents = cats.filter((c) => !c.parentId);
-  const editing = typeof edit === "object" ? edit : null;
-  function accountLabel(id?: string) {
-    const a = accounts.find((x) => x.id === id);
-    return a ? pickName(locale, a.name, a.nameZh) : "";
-  }
+  const [kind, setKind] = useState<"expense" | "income">("expense");
   return (
-    <div className="pb-10">
-      <ScreenHeader
-        title={t.more.categories}
-        right={
-          <button type="button" className="h-11 px-3 text-sm font-medium text-accent" onClick={() => setEdit("new-main")}>
-            {t.add.newMain}
-          </button>
-        }
-      />
-      {parents.map((p) => {
-        const kids = cats.filter((c) => c.parentId === p.id);
-        const pAcc = accountLabel(p.defaultAccountId);
-        return (
-          <div key={p.id} className="mb-3 overflow-hidden rounded-2xl bg-elevated mx-4">
-            <button type="button" className="flex w-full items-center gap-3 px-4 py-3 text-left" onClick={() => setEdit(p)}>
-              <span className="grid size-11 place-items-center rounded-2xl bg-accent-soft text-accent">
-                <CategoryIcon name={p.icon} />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold">{pickName(locale, p.name, p.nameZh)}</span>
-                <span className="text-xs text-muted">
-                  {p.kind === "income" ? t.add.income : t.add.expense}
-                  {pAcc ? ` · ${pAcc}` : ""}
-                </span>
-              </span>
-            </button>
-            {kids.map((c) => {
-              const acc = accountLabel(c.defaultAccountId ?? p.defaultAccountId);
-              return (
-                <button key={c.id} type="button" className="flex w-full items-center gap-3 border-t border-line py-2.5 pl-4 pr-4 text-left" onClick={() => setEdit(c)}>
-                  <span className="grid size-9 place-items-center rounded-xl bg-background">
-                    <CategoryIcon name={c.icon} className="size-4" />
-                  </span>
-                  <span className="min-w-0 flex-1 text-left">
-                    <span className="block text-sm">{pickName(locale, c.name, c.nameZh)}</span>
-                    {acc ? <span className="text-xs text-muted">{acc}</span> : null}
-                  </span>
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              className="w-full border-t border-line px-4 py-2.5 text-left text-sm text-accent"
-              onClick={() => {
-                setSubParent(p.id);
-                setEdit("new-sub");
-              }}
-            >
-              {t.add.newSub}
-            </button>
-          </div>
-        );
-      })}
-      <CategoryEditor
-        open={edit !== null}
-        onClose={() => setEdit(null)}
-        initial={editing}
-        defaultParentId={edit === "new-sub" ? subParent : undefined}
-        defaultKind="expense"
+    <div className="flex min-h-[calc(100dvh-4.25rem)] flex-col pb-4">
+      <ScreenHeader title={t.more.categories} />
+      <CategoryPicker
+        categories={cats}
+        kind={kind}
+        txType={kind}
+        onTxTypeChange={(next) => setKind(next === "income" ? "income" : "expense")}
+        onClose={() => undefined}
+        onSelect={() => undefined}
+        embedded
+        manageOnly
       />
     </div>
   );
@@ -419,7 +361,9 @@ export function AppearancePage() {
         ))}
       </div>
       <p className="px-5 pb-4 text-xs text-muted">{t.more.accessHint}</p>
-      <h2 className="px-5 pb-2 text-sm font-medium text-muted">{t.more.theme}</h2>
+      <h2 className="px-5 pb-2 text-sm font-medium text-muted">{t.more.appIcon}</h2>
+      <AppIconPicker />
+      <h2 className="px-5 pb-2 pt-6 text-sm font-medium text-muted">{t.more.theme}</h2>
       <div className="grid grid-cols-2 gap-3 px-4">
         {THEME_IDS.map((id) => {
           const swatch = THEME_PRESETS[id];
@@ -525,6 +469,51 @@ export function AppearancePage() {
         <button type="button" className="h-11 w-full rounded-xl bg-elevated text-sm" onClick={resetCustomColors}>
           {t.more.resetColors}
         </button>
+      </div>
+    </div>
+  );
+}
+
+function AppIconPicker() {
+  const t = useT();
+  const [icon, setIcon] = useState<string | null>(() => (typeof window === "undefined" ? null : readSavedPwaIcon()));
+  return (
+    <div className="mx-4 mb-2 overflow-hidden rounded-2xl bg-elevated p-4">
+      <div className="flex items-center gap-3">
+        <span className="grid size-16 place-items-center overflow-hidden rounded-2xl bg-background ring-1 ring-line">
+          {icon ? <img src={icon} alt="" className="size-16 object-cover" /> : <span className="text-xs text-muted">180</span>}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm">{t.more.appIconHint}</p>
+          <label className="mt-2 inline-flex h-10 items-center rounded-xl bg-accent px-3 text-sm font-medium text-on-accent">
+            {t.more.chooseIcon}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (!file) return;
+                const data = await resizeImageFile(file);
+                persistPwaIcon(data);
+                setIcon(data);
+              }}
+            />
+          </label>
+          {icon ? (
+            <button
+              type="button"
+              className="ml-2 h-10 text-sm text-muted"
+              onClick={() => {
+                persistPwaIcon(null);
+                setIcon(null);
+              }}
+            >
+              {t.more.resetIcon}
+            </button>
+          ) : null}
+        </div>
       </div>
     </div>
   );

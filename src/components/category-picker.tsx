@@ -23,7 +23,7 @@ export function TypeSwitch({
   includeMiles?: boolean;
 }) {
   const t = useT();
-  const opts: TxType[] = includeMiles ? ["expense", "income", "transfer", "miles"] : ["expense", "income", "transfer"];
+  const opts: TxType[] = ["expense", "income", "transfer"];
   return (
     <label className="relative inline-flex min-h-11 items-center justify-center">
       <select
@@ -51,6 +51,8 @@ export function CategoryPicker({
   onTxTypeChange,
   onClose,
   onSelect,
+  embedded,
+  manageOnly,
 }: {
   categories: Category[];
   kind: "expense" | "income";
@@ -59,6 +61,8 @@ export function CategoryPicker({
   onTxTypeChange?: (t: TxType) => void;
   onClose: () => void;
   onSelect: (c: Category | null) => void;
+  embedded?: boolean;
+  manageOnly?: boolean;
 }) {
   const t = useT();
   const locale = useUi((s) => s.locale);
@@ -66,7 +70,7 @@ export function CategoryPicker({
   const txs = useApp((s) => s.transactions);
   const rates = useApp((s) => s.fxRates);
   const [parent, setParent] = useState<Category | null>(null);
-  const [editMode, setEditMode] = useState(false);
+  const [editMode, setEditMode] = useState(!!manageOnly);
   const [editOpen, setEditOpen] = useState(false);
   const [editInitial, setEditInitial] = useState<Category | null>(null);
   const groups = useMemo(
@@ -116,7 +120,7 @@ export function CategoryPicker({
   }
 
   function onTile(c: Category) {
-    if (editMode) {
+    if (editMode || manageOnly) {
       openEditCat(c);
       return;
     }
@@ -131,7 +135,21 @@ export function CategoryPicker({
   }
 
   const node = (
-    <div className="fixed inset-0 z-[96] flex h-dvh flex-col bg-background">
+    <div className={cn(embedded ? "flex min-h-0 flex-1 flex-col" : "fixed inset-0 z-[96] flex h-dvh flex-col bg-background")}>
+      {embedded ? (
+        <div className="px-3 pb-2 pt-1 text-center">
+          {onTxTypeChange && txType ? (
+            <TypeSwitch
+              value={txType === "income" ? "income" : "expense"}
+              onChange={(next) => {
+                onTxTypeChange(next === "income" ? "income" : "expense");
+                setParent(null);
+              }}
+              includeMiles={false}
+            />
+          ) : null}
+        </div>
+      ) : (
       <header className="flex items-center justify-between px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <button type="button" className="h-11 min-w-11 px-2 text-sm text-accent" onClick={onClose}>
           {t.add.cancel}
@@ -157,7 +175,8 @@ export function CategoryPicker({
           {editMode ? t.common.done : t.common.edit}
         </button>
       </header>
-      <Hairline />
+      )}
+      {embedded ? null : <Hairline />}
 
       {parent ? (
         <>
@@ -234,6 +253,7 @@ export function CategoryPicker({
     </div>
   );
 
+  if (embedded) return node;
   if (typeof document === "undefined") return node;
   return createPortal(node, document.body);
 }

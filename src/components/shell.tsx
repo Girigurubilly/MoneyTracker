@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { useT, useUi, readOnboarded } from "@/store/ui";
 import { isDarkTheme } from "@/lib/theme";
+import { applyPwaIcon, readSavedPwaIcon } from "@/lib/pwa-icon";
 import { Overlay } from "@/components/shared";
 import { AddFlow } from "@/components/add-sheet";
 import { SearchFlow } from "@/components/search-sheet";
@@ -22,6 +23,7 @@ export function AppGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     void hydrate();
     setOnboarded(readOnboarded());
+    applyPwaIcon(readSavedPwaIcon());
   }, [hydrate, setOnboarded]);
 
   if (!onboarded && path !== "/onboarding") {

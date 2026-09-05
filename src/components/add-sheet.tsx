@@ -47,7 +47,6 @@ function AddTypePicker({ onPick, onClose }: { onPick: (t: TxType) => void; onClo
     { id: "expense", tone: "bg-expense-soft text-expense" },
     { id: "income", tone: "bg-success-soft text-income" },
     { id: "transfer", tone: "bg-accent-soft text-accent" },
-    { id: "miles", tone: "bg-background text-foreground" },
   ];
   return (
     <Overlay open onClose={onClose} variant="page">
