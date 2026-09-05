@@ -1,3 +1,5 @@
+import { assetUrl } from "./base";
+
 export const THEME_IDS = ["normal", "dark", "pinky", "anime", "cyberpunk", "shiba", "cat", "panda", "hongkong"] as const;
 export type ThemeId = (typeof THEME_IDS)[number];
 
@@ -142,21 +144,13 @@ export function colorsOnly(custom: ThemeCustom): ThemeCustom {
   };
 }
 
-function svgBg(markup: string): string {
-  return `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 844">${markup}</svg>`)}")`;
+function themeWallpaper(id: ThemeId): string {
+  return `url("${assetUrl(`wallpapers/${id}.jpg`)}")`;
 }
 
-export const THEME_WALLPAPERS: Record<ThemeId, string> = {
-  normal: svgBg('<rect width="390" height="844" fill="#d9eefc"/><circle cx="310" cy="90" r="36" fill="#ffe08a"/><path d="M-10 560 Q120 500 200 560 T400 540 L400 844 L-10 844Z" fill="#9ec9a3"/><path d="M40 560 L150 390 L260 560Z" fill="#7e9ec2"/><circle cx="86" cy="620" r="16" fill="#fff"/><circle cx="78" cy="616" r="3" fill="#334"/><circle cx="94" cy="616" r="3" fill="#334"/><path d="M78 626 Q86 632 94 626" fill="none" stroke="#334" stroke-width="1.4"/>'),
-  dark: svgBg('<rect width="390" height="844" fill="#101828"/><circle cx="300" cy="88" r="26" fill="#f1f5f9"/><circle cx="60" cy="140" r="3" fill="#e2e8f0"/><circle cx="120" cy="80" r="2" fill="#e2e8f0"/><path d="M0 620 L80 500 H130 L160 620 H230 L270 430 H330 L390 620 V844 H0Z" fill="#1e293b"/><circle cx="70" cy="680" r="18" fill="#334155"/><circle cx="62" cy="674" r="3" fill="#94a3b8"/><circle cx="78" cy="674" r="3" fill="#94a3b8"/>'),
-  pinky: svgBg('<rect width="390" height="844" fill="#ffe4f1"/><circle cx="300" cy="100" r="28" fill="#fecdd3"/><circle cx="70" cy="180" r="8" fill="#fb7185"/><circle cx="120" cy="230" r="5" fill="#f472b6"/><ellipse cx="80" cy="640" rx="28" ry="34" fill="#fff"/><circle cx="80" cy="608" r="18" fill="#fff"/><circle cx="68" cy="600" r="8" fill="#fecdd3"/><circle cx="92" cy="600" r="8" fill="#fecdd3"/><circle cx="74" cy="606" r="2.5" fill="#4a044e"/><circle cx="86" cy="606" r="2.5" fill="#4a044e"/><path d="M74 616 Q80 622 86 616" fill="none" stroke="#db2777" stroke-width="1.5"/>'),
-  anime: svgBg('<rect width="390" height="844" fill="#ffd6e8"/><path d="M0 0 H390 V250 Q195 310 0 250Z" fill="#ffb4c8"/><circle cx="320" cy="70" r="30" fill="#ffe08a"/><path d="M0 640 Q80 580 160 640 T390 620 V844 H0Z" fill="#86efac" opacity=".55"/><circle cx="86" cy="610" r="22" fill="#ffe4e6"/><path d="M64 598 Q70 572 86 588 Q102 572 108 598" fill="#4a2a12"/><circle cx="78" cy="608" r="3" fill="#2b1638"/><circle cx="94" cy="608" r="3" fill="#2b1638"/><path d="M78 618 Q86 624 94 618" fill="none" stroke="#db2777" stroke-width="1.6"/>'),
-  cyberpunk: svgBg('<rect width="390" height="844" fill="#12081f"/><path d="M0 0 H390 V210 Q200 260 0 210Z" fill="#2a0d3a"/><circle cx="64" cy="70" r="4" fill="#00e5ff"/><circle cx="330" cy="50" r="3" fill="#ff2e97"/><path d="M0 650 L70 520 H120 L150 650 H210 L250 470 H300 L350 650 H390 V844 H0Z" fill="#1b1033"/><circle cx="300" cy="700" r="20" fill="#2a1848"/><rect x="292" y="692" width="7" height="5" fill="#00e5ff"/><rect x="302" y="692" width="7" height="5" fill="#ff2e97"/>'),
-  shiba: svgBg('<rect width="390" height="844" fill="#ffe8cc"/><circle cx="318" cy="86" r="32" fill="#ffe08a"/><path d="M0 620 Q200 560 390 640 V844 H0Z" fill="#86efac" opacity=".45"/><ellipse cx="92" cy="668" rx="40" ry="26" fill="#f97316"/><circle cx="92" cy="640" r="24" fill="#fdba74"/><ellipse cx="70" cy="624" rx="10" ry="14" fill="#ea580c"/><ellipse cx="114" cy="624" rx="10" ry="14" fill="#ea580c"/><circle cx="84" cy="638" r="3.2" fill="#3f1d0a"/><circle cx="100" cy="638" r="3.2" fill="#3f1d0a"/><circle cx="92" cy="648" r="3" fill="#9a3412"/><path d="M84 652 Q92 658 100 652" fill="none" stroke="#9a3412" stroke-width="1.6"/>'),
-  cat: svgBg('<rect width="390" height="844" fill="#f6e6d3"/><path d="M48 0 H78 V844 H48Z" fill="#e8d2b8" opacity=".45"/><path d="M312 0 H342 V844 H312Z" fill="#e8d2b8" opacity=".35"/><ellipse cx="300" cy="680" rx="30" ry="22" fill="#d6b48e"/><circle cx="300" cy="656" r="20" fill="#e7c9a5"/><polygon points="282,646 288,622 304,646" fill="#d6b48e"/><polygon points="298,646 316,620 322,646" fill="#d6b48e"/><circle cx="293" cy="654" r="2.6" fill="#3b2a24"/><circle cx="307" cy="654" r="2.6" fill="#3b2a24"/><path d="M288 662 L276 658" stroke="#3b2a24" stroke-width="1"/><path d="M312 662 L324 658" stroke="#3b2a24" stroke-width="1"/>'),
-  panda: svgBg('<rect width="390" height="844" fill="#eef6ea"/><rect x="78" y="0" width="10" height="844" fill="#86efac" opacity=".35"/><rect x="210" y="0" width="8" height="844" fill="#4ade80" opacity=".28"/><circle cx="300" cy="150" r="28" fill="#f8fafc"/><circle cx="282" cy="138" r="12" fill="#111827"/><circle cx="318" cy="138" r="12" fill="#111827"/><circle cx="292" cy="152" r="3" fill="#111827"/><circle cx="308" cy="152" r="3" fill="#111827"/><ellipse cx="300" cy="164" rx="6" ry="4" fill="#111827"/>'),
-  hongkong: svgBg('<rect width="390" height="844" fill="#3a1420"/><circle cx="308" cy="78" r="22" fill="#fbbf24"/><path d="M0 660 L55 520 H95 L120 660 H175 L210 440 H270 L300 660 H350 L390 580 V844 H0Z" fill="#7f1d1d"/><path d="M20 760 Q80 730 140 760 T280 750 L200 700 Z" fill="#f8fafc" opacity=".25"/><circle cx="64" cy="700" r="14" fill="#ffe4e6"/><circle cx="58" cy="696" r="2" fill="#1a0c10"/><circle cx="70" cy="696" r="2" fill="#1a0c10"/>'),
-};
+export const THEME_WALLPAPERS: Record<ThemeId, string> = Object.fromEntries(
+  THEME_IDS.map((id) => [id, themeWallpaper(id)]),
+) as Record<ThemeId, string>;
 
 export function clampWallpaperOpacity(n: number | undefined): number {
   if (typeof n !== "number" || Number.isNaN(n)) return 40;
