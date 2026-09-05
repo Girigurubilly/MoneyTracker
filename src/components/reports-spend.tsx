@@ -27,7 +27,7 @@ export function SpendingPage() {
   const cats = useApp((s) => s.categories);
   const rates = useApp((s) => s.fxRates);
   const today = todayISO();
-  const [preset, setPreset] = useState<PeriodPreset>("this-year");
+  const [preset, setPreset] = useState<PeriodPreset>("this-month");
   const [tab, setTab] = useState<PeriodTab>("expense");
   const [merge, setMerge] = useState(true);
   const [customFrom, setCustomFrom] = useState(`${today.slice(0, 4)}-01-01`);

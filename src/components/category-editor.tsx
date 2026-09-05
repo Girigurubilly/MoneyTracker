@@ -2,7 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Overlay } from "@/components/shared";
 import { CategoryIcon } from "@/components/category-icon";
-import { AccountSelect } from "@/components/account-select";
+import { AccountLine, ComposerHeader, SelectLine, TextLine } from "@/components/txn-composer";
 import { pickName } from "@/lib/i18n";
 import { CATEGORY_ICON_GROUPS, type Category, type CategoryIconName, type LifeTheme } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
@@ -22,9 +22,8 @@ export function CategoryEditor({
   defaultParentId?: string;
   defaultKind?: "expense" | "income";
 }) {
-  const t = useT();
   return (
-    <Overlay open={open} onClose={onClose} title={initial ? t.common.edit : defaultParentId ? t.add.newSub : t.add.newMain} variant="page" layer="stack">
+    <Overlay open={open} onClose={onClose} variant="page" layer="stack">
       {open ? (
         <CategoryEditorBody
           key={initial?.id ?? `${defaultParentId ?? "main"}-${defaultKind ?? "expense"}`}
@@ -88,51 +87,42 @@ function CategoryEditorBody({
   }
 
   return (
-    <div className="px-5 pb-10">
-      <label className="block py-2">
-        <span className="text-xs text-muted">{t.budget.customName}</span>
-        <input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 outline-none" />
-      </label>
-      <label className="block py-2">
-        <span className="text-xs text-muted">{t.add.parentCategory}</span>
-        <select value={parentId} onChange={(e) => setParentId(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3">
-          <option value="">{t.add.noParent}</option>
-          {parents
-            .filter((p) => p.id !== initial?.id)
-            .map((p) => (
-              <option key={p.id} value={p.id}>
-                {pickName(locale, p.name, p.nameZh)}
-              </option>
-            ))}
-        </select>
-      </label>
+    <div className="flex min-h-full flex-col">
+      <ComposerHeader
+        onClose={onClose}
+        onSave={() => void save()}
+        title={initial ? t.common.edit : parentId ? t.add.newSub : t.add.newMain}
+      />
+      <TextLine value={name} onChange={setName} placeholder={t.budget.customName} />
+      <SelectLine
+        label={t.add.parentCategory}
+        value={parentId}
+        onChange={setParentId}
+        options={[
+          { id: "", label: t.add.noParent },
+          ...parents.filter((p) => p.id !== initial?.id).map((p) => ({ id: p.id, label: pickName(locale, p.name, p.nameZh) })),
+        ]}
+      />
       {!parentId ? (
-        <label className="block py-2">
-          <span className="text-xs text-muted">{t.more.kind}</span>
-          <select value={kind} onChange={(e) => setKind(e.target.value as "expense" | "income")} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3">
-            <option value="expense">{t.add.expense}</option>
-            <option value="income">{t.add.income}</option>
-          </select>
-        </label>
-      ) : null}
-      <label className="block py-2">
-        <span className="text-xs text-muted">{t.add.defaultAccount}</span>
-        <AccountSelect
-          accounts={accounts}
-          value={defaultAccountId}
-          onChange={setDefaultAccountId}
-          allowEmpty
-          emptyLabel={t.add.noDefaultAccount}
+        <SelectLine
+          label={t.more.kind}
+          value={kind}
+          onChange={(v) => setKind(v as "expense" | "income")}
+          options={[
+            { id: "expense", label: t.add.expense },
+            { id: "income", label: t.add.income },
+          ]}
         />
-        <span className="mt-1 block text-xs text-muted">{t.add.defaultAccountHint}</span>
-      </label>
-      <div className="py-2">
-        <span className="text-xs text-muted">{t.add.icon}</span>
+      ) : null}
+      <AccountLine accounts={accounts} value={defaultAccountId} onChange={setDefaultAccountId} placeholder={t.add.defaultAccount} />
+      <p className="px-4 py-2 text-xs text-muted">{t.add.defaultAccountHint}</p>
+      <div className="px-4 pb-8 pt-1">
+        <div className="text-xs text-muted">{t.add.icon}</div>
         <div className="mt-2 space-y-3">
           {CATEGORY_ICON_GROUPS.map((g) => (
             <div key={g.id}>
               <div className="pb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">{t.add.iconGroups[g.id]}</div>
-              <div className="grid grid-cols-6 gap-2">
+              <div className="grid grid-cols-7 gap-1.5">
                 {g.icons.map((id) => (
                   <button
                     key={id}
@@ -140,11 +130,11 @@ function CategoryEditorBody({
                     aria-label={id}
                     onClick={() => setIcon(id)}
                     className={cn(
-                      "grid size-11 place-items-center rounded-full bg-elevated",
+                      "grid size-10 place-items-center rounded-full bg-elevated",
                       icon === id && "ring-2 ring-accent text-accent",
                     )}
                   >
-                    <CategoryIcon name={id} className="size-5" />
+                    <CategoryIcon name={id} className="size-4" />
                   </button>
                 ))}
               </div>
@@ -152,13 +142,10 @@ function CategoryEditorBody({
           ))}
         </div>
       </div>
-      <button type="button" className="mt-4 h-12 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={() => void save()}>
-        {t.add.save}
-      </button>
       {initial ? (
         <button
           type="button"
-          className="mt-3 h-12 w-full text-sm font-medium text-expense"
+          className="mx-4 mb-10 h-12 rounded-xl text-sm font-medium text-expense"
           onClick={async () => {
             await del(initial.id);
             onClose();

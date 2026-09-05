@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Hairline, InfoButton, Overlay, ScreenHeader, SectionLabel, TxGroupedList } from "@/components/shared";
+import { Hairline, InfoButton, Overlay, ProgressRing, ScreenHeader, SectionLabel, TxGroupedList } from "@/components/shared";
 import { money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import {
@@ -69,25 +69,56 @@ export function LivingPage() {
           </div>
         }
       />
-      <div className="mx-4 rounded-xl bg-elevated p-4">
-        <div className="text-xs text-muted">{t.reports.livingMode}</div>
-        <div className="mt-0.5 text-base font-semibold">{modeLabel}</div>
-        <div className="mt-4">
-          <div className="text-xs text-muted">{t.reports.housingCost}</div>
-          <div className="mt-1 text-lg font-semibold tabular-nums">{money(cost, "HKD")}</div>
-        </div>
-        {lines.length ? (
-          <>
-            <div className="my-3">
-              <Hairline />
+      <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs font-medium text-accent">{modeLabel}</div>
+            <div className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{money(cost, "HKD")}</div>
+            <div className="mt-0.5 text-xs text-muted">{t.reports.housingCost}</div>
+          </div>
+          {m ? (
+            <div className="relative shrink-0">
+              <ProgressRing
+                value={m.original > 0 ? 1 - m.outstanding / m.original : 0}
+                size={64}
+                stroke={5}
+                tone={m.outstanding / Math.max(1, m.original || m.outstanding) > 0.7 ? "watch" : "income"}
+              />
+              <span className="pointer-events-none absolute inset-0 grid place-items-center text-[10px] font-semibold tabular-nums">
+                {m.original > 0 ? `${Math.round((1 - m.outstanding / m.original) * 100)}%` : "—"}
+              </span>
             </div>
+          ) : null}
+        </div>
+        {property || m ? (
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="rounded-xl bg-success-soft px-3 py-2">
+              <div className="text-[11px] text-income">{t.reports.propertyValue}</div>
+              <div className="mt-0.5 text-sm font-semibold tabular-nums">{property ? money(property.balance, "HKD") : "—"}</div>
+            </div>
+            <div className="rounded-xl bg-expense-soft px-3 py-2">
+              <div className="text-[11px] text-expense">{t.reports.owedBank}</div>
+              <div className="mt-0.5 text-sm font-semibold tabular-nums">{m ? money(m.outstanding, "HKD") : "—"}</div>
+            </div>
+            <div className="rounded-xl bg-background px-3 py-2">
+              <div className="text-[11px] text-muted">{t.reports.installment}</div>
+              <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(pmt, "HKD")}</div>
+            </div>
+            <div className="rounded-xl bg-background px-3 py-2">
+              <div className="text-[11px] text-muted">{t.reports.currentRate}</div>
+              <div className="mt-0.5 text-sm font-semibold tabular-nums">{m ? rateLine(m) : "—"}</div>
+            </div>
+          </div>
+        ) : null}
+        {lines.length ? (
+          <div className="mt-3 space-y-1">
             {lines.map((r) => (
-              <div key={r.id} className="flex justify-between py-1.5 text-sm">
+              <div key={r.id} className="flex justify-between text-sm">
                 <span className="text-muted">{pickName(locale, r.label, r.labelZh)}</span>
                 <span className="tabular-nums">{money(r.amount, "HKD")}</span>
               </div>
             ))}
-          </>
+          </div>
         ) : null}
       </div>
 

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
-import { Hairline, InfoButton, Overlay, ProgressBar, ScreenHeader, SectionLabel, BudgetChip, TxGroupedList } from "@/components/shared";
+import { Hairline, InfoButton, Overlay, ProgressBar, ProgressRing, ScreenHeader, SectionLabel, BudgetChip, TxGroupedList } from "@/components/shared";
+import { ComposerHeader, ComposerShell, LineRow, TextLine, ActiveKeypad } from "@/components/txn-composer";
 import { AmountWithHkd } from "@/components/currency-field";
 import { milesLabel, money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
@@ -50,20 +51,31 @@ export function TravelPage() {
           </div>
         }
       />
-      <div className="mx-4 rounded-xl bg-elevated p-4">
-        <div className="text-xs text-muted">{t.reports.annualTravel}</div>
-        <button type="button" className="mt-1 block text-left" onClick={() => setEditAnnual(true)}>
-          <span className="text-xl font-semibold tabular-nums">{money(ytd, "HKD")}</span>
-          <span className="text-sm font-normal text-muted"> / {money(annual, "HKD")}</span>
-        </button>
-        <div className="mt-3 text-sm">
-          {loc === "zh-HK" ? "亞洲萬里通" : "Asia Miles"}: {milesLabel(miles, loc)}
+      <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
+        <div className="flex items-start justify-between gap-3">
+          <button type="button" className="min-w-0 text-left" onClick={() => setEditAnnual(true)}>
+            <div className="text-xs font-medium text-accent">{t.reports.annualTravel}</div>
+            <div className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{money(ytd, "HKD")}</div>
+            <div className="mt-0.5 text-xs text-muted">/ {money(annual, "HKD")}</div>
+          </button>
+          <div className="relative shrink-0">
+            <ProgressRing value={annual > 0 ? ytd / annual : 0} size={64} stroke={5} tone={yearOver ? "expense" : "income"} />
+            <span className="pointer-events-none absolute inset-0 grid place-items-center text-[11px] font-semibold tabular-nums">
+              {annual > 0 ? `${Math.round((ytd / annual) * 100)}%` : "—"}
+            </span>
+          </div>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="rounded-xl bg-background px-3 py-2">
+            <div className="text-[11px] text-muted">{loc === "zh-HK" ? "亞洲萬里通" : "Asia Miles"}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{milesLabel(miles, loc)}</div>
+          </div>
+          <div className="rounded-xl bg-background px-3 py-2">
+            <div className="text-[11px] text-muted">{t.reports.trips}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{current.length}</div>
+          </div>
         </div>
         <p className="mt-2 text-xs text-muted">{t.reports.milesNote}</p>
-        <ProgressBar value={annual > 0 ? ytd / annual : 0} tone={yearOver ? "expense" : "income"} />
-        <div className="mt-2 flex justify-end">
-          <BudgetChip over={yearOver} />
-        </div>
       </div>
       <SectionLabel>{t.reports.trips}</SectionLabel>
       {current.map((tr) => (
@@ -95,31 +107,36 @@ function TripCard({ trip }: { trip: Trip }) {
   const used = tripBudgetUsed(spent, trip.cashBudget);
   const over = trip.cashBudget > 0 && spent > trip.cashBudget;
   return (
-    <Link to="/reports/travel/$id" params={{ id: trip.id }} className="mx-4 mb-3 block rounded-xl bg-elevated p-4">
-      <div className="flex items-start justify-between gap-2">
+    <Link to="/reports/travel/$id" params={{ id: trip.id }} className="mx-4 mb-3 block overflow-hidden rounded-2xl bg-elevated p-4">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-base font-semibold">{pickName(loc, trip.name, trip.nameZh)}</div>
           <div className="mt-0.5 text-xs text-muted">
             {trip.destination} · {trip.start} → {trip.end}
           </div>
         </div>
+        <div className="relative shrink-0">
+          <ProgressRing value={used.pct} size={52} stroke={4} tone={over ? "expense" : "income"} />
+          <span className="pointer-events-none absolute inset-0 grid place-items-center text-[10px] font-semibold tabular-nums">
+            {Math.round(used.pct * 100)}%
+          </span>
+        </div>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="rounded-xl bg-background px-3 py-2">
+          <div className="text-[11px] text-muted">{t.reports.tripSpent}</div>
+          <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(spent, "HKD")}</div>
+        </div>
+        <div className="rounded-xl bg-background px-3 py-2">
+          <div className="text-[11px] text-muted">{t.reports.cash}</div>
+          <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(trip.cashBudget, "HKD")}</div>
+        </div>
+      </div>
+      <div className="mt-2 flex items-center justify-between">
+        <span className="text-xs text-muted">
+          {loc === "zh-HK" ? "亞洲萬里通" : "Asia Miles"}: {milesLabel(trip.milesSaved, loc)} / {milesLabel(trip.milesTarget, loc)}
+        </span>
         <BudgetChip over={over} />
-      </div>
-      <div className="mt-3 grid grid-cols-2 gap-3">
-        <div>
-          <div className="text-xs text-muted">{t.reports.tripSpent}</div>
-          <div className="mt-1 text-sm font-semibold tabular-nums">
-            {money(spent, "HKD")} / {money(trip.cashBudget, "HKD")}
-          </div>
-        </div>
-        <div>
-          <div className="text-xs text-muted">{t.reports.budgetUsed}</div>
-          <div className="mt-1 text-sm font-semibold tabular-nums">{Math.round(used.pct * 100)}%</div>
-        </div>
-      </div>
-      <ProgressBar value={used.pct} tone={over ? "expense" : "income"} />
-      <div className="mt-2 text-xs text-muted">
-        {loc === "zh-HK" ? "亞洲萬里通" : "Asia Miles"}: {milesLabel(trip.milesSaved, loc)} / {milesLabel(trip.milesTarget, loc)}
       </div>
     </Link>
   );
@@ -168,35 +185,39 @@ export function TripDetailPage({ id }: { id: string }) {
           </button>
         }
       />
-      <div className="mx-4 rounded-xl bg-elevated p-4">
-        <div className="flex items-start justify-between gap-2">
+      <div className="mx-4 overflow-hidden rounded-2xl bg-elevated p-4">
+        <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-sm">{trip.destination}</div>
-            <div className="mt-0.5 text-sm text-muted">
+            <div className="text-sm font-semibold">{trip.destination}</div>
+            <div className="mt-0.5 text-xs text-muted">
               {trip.start} → {trip.end}
             </div>
           </div>
-          <BudgetChip over={over} />
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-4">
-          <div>
-            <div className="text-xs text-muted">{t.reports.cash}</div>
-            <div className="mt-1 text-lg font-semibold tabular-nums">{money(trip.cashBudget, "HKD")}</div>
-          </div>
-          <div>
-            <div className="text-xs text-muted">{t.reports.tripSpent}</div>
-            <div className="mt-1 text-lg font-semibold tabular-nums">{money(spent, "HKD")}</div>
-          </div>
-          <div>
-            <div className="text-xs text-muted">{t.reports.budgetUsed}</div>
-            <div className="mt-1 text-lg font-semibold tabular-nums">{Math.round(used.pct * 100)}%</div>
-          </div>
-          <div>
-            <div className="text-xs text-muted">{t.reports.remaining}</div>
-            <div className="mt-1 text-lg font-semibold tabular-nums">{money(used.remaining, "HKD")}</div>
+          <div className="relative shrink-0">
+            <ProgressRing value={used.pct} size={64} stroke={5} tone={over ? "expense" : "income"} />
+            <span className="pointer-events-none absolute inset-0 grid place-items-center text-[11px] font-semibold tabular-nums">
+              {Math.round(used.pct * 100)}%
+            </span>
           </div>
         </div>
-        <ProgressBar value={used.pct} tone={over ? "expense" : "income"} />
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="rounded-xl bg-background px-3 py-2">
+            <div className="text-[11px] text-muted">{t.reports.cash}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(trip.cashBudget, "HKD")}</div>
+          </div>
+          <div className="rounded-xl bg-expense-soft px-3 py-2">
+            <div className="text-[11px] text-expense">{t.reports.tripSpent}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(spent, "HKD")}</div>
+          </div>
+          <div className="rounded-xl bg-success-soft px-3 py-2">
+            <div className="text-[11px] text-income">{t.reports.remaining}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(used.remaining, "HKD")}</div>
+          </div>
+          <div className="rounded-xl bg-background px-3 py-2">
+            <div className="text-[11px] text-muted">{t.reports.budgetUsed}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{Math.round(used.pct * 100)}%</div>
+          </div>
+        </div>
       </div>
       <TxGroupedList txs={linked} onClick={(tx) => setTx(tx.id)} empty={t.common.none} />
       <p className="px-5 pt-4 text-xs text-muted">{t.reports.milesNote}</p>
@@ -238,80 +259,70 @@ function TripEditor({
   const [milesS, setMilesS] = useState(String(trip?.milesSaved ?? 0));
   const [monthly, setMonthly] = useState(String(trip?.monthlyCash ?? 0));
 
+  const [field, setField] = useState<"amount" | "dest" | "principal" | "interest">("amount");
+
+  async function save() {
+    const n = name.trim() || dest.trim();
+    if (!n) return;
+    const row: Trip = {
+      id: trip?.id ?? newId(),
+      name: n,
+      nameZh: n,
+      destination: dest.trim() || n,
+      start,
+      end: end < start ? start : end,
+      status: trip?.status ?? "planning",
+      cashBudget: Number(budget) || 0,
+      cashSaved: trip?.cashSaved ?? 0,
+      milesTarget: Number(milesT) || 0,
+      milesSaved: Number(milesS) || 0,
+      monthlyCash: Number(monthly) || 0,
+    };
+    if (trip) await update(row);
+    else await add(row);
+    onClose();
+  }
+
   return (
-    <Overlay open={open} onClose={onClose} title={trip ? t.reports.editTrip : t.reports.addTrip} variant="page">
-      <div className="px-5 pb-10">
-        <Field label={t.budget.customName} value={name} onChange={setName} />
-        <Field label={t.reports.destination} value={dest} onChange={setDest} />
-        <label className="block py-2 text-xs text-muted">
-          {t.reports.tripStart}
-          <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
-        </label>
-        <label className="block py-2 text-xs text-muted">
-          {t.reports.tripEnd}
-          <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
-        </label>
-        <Field label={t.reports.cashBudget} value={budget} onChange={setBudget} numeric />
-        <Field label={t.reports.milesTarget} value={milesT} onChange={setMilesT} numeric />
-        <Field label={t.reports.milesSaved} value={milesS} onChange={setMilesS} numeric />
-        <Field label={t.reports.monthlyCash} value={monthly} onChange={setMonthly} numeric />
-        <button
-          type="button"
-          className="mt-4 h-12 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent"
-          onClick={async () => {
-            const n = name.trim() || dest.trim();
-            if (!n) return;
-            const row: Trip = {
-              id: trip?.id ?? newId(),
-              name: n,
-              nameZh: n,
-              destination: dest.trim() || n,
-              start,
-              end: end < start ? start : end,
-              status: trip?.status ?? "planning",
-              cashBudget: Number(budget) || 0,
-              cashSaved: trip?.cashSaved ?? 0,
-              milesTarget: Number(milesT) || 0,
-              milesSaved: Number(milesS) || 0,
-              monthlyCash: Number(monthly) || 0,
-            };
-            if (trip) await update(row);
-            else await add(row);
-            onClose();
-          }}
-        >
-          {t.add.save}
-        </button>
+    <Overlay open={open} onClose={onClose} variant="page">
+      <ComposerShell
+        header={<ComposerHeader onClose={onClose} onSave={() => void save()} title={trip ? t.reports.editTrip : t.reports.addTrip} />}
+        keypad={
+          <ActiveKeypad
+            field="amount"
+            amount={budget}
+            dest=""
+            principal=""
+            interest=""
+            setAmount={setBudget}
+            setDest={() => undefined}
+            setPrincipal={() => undefined}
+            setInterest={() => undefined}
+            currency="HKD"
+            onCurrency={() => undefined}
+          />
+        }
+      >
+        <TextLine value={name} onChange={setName} placeholder={t.budget.customName} />
+        <TextLine value={dest} onChange={setDest} placeholder={t.reports.destination} />
+        <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+          <span className="text-sm text-muted">{t.reports.tripStart}</span>
+          <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
+        </div>
+        <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+          <span className="text-sm text-muted">{t.reports.tripEnd}</span>
+          <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
+        </div>
+        <LineRow label={t.reports.cashBudget} amount={budget} active={field === "amount"} onFocusAmount={() => setField("amount")} />
+        <TextLine value={milesT} onChange={setMilesT} placeholder={t.reports.milesTarget} />
+        <TextLine value={milesS} onChange={setMilesS} placeholder={t.reports.milesSaved} />
+        <TextLine value={monthly} onChange={setMonthly} placeholder={t.reports.monthlyCash} />
         {trip && onDeleted ? (
-          <button type="button" className="mt-4 h-11 w-full text-sm text-expense" onClick={onDeleted}>
+          <button type="button" className="mx-4 my-3 h-11 text-sm text-expense" onClick={onDeleted}>
             {t.reports.removeTrip}
           </button>
         ) : null}
-      </div>
+      </ComposerShell>
     </Overlay>
-  );
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  numeric,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  numeric?: boolean;
-}) {
-  return (
-    <label className="block py-2 text-xs text-muted">
-      {label}
-      <input
-        inputMode={numeric ? "decimal" : undefined}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground"
-      />
-    </label>
   );
 }

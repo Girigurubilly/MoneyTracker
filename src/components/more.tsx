@@ -74,18 +74,25 @@ export function CategoriesPage() {
   }
   return (
     <div className="pb-10">
-      <ScreenHeader title={t.more.categories} />
+      <ScreenHeader
+        title={t.more.categories}
+        right={
+          <button type="button" className="h-11 px-3 text-sm font-medium text-accent" onClick={() => setEdit("new-main")}>
+            {t.add.newMain}
+          </button>
+        }
+      />
       {parents.map((p) => {
         const kids = cats.filter((c) => c.parentId === p.id);
         const pAcc = accountLabel(p.defaultAccountId);
         return (
-          <div key={p.id} className="mb-4">
-            <button type="button" className="flex w-full items-center gap-3 px-5 py-2 text-left" onClick={() => setEdit(p)}>
-              <span className="grid size-10 place-items-center rounded-full bg-elevated">
+          <div key={p.id} className="mb-3 overflow-hidden rounded-2xl bg-elevated mx-4">
+            <button type="button" className="flex w-full items-center gap-3 px-4 py-3 text-left" onClick={() => setEdit(p)}>
+              <span className="grid size-11 place-items-center rounded-2xl bg-accent-soft text-accent">
                 <CategoryIcon name={p.icon} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-medium">{pickName(locale, p.name, p.nameZh)}</span>
+                <span className="block text-sm font-semibold">{pickName(locale, p.name, p.nameZh)}</span>
                 <span className="text-xs text-muted">
                   {p.kind === "income" ? t.add.income : t.add.expense}
                   {pAcc ? ` · ${pAcc}` : ""}
@@ -95,9 +102,9 @@ export function CategoriesPage() {
             {kids.map((c) => {
               const acc = accountLabel(c.defaultAccountId ?? p.defaultAccountId);
               return (
-                <button key={c.id} type="button" className="flex w-full items-center gap-3 py-2 pl-14 pr-5 text-left" onClick={() => setEdit(c)}>
-                  <span className="grid size-9 place-items-center rounded-full bg-elevated">
-                    <CategoryIcon name={c.icon} />
+                <button key={c.id} type="button" className="flex w-full items-center gap-3 border-t border-line py-2.5 pl-4 pr-4 text-left" onClick={() => setEdit(c)}>
+                  <span className="grid size-9 place-items-center rounded-xl bg-background">
+                    <CategoryIcon name={c.icon} className="size-4" />
                   </span>
                   <span className="min-w-0 flex-1 text-left">
                     <span className="block text-sm">{pickName(locale, c.name, c.nameZh)}</span>
@@ -108,7 +115,7 @@ export function CategoriesPage() {
             })}
             <button
               type="button"
-              className="px-5 py-2 text-sm text-accent"
+              className="w-full border-t border-line px-4 py-2.5 text-left text-sm text-accent"
               onClick={() => {
                 setSubParent(p.id);
                 setEdit("new-sub");
@@ -119,11 +126,6 @@ export function CategoriesPage() {
           </div>
         );
       })}
-      <div className="px-5">
-        <button type="button" className="h-11 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={() => setEdit("new-main")}>
-          {t.add.newMain}
-        </button>
-      </div>
       <CategoryEditor
         open={edit !== null}
         onClose={() => setEdit(null)}
