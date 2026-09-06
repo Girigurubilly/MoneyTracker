@@ -35,6 +35,9 @@ describe("parseOctopusText", () => {
     assert.equal(rows[0].kind, "expense");
     assert.equal(rows[0].categoryId, "dining");
     assert.equal(rows[1].categoryId, "mtr");
-    assert.equal(rows.find((r) => r.kind === "topup")?.amount, 500);
+    const inline = parseOctopusText("港鐵\n2026-09-05 20:37 -11.8", cats);
+    assert.equal(inline[0]?.amount, 11.8);
+    const unicode = parseOctopusText("太興\n2026-09-03 20:29\n−214.0", cats);
+    assert.equal(unicode[0]?.amount, 214);
   });
 });

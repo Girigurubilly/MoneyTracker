@@ -14,6 +14,41 @@ import {
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 
+function fileToImage(file: File): Promise<HTMLCanvasElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const scale = Math.min(2.2, 1600 / Math.max(img.width, 1));
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        URL.revokeObjectURL(url);
+        reject(new Error("canvas"));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const px = data.data;
+      for (let i = 0; i < px.length; i += 4) {
+        const y = px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11;
+        const v = y > 170 ? 255 : y < 90 ? 0 : y;
+        px[i] = px[i + 1] = px[i + 2] = v;
+      }
+      ctx.putImageData(data, 0, 0);
+      URL.revokeObjectURL(url);
+      resolve(canvas);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("image"));
+    };
+    img.src = url;
+  });
+}
+
 export function OctopusImport({ onClose }: { onClose: () => void }) {
   const t = useT();
   const locale = useUi((s) => s.locale);
@@ -27,25 +62,41 @@ export function OctopusImport({ onClose }: { onClose: () => void }) {
   const [rows, setRows] = useState<OctopusDraft[]>([]);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
+  const [rawText, setRawText] = useState("");
+  const [showRaw, setShowRaw] = useState(false);
   const expenseCats = useMemo(() => categories.filter((c) => c.kind === "expense"), [categories]);
+
+  function applyText(text: string) {
+    const parsed = parseOctopusText(text, categories);
+    setRows((prev) => {
+      const next = [...prev];
+      for (const r of parsed) {
+        if (!next.some((x) => x.id === r.id)) next.push(r);
+      }
+      return next;
+    });
+    setNote(parsed.length ? t.add.octopusFound.replace("{n}", String(parsed.length)) : t.add.octopusNone);
+    return parsed.length;
+  }
 
   async function readFile(file: File) {
     setBusy(true);
     setNote(t.add.octopusReading);
     try {
-      const { recognize } = await import("tesseract.js");
-      const result = await recognize(file, "chi_tra+eng");
-      const parsed = parseOctopusText(result.data.text, categories);
-      setRows((prev) => {
-        const next = [...prev];
-        for (const r of parsed) {
-          if (!next.some((x) => x.id === r.id)) next.push(r);
-        }
-        return next;
+      const canvas = await fileToImage(file);
+      const mod = await import("tesseract.js");
+      const Tesseract = (mod.default ?? mod) as typeof import("tesseract.js");
+      const result = await Tesseract.recognize(canvas, "chi_tra+eng", {
+        workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/worker.min.js",
+        corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@7.0.0/tesseract-core-simd-lstm.wasm.js",
+        langPath: "https://tessdata.projectnaptha.com/4.0.0",
       });
-      setNote(parsed.length ? t.add.octopusFound.replace("{n}", String(parsed.length)) : t.add.octopusNone);
-    } catch {
-      setNote(t.add.octopusFailed);
+      const text = result.data.text ?? "";
+      setRawText((prev) => (prev ? `${prev}\n${text}` : text));
+      applyText(text);
+    } catch (err) {
+      setNote(`${t.add.octopusFailed} ${err instanceof Error ? err.message : ""}`.trim());
+      setShowRaw(true);
     } finally {
       setBusy(false);
     }
@@ -139,6 +190,27 @@ export function OctopusImport({ onClose }: { onClose: () => void }) {
           />
         </label>
         {note ? <p className="mt-2 text-xs text-muted">{note}</p> : null}
+        <button type="button" className="mt-2 text-xs text-accent" onClick={() => setShowRaw((v) => !v)}>
+          {t.add.octopusPaste}
+        </button>
+        {showRaw ? (
+          <div className="mt-2">
+            <textarea
+              value={rawText}
+              onChange={(e) => setRawText(e.target.value)}
+              rows={6}
+              className="w-full rounded-xl bg-elevated px-3 py-2 text-xs"
+              placeholder={t.add.octopusPasteHint}
+            />
+            <button
+              type="button"
+              className="mt-2 h-9 rounded-lg bg-elevated px-3 text-xs font-medium"
+              onClick={() => applyText(rawText)}
+            >
+              {t.add.octopusParse}
+            </button>
+          </div>
+        ) : null}
       </div>
       <div className="px-4 pb-10">
         {rows.length === 0 ? (

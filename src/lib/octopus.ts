@@ -14,10 +14,21 @@ export type OctopusDraft = {
 };
 
 const SKIP_LINE =
-  /餘額|交易紀錄|消費摘要|Main|HKD|八達通卡有限公司$|^八達通$|交易記錄|消費|摘要|餘額|選擇類型|記錄/;
+  /餘額|交易紀錄|交易記錄|消費摘要|消費摘要|Main|HKD|選擇類型|^八達通$|記錄|摘要|^餘額/;
 
-const DATE_RE = /(\d{4})[-/.](\d{2})[-/.](\d{2})(?:\s+(\d{2}):(\d{2}))?/;
-const AMOUNT_RE = /^([+-])?\s*(\d{1,6}(?:\.\d{1,2})?)$/;
+const DATE_RE = /(\d{4})[-/.年](\d{2})[-/.月](\d{2})日?(?:\s+(\d{2})[:：](\d{2}))?/;
+const AMOUNT_RE = /(?:^|\s)([+＋\-−–—])\s*(\d{1,6}(?:[.,]\d{1,2})?)(?:\s|$)|(?:^|\s)(\d{1,6}[.,]\d{1,2})(?:\s|$)/;
+
+function normalizeOcr(text: string): string {
+  return text
+    .replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xff10 + 48))
+    .replace(/[：]/g, ":")
+    .replace(/[．]/g, ".")
+    .replace(/[，]/g, ",")
+    .replace(/[－—–−]/g, "-")
+    .replace(/[＋]/g, "+")
+    .replace(/\u00a0/g, " ");
+}
 
 export function guessOctopusCategory(merchant: string, categories: Category[]): string | undefined {
   const m = merchant.toLowerCase();
@@ -38,51 +49,78 @@ export function guessOctopusCategory(merchant: string, categories: Category[]): 
   return byName?.id ?? categories.find((c) => c.kind === "expense" && !c.parentId)?.id;
 }
 
+function isMerchant(line: string): boolean {
+  if (!line) return false;
+  if (SKIP_LINE.test(line)) return false;
+  if (DATE_RE.test(line) && line.length < 22) return false;
+  if (/^[-+]?[\d.,]+$/.test(line)) return false;
+  return /[\u4e00-\u9fffA-Za-z]/.test(line);
+}
+
+function parseAmount(line: string): { sign: string; amount: number } | null {
+  const m = line.replace(/,/g, "").replace(/HKD/gi, "").trim().match(AMOUNT_RE);
+  if (!m) return null;
+  const sign = m[1] === "+" ? "+" : m[1] ? "-" : "-";
+  const raw = (m[2] ?? m[3] ?? "").replace(",", ".");
+  const amount = Number(raw);
+  if (!Number.isFinite(amount)) return null;
+  return { sign, amount };
+}
+
 export function parseOctopusText(text: string, categories: Category[]): OctopusDraft[] {
-  const raw = text
+  const raw = normalizeOcr(text)
     .split(/\n+/)
     .map((l) => l.replace(/\s+/g, " ").trim())
     .filter(Boolean);
   const rows: OctopusDraft[] = [];
-  let pending: string[] = [];
-  function flush(amount: number, sign: string, date: string, time?: string) {
-    const merchant = pending.filter((l) => !SKIP_LINE.test(l) && !DATE_RE.test(l) && !AMOUNT_RE.test(l.replace(/,/g, ""))).at(-1) ?? "八達通";
-    pending = [];
+
+  function push(merchant: string, date: string, time: string | undefined, sign: string, amount: number) {
     if (amount === 0) return;
-    const kind: OctopusKind = sign === "+" || /八達通卡有限公司|增值|自動增值/.test(merchant) ? "topup" : "expense";
-    const key = `${date}|${time ?? ""}|${merchant}|${amount}|${kind}`;
-    if (rows.some((r) => `${r.date}|${r.time ?? ""}|${r.merchant}|${r.amount}|${r.kind}` === key)) return;
+    const name = merchant.replace(DATE_RE, "").replace(AMOUNT_RE, "").trim() || "八達通";
+    const kind: OctopusKind = sign === "+" || /八達通卡有限公司|增值|自動增值/.test(name) ? "topup" : "expense";
+    const key = `${date}|${time ?? ""}|${name}|${amount}|${kind}`;
+    if (rows.some((r) => r.id === key)) return;
     rows.push({
       id: key,
-      merchant,
+      merchant: name,
       date,
       time,
       amount,
-      kind: kind === "topup" ? "topup" : "expense",
-      categoryId: kind === "expense" ? guessOctopusCategory(merchant, categories) : undefined,
+      kind,
+      categoryId: kind === "expense" ? guessOctopusCategory(name, categories) : undefined,
       skip: false,
     });
   }
 
-  for (const line of raw) {
-    if (SKIP_LINE.test(line) && !/八達通卡有限公司/.test(line)) continue;
+  for (let i = 0; i < raw.length; i++) {
+    const line = raw[i];
     const dateM = line.match(DATE_RE);
+    const amtHere = parseAmount(line);
+    if (dateM && amtHere) {
+      const date = `${dateM[1]}-${dateM[2]}-${dateM[3]}`;
+      const time = dateM[4] ? `${dateM[4]}:${dateM[5]}` : undefined;
+      const prev = raw[i - 1] && isMerchant(raw[i - 1]) ? raw[i - 1] : line;
+      push(prev, date, time, amtHere.sign, amtHere.amount);
+      continue;
+    }
     if (dateM) {
-      pending.push(line);
+      const date = `${dateM[1]}-${dateM[2]}-${dateM[3]}`;
+      const time = dateM[4] ? `${dateM[4]}:${dateM[5]}` : undefined;
+      const prev = raw[i - 1] && isMerchant(raw[i - 1]) ? raw[i - 1] : "";
+      const next = raw[i + 1] ? parseAmount(raw[i + 1]) : null;
+      if (next) {
+        push(prev || "八達通", date, time, next.sign, next.amount);
+        i += 1;
+      }
       continue;
     }
-    const amtLine = line.replace(/,/g, "").replace(/HKD/i, "").trim();
-    const amtM = amtLine.match(AMOUNT_RE);
-    if (amtM) {
-      const dateLine = [...pending].reverse().find((l) => DATE_RE.test(l));
-      const dm = dateLine?.match(DATE_RE);
-      const date = dm ? `${dm[1]}-${dm[2]}-${dm[3]}` : "";
-      const time = dm?.[4] ? `${dm[4]}:${dm[5]}` : undefined;
-      const sign = amtM[1] ?? (Number(amtM[2]) === 0 ? "+" : "-");
-      flush(Number(amtM[2]), sign, date, time);
-      continue;
+    if (amtHere && raw[i - 1]) {
+      const prevDate = raw[i - 1].match(DATE_RE);
+      const merch = raw[i - 2] && isMerchant(raw[i - 2]) ? raw[i - 2] : raw[i - 1];
+      if (prevDate) {
+        push(merch, `${prevDate[1]}-${prevDate[2]}-${prevDate[3]}`, prevDate[4] ? `${prevDate[4]}:${prevDate[5]}` : undefined, amtHere.sign, amtHere.amount);
+      }
     }
-    pending.push(line);
   }
   return rows;
 }
