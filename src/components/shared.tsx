@@ -5,7 +5,6 @@ import { ChevronLeft, ChevronRight, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { money, monthTitle } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
-import { cashflowSide } from "@/lib/calc/ledger";
 import { AmountWithHkd } from "@/components/currency-field";
 import type { Transaction } from "@/lib/types";
 import { useT, useUi } from "@/store/ui";
@@ -276,20 +275,34 @@ export function ProgressBar({ value, tone = "income" }: { value: number; tone?: 
 
 export function TransactionRow({ tx, onClick, showDate }: { tx: Transaction; onClick?: () => void; showDate?: boolean }) {
   const locale = useUi((s) => s.locale);
+  const t = useT();
   const cats = useApp((s) => s.categories);
   const accs = useApp((s) => s.accounts);
   const rates = useApp((s) => s.fxRates);
   const cat = cats.find((c) => c.id === tx.categoryId);
-  const acc = accs.find((a) => a.id === tx.accountId);
-  const side = cashflowSide(tx);
+  const fromAcc = accs.find((a) => a.id === tx.accountId);
+  const toAcc = accs.find((a) => a.id === tx.toAccountId);
+  const transfer = tx.type === "transfer" && !tx.countsAsExpense;
   const spend = tx.type === "expense" || Boolean(tx.countsAsExpense);
-  const signed = spend ? -tx.amount : tx.type === "income" ? tx.amount : tx.amount;
+  const signed = transfer ? tx.amount : spend ? -tx.amount : tx.amount;
+  const title = transfer
+    ? pickName(locale, tx.payee, tx.payeeZh) || t.add.transfer
+    : pickName(locale, tx.payee, tx.payeeZh);
+  const fromName = fromAcc ? pickName(locale, fromAcc.name, fromAcc.nameZh) : t.add.from;
+  const toName = toAcc ? pickName(locale, toAcc.name, toAcc.nameZh) : t.add.to;
+  const meta = transfer
+    ? `${fromName} → ${toName}`
+    : cat
+      ? pickName(locale, cat.name, cat.nameZh)
+      : fromAcc
+        ? pickName(locale, fromAcc.name, fromAcc.nameZh)
+        : "—";
   return (
     <button type="button" onClick={onClick} className="flex w-full items-center gap-3 px-5 py-3 text-left">
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium">{pickName(locale, tx.payee, tx.payeeZh)}</div>
+        <div className="truncate text-sm font-medium">{title}</div>
         <div className="truncate text-xs text-muted">
-          {cat ? pickName(locale, cat.name, cat.nameZh) : acc ? pickName(locale, acc.name, acc.nameZh) : "—"}
+          {meta}
           {showDate ? ` · ${tx.date}` : ""}
           {tx.planned ? (locale === "zh-HK" ? " · 計劃" : " · planned") : ""}
         </div>
@@ -297,7 +310,7 @@ export function TransactionRow({ tx, onClick, showDate }: { tx: Transaction; onC
       <span
         className={cn(
           "shrink-0",
-          side === "income" || tx.type === "income" ? "text-income" : "text-foreground",
+          transfer ? "text-muted" : spend ? "text-foreground" : "text-income",
         )}
       >
         <AmountWithHkd
@@ -305,7 +318,7 @@ export function TransactionRow({ tx, onClick, showDate }: { tx: Transaction; onC
           currency={tx.currency}
           rates={rates}
           fxToHkd={tx.fxToHkd}
-          sign
+          sign={!transfer}
           className="text-sm font-semibold"
         />
       </span>

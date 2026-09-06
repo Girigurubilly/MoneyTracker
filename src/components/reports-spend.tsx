@@ -41,8 +41,6 @@ export function SpendingPage() {
     () => periodCategoryTotals(txs, cats, rates, from, to, tab, merge),
     [txs, cats, rates, from, to, tab, merge],
   );
-  const center = tab === "income" ? totals.income : totals.expense;
-  const centerLabel = tab === "income" ? t.reports.income : t.reports.expense;
   const presets: { id: PeriodPreset; label: string }[] = [
     { id: "this-month", label: t.reports.thisMonth },
     { id: "last-month", label: t.reports.lastMonth },
@@ -59,12 +57,19 @@ export function SpendingPage() {
   const childTotals = useMemo(() => {
     if (!focusParent) return null;
     const raw = periodCategoryTotals(txs, cats, rates, from, to, tab, false);
-    const allow = new Set(cats.filter((c) => c.id === focusParent || c.parentId === focusParent).map((c) => c.id));
-    return { ...raw, rows: raw.rows.filter((r) => allow.has(r.id)) };
+    const kidIds = new Set(cats.filter((c) => c.parentId === focusParent).map((c) => c.id));
+    let rows = raw.rows.filter((r) => kidIds.has(r.id));
+    if (!rows.length) rows = raw.rows.filter((r) => r.id === focusParent);
+    return {
+      ...raw,
+      rows: rows.map((r, i) => ({ ...r, colorIndex: i % 8 })),
+    };
   }, [txs, cats, rates, from, to, tab, focusParent]);
   const view = childTotals ?? totals;
   const openRow = view.rows.find((r) => r.id === openId) ?? totals.rows.find((r) => r.id === openId) ?? null;
   const focusCat = cats.find((c) => c.id === focusParent);
+  const center = focusParent ? view.rows.reduce((s, r) => s + r.value, 0) : tab === "income" ? totals.income : totals.expense;
+  const centerLabel = focusCat ? pickName(locale, focusCat.name, focusCat.nameZh) : tab === "income" ? t.reports.income : t.reports.expense;
 
   function openBucket(id: string) {
     if (merge && !focusParent) {
@@ -161,7 +166,7 @@ export function SpendingPage() {
       ) : null}
       <div className="relative mx-auto h-56 w-56">
         <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
+          <PieChart key={focusParent ?? "all"}>
             <Pie
               data={view.rows.length ? view.rows : [{ id: "empty", value: 1, name: "—" }]}
               dataKey="value"

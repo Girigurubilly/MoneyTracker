@@ -698,7 +698,7 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
       <TextLine value={name} onChange={setName} placeholder={t.budget.regularName} />
       {kind === "transfer" ? (
         <>
-          <AccountLine accounts={accounts} value={accountId} onChange={setAccountId} placeholder={t.add.from} amount={amount} active={field === "amount"} onFocusAmount={() => setField("amount")} />
+          <AccountLine accounts={accounts} value={accountId} onChange={setAccountId} placeholder={t.add.fromAccount} role={t.add.fromAccount} amount={amount} active={field === "amount"} onFocusAmount={() => setField("amount")} />
           <AccountLine
             accounts={accounts}
             value={toAccountId}
@@ -707,7 +707,8 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
               setDestLocked(false);
             }}
             excludeId={accountId}
-            placeholder={t.add.to}
+            placeholder={t.add.toAccount}
+            role={t.add.toAccount}
             amount={destLocked ? destAmount : String(autoDest || amount || "0")}
             active={field === "dest"}
             onFocusAmount={() => setField("dest")}

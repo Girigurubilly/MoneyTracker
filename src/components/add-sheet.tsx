@@ -315,7 +315,8 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
             accounts={accounts}
             value={accountId}
             onChange={setAccountId}
-            placeholder={t.add.from}
+            placeholder={t.add.fromAccount}
+            role={t.add.fromAccount}
             amount={amount}
             active={field === "amount"}
             onFocusAmount={() => setField("amount")}
@@ -328,7 +329,8 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
               setDestLocked(false);
             }}
             excludeId={accountId}
-            placeholder={t.add.to}
+            placeholder={t.add.toAccount}
+            role={t.add.toAccount}
             amount={destLocked ? destAmount : String(autoDest || amount || "0")}
             active={field === "dest"}
             onFocusAmount={() => setField("dest")}

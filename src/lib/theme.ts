@@ -165,7 +165,7 @@ export const THEME_WALLPAPERS: Record<ThemeId, string> = Object.fromEntries(
 ) as Record<ThemeId, string>;
 
 export function clampWallpaperOpacity(n: number | undefined): number {
-  if (typeof n !== "number" || Number.isNaN(n)) return 40;
+  if (typeof n !== "number" || Number.isNaN(n)) return 15;
   return Math.min(80, Math.max(8, Math.round(n)));
 }
 

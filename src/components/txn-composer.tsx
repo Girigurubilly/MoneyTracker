@@ -155,6 +155,7 @@ export function AccountLine({
   onChange,
   excludeId,
   placeholder,
+  role,
   amount,
   active,
   onFocusAmount,
@@ -164,6 +165,7 @@ export function AccountLine({
   onChange: (id: string) => void;
   excludeId?: string;
   placeholder: string;
+  role?: string;
   amount?: string;
   active?: boolean;
   onFocusAmount?: () => void;
@@ -173,6 +175,7 @@ export function AccountLine({
   return (
     <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
       <div className="relative min-w-0 flex-1">
+        {role ? <div className="text-[11px] font-medium text-muted">{role}</div> : null}
         <div className="pointer-events-none truncate text-sm">{acc ? pickName(locale, acc.name, acc.nameZh) : placeholder}</div>
         <AccountSelect
           accounts={accounts}

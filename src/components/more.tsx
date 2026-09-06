@@ -441,13 +441,13 @@ export function AppearancePage() {
         ) : null}
         <div className="mt-3 flex items-center justify-between text-sm">
           <span>{t.more.wallpaperOpacity}</span>
-          <span className="tabular-nums text-muted">{custom.wallpaperOpacity ?? 40}%</span>
+          <span className="tabular-nums text-muted">{custom.wallpaperOpacity ?? 15}%</span>
         </div>
         <input
           type="range"
           min={8}
           max={80}
-          value={custom.wallpaperOpacity ?? 40}
+          value={custom.wallpaperOpacity ?? 15}
           onChange={(e) => setWallpaperOpacity(Number(e.target.value))}
           className="mt-2 w-full accent-[var(--color-accent)]"
         />
