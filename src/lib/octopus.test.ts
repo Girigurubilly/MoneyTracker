@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseOctopusText } from "./octopus.ts";
+import { correctMerchant, parseOctopusBoxes, parseOctopusText } from "./octopus.ts";
 import type { Category } from "./types.ts";
 
 const cats: Category[] = [
@@ -39,5 +39,17 @@ describe("parseOctopusText", () => {
     assert.equal(inline[0]?.amount, 11.8);
     const unicode = parseOctopusText("太興\n2026-09-03 20:29\n−214.0", cats);
     assert.equal(unicode[0]?.amount, 214);
+    assert.equal(correctMerchant("港錶"), "港鐵");
+    const boxed = parseOctopusBoxes(
+      [
+        { text: "餐飲/會所", x0: 40, y0: 10, x1: 200, y1: 30 },
+        { text: "-42.0", x0: 300, y0: 10, x1: 360, y1: 30 },
+        { text: "2026-09-05 20:41", x0: 40, y0: 34, x1: 220, y1: 50 },
+      ],
+      400,
+      cats,
+    );
+    assert.equal(boxed[0]?.merchant, "餐飲/會所");
+    assert.equal(boxed[0]?.amount, 42);
   });
 });

@@ -30,6 +30,71 @@ function normalizeOcr(text: string): string {
     .replace(/\u00a0/g, " ");
 }
 
+export const OCTOPUS_MERCHANTS = [
+  "餐飲/會所",
+  "港鐵",
+  "九巴 / 龍運",
+  "九巴",
+  "龍運",
+  "城巴",
+  "新巴",
+  "瑞幸咖啡香港運營有限公司",
+  "瑞幸咖啡",
+  "大快活",
+  "百佳",
+  "太興",
+  "美心集團",
+  "美心",
+  "八達通卡有限公司",
+  "大家樂",
+  "麥當勞",
+  "肯德基",
+  "星巴克",
+  "惠康",
+  "萬寧",
+  "7-Eleven",
+  "便利店",
+];
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  if (!m) return n;
+  if (!n) return m;
+  const dp = Array.from({ length: m + 1 }, (_, i) => i);
+  for (let j = 1; j <= n; j++) {
+    let prev = dp[0];
+    dp[0] = j;
+    for (let i = 1; i <= m; i++) {
+      const tmp = dp[i];
+      dp[i] = a[i - 1] === b[j - 1] ? prev : Math.min(prev + 1, dp[i] + 1, dp[i - 1] + 1);
+      prev = tmp;
+    }
+  }
+  return dp[m];
+}
+
+export function correctMerchant(raw: string, extra: string[] = []): string {
+  const text = raw.replace(/\s+/g, "").replace(/[|]/g, "/");
+  if (!text) return raw;
+  const pool = [...OCTOPUS_MERCHANTS, ...extra];
+  let best = raw;
+  let score = Infinity;
+  for (const name of pool) {
+    const compact = name.replace(/\s+/g, "");
+    if (text.includes(compact) || compact.includes(text)) return name;
+    const d = levenshtein(text.slice(0, compact.length + 2), compact);
+    const ratio = d / Math.max(compact.length, 1);
+    if ((compact.length <= 3 && d <= 1) || (ratio < 0.34 && d < score)) {
+      if (d < score) {
+        score = d;
+        best = name;
+      }
+    }
+  }
+  return best;
+}
+
 export function guessOctopusCategory(merchant: string, categories: Category[]): string | undefined {
   const m = merchant.toLowerCase();
   const rules: { re: RegExp; ids: string[] }[] = [
@@ -76,7 +141,7 @@ export function parseOctopusText(text: string, categories: Category[]): OctopusD
 
   function push(merchant: string, date: string, time: string | undefined, sign: string, amount: number) {
     if (amount === 0) return;
-    const name = merchant.replace(DATE_RE, "").replace(AMOUNT_RE, "").trim() || "八達通";
+    const name = correctMerchant(merchant.replace(DATE_RE, "").replace(AMOUNT_RE, "").trim() || "八達通");
     const kind: OctopusKind = sign === "+" || /八達通卡有限公司|增值|自動增值/.test(name) ? "topup" : "expense";
     const key = `${date}|${time ?? ""}|${name}|${amount}|${kind}`;
     if (rows.some((r) => r.id === key)) return;
@@ -123,6 +188,94 @@ export function parseOctopusText(text: string, categories: Category[]): OctopusD
     }
   }
   return rows;
+}
+
+export type OcrBox = { text: string; x0: number; y0: number; x1: number; y1: number };
+
+export function parseOctopusBoxes(boxes: OcrBox[], pageWidth: number, categories: Category[], extraMerchants: string[] = []): OctopusDraft[] {
+  const items = boxes
+    .map((b) => ({ ...b, text: normalizeOcr(b.text).replace(/\s+/g, " ").trim() }))
+    .filter((b) => b.text && !SKIP_LINE.test(b.text));
+  items.sort((a, b) => a.y0 - b.y0 || a.x0 - b.x0);
+  const bands: OcrBox[][] = [];
+  for (const item of items) {
+    const last = bands.at(-1);
+    const mid = (item.y0 + item.y1) / 2;
+    if (last) {
+      const ref = last.reduce((s, x) => s + (x.y0 + x.y1) / 2, 0) / last.length;
+      if (Math.abs(mid - ref) < 28) {
+        last.push(item);
+        continue;
+      }
+    }
+    bands.push([item]);
+  }
+
+  type PartialRow = { merchant?: string; date?: string; time?: string; sign?: string; amount?: number };
+  const parts: PartialRow[] = [];
+  for (const band of bands) {
+    const text = band.map((b) => b.text).join(" ");
+    const dateM = text.match(DATE_RE);
+    const amt = parseAmount(text) ?? band.filter((b) => b.x0 > pageWidth * 0.62).map((b) => parseAmount(b.text)).find(Boolean) ?? null;
+    const left = band
+      .filter((b) => b.x1 < pageWidth * 0.72)
+      .map((b) => b.text)
+      .filter((t) => isMerchant(t) && !DATE_RE.test(t))
+      .join(" ");
+    const row: PartialRow = {};
+    if (left) row.merchant = correctMerchant(left, extraMerchants);
+    if (dateM) {
+      row.date = `${dateM[1]}-${dateM[2]}-${dateM[3]}`;
+      row.time = dateM[4] ? `${dateM[4]}:${dateM[5]}` : undefined;
+    }
+    if (amt) {
+      row.sign = amt.sign;
+      row.amount = amt.amount;
+    }
+    if (row.merchant || row.date || row.amount != null) parts.push(row);
+  }
+
+  const rows: OctopusDraft[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    const cur = parts[i];
+    const next = parts[i + 1];
+    const prev = parts[i - 1];
+    const merchant = cur.merchant || prev?.merchant;
+    const date = cur.date || next?.date || prev?.date;
+    const time = cur.time || next?.time || prev?.time;
+    const amount = cur.amount ?? next?.amount;
+    const sign = cur.sign ?? next?.sign ?? "-";
+    if (!merchant || amount == null || amount === 0) continue;
+    const kind: OctopusKind = sign === "+" || /八達通卡有限公司|增值|自動增值/.test(merchant) ? "topup" : "expense";
+    const key = `${date ?? ""}|${time ?? ""}|${merchant}|${amount}|${kind}`;
+    if (rows.some((r) => r.id === key)) continue;
+    rows.push({
+      id: key,
+      merchant,
+      date: date ?? "",
+      time,
+      amount,
+      kind,
+      categoryId: kind === "expense" ? guessOctopusCategory(merchant, categories) : undefined,
+      skip: false,
+    });
+  }
+  return rows;
+}
+
+export function mergeOctopusDrafts(...lists: OctopusDraft[][]): OctopusDraft[] {
+  const out: OctopusDraft[] = [];
+  for (const list of lists) {
+    for (const row of list) {
+      const same = out.find((r) => r.date === row.date && r.time === row.time && Math.abs(r.amount - row.amount) < 0.001);
+      if (same) {
+        if (same.merchant.length < row.merchant.length) same.merchant = row.merchant;
+        continue;
+      }
+      out.push({ ...row });
+    }
+  }
+  return out;
 }
 
 const SETTINGS_KEY = "hk-life-money-octopus";

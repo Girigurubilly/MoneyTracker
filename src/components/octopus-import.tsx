@@ -5,6 +5,8 @@ import { AccountSelect } from "@/components/account-select";
 import { moneyAccountsForPicker } from "@/lib/accounts";
 import { pickName } from "@/lib/i18n";
 import {
+  mergeOctopusDrafts,
+  parseOctopusBoxes,
   parseOctopusText,
   readOctopusSettings,
   suggestOctopusAccountId,
@@ -20,7 +22,7 @@ function fileToImage(file: File): Promise<HTMLCanvasElement> {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement("canvas");
-      const scale = Math.min(2.2, 1600 / Math.max(img.width, 1));
+      const scale = Math.min(2.4, 1800 / Math.max(img.width, 1));
       canvas.width = Math.max(1, Math.round(img.width * scale));
       canvas.height = Math.max(1, Math.round(img.height * scale));
       const ctx = canvas.getContext("2d");
@@ -30,16 +32,28 @@ function fileToImage(file: File): Promise<HTMLCanvasElement> {
         return;
       }
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const top = Math.round(canvas.height * 0.16);
+      const bottom = Math.round(canvas.height * 0.04);
+      const cropped = document.createElement("canvas");
+      cropped.width = canvas.width;
+      cropped.height = Math.max(1, canvas.height - top - bottom);
+      const cctx = cropped.getContext("2d");
+      if (!cctx) {
+        URL.revokeObjectURL(url);
+        reject(new Error("canvas"));
+        return;
+      }
+      cctx.drawImage(canvas, 0, top, canvas.width, cropped.height, 0, 0, cropped.width, cropped.height);
+      const data = cctx.getImageData(0, 0, cropped.width, cropped.height);
       const px = data.data;
       for (let i = 0; i < px.length; i += 4) {
         const y = px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11;
-        const v = y > 170 ? 255 : y < 90 ? 0 : y;
+        const v = y > 188 ? 255 : y < 110 ? 0 : (y - 110) * (255 / 78);
         px[i] = px[i + 1] = px[i + 2] = v;
       }
-      ctx.putImageData(data, 0, 0);
+      cctx.putImageData(data, 0, 0);
       URL.revokeObjectURL(url);
-      resolve(canvas);
+      resolve(cropped);
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
@@ -66,17 +80,20 @@ export function OctopusImport({ onClose }: { onClose: () => void }) {
   const [showRaw, setShowRaw] = useState(false);
   const expenseCats = useMemo(() => categories.filter((c) => c.kind === "expense"), [categories]);
 
-  function applyText(text: string) {
-    const parsed = parseOctopusText(text, categories);
-    setRows((prev) => {
-      const next = [...prev];
-      for (const r of parsed) {
-        if (!next.some((x) => x.id === r.id)) next.push(r);
-      }
-      return next;
-    });
+  const txs = useApp((s) => s.transactions);
+  const extraMerchants = useMemo(
+    () => [...new Set(txs.flatMap((tx) => [tx.payeeZh, tx.payee].filter(Boolean)))],
+    [txs],
+  );
+
+  function applyDrafts(parsed: OctopusDraft[]) {
+    setRows((prev) => mergeOctopusDrafts(prev, parsed));
     setNote(parsed.length ? t.add.octopusFound.replace("{n}", String(parsed.length)) : t.add.octopusNone);
     return parsed.length;
+  }
+
+  function applyText(text: string) {
+    return applyDrafts(parseOctopusText(text, categories));
   }
 
   async function readFile(file: File) {
@@ -86,14 +103,42 @@ export function OctopusImport({ onClose }: { onClose: () => void }) {
       const canvas = await fileToImage(file);
       const mod = await import("tesseract.js");
       const Tesseract = (mod.default ?? mod) as typeof import("tesseract.js");
-      const result = await Tesseract.recognize(canvas, "chi_tra+eng", {
+      const opts = {
         workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/worker.min.js",
         corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@7.0.0/tesseract-core-simd-lstm.wasm.js",
         langPath: "https://tessdata.projectnaptha.com/4.0.0",
+      };
+      const worker = await Tesseract.createWorker("chi_tra+eng", 1, opts);
+      await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK });
+      const full = await worker.recognize(canvas);
+      const w = canvas.width;
+      const h = canvas.height;
+      await worker.setParameters({
+        tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE,
+        tessedit_char_whitelist: "0123456789.+-",
       });
-      const text = result.data.text ?? "";
+      const right = await worker.recognize(canvas, {
+        rectangle: { left: Math.floor(w * 0.7), top: 0, width: Math.max(40, Math.floor(w * 0.3)), height: h },
+      });
+      await worker.terminate();
+      const text = [full.data.text ?? "", right.data.text ?? ""].join("\n");
       setRawText((prev) => (prev ? `${prev}\n${text}` : text));
-      applyText(text);
+      const boxesFrom = (page: { blocks?: { paragraphs?: { lines?: { text: string; bbox: { x0: number; y0: number; x1: number; y1: number } }[] }[] }[] | null }, dx = 0) =>
+        (page.blocks ?? []).flatMap((block) =>
+          (block.paragraphs ?? []).flatMap((para) =>
+            (para.lines ?? []).map((line) => ({
+              text: line.text,
+              x0: line.bbox.x0 + dx,
+              y0: line.bbox.y0,
+              x1: line.bbox.x1 + dx,
+              y1: line.bbox.y1,
+            })),
+          ),
+        );
+      applyDrafts(mergeOctopusDrafts(
+        parseOctopusBoxes([...boxesFrom(full.data), ...boxesFrom(right.data, Math.floor(w * 0.7))], w, categories, extraMerchants),
+        parseOctopusText(text, categories),
+      ));
     } catch (err) {
       setNote(`${t.add.octopusFailed} ${err instanceof Error ? err.message : ""}`.trim());
       setShowRaw(true);
