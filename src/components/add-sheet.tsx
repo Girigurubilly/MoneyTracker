@@ -24,19 +24,19 @@ import { resolveAmountInput } from "@/lib/money-expr";
 import type { Category, Currency, MoneyUnit, TxType } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
-import { OctopusImport } from "@/components/octopus-import";
+import { ApplePayImport } from "@/components/apple-pay-import";
 
 export function AddFlow() {
   const open = useUi((s) => s.addOpen);
   const type = useUi((s) => s.addType);
-  const octopus = useUi((s) => s.addOctopus);
+  const wallet = useUi((s) => s.addOctopus);
   const close = useUi((s) => s.closeAdd);
   const pickType = useUi((s) => s.openAdd);
-  const pickOctopus = useUi((s) => s.openOctopus);
+  const pickWallet = useUi((s) => s.openOctopus);
   if (!open) return null;
-  if (octopus) return <OctopusImport onClose={close} />;
+  if (wallet) return <ApplePayImport onClose={close} />;
   if (!type) {
-    return <AddTypePicker onPick={pickType} onOctopus={pickOctopus} onClose={close} />;
+    return <AddTypePicker onPick={pickType} onWallet={pickWallet} onClose={close} />;
   }
   return (
     <Overlay open onClose={close} variant="page">
@@ -45,7 +45,7 @@ export function AddFlow() {
   );
 }
 
-function AddTypePicker({ onPick, onOctopus, onClose }: { onPick: (t: TxType) => void; onOctopus: () => void; onClose: () => void }) {
+function AddTypePicker({ onPick, onWallet, onClose }: { onPick: (t: TxType) => void; onWallet: () => void; onClose: () => void }) {
   const t = useT();
   const opts: { id: TxType; tone: string }[] = [
     { id: "expense", tone: "bg-expense-soft text-expense" },
@@ -76,9 +76,9 @@ function AddTypePicker({ onPick, onOctopus, onClose }: { onPick: (t: TxType) => 
           <button
             type="button"
             className="flex min-h-28 flex-col items-center justify-center rounded-2xl bg-watch-soft text-base font-semibold text-watch"
-            onClick={onOctopus}
+            onClick={onWallet}
           >
-            {t.add.octopus}
+            {t.add.applePay}
           </button>
         </div>
       </div>
