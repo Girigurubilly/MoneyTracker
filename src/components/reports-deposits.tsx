@@ -4,6 +4,7 @@ import { Hairline, Overlay, ScreenHeader, SectionLabel } from "@/components/shar
 import { moneyAccountsForPicker } from "@/lib/accounts";
 import { MONTHS_S, suggestedInterest, summarizeDeposits } from "@/lib/calc/deposits";
 import { money, todayISO } from "@/lib/format";
+import { pickName } from "@/lib/i18n";
 import { resolveAmountInput } from "@/lib/money-expr";
 import { CURRENCIES, type Currency, type TimeSaving } from "@/lib/types";
 import {
@@ -13,7 +14,6 @@ import {
   ComposerShell,
   LineRow,
   SelectLine,
-  TextLine,
 } from "@/components/txn-composer";
 import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -109,13 +109,15 @@ export function DepositsPage() {
                 const d = r.endDate ? new Date(`${r.endDate}T00:00:00`) : null;
                 const rm = d && !Number.isNaN(d.getTime()) ? `${MONTHS_S[d.getMonth()]} ${d.getFullYear()}` : "—";
                 const tone = realized ? "text-income" : d && d.getFullYear() === year ? "text-accent" : "text-muted";
+                const acc = accounts.find((a) => a.id === r.accountId);
+                const title = acc ? pickName(locale, acc.name, acc.nameZh) : r.bank;
                 return (
                   <div key={r.id}>
                     {i > 0 ? <Hairline /> : null}
                     <div className="flex items-start gap-3 px-4 py-3">
                       <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setEditing(r)}>
                         <div className="flex items-center justify-between gap-2">
-                          <span className="truncate text-sm font-semibold">{r.bank}</span>
+                          <span className="truncate text-sm font-semibold">{title}</span>
                           <span className={`text-xs font-medium ${tone}`}>{rm}</span>
                         </div>
                         <div className="mt-1 text-xs text-muted">
@@ -152,12 +154,12 @@ export function DepositsPage() {
 
 function DepositEditor({ open, initial, onClose }: { open: boolean; initial: TimeSaving | null; onClose: () => void }) {
   const t = useT();
+  const locale = useUi((s) => s.locale);
   const accounts = useApp((s) => s.accounts);
   const addDeposit = useApp((s) => s.addDeposit);
   const updateDeposit = useApp((s) => s.updateDeposit);
   const picker = moneyAccountsForPicker(accounts);
   const today = todayISO();
-  const [bank, setBank] = useState(initial?.bank ?? "");
   const [startDate, setStartDate] = useState(initial?.startDate ?? today);
   const [endDate, setEndDate] = useState(initial?.endDate ?? "");
   const [rate, setRate] = useState(initial ? String(initial.rate) : "");
@@ -167,6 +169,7 @@ function DepositEditor({ open, initial, onClose }: { open: boolean; initial: Tim
   const [accountId, setAccountId] = useState(initial?.accountId ?? picker[0]?.id ?? "");
   const [interestTouched, setInterestTouched] = useState(Boolean(initial));
   const [field, setField] = useState<"amount" | "dest" | "principal" | "interest">("amount");
+  const asset = accounts.find((a) => a.id === accountId);
 
   function suggest(nextAmt = amount, nextRate = rate, nextStart = startDate, nextEnd = endDate) {
     return suggestedInterest(resolveAmountInput(nextAmt), parseFloat(nextRate) || 0, nextStart, nextEnd);
@@ -174,11 +177,11 @@ function DepositEditor({ open, initial, onClose }: { open: boolean; initial: Tim
 
   async function save() {
     const amt = resolveAmountInput(amount);
-    if (!bank.trim() || !startDate || !endDate || amt <= 0 || !accountId) return;
+    if (!accountId || !startDate || !endDate || amt <= 0) return;
     let int = resolveAmountInput(interest);
     if (!int) int = suggest();
     const row = {
-      bank: bank.trim(),
+      bank: asset ? (locale === "zh-HK" ? asset.nameZh || asset.name : asset.name) : "",
       startDate,
       endDate,
       rate: parseFloat(rate) || 0,
@@ -218,7 +221,7 @@ function DepositEditor({ open, initial, onClose }: { open: boolean; initial: Tim
           />
         }
       >
-        <TextLine value={bank} onChange={setBank} placeholder={t.reports.bank} />
+        <AccountLine accounts={picker} value={accountId} onChange={setAccountId} placeholder={t.reports.bank} role={t.reports.bank} />
         <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
           <span className="text-sm text-muted">{t.reports.startDate}</span>
           <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
@@ -230,7 +233,6 @@ function DepositEditor({ open, initial, onClose }: { open: boolean; initial: Tim
         <SelectLine label={t.reports.currency} value={currency} onChange={(v) => setCurrency(v as Currency)} options={CURRENCIES.map((c) => ({ id: c, label: c }))} />
         <LineRow label={t.reports.depositAmount} amount={amount} active={field === "amount"} onFocusAmount={() => setField("amount")} />
         <LineRow label={t.reports.interest} amount={interest} active={field === "interest"} onFocusAmount={() => setField("interest")} />
-        <AccountLine accounts={accounts} value={accountId} onChange={setAccountId} placeholder={t.reports.creditAccount} />
       </ComposerShell>
     </Overlay>
   );

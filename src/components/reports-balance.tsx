@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import { ChevronRight } from "lucide-react";
 import { Overlay, ScreenHeader } from "@/components/shared";
-import { money } from "@/lib/format";
+import { money, pct } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { netWorthBreakdown, netWorthNow, type WorthRow } from "@/lib/calc/networth";
 import { ACCOUNT_TYPE_OPTIONS } from "@/lib/types";
@@ -116,7 +116,10 @@ export function BalancePage() {
               <span className="truncate text-sm">{r.name}</span>
             </div>
             <span className="flex shrink-0 items-center gap-1">
-              <span className="text-sm tabular-nums text-muted">{money(r.value, "HKD")}</span>
+              <span className="text-sm tabular-nums text-muted">
+                {money(r.value, "HKD")}
+                <span className="ml-2 text-xs text-faint">{nw.assets + nw.liab > 0 ? pct(r.value / (nw.assets + nw.liab)) : "—"}</span>
+              </span>
               <ChevronRight className="size-4 text-faint" />
             </span>
           </button>
@@ -181,7 +184,10 @@ export function BalancePage() {
                   <span className="truncate text-sm">{r.name}</span>
                 </div>
                 <span className="flex shrink-0 items-center gap-1">
-                  <span className="text-sm tabular-nums text-muted">{money(r.value, "HKD")}</span>
+                  <span className="text-sm tabular-nums text-muted">
+                    {money(r.value, "HKD")}
+                    <span className="ml-2 text-xs text-faint">{focusTotal > 0 ? pct(r.value / focusTotal) : "—"}</span>
+                  </span>
                   <ChevronRight className="size-4 text-faint" />
                 </span>
               </button>
@@ -227,7 +233,10 @@ function TypeAccountList({
         {row.accounts.map((a) => (
           <div key={a.id} className="flex min-h-11 items-center justify-between gap-3 py-2.5">
             <span className="truncate text-sm">{pickName(locale, a.name, a.nameZh)}</span>
-            <span className="text-sm tabular-nums text-muted">{money(Math.abs(toHkd(a.balance, a.currency, rates)), "HKD")}</span>
+            <span className="text-sm tabular-nums text-muted">
+              {money(Math.abs(toHkd(a.balance, a.currency, rates)), "HKD")}
+              <span className="ml-2 text-xs text-faint">{row.value > 0 ? pct(Math.abs(toHkd(a.balance, a.currency, rates)) / row.value) : "—"}</span>
+            </span>
           </div>
         ))}
         {row.accounts.length === 0 ? <p className="py-6 text-center text-sm text-muted">{t.common.none}</p> : null}

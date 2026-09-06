@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Archive, FolderTree, Globe, Palette, PiggyBank, Repeat, Settings2, ShoppingBag, Upload, Wallet } from "lucide-react";
+import { Archive, FolderTree, Globe, Palette, PiggyBank, Repeat, Settings2, ShoppingBag, Undo2, Upload, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
 import { Disclaimer, Group, Hairline, Overlay, Row, ScreenHeader } from "@/components/shared";
@@ -50,6 +50,10 @@ export function MoreScreen() {
         <Hairline />
         <Row icon={<Palette className="size-4" />} title={t.more.appearance} to="/more/appearance" chevron />
       </Group>
+      <h2 className="px-5 pb-1 pt-6 text-sm font-medium text-muted">{t.more.quickFix}</h2>
+      <Group>
+        <UndoLastRow />
+      </Group>
       {kid ? null : (
         <>
           <h2 className="px-5 pb-1 pt-6 text-sm font-medium text-muted">{t.more.data}</h2>
@@ -68,6 +72,30 @@ export function MoreScreen() {
         </button>
       </div>
     </div>
+  );
+}
+
+function UndoLastRow() {
+  const t = useT();
+  const locale = useUi((s) => s.locale);
+  const lastId = useApp((s) => s.lastPostedTxId);
+  const txs = useApp((s) => s.transactions);
+  const undo = useApp((s) => s.undoLastTransaction);
+  const last = lastId ? txs.find((tx) => tx.id === lastId) : undefined;
+  return (
+    <Row
+      icon={<Undo2 className="size-4" />}
+      title={t.more.undoLast}
+      onClick={async () => {
+        if (!last) {
+          toast(t.more.undoEmpty);
+          return;
+        }
+        const prev = await undo();
+        if (prev) toast(t.more.undoDone.replace("{name}", pickName(locale, prev.payee, prev.payeeZh) || t.add.transfer));
+        else toast(t.more.undoEmpty);
+      }}
+    />
   );
 }
 

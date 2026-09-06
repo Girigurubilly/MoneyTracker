@@ -299,6 +299,12 @@ export function BudgetScreen() {
   );
 }
 
+function dayPart(isoOrDay: string | number, locale: string): string {
+  const day = typeof isoOrDay === "number" ? isoOrDay : Number(String(isoOrDay).slice(8, 10));
+  if (!Number.isFinite(day) || day <= 0) return "—";
+  return locale === "zh-HK" ? `${day}日` : `Day ${day}`;
+}
+
 function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recurring) => void }) {
   const t = useT();
   const locale = useUi((s) => s.locale);
@@ -330,7 +336,7 @@ function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recur
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{pickName(locale, r.label, r.labelZh)}</div>
                   <div className="mt-0.5 text-xs text-muted">
-                    {locale === "zh-HK" ? `${day}日` : `day ${day}`}
+                    {dayPart(day, locale)}
                     {` · ${r.type === "income" ? t.add.income : r.type === "transfer" ? (r.countsAsExpense ? `${t.add.transfer} · ${t.add.principal}` : t.add.transfer) : t.add.expense}`}
                   </div>
                 </div>
@@ -360,6 +366,10 @@ function AdhocBlock({
   const t = useT();
   const locale = useUi((s) => s.locale);
   const rates = useApp((s) => s.fxRates);
+  const accounts = useApp((s) => s.accounts);
+  const addTx = useApp((s) => s.addTransaction);
+  const delAdhoc = useApp((s) => s.deleteAdhocBudget);
+  const today = todayISO();
   const rows = useApp((s) => s.adhocBudgets)
     .filter((a) => a.month === month || a.date.startsWith(month))
     .sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label));
@@ -376,16 +386,49 @@ function AdhocBlock({
         <p className="px-5 py-4 text-sm text-muted">{t.budget.addAdhoc}</p>
       ) : (
         <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
-          {rows.map((a) => (
-            <button key={a.id} type="button" className="flex w-full items-center gap-3 border-t border-line px-4 py-3 text-left first:border-0" onClick={() => onEdit(a)}>
-              <div className="min-w-0 flex-1">
+          {rows.map((a) => {
+            const upcoming = a.date > today;
+            return (
+            <div key={a.id} className="flex w-full items-center gap-3 border-t border-line px-4 py-3 first:border-0">
+              <button type="button" className="min-w-0 flex-1 text-left" onClick={() => onEdit(a)}>
                 <div className="truncate text-sm font-medium">{pickName(locale, a.label, a.labelZh)}</div>
-                <div className="mt-0.5 text-xs text-muted">{a.date.slice(8)}</div>
-              </div>
+                <div className="mt-0.5 text-xs text-muted">{dayPart(a.date, locale)}</div>
+              </button>
               <AmountWithHkd amount={-a.amount} currency={a.currency} rates={rates} sign className="text-sm font-semibold" />
-              <ChevronRight className="size-4 shrink-0 text-faint" />
-            </button>
-          ))}
+              {upcoming ? (
+                <button
+                  type="button"
+                  className="h-8 shrink-0 rounded-full bg-accent-soft px-3 text-xs font-medium text-accent"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const acc = accounts.find((x) => x.type === "cash" || x.type === "current" || x.type === "savings") ?? accounts[0];
+                    if (!acc) return;
+                    await addTx({
+                      type: "expense",
+                      date: today,
+                      amount: a.amount,
+                      currency: a.currency,
+                      accountId: acc.id,
+                      categoryId: a.categoryId,
+                      payee: a.label,
+                      payeeZh: a.labelZh,
+                      note: a.label,
+                    });
+                    await delAdhoc(a.id);
+                    toast(t.add.savedToast);
+                  }}
+                >
+                  {t.budget.postAdhoc}
+                </button>
+              ) : (
+                <span className="shrink-0 rounded-full bg-success-soft px-2 py-1 text-xs font-medium text-income">{t.budget.charged}</span>
+              )}
+              <button type="button" aria-label={t.common.edit} onClick={() => onEdit(a)}>
+                <ChevronRight className="size-4 shrink-0 text-faint" />
+              </button>
+            </div>
+            );
+          })}
         </div>
       )}
     </div>

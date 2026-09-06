@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import { ChevronRight } from "lucide-react";
 import { Overlay, ScreenHeader, TxGroupedList } from "@/components/shared";
-import { money, shortDate, todayISO } from "@/lib/format";
+import { money, pct, shortDate, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { periodCategoryTotals, periodCategoryTxs, periodRange, type PeriodPreset, type PeriodTab } from "@/lib/calc/period";
 import { cn } from "@/lib/utils";
@@ -217,7 +217,10 @@ export function SpendingPage() {
               <span className="truncate text-sm">{label}</span>
             </div>
             <span className="flex shrink-0 items-center gap-1">
-              <span className="text-sm tabular-nums text-muted">{money(r.value, "HKD")}</span>
+              <span className="text-sm tabular-nums text-muted">
+                {money(r.value, "HKD")}
+                <span className="ml-2 text-xs text-faint">{center > 0 ? pct(r.value / center) : "—"}</span>
+              </span>
               <ChevronRight className="size-4 text-faint" />
             </span>
           </button>

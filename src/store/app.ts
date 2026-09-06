@@ -107,6 +107,7 @@ export function newId(): string {
 
 type Dispatchers = {
   addTransaction: (partial: Omit<Transaction, "id"> & { id?: string }) => Promise<Transaction>;
+  undoLastTransaction: () => Promise<Transaction | undefined>;
   updateTransaction: (tx: Transaction, previous?: Transaction) => Promise<void>;
   deleteTransaction: (id: string) => Promise<Transaction | undefined>;
   addAccount: (a: Account) => Promise<void>;
@@ -165,6 +166,7 @@ type AppState = {
   deposits: TimeSaving[];
   yearlyPlans: YearlyPlan[];
   wishlist: WishItem[];
+  lastPostedTxId?: string | null;
   fxRates: FxRate[];
   snapshots: SnapshotRow[];
   annualTravelBudget: number;
@@ -592,6 +594,7 @@ export const useApp = create<AppState>((set, get) => ({
   deposits: [],
   yearlyPlans: [],
   wishlist: [],
+  lastPostedTxId: null as string | null,
   fxRates: seedFx,
   snapshots: [],
   annualTravelBudget: seedTravelBudget,
@@ -645,8 +648,16 @@ export const useApp = create<AppState>((set, get) => ({
       await Promise.all(accounts.map((a) => idb().accounts.put(a)));
       if (mortgage) await idb().mortgage.put(mortgage);
     });
-    set({ transactions: [tx, ...get().transactions], accounts, mortgage });
+    set({ transactions: [tx, ...get().transactions], accounts, mortgage, lastPostedTxId: tx.id });
     return tx;
+  },
+
+  undoLastTransaction: async () => {
+    const id = get().lastPostedTxId;
+    if (!id) return undefined;
+    const prev = await get().deleteTransaction(id);
+    set({ lastPostedTxId: null });
+    return prev;
   },
 
   updateTransaction: async (tx, previous) => {
