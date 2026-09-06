@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Overlay } from "@/components/shared";
 import { CategoryIcon } from "@/components/category-icon";
 import { CategoryPicker } from "@/components/category-picker";
-import { AccountLine, LineRow, TextLine } from "@/components/txn-composer";
+import { AccountSelect } from "@/components/account-select";
 import { moneyAccountsForPicker } from "@/lib/accounts";
 import { categoryPath } from "@/lib/categories";
 import { parseApplePayText, type ApplePayDraft } from "@/lib/apple-pay";
@@ -18,21 +18,24 @@ function enhanceGrayText(canvas: HTMLCanvasElement) {
   const px = data.data;
   for (let i = 0; i < px.length; i += 4) {
     const y = px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11;
-    const v = y > 208 ? 255 : y < 70 ? 0 : (y - 70) * (255 / 138);
+    const v = y > 214 ? 255 : y < 60 ? 0 : Math.min(255, (y - 60) * 1.55);
     px[i] = px[i + 1] = px[i + 2] = v;
   }
   ctx.putImageData(data, 0, 0);
   return canvas;
 }
 
-function cropBand(src: HTMLCanvasElement, topRatio: number, bottomRatio: number): HTMLCanvasElement {
+function cropBand(src: HTMLCanvasElement, topRatio: number, bottomRatio: number, zoom = 1.6): HTMLCanvasElement {
   const y = Math.round(src.height * topRatio);
   const h = Math.max(8, Math.round(src.height * (bottomRatio - topRatio)));
   const out = document.createElement("canvas");
-  out.width = src.width;
-  out.height = h;
+  out.width = Math.round(src.width * zoom);
+  out.height = Math.round(h * zoom);
   const ctx = out.getContext("2d");
-  if (ctx) ctx.drawImage(src, 0, y, src.width, h, 0, 0, src.width, h);
+  if (ctx) {
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(src, 0, y, src.width, h, 0, 0, out.width, out.height);
+  }
   return enhanceGrayText(out);
 }
 
@@ -42,7 +45,7 @@ function fileToImage(file: File): Promise<HTMLCanvasElement> {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement("canvas");
-      const scale = Math.min(3, 2200 / Math.max(img.width, 1));
+      const scale = Math.min(3.2, 2400 / Math.max(img.width, 1));
       canvas.width = Math.max(1, Math.round(img.width * scale));
       canvas.height = Math.max(1, Math.round(img.height * scale));
       const ctx = canvas.getContext("2d");
@@ -74,10 +77,8 @@ export function ApplePayImport({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const [rows, setRows] = useState<ApplePayDraft[]>([]);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [pickCat, setPickCat] = useState(false);
-  const editing = rows.find((r) => r.id === editId) ?? null;
-  const cat = useMemo(() => categories.find((c) => c.id === editing?.categoryId), [categories, editing?.categoryId]);
+  const [pickCatId, setPickCatId] = useState<string | null>(null);
+  const picking = rows.find((r) => r.id === pickCatId) ?? null;
 
   function patch(id: string, next: Partial<ApplePayDraft>) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...next } : r)));
@@ -94,13 +95,19 @@ export function ApplePayImport({ onClose }: { onClose: () => void }) {
         corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@7.0.0/tesseract-core-simd-lstm.wasm.js",
         langPath: "https://tessdata.projectnaptha.com/4.0.0",
       });
+      await worker.setParameters({
+        tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
+        preserve_interword_spaces: "1",
+      });
       const found: ApplePayDraft[] = [];
       for (const file of files) {
         const canvas = await fileToImage(file);
-        const band = cropBand(canvas, 0.14, 0.36);
         const full = await worker.recognize(enhanceGrayText(canvas));
-        const bandOcr = await worker.recognize(band);
-        const text = `${full.data.text ?? ""}\n${bandOcr.data.text ?? ""}`;
+        await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK });
+        const mid = await worker.recognize(cropBand(canvas, 0.15, 0.34, 1.8));
+        await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE });
+        const line = await worker.recognize(cropBand(canvas, 0.18, 0.27, 2));
+        const text = [full.data.text, mid.data.text, line.data.text].filter(Boolean).join("\n");
         const draft = parseApplePayText(text, accounts, categories);
         if (draft) {
           if (!draft.accountId) draft.accountId = fallbackAccount;
@@ -112,7 +119,6 @@ export function ApplePayImport({ onClose }: { onClose: () => void }) {
       await worker.terminate();
       setRows((prev) => [...prev, ...found]);
       setNote(found.length ? t.add.octopusFound.replace("{n}", String(found.length)) : t.add.appleNone);
-      if (found.length === 1) setEditId(found[0].id);
     } catch (err) {
       setNote(`${t.add.appleFailed} ${err instanceof Error ? err.message : ""}`.trim());
     } finally {
@@ -122,11 +128,7 @@ export function ApplePayImport({ onClose }: { onClose: () => void }) {
 
   async function save() {
     const ready = rows.filter((r) => !r.skip);
-    if (!ready.length) {
-      toast(t.add.appleNeedFields);
-      return;
-    }
-    if (ready.some((r) => !r.amount || !r.accountId)) {
+    if (!ready.length || ready.some((r) => !r.amount || !r.accountId)) {
       toast(t.add.appleNeedFields);
       return;
     }
@@ -148,17 +150,17 @@ export function ApplePayImport({ onClose }: { onClose: () => void }) {
     onClose();
   }
 
-  if (pickCat && editing) {
+  if (picking) {
     return (
       <CategoryPicker
         categories={categories}
         kind="expense"
-        selectedId={editing.categoryId || undefined}
+        selectedId={picking.categoryId || undefined}
         txType="expense"
-        onClose={() => setPickCat(false)}
+        onClose={() => setPickCatId(null)}
         onSelect={(c) => {
-          patch(editing.id, { categoryId: c?.id ?? "" });
-          setPickCat(false);
+          patch(picking.id, { categoryId: c?.id ?? "" });
+          setPickCatId(null);
         }}
       />
     );
@@ -167,8 +169,8 @@ export function ApplePayImport({ onClose }: { onClose: () => void }) {
   return (
     <Overlay open onClose={onClose} variant="page">
       <header className="flex items-center justify-between px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <button type="button" className="h-11 px-2 text-sm text-accent" onClick={editing ? () => setEditId(null) : onClose}>
-          {editing ? t.add.cancel : t.add.cancel}
+        <button type="button" className="h-11 px-2 text-sm text-accent" onClick={onClose}>
+          {t.add.cancel}
         </button>
         <h1 className="text-base font-semibold">{t.add.applePay}</h1>
         <button type="button" className="h-11 px-2 text-sm font-medium text-accent" disabled={busy || !rows.length} onClick={() => void save()}>
@@ -194,62 +196,46 @@ export function ApplePayImport({ onClose }: { onClose: () => void }) {
         </label>
         {note ? <p className="mt-2 text-xs text-muted">{note}</p> : null}
       </div>
-      {editing ? (
-        <div className="pb-8">
-          <label className="flex items-center justify-between gap-3 border-b border-line px-4 py-2">
-            <span className="text-sm text-muted">{t.add.amount}</span>
-            <input
-              value={String(editing.amount || "")}
-              onChange={(e) => patch(editing.id, { amount: Number(e.target.value) || 0 })}
-              inputMode="decimal"
-              className="w-36 bg-transparent text-right text-2xl font-semibold outline-none"
-            />
-          </label>
-          <TextLine value={editing.payee} onChange={(v) => patch(editing.id, { payee: v })} placeholder={t.add.note} />
-          <label className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
-            <span className="text-sm text-muted">{t.add.date}</span>
-            <input type="date" value={editing.date} onChange={(e) => patch(editing.id, { date: e.target.value })} className="h-10 bg-transparent text-sm text-accent outline-none" />
-          </label>
-          <AccountLine accounts={accounts} value={editing.accountId ?? ""} onChange={(id) => patch(editing.id, { accountId: id })} placeholder={t.add.account} />
-          {editing.cardHint ? <p className="px-4 pt-1 text-[11px] text-muted">{t.add.appleCard}: {editing.cardHint}</p> : null}
-          <LineRow
-            leading={
-              cat ? (
-                <span className="grid size-8 place-items-center rounded-full bg-elevated">
-                  <CategoryIcon name={cat.icon} />
-                </span>
-              ) : null
-            }
-            label={cat ? categoryPath(cat, categories, locale) : ""}
-            placeholder={t.add.pickCategory}
-            onPressLabel={() => setPickCat(true)}
-          />
-        </div>
-      ) : (
-        <div className="px-4 pb-10">
-          {rows.map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => setEditId(r.id)}
-              className="mb-2 flex w-full items-start gap-2 rounded-xl bg-elevated px-3 py-2 text-left"
-            >
-              <input
-                type="checkbox"
-                checked={!r.skip}
-                onClick={(e) => e.stopPropagation()}
-                onChange={() => patch(r.id, { skip: !r.skip })}
-                className="mt-1"
-              />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">{r.payee || t.add.note}</div>
-                <div className="text-xs text-muted">{r.date}{r.cardHint ? ` · ${r.cardHint}` : ""}</div>
+      <div className="px-4 pb-10">
+        {rows.map((r) => {
+          const cat = categories.find((c) => c.id === r.categoryId);
+          return (
+            <div key={r.id} className={`mb-3 rounded-2xl bg-elevated px-3 py-3 ${r.skip ? "opacity-50" : ""}`}>
+              <div className="mb-2 flex items-center gap-2">
+                <input type="checkbox" checked={!r.skip} onChange={() => patch(r.id, { skip: !r.skip })} />
+                <input
+                  value={String(r.amount || "")}
+                  onChange={(e) => patch(r.id, { amount: Number(e.target.value) || 0 })}
+                  inputMode="decimal"
+                  className="min-w-0 flex-1 bg-transparent text-right text-xl font-semibold outline-none"
+                />
               </div>
-              <span className="text-sm font-semibold tabular-nums">{r.amount ? r.amount.toFixed(2) : "—"}</span>
-            </button>
-          ))}
-        </div>
-      )}
+              <input
+                value={r.payee}
+                onChange={(e) => patch(r.id, { payee: e.target.value })}
+                placeholder={t.add.note}
+                className="mb-2 h-10 w-full rounded-lg bg-background px-3 text-sm outline-none"
+              />
+              <div className="flex items-center justify-between gap-2 py-1">
+                <span className="text-xs text-muted">{t.add.date}</span>
+                <input type="date" value={r.date} onChange={(e) => patch(r.id, { date: e.target.value })} className="h-9 bg-transparent text-sm text-accent outline-none" />
+              </div>
+              <div className="flex items-center justify-between gap-2 py-1">
+                <span className="text-xs text-muted">{t.add.account}</span>
+                <AccountSelect accounts={picker} value={r.accountId ?? ""} onChange={(id) => patch(r.id, { accountId: id })} className="max-w-[12rem] text-right text-sm" />
+              </div>
+              <button type="button" className="mt-1 flex w-full items-center gap-2 py-2 text-left" onClick={() => setPickCatId(r.id)}>
+                {cat ? (
+                  <span className="grid size-8 place-items-center rounded-full bg-background">
+                    <CategoryIcon name={cat.icon} />
+                  </span>
+                ) : null}
+                <span className={`text-sm ${cat ? "" : "text-muted"}`}>{cat ? categoryPath(cat, categories, locale) : t.add.pickCategory}</span>
+              </button>
+            </div>
+          );
+        })}
+      </div>
     </Overlay>
   );
 }
