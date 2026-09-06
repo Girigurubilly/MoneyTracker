@@ -439,12 +439,19 @@ export type Trip = {
   monthlyCash: number;
 };
 
+export type WishCard = {
+  id: string;
+  text: string;
+};
+
 export type WishItem = {
   id: string;
   name: string;
   price: number;
   currency: Currency;
   note?: string;
+  priceCards?: WishCard[];
+  valueCards?: WishCard[];
 };
 
 export type Goal = {

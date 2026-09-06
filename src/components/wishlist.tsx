@@ -11,7 +11,7 @@ import { moneyAccountsForPicker } from "@/lib/accounts";
 import { applyTxRules } from "@/lib/tx-rules";
 import { captureFxToHkd } from "@/lib/calc/fx";
 import { categoryPath } from "@/lib/categories";
-import type { Category, Currency, WishItem } from "@/lib/types";
+import type { Category, Currency, WishCard, WishItem } from "@/lib/types";
 import {
   AccountLine,
   ActiveKeypad,
@@ -37,12 +37,14 @@ export function WishlistPage() {
 
 export function WishlistBlock({ compact }: { compact?: boolean }) {
   const t = useT();
+  const locale = useUi((s) => s.locale);
   const items = useApp((s) => s.wishlist);
   const rates = useApp((s) => s.fxRates);
   const defaultCurrency = useApp((s) => s.defaultCurrency);
   const add = useApp((s) => s.addWishItem);
   const remove = useApp((s) => s.deleteWishItem);
   const [editing, setEditing] = useState<WishItem | null | "new">(null);
+  const [board, setBoard] = useState<WishItem | null>(null);
   const [converting, setConverting] = useState<WishItem | null>(null);
 
   return (
@@ -59,32 +61,38 @@ export function WishlistBlock({ compact }: { compact?: boolean }) {
         <p className="px-5 py-4 text-sm text-muted">{t.wish.empty}</p>
       ) : (
         <Group>
-          {items.map((it, i) => (
-            <div key={it.id}>
-              {i > 0 ? <Hairline /> : null}
-              <div className="flex items-center gap-2 px-4 py-3">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{it.name}</div>
-                  <div className="mt-0.5 text-xs tabular-nums text-muted">{money(it.price, it.currency)}</div>
+          {items.map((it, i) => {
+            const notes = (it.priceCards?.length ?? 0) + (it.valueCards?.length ?? 0);
+            return (
+              <div key={it.id}>
+                {i > 0 ? <Hairline /> : null}
+                <div className="flex items-center gap-2 px-4 py-3">
+                  <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setBoard(it)}>
+                    <div className="truncate text-sm font-medium">{it.name}</div>
+                    <div className="mt-0.5 text-xs tabular-nums text-muted">
+                      {money(it.price, it.currency)}
+                      {notes ? (locale === "zh-HK" ? ` · ${notes} 張卡` : ` · ${notes} cards`) : ""}
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    className="h-9 shrink-0 rounded-full bg-accent-soft px-3 text-xs font-medium text-accent"
+                    onClick={() => setConverting(it)}
+                  >
+                    {t.wish.convert}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t.wish.remove}
+                    className="grid size-9 place-items-center text-expense"
+                    onClick={() => void remove(it.id)}
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  className="h-9 shrink-0 rounded-full bg-accent-soft px-3 text-xs font-medium text-accent"
-                  onClick={() => setConverting(it)}
-                >
-                  {t.wish.convert}
-                </button>
-                <button
-                  type="button"
-                  aria-label={t.wish.remove}
-                  className="grid size-9 place-items-center text-expense"
-                  onClick={() => void remove(it.id)}
-                >
-                  <Trash2 className="size-4" />
-                </button>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </Group>
       )}
       {!compact ? (
@@ -109,10 +117,112 @@ export function WishlistBlock({ compact }: { compact?: boolean }) {
         onSave={(row) => {
           void add(row);
           setEditing(null);
+          setBoard(row);
+        }}
+      />
+      <WishBoard
+        item={board ? items.find((x) => x.id === board.id) ?? board : null}
+        onClose={() => setBoard(null)}
+        onConvert={(it) => {
+          setBoard(null);
+          setConverting(it);
         }}
       />
       <ConvertSheet item={converting} onClose={() => setConverting(null)} />
     </div>
+  );
+}
+
+function WishBoard({ item, onClose, onConvert }: { item: WishItem | null; onClose: () => void; onConvert: (it: WishItem) => void }) {
+  const t = useT();
+  const update = useApp((s) => s.updateWishItem);
+  if (!item) return null;
+
+  function patch(next: Partial<WishItem>) {
+    void update({ ...item!, ...next });
+  }
+
+  return (
+    <Overlay open onClose={onClose} variant="page">
+      <header className="flex items-center justify-between px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <button type="button" className="h-11 px-2 text-sm text-accent" onClick={onClose}>
+          {t.common.done}
+        </button>
+        <h1 className="min-w-0 flex-1 truncate text-center text-base font-semibold">{item.name}</h1>
+        <button type="button" className="h-11 px-2 text-sm font-medium text-accent" onClick={() => onConvert(item)}>
+          {t.wish.convert}
+        </button>
+      </header>
+      <p className="px-5 pb-1 pt-1 text-sm font-semibold tabular-nums">{money(item.price, item.currency)}</p>
+      <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.wish.boardHint}</p>
+      <div className="grid grid-cols-2 gap-2 px-3 pb-10">
+        <WishColumn
+          title={t.wish.priceCol}
+          cards={item.priceCards ?? []}
+          addLabel={t.wish.addCard}
+          placeholder={t.wish.cardPlaceholder}
+          onChange={(priceCards) => patch({ priceCards })}
+        />
+        <WishColumn
+          title={t.wish.valueCol}
+          cards={item.valueCards ?? []}
+          addLabel={t.wish.addCard}
+          placeholder={t.wish.cardPlaceholder}
+          onChange={(valueCards) => patch({ valueCards })}
+        />
+      </div>
+    </Overlay>
+  );
+}
+
+function WishColumn({
+  title,
+  cards,
+  addLabel,
+  placeholder,
+  onChange,
+}: {
+  title: string;
+  cards: WishCard[];
+  addLabel: string;
+  placeholder: string;
+  onChange: (cards: WishCard[]) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  function add() {
+    const text = draft.trim();
+    if (!text) return;
+    onChange([...cards, { id: newId(), text }]);
+    setDraft("");
+  }
+  return (
+    <section className="min-h-[16rem] rounded-2xl bg-elevated px-2 py-2">
+      <h2 className="px-1 pb-2 text-xs font-semibold text-muted">{title}</h2>
+      <div className="space-y-2">
+        {cards.map((card) => (
+          <div key={card.id} className="rounded-xl bg-background px-2.5 py-2 shadow-sm">
+            <p className="whitespace-pre-wrap text-sm leading-5">{card.text}</p>
+            <button
+              type="button"
+              className="mt-1 text-[11px] text-expense"
+              onClick={() => onChange(cards.filter((c) => c.id !== card.id))}
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+      <textarea
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        placeholder={placeholder}
+        rows={2}
+        className="mt-2 w-full resize-none rounded-xl bg-background px-2.5 py-2 text-sm outline-none"
+      />
+      <button type="button" className="mt-1 h-8 w-full rounded-lg text-xs font-medium text-accent" onClick={add}>
+        + {addLabel}
+      </button>
+    </section>
   );
 }
 

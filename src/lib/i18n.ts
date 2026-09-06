@@ -213,6 +213,11 @@ export const messages = {
       converted: "Recorded and removed from the list.",
       empty: "No wishlist items yet",
       remove: "Remove",
+      priceCol: "Price",
+      valueCol: "Value",
+      addCard: "Add a card",
+      cardPlaceholder: "Write a point…",
+      boardHint: "List why the price feels high or low, and what value you get, before you buy.",
     },
     reports: {
       title: "Reports",
@@ -751,6 +756,11 @@ export const messages = {
       converted: "已記帳並從清單移除。",
       empty: "尚未有願望清單項目",
       remove: "刪除",
+      priceCol: "價格",
+      valueCol: "價值",
+      addCard: "新增卡片",
+      cardPlaceholder: "寫一點想法…",
+      boardHint: "買之前列出你覺得價錢貴或抵，同呢件嘢帶嚟嘅價值。",
     },
     reports: {
       title: "報表",
