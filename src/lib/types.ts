@@ -28,6 +28,7 @@ export type AccountType =
   | "savings"
   | "fx"
   | "ewallet"
+  | "debit"
   | "credit"
   | "loan"
   | "investment"
@@ -62,6 +63,7 @@ export const ACCOUNT_TYPE_OPTIONS: { id: AccountType; en: string; zh: string }[]
   { id: "cash", en: "Cash", zh: "現金" },
   { id: "fx", en: "FX", zh: "外幣" },
   { id: "ewallet", en: "E-wallet", zh: "電子錢包" },
+  { id: "debit", en: "Debit card", zh: "扣帳卡" },
   { id: "credit", en: "Credit card", zh: "信用卡" },
   { id: "loan", en: "Loan", zh: "貸款" },
   { id: "investment", en: "Investment", zh: "投資" },

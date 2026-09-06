@@ -17,7 +17,8 @@ import { Hairline, Overlay, ScreenHeader, SectionLabel, TxGroupedList } from "@/
 import { AmountWithHkd } from "@/components/currency-field";
 import { money } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
-import { resolveAmountInput } from "@/lib/money-expr";
+import { resolveSignedAmountInput } from "@/lib/money-expr";
+import { isDebtAccount } from "@/lib/calc/ledger";
 import {
   ActiveKeypad,
   ComposerHeader,
@@ -52,6 +53,7 @@ const TYPE_TONE: Record<AccountType, string> = {
   savings: "bg-[#e8f8ee] text-[#1f7a3a]",
   fx: "bg-[#f3e8ff] text-[#7a3db8]",
   ewallet: "bg-[#fff4e0] text-[#b86a00]",
+  debit: "bg-[#e8f1ff] text-[#0b63ce]",
   credit: "bg-[#ffecec] text-[#c0122a]",
   loan: "bg-[#ffecec] text-[#c0122a]",
   investment: "bg-[#e8f1ff] text-[#0b63ce]",
@@ -70,6 +72,7 @@ function TypeGlyph({ type }: { type: AccountType }) {
     savings: <PiggyBank className={cls} />,
     fx: <Globe className={cls} />,
     ewallet: <Wallet className={cls} />,
+    debit: <CreditCard className={cls} />,
     credit: <CreditCard className={cls} />,
     loan: <Landmark className={cls} />,
     investment: <TrendingUp className={cls} />,
@@ -392,6 +395,11 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
 
   async function save() {
     const n = name.trim() || (locale === "zh-HK" ? "帳戶" : "Account");
+    const wasDebt = account ? isDebtAccount(account) : false;
+    const nowDebt = isDebtAccount({ type });
+    let balance = resolveSignedAmountInput(bal);
+    if (wasDebt && !nowDebt && balance < 0) balance = Math.abs(balance);
+    if (!wasDebt && nowDebt && balance > 0) balance = -Math.abs(balance);
     const group = groupForType(type);
     const row: Account = {
       id: account?.id ?? newId(),
@@ -399,7 +407,7 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
       nameZh: n,
       type,
       currency: type === "miles" ? "MILES" : currency === "MILES" ? "HKD" : currency,
-      balance: resolveAmountInput(bal),
+      balance,
       includeInNetWorth: type === "miles" ? false : include,
       group,
       hidden,

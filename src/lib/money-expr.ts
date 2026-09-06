@@ -77,6 +77,13 @@ export function resolveAmountInput(raw: string): number {
   return Math.abs(parsed);
 }
 
+export function resolveSignedAmountInput(raw: string): number {
+  const parsed = parseMoneyExpr(raw);
+  if (parsed != null) return parsed;
+  const n = Number(String(raw).replace(/,/g, "").replace(/−/g, "-").trim());
+  return Number.isFinite(n) ? n : 0;
+}
+
 export function commitAmountExpr(raw: string): string {
   const parsed = parseMoneyExpr(raw);
   if (parsed == null) return raw;
