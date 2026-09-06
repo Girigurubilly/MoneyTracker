@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Overlay } from "@/components/shared";
-import { AccountSelect } from "@/components/account-select";
+import { CategoryIcon } from "@/components/category-icon";
+import { CategoryPicker } from "@/components/category-picker";
+import { AccountLine, LineRow, TextLine } from "@/components/txn-composer";
 import { moneyAccountsForPicker } from "@/lib/accounts";
-import { pickName } from "@/lib/i18n";
+import { categoryPath } from "@/lib/categories";
 import { parseApplePayText } from "@/lib/apple-pay";
 import { todayISO } from "@/lib/format";
 import { useApp, newId } from "@/store/app";
@@ -43,7 +45,6 @@ export function ApplePayImport({ onClose }: { onClose: () => void }) {
   const categories = useApp((s) => s.categories);
   const addTx = useApp((s) => s.addTransaction);
   const picker = moneyAccountsForPicker(accounts);
-  const expenseCats = useMemo(() => categories.filter((c) => c.kind === "expense"), [categories]);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const [amount, setAmount] = useState("");
@@ -53,6 +54,8 @@ export function ApplePayImport({ onClose }: { onClose: () => void }) {
   const [categoryId, setCategoryId] = useState("");
   const [cardHint, setCardHint] = useState("");
   const [ready, setReady] = useState(false);
+  const [pickCat, setPickCat] = useState(false);
+  const cat = useMemo(() => categories.find((c) => c.id === categoryId), [categories, categoryId]);
 
   async function readFile(file: File) {
     setBusy(true);
@@ -110,6 +113,22 @@ export function ApplePayImport({ onClose }: { onClose: () => void }) {
     onClose();
   }
 
+  if (pickCat) {
+    return (
+      <CategoryPicker
+        categories={categories}
+        kind="expense"
+        selectedId={categoryId || undefined}
+        txType="expense"
+        onClose={() => setPickCat(false)}
+        onSelect={(c) => {
+          setCategoryId(c?.id ?? "");
+          setPickCat(false);
+        }}
+      />
+    );
+  }
+
   return (
     <Overlay open onClose={onClose} variant="page">
       <header className="flex items-center justify-between px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
@@ -140,35 +159,30 @@ export function ApplePayImport({ onClose }: { onClose: () => void }) {
         {note ? <p className="mt-2 text-xs text-muted">{note}</p> : null}
       </div>
       {ready ? (
-        <div className="mx-4 space-y-2 rounded-2xl bg-elevated px-4 py-3">
-          <label className="flex items-center justify-between gap-3 py-2">
+        <div className="pb-8">
+          <label className="flex items-center justify-between gap-3 border-b border-line px-4 py-2">
             <span className="text-sm text-muted">{t.add.amount}</span>
-            <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" className="w-36 bg-transparent text-right text-lg font-semibold outline-none" />
+            <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" className="w-36 bg-transparent text-right text-2xl font-semibold outline-none" />
           </label>
-          <label className="block py-2">
-            <span className="text-sm text-muted">{t.add.note}</span>
-            <input value={payee} onChange={(e) => setPayee(e.target.value)} className="mt-1 h-10 w-full bg-transparent text-sm outline-none" />
-          </label>
-          <label className="flex items-center justify-between gap-3 py-2">
+          <TextLine value={payee} onChange={setPayee} placeholder={t.add.note} />
+          <label className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
             <span className="text-sm text-muted">{t.add.date}</span>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
           </label>
-          <label className="flex items-center justify-between gap-3 py-2">
-            <span className="text-sm">{t.add.account}</span>
-            <AccountSelect accounts={picker} value={accountId} onChange={setAccountId} className="max-w-[12rem] text-right text-sm" />
-          </label>
-          {cardHint ? <p className="text-[11px] text-muted">{t.add.appleCard}: {cardHint}</p> : null}
-          <label className="flex items-center justify-between gap-3 py-2">
-            <span className="text-sm">{t.add.category}</span>
-            <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="max-w-[12rem] bg-transparent text-right text-sm outline-none">
-              <option value="">{t.add.pickCategory}</option>
-              {expenseCats.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {pickName(locale, c.name, c.nameZh)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <AccountLine accounts={accounts} value={accountId} onChange={setAccountId} placeholder={t.add.account} />
+          {cardHint ? <p className="px-4 pt-1 text-[11px] text-muted">{t.add.appleCard}: {cardHint}</p> : null}
+          <LineRow
+            leading={
+              cat ? (
+                <span className="grid size-8 place-items-center rounded-full bg-elevated">
+                  <CategoryIcon name={cat.icon} />
+                </span>
+              ) : null
+            }
+            label={cat ? categoryPath(cat, categories, locale) : ""}
+            placeholder={t.add.pickCategory}
+            onPressLabel={() => setPickCat(true)}
+          />
         </div>
       ) : null}
     </Overlay>

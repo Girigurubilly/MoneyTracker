@@ -22,7 +22,34 @@ function normalize(text: string): string {
     .replace(/\u00a0/g, " ");
 }
 
-const SKIP = /狀態|已批核|總計|聯絡|報告|銀包|地圖|不正確|無法識別|尋求協助|提出爭議|使用「地圖」|改善準確/;
+const SKIP = /狀態|已批核|總計|聯絡|報告|銀包|地圖|不正確|無法識別|尋求協助|提出爭議|使用「地圖」|改善準確|南區|香葉道|海洋奇觀|港島南岸|莎莎|Eco Trai|黃竹坑/;
+
+function extractPayee(lines: string[]): string {
+  const scored = lines
+    .map((line, i) => {
+      if (SKIP.test(line)) return { line, i, score: -99 };
+      if (/HK\$|HKD\s*\d|信用卡|Credit Card|Visa|Mastercard|UnionPay/i.test(line)) return { line, i, score: -99 };
+      if (/^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}/.test(line)) return { line, i, score: -99 };
+      if (!/[\u4e00-\u9fffA-Za-z]/.test(line) || line.length < 3) return { line, i, score: -99 };
+      let score = 1;
+      if (/[A-Za-z]{3,}/.test(line)) score += 3;
+      if (/\d{4,}/.test(line)) score += 2;
+      if (/[,，]/.test(line) && /[\u4e00-\u9fff]/.test(line)) score += 3;
+      if (i <= 4) score += 2;
+      const dup = lines.filter((other) => other !== line && (other.includes(line) || line.includes(other.split(/[,，]/)[0].trim()))).length;
+      if (dup) score += 2;
+      return { line, i, score };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score || a.i - b.i);
+  const best = scored[0];
+  if (!best) return "";
+  const next = lines[best.i + 1];
+  if (next && !SKIP.test(next) && /^[\u4e00-\u9fff]{2,12}$/.test(next) && !best.line.includes(next)) {
+    return `${best.line}, ${next}`;
+  }
+  return best.line;
+}
 
 export function parseApplePayText(text: string, accounts: Account[], categories: Category[]): ApplePayDraft | null {
   const raw = normalize(text);
@@ -49,12 +76,7 @@ export function parseApplePayText(text: string, accounts: Account[], categories:
     }
   }
 
-  const payee = lines.find((l) => {
-    if (SKIP.test(l)) return false;
-    if (/HK\$|HKD|信用卡|Credit Card|Visa|Mastercard|UnionPay/i.test(l)) return false;
-    if (/^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}/.test(l)) return false;
-    return /[\u4e00-\u9fffA-Za-z]/.test(l) && l.length >= 3;
-  }) ?? "";
+  const payee = extractPayee(lines);
 
   const cardHint =
     lines.find((l) => /信用卡|Credit Card|Visa|Mastercard|UnionPay|滙豐|恒生|渣打|中銀|HSBC|Hang Seng/i.test(l) && !/聯絡|報告/.test(l)) ?? "";
@@ -63,7 +85,7 @@ export function parseApplePayText(text: string, accounts: Account[], categories:
   return {
     amount,
     currency: "HKD",
-    payee: payee.replace(/,.*$/, "").trim(),
+    payee: payee.trim(),
     date,
     time,
     cardHint,
@@ -83,7 +105,13 @@ function formatTime(ampm?: string, hh?: string, mm?: string): string | undefined
 
 function guessCategory(merchant: string, categories: Category[]): string | undefined {
   const m = merchant.toLowerCase();
-  const want = /park|ocean|餐|咖啡|cafe|dining/.test(m) ? ["dining"] : /mtr|港鐵|巴士/.test(m) ? ["mtr"] : [];
+  const want = /park|ocean|海洋公園|娛樂/.test(m)
+    ? ["entertainment"]
+    : /餐|咖啡|cafe|dining/.test(m)
+      ? ["dining"]
+      : /mtr|港鐵|巴士/.test(m)
+        ? ["mtr"]
+        : [];
   for (const id of want) {
     if (categories.some((c) => c.id === id)) return id;
   }

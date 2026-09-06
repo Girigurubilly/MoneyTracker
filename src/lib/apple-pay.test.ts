@@ -25,7 +25,7 @@ Ocean Park 22219
     const row = parseApplePayText(text, accounts, cats);
     assert.ok(row);
     assert.equal(row!.amount, 443.6);
-    assert.equal(row!.payee.includes("Ocean Park"), true);
+    assert.equal(row!.payee, "Ocean Park 22219, 香港南朗山");
     assert.equal(row!.date, "2026-09-05");
     assert.equal(row!.time, "19:09");
     assert.equal(row!.accountId, "hsbc-red");
