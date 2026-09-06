@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseApplePayText } from "./apple-pay.ts";
+import { parseApplePayText, detectReceiptKind } from "./apple-pay.ts";
 import type { Account, Category } from "./types.ts";
 
 const accounts: Account[] = [
@@ -28,6 +28,7 @@ Ocean Park 22219
     const row = parseApplePayText(text, accounts, cats);
     assert.ok(row);
     assert.equal(row!.amount, 443.6);
+    assert.equal(detectReceiptKind(text), "wallet");
     assert.equal(row!.payee, "Ocean Park 22219, 香港南朗山");
     assert.equal(row!.date, "2026-09-05");
     assert.equal(row!.time, "19:09");
@@ -61,6 +62,7 @@ Service Providers - Lodging - Hotels, Motels, and Resorts
 `, accounts, cats);
     assert.equal(scb?.amount, 176);
     assert.equal(scb?.payee.includes("HEADLAND HOTEL"), true);
+    assert.equal(detectReceiptKind(`支賬 HKD 176.00 簡述 HEADLAND HOTEL HK INT' NT HK`), "scb");
     assert.equal(scb?.date, "2026-09-04");
     assert.equal(scb?.accountId, "scb-cathay");
     assert.equal(scb?.categoryId, "hotels");

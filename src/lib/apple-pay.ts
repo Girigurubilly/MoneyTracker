@@ -71,24 +71,35 @@ function isStatementMerchant(line: string): boolean {
   return letters >= 8 && letters / t.replace(/\s/g, "").length >= 0.55 && caps / letters >= 0.65;
 }
 
-function extractPayee(lines: string[]): string {
+export function detectReceiptKind(text: string): "wallet" | "scb" {
+  const t = text.replace(/\s+/g, " ");
+  const scb = Number(/支賬|交易詳情|簡述|简述|國泰萬事達|\*\d{4}/.test(t)) + Number(/HKD\s*\d/.test(t) && /年\s*\d{1,2}\s*月/.test(t));
+  const wallet = Number(/已批核|總計|HK\$/.test(t)) + Number(/\d{1,2}\/\d{1,2}\/\d{4}/.test(t) && /下午|上午/.test(t));
+  return scb > wallet ? "scb" : "wallet";
+}
+
+function extractScbPayee(lines: string[]): string {
   const briefIdx = lines.findIndex((l) => /簡\s*述|简\s*述|简述/.test(l));
   if (briefIdx >= 0) {
-    const next = lines.slice(briefIdx + 1).find((l) => isStatementMerchant(l) || (!SKIP.test(l) && !DATE_OR_TIME.test(l) && /[A-Za-z]{4,}/.test(l)));
+    const next = lines.slice(briefIdx + 1).find((l) => isStatementMerchant(l) || (!SKIP.test(l) && !DATE_OR_TIME.test(l) && /[A-Za-z]{4,}/.test(l) && !/商戶|Service|Utilities|Lodging/.test(l)));
     if (next) return next.replace(/\s+/g, " ").trim();
   }
-  const statement = lines.find((l) => isStatementMerchant(l) && /(\bHK\b|HOTEL|AUTOPAY|TEL|INT)/i.test(l))
-    ?? lines.find((l) => isStatementMerchant(l));
-  if (statement) return statement.replace(/\s+/g, " ").trim();
+  return (
+    lines.find((l) => isStatementMerchant(l) && /(\bHK\b|HOTEL|AUTOPAY|TEL|INT)/i.test(l))
+    ?? lines.find((l) => isStatementMerchant(l))
+    ?? ""
+  ).replace(/\s+/g, " ").trim();
+}
+
+function extractWalletPayee(lines: string[]): string {
   const amountIdx = lines.findIndex((l) => /HK\$|HKD/i.test(l));
-  const hasCjk = lines.some((l) => cjkCount(l) >= 3) && !lines.some((l) => isStatementMerchant(l));
   const scored = lines
     .map((line, i) => {
       if (SKIP.test(line) || MAP_JUNK.test(line)) return { line, i, score: -99 };
       if (/HK\$|HKD\s*\d|信用卡|Credit Card|Visa|Mastercard|UnionPay|萬事達|國泰/i.test(line)) return { line, i, score: -99 };
       if (/^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}/.test(line) || DATE_OR_TIME.test(line)) return { line, i, score: -99 };
+      if (isStatementMerchant(line)) return { line, i, score: -99 };
       if (!/[\u4e00-\u9fffA-Za-z]/.test(line) || line.length < 2) return { line, i, score: -99 };
-      if (hasCjk && cjkCount(line) === 0) return { line, i, score: -99 };
       let score = 1 + cjkCount(line);
       if (/[\u4e00-\u9fff]{3,}/.test(line)) score += 6;
       if (/飯店|餐廳|火鍋|茶|咖啡|超市|商場|公園|Park|店/.test(line)) score += 4;
@@ -126,7 +137,8 @@ export function parseApplePayText(text: string, accounts: Account[], categories:
 
   const amount = parseMoney(raw);
   const { date, time } = parseDate(raw);
-  const payee = extractPayee(lines);
+  const kind = detectReceiptKind(raw);
+  const payee = kind === "scb" ? extractScbPayee(lines) : extractWalletPayee(lines);
   const categoryHint = lines.find((l) => /商戶類別|Lodging|Hotels|Utilities|Telecommunication|住宿|電訊|公用/.test(l)) ?? "";
   const cardHint =
     lines.find((l) => /信用卡|Credit Card|Visa|Mastercard|萬事達|國泰|渣打|UnionPay|滙豐|恒生|中銀|HSBC|Hang Seng|Standard Chartered|\*\d{4}/i.test(l) && !/聯絡|報告/.test(l)) ?? "";
