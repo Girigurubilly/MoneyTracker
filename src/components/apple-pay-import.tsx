@@ -6,7 +6,7 @@ import { CategoryPicker } from "@/components/category-picker";
 import { AccountLine, LineRow, TextLine } from "@/components/txn-composer";
 import { moneyAccountsForPicker } from "@/lib/accounts";
 import { categoryPath } from "@/lib/categories";
-import { parseApplePayText } from "@/lib/apple-pay";
+import { parseApplePayText, type ApplePayDraft } from "@/lib/apple-pay";
 import { todayISO } from "@/lib/format";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -45,84 +45,91 @@ export function ApplePayImport({ onClose }: { onClose: () => void }) {
   const categories = useApp((s) => s.categories);
   const addTx = useApp((s) => s.addTransaction);
   const picker = moneyAccountsForPicker(accounts);
+  const fallbackAccount = picker.find((a) => a.type === "credit")?.id ?? picker[0]?.id ?? "";
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
-  const [amount, setAmount] = useState("");
-  const [payee, setPayee] = useState("");
-  const [date, setDate] = useState(todayISO());
-  const [accountId, setAccountId] = useState(picker.find((a) => a.type === "credit")?.id ?? picker[0]?.id ?? "");
-  const [categoryId, setCategoryId] = useState("");
-  const [cardHint, setCardHint] = useState("");
-  const [ready, setReady] = useState(false);
+  const [rows, setRows] = useState<ApplePayDraft[]>([]);
+  const [editId, setEditId] = useState<string | null>(null);
   const [pickCat, setPickCat] = useState(false);
-  const cat = useMemo(() => categories.find((c) => c.id === categoryId), [categories, categoryId]);
+  const editing = rows.find((r) => r.id === editId) ?? null;
+  const cat = useMemo(() => categories.find((c) => c.id === editing?.categoryId), [categories, editing?.categoryId]);
 
-  async function readFile(file: File) {
+  function patch(id: string, next: Partial<ApplePayDraft>) {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...next } : r)));
+  }
+
+  async function readFiles(files: File[]) {
     setBusy(true);
     setNote(t.add.appleReading);
     try {
-      const canvas = await fileToImage(file);
       const mod = await import("tesseract.js");
       const Tesseract = (mod.default ?? mod) as typeof import("tesseract.js");
-      const result = await Tesseract.recognize(canvas, "chi_tra+eng", {
+      const worker = await Tesseract.createWorker("chi_tra+eng", 1, {
         workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/worker.min.js",
         corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@7.0.0/tesseract-core-simd-lstm.wasm.js",
         langPath: "https://tessdata.projectnaptha.com/4.0.0",
       });
-      const draft = parseApplePayText(result.data.text ?? "", accounts, categories);
-      if (!draft) {
-        setNote(t.add.appleNone);
-        setReady(true);
-        return;
+      const found: ApplePayDraft[] = [];
+      for (const file of files) {
+        const canvas = await fileToImage(file);
+        const result = await worker.recognize(canvas);
+        const draft = parseApplePayText(result.data.text ?? "", accounts, categories);
+        if (draft) {
+          if (!draft.accountId) draft.accountId = fallbackAccount;
+          if (!draft.date) draft.date = todayISO();
+          draft.id = `${draft.id}|${found.length}|${file.name}`;
+          found.push(draft);
+        }
       }
-      setAmount(draft.amount ? String(draft.amount) : "");
-      setPayee(draft.payee);
-      if (draft.date) setDate(draft.date);
-      if (draft.accountId) setAccountId(draft.accountId);
-      if (draft.categoryId) setCategoryId(draft.categoryId);
-      setCardHint(draft.cardHint);
-      setReady(true);
-      setNote(t.add.appleReview);
+      await worker.terminate();
+      setRows((prev) => [...prev, ...found]);
+      setNote(found.length ? t.add.octopusFound.replace("{n}", String(found.length)) : t.add.appleNone);
+      if (found.length === 1) setEditId(found[0].id);
     } catch (err) {
       setNote(`${t.add.appleFailed} ${err instanceof Error ? err.message : ""}`.trim());
-      setReady(true);
     } finally {
       setBusy(false);
     }
   }
 
   async function save() {
-    const amt = Number(amount);
-    if (!amt || amt <= 0 || !accountId) {
+    const ready = rows.filter((r) => !r.skip);
+    if (!ready.length) {
       toast(t.add.appleNeedFields);
       return;
     }
-    await addTx({
-      id: newId(),
-      type: "expense",
-      amount: amt,
-      currency: "HKD",
-      accountId,
-      categoryId: categoryId || undefined,
-      date,
-      payee: payee || "Apple Pay",
-      payeeZh: payee || "Apple Pay",
-      note: cardHint ? `Apple Pay · ${cardHint}` : "Apple Pay",
-    });
-    toast(t.add.savedToast);
+    if (ready.some((r) => !r.amount || !r.accountId)) {
+      toast(t.add.appleNeedFields);
+      return;
+    }
+    for (const r of ready) {
+      await addTx({
+        id: newId(),
+        type: "expense",
+        amount: r.amount,
+        currency: "HKD",
+        accountId: r.accountId!,
+        categoryId: r.categoryId || undefined,
+        date: r.date || todayISO(),
+        payee: r.payee || "Apple Pay",
+        payeeZh: r.payee || "Apple Pay",
+        note: r.cardHint ? `Apple Pay · ${r.cardHint}` : "Apple Pay",
+      });
+    }
+    toast(t.add.octopusImported.replace("{n}", String(ready.length)));
     onClose();
   }
 
-  if (pickCat) {
+  if (pickCat && editing) {
     return (
       <CategoryPicker
         categories={categories}
         kind="expense"
-        selectedId={categoryId || undefined}
+        selectedId={editing.categoryId || undefined}
         txType="expense"
         onClose={() => setPickCat(false)}
         onSelect={(c) => {
-          setCategoryId(c?.id ?? "");
+          patch(editing.id, { categoryId: c?.id ?? "" });
           setPickCat(false);
         }}
       />
@@ -132,11 +139,11 @@ export function ApplePayImport({ onClose }: { onClose: () => void }) {
   return (
     <Overlay open onClose={onClose} variant="page">
       <header className="flex items-center justify-between px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <button type="button" className="h-11 px-2 text-sm text-accent" onClick={onClose}>
-          {t.add.cancel}
+        <button type="button" className="h-11 px-2 text-sm text-accent" onClick={editing ? () => setEditId(null) : onClose}>
+          {editing ? t.add.cancel : t.add.cancel}
         </button>
         <h1 className="text-base font-semibold">{t.add.applePay}</h1>
-        <button type="button" className="h-11 px-2 text-sm font-medium text-accent" disabled={busy || !ready} onClick={() => void save()}>
+        <button type="button" className="h-11 px-2 text-sm font-medium text-accent" disabled={busy || !rows.length} onClick={() => void save()}>
           {t.add.save}
         </button>
       </header>
@@ -147,30 +154,36 @@ export function ApplePayImport({ onClose }: { onClose: () => void }) {
           <input
             type="file"
             accept="image/*"
+            multiple
             className="hidden"
             disabled={busy}
             onChange={(e) => {
-              const file = e.target.files?.[0];
+              const files = [...(e.target.files ?? [])];
               e.target.value = "";
-              if (file) void readFile(file);
+              if (files.length) void readFiles(files);
             }}
           />
         </label>
         {note ? <p className="mt-2 text-xs text-muted">{note}</p> : null}
       </div>
-      {ready ? (
+      {editing ? (
         <div className="pb-8">
           <label className="flex items-center justify-between gap-3 border-b border-line px-4 py-2">
             <span className="text-sm text-muted">{t.add.amount}</span>
-            <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" className="w-36 bg-transparent text-right text-2xl font-semibold outline-none" />
+            <input
+              value={String(editing.amount || "")}
+              onChange={(e) => patch(editing.id, { amount: Number(e.target.value) || 0 })}
+              inputMode="decimal"
+              className="w-36 bg-transparent text-right text-2xl font-semibold outline-none"
+            />
           </label>
-          <TextLine value={payee} onChange={setPayee} placeholder={t.add.note} />
+          <TextLine value={editing.payee} onChange={(v) => patch(editing.id, { payee: v })} placeholder={t.add.note} />
           <label className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
             <span className="text-sm text-muted">{t.add.date}</span>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
+            <input type="date" value={editing.date} onChange={(e) => patch(editing.id, { date: e.target.value })} className="h-10 bg-transparent text-sm text-accent outline-none" />
           </label>
-          <AccountLine accounts={accounts} value={accountId} onChange={setAccountId} placeholder={t.add.account} />
-          {cardHint ? <p className="px-4 pt-1 text-[11px] text-muted">{t.add.appleCard}: {cardHint}</p> : null}
+          <AccountLine accounts={accounts} value={editing.accountId ?? ""} onChange={(id) => patch(editing.id, { accountId: id })} placeholder={t.add.account} />
+          {editing.cardHint ? <p className="px-4 pt-1 text-[11px] text-muted">{t.add.appleCard}: {editing.cardHint}</p> : null}
           <LineRow
             leading={
               cat ? (
@@ -184,7 +197,31 @@ export function ApplePayImport({ onClose }: { onClose: () => void }) {
             onPressLabel={() => setPickCat(true)}
           />
         </div>
-      ) : null}
+      ) : (
+        <div className="px-4 pb-10">
+          {rows.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => setEditId(r.id)}
+              className="mb-2 flex w-full items-start gap-2 rounded-xl bg-elevated px-3 py-2 text-left"
+            >
+              <input
+                type="checkbox"
+                checked={!r.skip}
+                onClick={(e) => e.stopPropagation()}
+                onChange={() => patch(r.id, { skip: !r.skip })}
+                className="mt-1"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium">{r.payee || t.add.note}</div>
+                <div className="text-xs text-muted">{r.date}{r.cardHint ? ` · ${r.cardHint}` : ""}</div>
+              </div>
+              <span className="text-sm font-semibold tabular-nums">{r.amount ? r.amount.toFixed(2) : "—"}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </Overlay>
   );
 }

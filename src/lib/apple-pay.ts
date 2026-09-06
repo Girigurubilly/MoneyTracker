@@ -1,6 +1,7 @@
 import type { Account, Category } from "./types";
 
 export type ApplePayDraft = {
+  id: string;
   amount: number;
   currency: "HKD";
   payee: string;
@@ -9,6 +10,7 @@ export type ApplePayDraft = {
   cardHint: string;
   accountId?: string;
   categoryId?: string;
+  skip: boolean;
   raw: string;
 };
 
@@ -22,22 +24,33 @@ function normalize(text: string): string {
     .replace(/\u00a0/g, " ");
 }
 
-const SKIP = /狀態|已批核|總計|聯絡|報告|銀包|地圖|不正確|無法識別|尋求協助|提出爭議|使用「地圖」|改善準確|南區|香葉道|海洋奇觀|港島南岸|莎莎|Eco Trai|黃竹坑/;
+const SKIP = /狀態|已批核|總計|聯絡|報告|銀包|地圖|不正確|無法識別|尋求協助|提出爭議|使用「地圖」|改善準確|南區|香葉道|海洋奇觀|港島南岸|莎莎|Eco|黃竹坑|DONKI|廣東道|健身徑|滾球|科學館|富豪|龍堡|華嫂|加連威|彌敦|山林道/;
+
+const MAP_JUNK = /DONKI|Apple\s|廣東道|健身徑|滾球|科學館|富豪|龍堡|華嫂|酒店|國際$/;
+
+function parseMoney(text: string): number {
+  const m = text.match(/HK\$?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/i)
+    ?? text.match(/HKD\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)/i);
+  if (!m) return 0;
+  return Number(m[1].replace(/,/g, ""));
+}
 
 function extractPayee(lines: string[]): string {
+  const amountIdx = lines.findIndex((l) => /HK\$|HKD/i.test(l));
   const scored = lines
     .map((line, i) => {
-      if (SKIP.test(line)) return { line, i, score: -99 };
+      if (SKIP.test(line) || MAP_JUNK.test(line)) return { line, i, score: -99 };
       if (/HK\$|HKD\s*\d|信用卡|Credit Card|Visa|Mastercard|UnionPay/i.test(line)) return { line, i, score: -99 };
       if (/^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}/.test(line)) return { line, i, score: -99 };
       if (!/[\u4e00-\u9fffA-Za-z]/.test(line) || line.length < 3) return { line, i, score: -99 };
       let score = 1;
-      if (/[A-Za-z]{3,}/.test(line)) score += 3;
-      if (/\d{4,}/.test(line)) score += 2;
-      if (/[,，]/.test(line) && /[\u4e00-\u9fff]/.test(line)) score += 3;
-      if (i <= 4) score += 2;
-      const dup = lines.filter((other) => other !== line && (other.includes(line) || line.includes(other.split(/[,，]/)[0].trim()))).length;
-      if (dup) score += 2;
+      if (/[\u4e00-\u9fff]{3,}/.test(line)) score += 4;
+      if (/飯店|餐廳|火鍋|茶|咖啡|超市|商場|公園|Park/.test(line)) score += 4;
+      if (/[,，]/.test(line) && /[\u4e00-\u9fff]/.test(line)) score += 4;
+      if (amountIdx >= 0 && i === amountIdx + 1) score += 6;
+      if (amountIdx >= 0 && i > amountIdx && i <= amountIdx + 3) score += 2;
+      const stem = line.split(/[,，]/)[0].trim();
+      if (stem.length >= 3 && lines.some((other, j) => j !== i && other.includes(stem))) score += 3;
       return { line, i, score };
     })
     .filter((x) => x.score > 0)
@@ -45,7 +58,7 @@ function extractPayee(lines: string[]): string {
   const best = scored[0];
   if (!best) return "";
   const next = lines[best.i + 1];
-  if (next && !SKIP.test(next) && /^[\u4e00-\u9fff]{2,12}$/.test(next) && !best.line.includes(next)) {
+  if (next && !SKIP.test(next) && !MAP_JUNK.test(next) && /^[\u4e00-\u9fff]{2,12}$/.test(next) && !best.line.includes(next)) {
     return `${best.line}, ${next}`;
   }
   return best.line;
@@ -58,8 +71,7 @@ export function parseApplePayText(text: string, accounts: Account[], categories:
     .map((l) => l.replace(/\s+/g, " ").trim())
     .filter(Boolean);
 
-  const amountM = raw.match(/HK\$?\s*([0-9]{1,7}(?:\.[0-9]{1,2})?)/i) ?? raw.match(/HKD\s*([0-9]{1,7}(?:\.[0-9]{1,2})?)/i);
-  const amount = amountM ? Number(amountM[1]) : 0;
+  const amount = parseMoney(raw);
 
   const dateM =
     raw.match(/(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})(?:\s*(上午|下午)?\s*(\d{1,2})[:：](\d{2}))?/) ??
@@ -83,6 +95,7 @@ export function parseApplePayText(text: string, accounts: Account[], categories:
 
   if (!amount && !payee) return null;
   return {
+    id: `${date}|${payee}|${amount}`,
     amount,
     currency: "HKD",
     payee: payee.trim(),
@@ -91,6 +104,7 @@ export function parseApplePayText(text: string, accounts: Account[], categories:
     cardHint,
     accountId: matchAccount(cardHint, accounts),
     categoryId: guessCategory(payee, categories),
+    skip: false,
     raw,
   };
 }
@@ -107,7 +121,7 @@ function guessCategory(merchant: string, categories: Category[]): string | undef
   const m = merchant.toLowerCase();
   const want = /park|ocean|海洋公園|娛樂/.test(m)
     ? ["entertainment"]
-    : /餐|咖啡|cafe|dining/.test(m)
+    : /飯店|火鍋|餐廳|餐|咖啡|cafe|dining/.test(m)
       ? ["dining"]
       : /mtr|港鐵|巴士/.test(m)
         ? ["mtr"]

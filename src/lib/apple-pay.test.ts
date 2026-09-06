@@ -28,6 +28,19 @@ Ocean Park 22219
     assert.equal(row!.payee, "Ocean Park 22219, 香港南朗山");
     assert.equal(row!.date, "2026-09-05");
     assert.equal(row!.time, "19:09");
-    assert.equal(row!.accountId, "hsbc-red");
+    const hotpot = parseApplePayText(`
+HK$2,404.00
+樓下火鍋飯店, 九龍尖沙咀
+4/9/2026 下午 9:45
+狀態：已批核
+HSBC Red Credit Card 滙豐 Red 信用卡
+總計 HK$2,404.00
+DON DON DONKI
+樓下火鍋飯店
+`, accounts, cats);
+    assert.equal(hotpot?.amount, 2404);
+    assert.equal(hotpot?.payee.includes("樓下火鍋飯店"), true);
+    assert.equal(hotpot?.date, "2026-09-04");
+    assert.equal(hotpot?.categoryId, "dining");
   });
 });
