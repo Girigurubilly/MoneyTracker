@@ -94,10 +94,11 @@ describe("budget formulas", () => {
     assert.equal(row.dailyAllowed, row.remaining / 16);
     assert.equal(row.ratio, row.expected / 20_000);
     const [regularOnly] = budgetActuals(budgets, txs, "2026-08", [], [], recurring, asOf, adhoc, "regular");
-    assert.equal(regularOnly.reservedAdhoc, 0);
-    assert.equal(regularOnly.adhoc, 0);
-    assert.equal(regularOnly.realized, 3_000);
-    assert.equal(regularOnly.remaining, 20_000 - 10_000 - 4_000);
+    assert.equal(regularOnly.reservedAdhoc, 1_500);
+    assert.equal(regularOnly.adhoc, 2_000);
+    assert.equal(regularOnly.realized, 3_500);
+    assert.equal(regularOnly.nonRegular, 10_000 - 3_500);
+    assert.equal(regularOnly.remaining, 20_000 - (10_000 - 500) - 4_000);
   });
 
   it("a regular whose charged day has not arrived stays reserved even if the category spent", () => {

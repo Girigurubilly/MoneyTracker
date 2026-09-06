@@ -58,8 +58,8 @@ export function BudgetScreen() {
   const dailyAllowed = storedTotal?.dailyAllowed ?? 0;
   const daysRemaining = storedTotal?.daysRemaining ?? 0;
   const monthCap = storedTotal?.monthly ?? 0;
-  const monthUsed = storedTotal?.expected ?? monthSpent + reserved + reservedA + projectedRemain;
-  const monthRemain = monthCap - monthSpent - reserved - reservedA;
+  const monthUsed = storedTotal?.expected ?? monthSpent + reserved + (targetMode === "regular" ? 0 : reservedA) + projectedRemain;
+  const monthRemain = storedTotal?.remaining ?? monthCap - monthSpent - reserved - (targetMode === "regular" ? 0 : reservedA);
   const monthRatio = storedTotal?.ratio ?? (monthCap > 0 ? monthUsed / monthCap : 0);
   const monthTone = forecastTone(monthRatio);
   const categoryActuals = actuals.filter((b) => b.id !== MONTH_TOTAL_BUDGET_ID);

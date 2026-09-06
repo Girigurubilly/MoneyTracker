@@ -336,10 +336,12 @@ export function budgetActuals(
 })[] {
   const asOf = asOfIso ?? monthEndIso(month);
   const reservedReg = reservedRegulars(recurring, rates, asOf);
+  const reservedAAll = reservedAdhoc(adhocRows, month, rates, asOf);
+  const realizedA = realizedAdhoc(adhocRows, month, rates, asOf);
+  const realizedR = realizedRegulars(recurring, rates, asOf);
+  const realized = realizedR + realizedA;
+  const adhoc = adhocTotal(adhocRows, month, rates);
   const ignoreAdhoc = mode === "regular";
-  const reservedA = ignoreAdhoc ? 0 : reservedAdhoc(adhocRows, month, rates, asOf);
-  const realized = realizedRegulars(recurring, rates, asOf) + (ignoreAdhoc ? 0 : realizedAdhoc(adhocRows, month, rates, asOf));
-  const adhoc = ignoreAdhoc ? 0 : adhocTotal(adhocRows, month, rates);
   return budgets.map((b) => {
     const unscoped = !b.categoryId && !b.theme;
     const isMonth = unscoped && b.id === MONTH_TOTAL_BUDGET_ID;
@@ -352,19 +354,21 @@ export function budgetActuals(
           theme: b.theme,
           categories,
         });
+    const reservedA = ignoreAdhoc ? 0 : reservedAAll;
+    const spentForTarget = isMonth && ignoreAdhoc ? Math.max(0, spent - realizedA) : spent;
     const hold = isMonth ? reservedReg + reservedA : 0;
-    const paceBase = isMonth ? spent - realized : 0;
+    const paceBase = isMonth ? Math.max(0, spent - realized) : 0;
     const avgDaily = isMonth ? avgDailyNonRegular(paceBase, asOf) : 0;
     const projectedRemain = isMonth ? projectedNonRegularRemain(paceBase, asOf) : 0;
     const projected = isMonth ? paceBase + projectedRemain : 0;
-    const expected = isMonth ? spent + hold + projectedRemain : spent;
-    const remaining = isMonth ? b.monthly - spent - hold : b.monthly - spent;
+    const expected = isMonth ? spentForTarget + hold + projectedRemain : spent;
+    const remaining = isMonth ? b.monthly - spentForTarget - hold : b.monthly - spent;
     const allowed = isMonth ? dailySpendable(remaining, asOf) : { daysLeft: 0, daily: 0 };
     return {
       ...b,
       spent,
       reserved: isMonth ? reservedReg : 0,
-      reservedAdhoc: isMonth ? reservedA : 0,
+      reservedAdhoc: isMonth ? reservedAAll : 0,
       adhoc: isMonth ? adhoc : 0,
       realized: isMonth ? realized : 0,
       nonRegular: paceBase,
