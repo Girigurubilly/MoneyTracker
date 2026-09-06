@@ -11,13 +11,38 @@ import { todayISO } from "@/lib/format";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 
+function enhanceGrayText(canvas: HTMLCanvasElement) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return canvas;
+  const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const px = data.data;
+  for (let i = 0; i < px.length; i += 4) {
+    const y = px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11;
+    const v = y > 208 ? 255 : y < 70 ? 0 : (y - 70) * (255 / 138);
+    px[i] = px[i + 1] = px[i + 2] = v;
+  }
+  ctx.putImageData(data, 0, 0);
+  return canvas;
+}
+
+function cropBand(src: HTMLCanvasElement, topRatio: number, bottomRatio: number): HTMLCanvasElement {
+  const y = Math.round(src.height * topRatio);
+  const h = Math.max(8, Math.round(src.height * (bottomRatio - topRatio)));
+  const out = document.createElement("canvas");
+  out.width = src.width;
+  out.height = h;
+  const ctx = out.getContext("2d");
+  if (ctx) ctx.drawImage(src, 0, y, src.width, h, 0, 0, src.width, h);
+  return enhanceGrayText(out);
+}
+
 function fileToImage(file: File): Promise<HTMLCanvasElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement("canvas");
-      const scale = Math.min(2.2, 1600 / Math.max(img.width, 1));
+      const scale = Math.min(3, 2200 / Math.max(img.width, 1));
       canvas.width = Math.max(1, Math.round(img.width * scale));
       canvas.height = Math.max(1, Math.round(img.height * scale));
       const ctx = canvas.getContext("2d");
@@ -72,8 +97,11 @@ export function ApplePayImport({ onClose }: { onClose: () => void }) {
       const found: ApplePayDraft[] = [];
       for (const file of files) {
         const canvas = await fileToImage(file);
-        const result = await worker.recognize(canvas);
-        const draft = parseApplePayText(result.data.text ?? "", accounts, categories);
+        const band = cropBand(canvas, 0.14, 0.36);
+        const full = await worker.recognize(enhanceGrayText(canvas));
+        const bandOcr = await worker.recognize(band);
+        const text = `${full.data.text ?? ""}\n${bandOcr.data.text ?? ""}`;
+        const draft = parseApplePayText(text, accounts, categories);
         if (draft) {
           if (!draft.accountId) draft.accountId = fallbackAccount;
           if (!draft.date) draft.date = todayISO();
