@@ -41,11 +41,12 @@ export function BudgetScreen() {
   const categories = useApp((s) => s.categories);
   const recurring = useApp((s) => s.recurring);
   const adhocRows = useApp((s) => s.adhocBudgets);
+  const targetMode = useApp((s) => s.budgetTargetMode);
   const annual = useApp((s) => s.annualTravelBudget);
   const updateBudget = useApp((s) => s.updateBudget);
   const month = monthKey();
   const asOf = asOfForMonth(month, todayISO());
-  const actuals = budgetActuals(budgets, txs, month, rates, categories, recurring, asOf, adhocRows);
+  const actuals = budgetActuals(budgets, txs, month, rates, categories, recurring, asOf, adhocRows, targetMode);
   const storedTotal = actuals.find((b) => b.id === MONTH_TOTAL_BUDGET_ID);
   const monthSpent = storedTotal?.spent ?? 0;
   const reserved = storedTotal?.reserved ?? 0;

@@ -4,6 +4,7 @@ import type {
   AdhocBudget,
   Allowance,
   Budget,
+  BudgetTargetMode,
   Category,
   Currency,
   FxRate,
@@ -26,6 +27,7 @@ export type MetaRow = {
   seededAt?: string;
   defaultCurrency?: Currency;
   lastFxSyncAt?: string;
+  budgetTargetMode?: BudgetTargetMode;
 };
 
 export type RetirementRow = RetirementInputs & { id: string };

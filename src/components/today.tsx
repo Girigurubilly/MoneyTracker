@@ -85,7 +85,8 @@ function TodayBody() {
   const rates = useApp((s) => s.fxRates);
   const recurring = useApp((s) => s.recurring);
   const adhoc = useApp((s) => s.adhocBudgets);
-  const stats = monthStats(transactions, budgets, categories, rates, selected, recurring, adhoc);
+  const targetMode = useApp((s) => s.budgetTargetMode);
+  const stats = monthStats(transactions, budgets, categories, rates, selected, recurring, adhoc, targetMode);
   const cap = stats.actuals.find((b) => b.id === MONTH_TOTAL_BUDGET_ID) ?? stats.actuals.find((b) => !b.categoryId && !b.theme);
   const used = cap?.expected ?? stats.flow.expense;
   const target = cap?.monthly ?? 0;

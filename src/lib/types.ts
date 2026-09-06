@@ -21,6 +21,7 @@ export type MoneyUnit = Currency | "MILES";
 export type TxType = "expense" | "income" | "transfer" | "miles";
 export type LifeTheme = "living" | "travel" | "retirement" | "other";
 export type TodayView = "day" | "week" | "month";
+export type BudgetTargetMode = "all" | "regular";
 export type AccountGroup = "cash" | "credit" | "assets" | "housing" | "loyalty";
 export type AccountType =
   | "cash"

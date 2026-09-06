@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Archive, FolderTree, Globe, Palette, PiggyBank, Repeat, Settings2, ShoppingBag, Undo2, Upload, Wallet } from "lucide-react";
+import { Archive, FolderTree, Globe, Palette, PiggyBank, Repeat, Settings2, ShoppingBag, SlidersHorizontal, Undo2, Upload, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
 import { Disclaimer, Group, Hairline, Overlay, Row, ScreenHeader } from "@/components/shared";
@@ -9,7 +9,9 @@ import { pickName } from "@/lib/i18n";
 import { decryptSnapshot, downloadBlob, encryptSnapshot } from "@/lib/backup";
 import { transactionsToCsv } from "@/lib/derived";
 import { convertBtp, isAppSnapshot, isBtpFile } from "@/lib/import-btp";
-import { CURRENCIES } from "@/lib/types";
+import { CURRENCIES, type BudgetTargetMode } from "@/lib/types";
+import { ageFromBirthday } from "@/lib/calc/retirement";
+import { todayISO } from "@/lib/format";
 import { useApp, type AppSnapshot } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 import { ACCESS_MODES, THEME_IDS, THEME_PRESETS, FONT_IDS, FONT_SIZE_IDS, normalizeHex, type FontId, type FontSizeId, type ThemeId } from "@/lib/theme";
@@ -28,6 +30,8 @@ export function MoreScreen() {
       <ScreenHeader title={t.more.title} large />
       <h2 className="px-5 pb-1 text-sm font-medium text-muted">{t.more.setup}</h2>
       <Group>
+        <Row icon={<SlidersHorizontal className="size-4" />} title={t.more.prefs} to="/more/setup" chevron />
+        <Hairline />
         {kid ? null : (
           <>
             <Row icon={<FolderTree className="size-4" />} title={t.more.categories} to="/more/categories" chevron />
@@ -329,6 +333,73 @@ export function SecurityPage() {
     <div className="pb-10">
       <ScreenHeader title={t.security.title} />
       <p className="px-5 text-sm text-muted">{t.security.hint}</p>
+    </div>
+  );
+}
+
+export function SetupPage() {
+  const t = useT();
+  const mode = useApp((s) => s.budgetTargetMode);
+  const setMode = useApp((s) => s.setBudgetTargetMode);
+  const ret = useApp((s) => s.retirement);
+  const updateRetirement = useApp((s) => s.updateRetirement);
+  const birthday = ret?.birthday ?? "";
+  function persistBirthday(value: string) {
+    const next = value || undefined;
+    const base = ret ?? {
+      id: "base",
+      currentAge: 40,
+      retireAge: 65,
+      deathAge: 90,
+      monthlyIncomeNow: 0,
+      monthlySpendNow: 0,
+      targetMonthly: 25000,
+      preReturn: 0.05,
+      postReturn: 0.035,
+      inflation: 0.025,
+      travelInRetirement: 0,
+    };
+    void updateRetirement({
+      ...base,
+      birthday: next,
+      currentAge: next ? ageFromBirthday(next, todayISO()) : base.currentAge,
+    });
+  }
+  return (
+    <div className="pb-10">
+      <ScreenHeader title={t.more.prefs} backTo="/more" />
+      <h2 className="px-5 pb-2 text-sm font-medium text-muted">{t.more.targetMode}</h2>
+      <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.more.targetModeHint}</p>
+      <div className="mx-4 mb-6 grid grid-cols-2 gap-2">
+        {(["all", "regular"] as BudgetTargetMode[]).map((id) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => void setMode(id)}
+            className={cn(
+              "rounded-2xl px-3 py-3 text-left text-sm font-medium",
+              mode === id ? "bg-accent text-on-accent" : "bg-elevated ring-1 ring-line",
+            )}
+          >
+            <span className="block">{id === "all" ? t.more.targetAll : t.more.targetRegular}</span>
+            <span className={cn("mt-1 block text-[11px] font-normal leading-4", mode === id ? "text-on-accent/80" : "text-muted")}>
+              {id === "all" ? t.more.targetAllHint : t.more.targetRegularHint}
+            </span>
+          </button>
+        ))}
+      </div>
+      <h2 className="px-5 pb-2 text-sm font-medium text-muted">{t.reports.birthday}</h2>
+      <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.more.birthdayHint}</p>
+      <label className="mx-4 flex items-center justify-between rounded-2xl bg-elevated px-4 py-3">
+        <span className="text-sm">{t.reports.birthday}</span>
+        <input
+          type="date"
+          value={birthday}
+          onChange={(e) => persistBirthday(e.target.value)}
+          className="h-10 bg-transparent text-sm text-accent outline-none"
+        />
+      </label>
+      {birthday ? <p className="px-5 pt-2 text-xs text-muted">{t.reports.currentAge}: {ageFromBirthday(birthday, todayISO())}</p> : null}
     </div>
   );
 }

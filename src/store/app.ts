@@ -6,6 +6,7 @@ import type {
   AdhocBudget,
   Allowance,
   Budget,
+  BudgetTargetMode,
   Category,
   Currency,
   FxRate,
@@ -73,6 +74,7 @@ export type AppSnapshot = {
   yearlyPlans?: YearlyPlan[];
   wishlist?: WishItem[];
   defaultCurrency?: Currency;
+  budgetTargetMode?: BudgetTargetMode;
   lastFxSyncAt?: string;
 };
 
@@ -98,6 +100,7 @@ async function writeMeta(
     seededAt: "seededAt" in patch ? patch.seededAt : prev?.seededAt,
     defaultCurrency: patch.defaultCurrency ?? prev?.defaultCurrency ?? fallback.defaultCurrency,
     lastFxSyncAt: "lastFxSyncAt" in patch ? patch.lastFxSyncAt : prev?.lastFxSyncAt,
+    budgetTargetMode: patch.budgetTargetMode ?? prev?.budgetTargetMode ?? "all",
   });
 }
 
@@ -130,6 +133,7 @@ type Dispatchers = {
   refreshFx: () => Promise<void>;
   setAnnualTravel: (n: number) => Promise<void>;
   setDefaultCurrency: (c: Currency) => Promise<void>;
+  setBudgetTargetMode: (m: BudgetTargetMode) => Promise<void>;
   addAllowance: (a: Allowance) => Promise<void>;
   updateAllowance: (a: Allowance) => Promise<void>;
   deleteAllowance: (id: string) => Promise<void>;
@@ -171,6 +175,7 @@ type AppState = {
   snapshots: SnapshotRow[];
   annualTravelBudget: number;
   defaultCurrency: Currency;
+  budgetTargetMode: BudgetTargetMode;
   lastFxSyncAt?: string;
   hydrate: () => Promise<void>;
 } & Dispatchers;
@@ -235,6 +240,7 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     snapshots,
     annualTravelBudget: meta?.annualTravelBudget ?? seedTravelBudget,
     defaultCurrency: meta?.defaultCurrency ?? "HKD",
+    budgetTargetMode: meta?.budgetTargetMode === "regular" ? "regular" : "all",
     lastFxSyncAt: meta?.lastFxSyncAt,
   };
 }
@@ -599,6 +605,7 @@ export const useApp = create<AppState>((set, get) => ({
   snapshots: [],
   annualTravelBudget: seedTravelBudget,
   defaultCurrency: "HKD",
+  budgetTargetMode: "all" as BudgetTargetMode,
   lastFxSyncAt: undefined,
 
   hydrate: async () => {
@@ -866,6 +873,10 @@ export const useApp = create<AppState>((set, get) => ({
     await writeMeta({ defaultCurrency: c }, get());
     set({ defaultCurrency: c });
   },
+  setBudgetTargetMode: async (m) => {
+    await writeMeta({ budgetTargetMode: m }, get());
+    set({ budgetTargetMode: m });
+  },
   addAllowance: async (a) => {
     await idb().allowances.put(a);
     set({ allowances: get().allowances.some((x) => x.id === a.id) ? get().allowances.map((x) => (x.id === a.id ? a : x)) : [...get().allowances, a] });
@@ -962,6 +973,7 @@ export const useApp = create<AppState>((set, get) => ({
         schemaVersion: 3,
         seededAt: snap.exportedAt,
         defaultCurrency: snap.defaultCurrency ?? "HKD",
+        budgetTargetMode: snap.budgetTargetMode === "regular" ? "regular" : "all",
         lastFxSyncAt: snap.lastFxSyncAt,
       });
     });
@@ -993,6 +1005,7 @@ export const useApp = create<AppState>((set, get) => ({
       yearlyPlans: s.yearlyPlans,
       wishlist: s.wishlist,
       defaultCurrency: s.defaultCurrency,
+      budgetTargetMode: s.budgetTargetMode,
       lastFxSyncAt: s.lastFxSyncAt,
     };
   },

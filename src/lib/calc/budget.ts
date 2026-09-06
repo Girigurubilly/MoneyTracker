@@ -1,4 +1,4 @@
-import type { AdhocBudget, Budget, Category, Recurring, Transaction, FxRate } from "../types.ts";
+import type { AdhocBudget, Budget, BudgetTargetMode, Category, Recurring, Transaction, FxRate } from "../types.ts";
 import { MONTH_TOTAL_BUDGET_ID } from "../types.ts";
 import { cashflowSide, inMonth, isSpendLike } from "./ledger.ts";
 import { toHkd } from "./fx.ts";
@@ -317,6 +317,7 @@ export function budgetActuals(
   recurring: Recurring[] = [],
   asOfIso?: string,
   adhocRows: AdhocBudget[] = [],
+  mode: BudgetTargetMode = "all",
 ): (Budget & {
   spent: number;
   remaining: number;
@@ -335,9 +336,10 @@ export function budgetActuals(
 })[] {
   const asOf = asOfIso ?? monthEndIso(month);
   const reservedReg = reservedRegulars(recurring, rates, asOf);
-  const reservedA = reservedAdhoc(adhocRows, month, rates, asOf);
-  const realized = realizedRegulars(recurring, rates, asOf) + realizedAdhoc(adhocRows, month, rates, asOf);
-  const adhoc = adhocTotal(adhocRows, month, rates);
+  const ignoreAdhoc = mode === "regular";
+  const reservedA = ignoreAdhoc ? 0 : reservedAdhoc(adhocRows, month, rates, asOf);
+  const realized = realizedRegulars(recurring, rates, asOf) + (ignoreAdhoc ? 0 : realizedAdhoc(adhocRows, month, rates, asOf));
+  const adhoc = ignoreAdhoc ? 0 : adhocTotal(adhocRows, month, rates);
   return budgets.map((b) => {
     const unscoped = !b.categoryId && !b.theme;
     const isMonth = unscoped && b.id === MONTH_TOTAL_BUDGET_ID;

@@ -1,4 +1,4 @@
-import type { AdhocBudget, Budget, Category, FxRate, Goal, Account, Recurring, Transaction, Locale } from "@/lib/types";
+import type { AdhocBudget, Budget, BudgetTargetMode, Category, FxRate, Goal, Account, Recurring, Transaction, Locale } from "@/lib/types";
 import { budgetActuals, dailySpendable, monthFlow, asOfForMonth, monthCashflowForecast } from "@/lib/calc/budget";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
 import { netWorthNow } from "@/lib/calc/networth";
@@ -58,11 +58,12 @@ export function monthStats(
   isoDate: string,
   recurring: Recurring[] = [],
   adhoc: AdhocBudget[] = [],
+  mode: BudgetTargetMode = "all",
 ) {
   const month = isoDate.slice(0, 7);
   const flow = monthFlow(txs, month, rates);
   const asOf = asOfForMonth(month, todayISO());
-  const actuals = budgetActuals(budgets, txs, month, rates, categories, recurring, asOf, adhoc);
+  const actuals = budgetActuals(budgets, txs, month, rates, categories, recurring, asOf, adhoc, mode);
   const total = actuals.find((b) => b.id === MONTH_TOTAL_BUDGET_ID) ?? actuals.find((b) => !b.categoryId && !b.theme);
   const remainingBudget = total ? total.remaining : actuals.reduce((s, b) => s + b.remaining, 0);
   const remainingDisc = (total?.reserved ?? 0) + (total?.reservedAdhoc ?? 0) + (total?.projectedRemain ?? 0);
