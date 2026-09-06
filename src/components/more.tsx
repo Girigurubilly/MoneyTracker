@@ -413,7 +413,10 @@ export function AppearancePage() {
             >
               <span
                 className="block h-20 bg-cover bg-center"
-                style={{ backgroundImage: `url("${assetUrl(`wallpapers/${id}.jpg`)}")`, backgroundColor: swatch.background }}
+                style={{
+                  backgroundImage: id === "normal" ? "none" : `url("${assetUrl(`wallpapers/${id}.jpg`)}")`,
+                  backgroundColor: swatch.background,
+                }}
               />
               <span className="flex items-center justify-between gap-2 bg-elevated px-3 py-2">
                 <span className="text-sm font-medium">{labels[id]}</span>

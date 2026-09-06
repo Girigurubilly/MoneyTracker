@@ -157,6 +157,7 @@ export function colorsOnly(custom: ThemeCustom): ThemeCustom {
 }
 
 function themeWallpaper(id: ThemeId): string {
+  if (id === "normal") return "none";
   return `url("${assetUrl(`wallpapers/${id}.jpg`)}")`;
 }
 
@@ -261,6 +262,9 @@ export function applyTheme(theme: ThemeId, custom: ThemeCustom = {}): void {
   } else if (mode === "custom" && custom.wallpaper) {
     root.setAttribute("data-wallpaper", "custom");
     root.style.setProperty("--app-wallpaper", `url("${custom.wallpaper}")`);
+  } else if (theme === "normal") {
+    root.setAttribute("data-wallpaper", "none");
+    root.style.removeProperty("--app-wallpaper");
   } else {
     root.setAttribute("data-wallpaper", "theme");
     root.style.setProperty("--app-wallpaper", THEME_WALLPAPERS[theme]);
