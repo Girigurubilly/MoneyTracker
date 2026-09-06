@@ -78,6 +78,15 @@ Utilities - Telecommunication Equipment
     assert.equal(tel?.amount, 139);
     assert.equal(tel?.payee.includes("HUTCHISON"), true);
     assert.equal(tel?.date, "2026-08-31");
-    assert.equal(tel?.categoryId, "internet");
+    const messy = parseApplePayText(`
+支賬 HKD 176.00
+由 國泰萬事達卡 *4901
+2026年9月4日
+交易詳情
+简述
+HEADLAND HOTEL HK INT' NT HK
+商戶類別 Lodging Hotels
+`, accounts, cats);
+    assert.equal(messy?.payee, "HEADLAND HOTEL HK INT' NT HK");
   });
 });

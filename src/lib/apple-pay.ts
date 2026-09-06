@@ -61,14 +61,27 @@ function parseDate(raw: string): { date: string; time?: string } {
   return { date: `${dateM[3]}-${dateM[2].padStart(2, "0")}-${dateM[1].padStart(2, "0")}`, time: formatTime(dateM[4], dateM[5], dateM[6]) };
 }
 
+function isStatementMerchant(line: string): boolean {
+  const t = line.replace(/\s+/g, " ").trim();
+  if (t.length < 8) return false;
+  if (SKIP.test(t) || MAP_JUNK.test(t)) return false;
+  if (/HK\$|HKD|信用卡|萬事達|國泰|渣打|支賬|交易/.test(t)) return false;
+  const letters = (t.match(/[A-Za-z]/g) ?? []).length;
+  const caps = (t.match(/[A-Z]/g) ?? []).length;
+  return letters >= 8 && letters / t.replace(/\s/g, "").length >= 0.55 && caps / letters >= 0.65;
+}
+
 function extractPayee(lines: string[]): string {
-  const briefIdx = lines.findIndex((l) => l === "簡述");
+  const briefIdx = lines.findIndex((l) => /簡\s*述|简\s*述|简述/.test(l));
   if (briefIdx >= 0) {
-    const next = lines.slice(briefIdx + 1).find((l) => !SKIP.test(l) && /[A-Za-z\u4e00-\u9fff]/.test(l) && !DATE_OR_TIME.test(l));
+    const next = lines.slice(briefIdx + 1).find((l) => isStatementMerchant(l) || (!SKIP.test(l) && !DATE_OR_TIME.test(l) && /[A-Za-z]{4,}/.test(l)));
     if (next) return next.replace(/\s+/g, " ").trim();
   }
+  const statement = lines.find((l) => isStatementMerchant(l) && /(\bHK\b|HOTEL|AUTOPAY|TEL|INT)/i.test(l))
+    ?? lines.find((l) => isStatementMerchant(l));
+  if (statement) return statement.replace(/\s+/g, " ").trim();
   const amountIdx = lines.findIndex((l) => /HK\$|HKD/i.test(l));
-  const hasCjk = lines.some((l) => cjkCount(l) >= 3);
+  const hasCjk = lines.some((l) => cjkCount(l) >= 3) && !lines.some((l) => isStatementMerchant(l));
   const scored = lines
     .map((line, i) => {
       if (SKIP.test(line) || MAP_JUNK.test(line)) return { line, i, score: -99 };

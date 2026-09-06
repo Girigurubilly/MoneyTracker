@@ -105,9 +105,12 @@ export function ApplePayImport({ onClose }: { onClose: () => void }) {
         const full = await worker.recognize(enhanceGrayText(canvas));
         await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK });
         const mid = await worker.recognize(cropBand(canvas, 0.15, 0.34, 1.8));
+        await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK });
+        const detail = await worker.recognize(cropBand(canvas, 0.42, 0.68, 1.7));
         await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.SINGLE_LINE });
         const line = await worker.recognize(cropBand(canvas, 0.18, 0.27, 2));
-        const text = [full.data.text, mid.data.text, line.data.text].filter(Boolean).join("\n");
+        const brief = await worker.recognize(cropBand(canvas, 0.48, 0.58, 2));
+        const text = [full.data.text, mid.data.text, detail.data.text, line.data.text, brief.data.text].filter(Boolean).join("\n");
         const draft = parseApplePayText(text, accounts, categories);
         if (draft) {
           if (!draft.accountId) draft.accountId = fallbackAccount;
