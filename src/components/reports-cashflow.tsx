@@ -75,7 +75,7 @@ export function CashflowPage() {
         ))}
       </div>
 
-      <div className="mx-4 mt-4 grid grid-cols-3 gap-2 text-center">
+      <div className="mx-4 mt-4 space-y-3">
         <Stat label={t.reports.spendCats} value={money(expense.expense, "HKD")} />
         <Stat label={t.reports.netSurplus} value={money(surplus, "HKD", { sign: true })} tone={surplus >= 0 ? "income" : "expense"} />
         <Stat label={t.reports.savingsRate} value={pct(rate)} tone={rate >= 0 ? "income" : "expense"} />
@@ -129,9 +129,9 @@ export function CashflowPage() {
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: "income" | "expense" }) {
   return (
-    <div>
-      <div className="text-[11px] leading-4 text-muted">{label}</div>
-      <div className={cn("mt-1 text-lg font-semibold tabular-nums", tone === "income" && "text-income", tone === "expense" && "text-expense")}>{value}</div>
+    <div className="flex items-baseline justify-between gap-3 rounded-xl bg-elevated px-4 py-3">
+      <div className="text-xs text-muted">{label}</div>
+      <div className={cn("text-base font-semibold tabular-nums", tone === "income" && "text-income", tone === "expense" && "text-expense")}>{value}</div>
     </div>
   );
 }

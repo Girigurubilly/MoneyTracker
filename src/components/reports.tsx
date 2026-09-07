@@ -32,6 +32,7 @@ export function ReportsHub() {
     { to: "/reports/dashboard", title: t.reports.dashboard, modes: ["standard", "elderly"] },
     { to: "/reports/spending", title: t.reports.spending, modes: ["standard", "elderly", "kid"] },
     { to: "/reports/cashflow", title: t.reports.cashflow, modes: ["standard", "elderly", "kid"] },
+    { to: "/reports/trends", title: t.reports.trends, modes: ["standard", "elderly"] },
     { to: "/reports/compare", title: t.reports.yearCompare, modes: ["standard"] },
     { to: "/reports/balance", title: t.reports.balance, modes: ["standard", "elderly"] },
     { to: "/reports/deposits", title: t.reports.deposits, modes: ["standard", "elderly"] },
@@ -41,7 +42,7 @@ export function ReportsHub() {
     { to: "/reports/retirement", title: t.reports.retirement, modes: ["standard", "elderly"] },
   ].filter((it) => it.modes.includes(access));
   const groups = [
-    { id: "flow", title: t.reports.groupFlow, items: items.filter((it) => ["/reports/dashboard", "/reports/spending", "/reports/cashflow", "/reports/compare"].includes(it.to)) },
+    { id: "flow", title: t.reports.groupFlow, items: items.filter((it) => ["/reports/dashboard", "/reports/spending", "/reports/cashflow", "/reports/trends", "/reports/compare"].includes(it.to)) },
     { id: "save", title: t.reports.groupSave, items: items.filter((it) => ["/reports/balance", "/reports/deposits", "/reports/yearly"].includes(it.to)) },
     { id: "life", title: t.reports.groupLife, items: items.filter((it) => ["/reports/living", "/reports/travel", "/reports/retirement"].includes(it.to)) },
   ].filter((g) => g.items.length);

@@ -36,6 +36,7 @@ import { Route as ReportsLivingRouteImport } from './routes/reports.living'
 import { Route as ReportsRetirementRouteImport } from './routes/reports.retirement'
 import { Route as ReportsSpendingRouteImport } from './routes/reports.spending'
 import { Route as ReportsTravelRouteImport } from './routes/reports.travel'
+import { Route as ReportsTrendsRouteImport } from './routes/reports.trends'
 import { Route as ReportsYearlyRouteImport } from './routes/reports.yearly'
 import { Route as ReportsTravelIndexRouteImport } from './routes/reports.travel.index'
 import { Route as ReportsTravelIdRouteImport } from './routes/reports.travel.$id'
@@ -175,6 +176,11 @@ const ReportsTravelRoute = ReportsTravelRouteImport.update({
   path: '/travel',
   getParentRoute: () => ReportsRoute,
 } as any)
+const ReportsTrendsRoute = ReportsTrendsRouteImport.update({
+  id: '/trends',
+  path: '/trends',
+  getParentRoute: () => ReportsRoute,
+} as any)
 const ReportsYearlyRoute = ReportsYearlyRouteImport.update({
   id: '/yearly',
   path: '/yearly',
@@ -217,6 +223,7 @@ export interface FileRoutesByFullPath {
   '/reports/retirement': typeof ReportsRetirementRoute
   '/reports/spending': typeof ReportsSpendingRoute
   '/reports/travel': typeof ReportsTravelRouteWithChildren
+  '/reports/trends': typeof ReportsTrendsRoute
   '/reports/yearly': typeof ReportsYearlyRoute
   '/more/': typeof MoreIndexRoute
   '/reports/': typeof ReportsIndexRoute
@@ -246,6 +253,7 @@ export interface FileRoutesByTo {
   '/reports/living': typeof ReportsLivingRoute
   '/reports/retirement': typeof ReportsRetirementRoute
   '/reports/spending': typeof ReportsSpendingRoute
+  '/reports/trends': typeof ReportsTrendsRoute
   '/reports/yearly': typeof ReportsYearlyRoute
   '/more': typeof MoreIndexRoute
   '/reports': typeof ReportsIndexRoute
@@ -279,6 +287,7 @@ export interface FileRoutesById {
   '/reports/retirement': typeof ReportsRetirementRoute
   '/reports/spending': typeof ReportsSpendingRoute
   '/reports/travel': typeof ReportsTravelRouteWithChildren
+  '/reports/trends': typeof ReportsTrendsRoute
   '/reports/yearly': typeof ReportsYearlyRoute
   '/more/': typeof MoreIndexRoute
   '/reports/': typeof ReportsIndexRoute
@@ -313,6 +322,7 @@ export interface FileRouteTypes {
     | '/reports/retirement'
     | '/reports/spending'
     | '/reports/travel'
+    | '/reports/trends'
     | '/reports/yearly'
     | '/more/'
     | '/reports/'
@@ -342,6 +352,7 @@ export interface FileRouteTypes {
     | '/reports/living'
     | '/reports/retirement'
     | '/reports/spending'
+    | '/reports/trends'
     | '/reports/yearly'
     | '/more'
     | '/reports'
@@ -374,6 +385,7 @@ export interface FileRouteTypes {
     | '/reports/retirement'
     | '/reports/spending'
     | '/reports/travel'
+    | '/reports/trends'
     | '/reports/yearly'
     | '/more/'
     | '/reports/'
@@ -581,6 +593,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReportsTravelRouteImport
       parentRoute: typeof ReportsRoute
     }
+    '/reports/trends': {
+      id: '/reports/trends'
+      path: '/trends'
+      fullPath: '/reports/trends'
+      preLoaderRoute: typeof ReportsTrendsRouteImport
+      parentRoute: typeof ReportsRoute
+    }
     '/reports/yearly': {
       id: '/reports/yearly'
       path: '/yearly'
@@ -658,6 +677,7 @@ interface ReportsRouteChildren {
   ReportsRetirementRoute: typeof ReportsRetirementRoute
   ReportsSpendingRoute: typeof ReportsSpendingRoute
   ReportsTravelRoute: typeof ReportsTravelRouteWithChildren
+  ReportsTrendsRoute: typeof ReportsTrendsRoute
   ReportsYearlyRoute: typeof ReportsYearlyRoute
   ReportsIndexRoute: typeof ReportsIndexRoute
 }
@@ -673,6 +693,7 @@ const ReportsRouteChildren: ReportsRouteChildren = {
   ReportsRetirementRoute: ReportsRetirementRoute,
   ReportsSpendingRoute: ReportsSpendingRoute,
   ReportsTravelRoute: ReportsTravelRouteWithChildren,
+  ReportsTrendsRoute: ReportsTrendsRoute,
   ReportsYearlyRoute: ReportsYearlyRoute,
   ReportsIndexRoute: ReportsIndexRoute,
 }
