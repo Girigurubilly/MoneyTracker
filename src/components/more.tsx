@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Archive, FolderTree, Globe, Palette, PiggyBank, Repeat, Settings2, ShoppingBag, SlidersHorizontal, Undo2, Upload, Wallet } from "lucide-react";
+import { Archive, FolderTree, Globe, Palette, PiggyBank, Settings2, ShoppingBag, SlidersHorizontal, Undo2, Upload, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
 import { Disclaimer, Group, Hairline, Overlay, Row, ScreenHeader } from "@/components/shared";
@@ -35,8 +35,6 @@ export function MoreScreen() {
         {kid ? null : (
           <>
             <Row icon={<FolderTree className="size-4" />} title={t.more.categories} to="/more/categories" chevron />
-            <Hairline />
-            <Row icon={<Repeat className="size-4" />} title={t.more.recurring} to="/budget" chevron />
             <Hairline />
           </>
         )}

@@ -448,7 +448,7 @@ async function migrateAdhocFromPlannedTxs() {
   const existing = await idb().adhocBudgets.toArray();
   const seen = new Set(existing.map((a) => `${a.date}|${a.amount}|${a.label}`));
   const candidates = txs.filter((t) => {
-    if (!t.planned || t.recurringId || t.depositId || t.type === "miles" || t.type === "income") return false;
+    if (!t.planned || t.recurringId || t.depositId || t.type === "miles" || t.type === "income" || t.type === "transfer") return false;
     const day = Number(t.date.slice(8, 10));
     return !regulars.some(
       (r) =>
@@ -681,6 +681,28 @@ export const useApp = create<AppState>((set, get) => ({
       if (mortgage) await idb().mortgage.put(mortgage);
     });
     set({ transactions: get().transactions.map((t) => (t.id === next.id ? next : t)), accounts, mortgage });
+    if (next.recurringId) {
+      const rec = get().recurring.find((r) => r.id === next.recurringId);
+      if (rec) {
+        const chargedDay = Math.min(28, Math.max(1, Number(next.date.slice(8, 10)) || chargedDayOf(rec)));
+        const patched = {
+          ...rec,
+          type: next.type,
+          amount: next.amount,
+          currency: next.currency,
+          accountId: next.accountId,
+          toAccountId: next.toAccountId,
+          destAmount: next.destAmount,
+          categoryId: next.categoryId,
+          label: next.payee || rec.label,
+          labelZh: next.payeeZh || rec.labelZh,
+          chargedDay,
+          countsAsExpense: next.countsAsExpense,
+        };
+        await idb().recurring.put(patched);
+        set({ recurring: get().recurring.map((r) => (r.id === patched.id ? patched : r)) });
+      }
+    }
   },
 
   deleteTransaction: async (id) => {

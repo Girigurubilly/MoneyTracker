@@ -95,7 +95,10 @@ function TodayBody() {
   const onThisMonth = selected.slice(0, 7) === today.slice(0, 7);
   const ringTone = forecastTone(target > 0 ? used / target : 0);
   const paid = transactions.filter((x) => x.date === selected && !x.planned && x.type !== "miles").sort((a, b) => b.id.localeCompare(a.id));
-  const scheduled = transactions.filter((x) => x.date === selected && x.planned && x.type !== "miles").sort((a, b) => b.id.localeCompare(a.id));
+  const monthKey = selected.slice(0, 7);
+  const monthPlanned = transactions
+    .filter((x) => x.planned && x.type !== "miles" && x.date.startsWith(monthKey))
+    .sort((a, b) => a.date.localeCompare(b.date) || b.id.localeCompare(a.id));
   const upcoming = upcomingExpenseRegulars(recurring, asOf);
   const cells = monthGrid(selected, firstDay);
   const active = activityDates(transactions);
@@ -228,7 +231,7 @@ function TodayBody() {
       <SectionLabel>{t.today.dayTx}</SectionLabel>
       <Hairline />
       <p className="px-5 pt-2 text-xs text-muted">{longDate(selected, locale)}</p>
-      {paid.length === 0 && scheduled.length === 0 ? (
+      {paid.length === 0 && monthPlanned.length === 0 ? (
         <p className="px-5 py-6 text-sm text-muted">{t.today.noTxDay}</p>
       ) : (
         <>
@@ -238,14 +241,14 @@ function TodayBody() {
               <TransactionRow tx={tx} onClick={() => setTx(tx.id)} />
             </div>
           ))}
-          {scheduled.length ? (
+          {monthPlanned.length ? (
             <>
-              <SectionLabel>{t.today.scheduled}</SectionLabel>
+              <SectionLabel>{t.today.monthPlanned}</SectionLabel>
               <Hairline />
-              {scheduled.map((tx, i) => (
+              {monthPlanned.map((tx, i) => (
                 <div key={tx.id}>
                   {i > 0 ? <Hairline /> : null}
-                  <TransactionRow tx={tx} onClick={() => setTx(tx.id)} />
+                  <TransactionRow tx={tx} showDate onClick={() => setTx(tx.id)} />
                 </div>
               ))}
             </>
