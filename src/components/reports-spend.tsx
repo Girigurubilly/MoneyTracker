@@ -5,6 +5,7 @@ import { Overlay, ScreenHeader, TxGroupedList } from "@/components/shared";
 import { money, pct, shortDate, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { periodCategoryTotals, periodCategoryTxs, periodRange, type PeriodPreset, type PeriodTab } from "@/lib/calc/period";
+import type { Category } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -240,7 +241,7 @@ export function SpendingPage() {
             <span className="flex shrink-0 items-center gap-1">
               <span className="text-sm tabular-nums text-muted">
                 {money(r.value, "HKD")}
-                <span className="ml-2 text-xs text-faint">{center > 0 ? pct(r.value / center) : "—"}</span>
+                <span className="ml-2 text-xs text-faint">{pct(r.value / shareBase(r.id, cats, tab, totals, center))}</span>
               </span>
               <ChevronRight className="size-4 text-faint" />
             </span>
@@ -261,6 +262,18 @@ export function SpendingPage() {
       ) : null}
     </div>
   );
+}
+
+function shareBase(
+  id: string,
+  cats: Category[],
+  tab: PeriodTab,
+  totals: { income: number; expense: number },
+  center: number,
+): number {
+  if (tab !== "both") return center > 0 ? center : 1;
+  if (id === "uncat-in" || cats.find((c) => c.id === id)?.kind === "income") return totals.income > 0 ? totals.income : 1;
+  return totals.expense > 0 ? totals.expense : 1;
 }
 
 function CategoryTxList({

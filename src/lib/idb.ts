@@ -28,6 +28,7 @@ export type MetaRow = {
   defaultCurrency?: Currency;
   lastFxSyncAt?: string;
   budgetTargetMode?: BudgetTargetMode;
+  depositCategoryId?: string;
 };
 
 export type RetirementRow = RetirementInputs & { id: string };

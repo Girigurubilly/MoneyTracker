@@ -75,6 +75,7 @@ export type AppSnapshot = {
   wishlist?: WishItem[];
   defaultCurrency?: Currency;
   budgetTargetMode?: BudgetTargetMode;
+  depositCategoryId?: string;
   lastFxSyncAt?: string;
 };
 
@@ -101,6 +102,7 @@ async function writeMeta(
     defaultCurrency: patch.defaultCurrency ?? prev?.defaultCurrency ?? fallback.defaultCurrency,
     lastFxSyncAt: "lastFxSyncAt" in patch ? patch.lastFxSyncAt : prev?.lastFxSyncAt,
     budgetTargetMode: patch.budgetTargetMode ?? prev?.budgetTargetMode ?? "all",
+    depositCategoryId: "depositCategoryId" in patch ? patch.depositCategoryId : prev?.depositCategoryId,
   });
 }
 
@@ -135,6 +137,7 @@ type Dispatchers = {
   setAnnualTravel: (n: number) => Promise<void>;
   setDefaultCurrency: (c: Currency) => Promise<void>;
   setBudgetTargetMode: (m: BudgetTargetMode) => Promise<void>;
+  setDepositCategory: (id: string) => Promise<void>;
   addAllowance: (a: Allowance) => Promise<void>;
   updateAllowance: (a: Allowance) => Promise<void>;
   deleteAllowance: (id: string) => Promise<void>;
@@ -177,6 +180,7 @@ type AppState = {
   annualTravelBudget: number;
   defaultCurrency: Currency;
   budgetTargetMode: BudgetTargetMode;
+  depositCategoryId?: string;
   lastFxSyncAt?: string;
   hydrate: () => Promise<void>;
 } & Dispatchers;
@@ -242,6 +246,7 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     annualTravelBudget: meta?.annualTravelBudget ?? seedTravelBudget,
     defaultCurrency: meta?.defaultCurrency ?? "HKD",
     budgetTargetMode: meta?.budgetTargetMode === "regular" ? "regular" : "all",
+    depositCategoryId: meta?.depositCategoryId,
     lastFxSyncAt: meta?.lastFxSyncAt,
   };
 }
@@ -348,7 +353,13 @@ async function seedSkeleton() {
   });
 }
 
-function interestTxFromDeposit(d: TimeSaving, today: string, existing?: Transaction): Transaction | null {
+function resolveDepositCategoryId(categories: Category[], stored?: string): string {
+  if (stored && categories.some((c) => c.id === stored)) return stored;
+  if (categories.some((c) => c.id === "interest-inc")) return "interest-inc";
+  return categories.find((c) => c.kind === "income")?.id ?? "";
+}
+
+function interestTxFromDeposit(d: TimeSaving, today: string, existing?: Transaction, categoryId?: string): Transaction | null {
   if (!d.interest || d.interest <= 0 || !d.endDate) return null;
   return {
     id: existing?.id ?? nid(),
@@ -356,7 +367,7 @@ function interestTxFromDeposit(d: TimeSaving, today: string, existing?: Transact
     amount: d.interest,
     currency: d.currency,
     accountId: d.accountId,
-    categoryId: "interest-inc",
+    categoryId: categoryId || existing?.categoryId || "interest-inc",
     date: d.endDate,
     payee: `${d.bank} deposit interest`,
     payeeZh: `${d.bank} 存款利息`,
@@ -368,7 +379,8 @@ function interestTxFromDeposit(d: TimeSaving, today: string, existing?: Transact
 async function syncLinkedInterest(get: () => AppState, d: TimeSaving) {
   const today = todayISO();
   const existing = get().transactions.find((t) => t.depositId === d.id);
-  const next = interestTxFromDeposit(d, today, existing);
+  const categoryId = resolveDepositCategoryId(get().categories, get().depositCategoryId);
+  const next = interestTxFromDeposit(d, today, existing, categoryId);
   if (!next) {
     if (existing?.planned) await get().deleteTransaction(existing.id);
     return;
@@ -607,6 +619,7 @@ export const useApp = create<AppState>((set, get) => ({
   annualTravelBudget: seedTravelBudget,
   defaultCurrency: "HKD",
   budgetTargetMode: "all" as BudgetTargetMode,
+  depositCategoryId: undefined as string | undefined,
   lastFxSyncAt: undefined,
 
   hydrate: async () => {
@@ -910,6 +923,16 @@ export const useApp = create<AppState>((set, get) => ({
     await writeMeta({ budgetTargetMode: m }, get());
     set({ budgetTargetMode: m });
   },
+  setDepositCategory: async (id) => {
+    await writeMeta({ depositCategoryId: id }, get());
+    set({ depositCategoryId: id });
+    const linked = get().transactions.filter((t) => t.depositId);
+    for (const tx of linked) {
+      if (tx.categoryId === id) continue;
+      await get().updateTransaction({ ...tx, categoryId: id }, tx);
+    }
+    for (const d of get().deposits) await syncLinkedInterest(get, d);
+  },
   addAllowance: async (a) => {
     await idb().allowances.put(a);
     set({ allowances: get().allowances.some((x) => x.id === a.id) ? get().allowances.map((x) => (x.id === a.id ? a : x)) : [...get().allowances, a] });
@@ -1007,6 +1030,7 @@ export const useApp = create<AppState>((set, get) => ({
         seededAt: snap.exportedAt,
         defaultCurrency: snap.defaultCurrency ?? "HKD",
         budgetTargetMode: snap.budgetTargetMode === "regular" ? "regular" : "all",
+        depositCategoryId: snap.depositCategoryId,
         lastFxSyncAt: snap.lastFxSyncAt,
       });
     });
@@ -1039,6 +1063,7 @@ export const useApp = create<AppState>((set, get) => ({
       wishlist: s.wishlist,
       defaultCurrency: s.defaultCurrency,
       budgetTargetMode: s.budgetTargetMode,
+      depositCategoryId: s.depositCategoryId,
       lastFxSyncAt: s.lastFxSyncAt,
     };
   },

@@ -23,10 +23,17 @@ export function DepositsPage() {
   const locale = useUi((s) => s.locale);
   const deposits = useApp((s) => s.deposits);
   const accounts = useApp((s) => s.accounts);
+  const categories = useApp((s) => s.categories);
   const rates = useApp((s) => s.fxRates);
   const lastFx = useApp((s) => s.lastFxSyncAt);
   const deleteDeposit = useApp((s) => s.deleteDeposit);
   const refreshFx = useApp((s) => s.refreshFx);
+  const depositCatStored = useApp((s) => s.depositCategoryId);
+  const setDepositCategory = useApp((s) => s.setDepositCategory);
+  const incomeCats = categories.filter((c) => c.kind === "income");
+  const depositCat =
+    (depositCatStored && incomeCats.some((c) => c.id === depositCatStored) && depositCatStored) ||
+    (incomeCats.some((c) => c.id === "interest-inc") ? "interest-inc" : incomeCats[0]?.id ?? "");
   const today = todayISO();
   const year = Number(today.slice(0, 4));
   const [editing, setEditing] = useState<TimeSaving | null | "new">(null);
@@ -94,6 +101,22 @@ export function DepositsPage() {
             {t.reports.fetchFx}
           </button>
         </div>
+      </div>
+
+      <div className="mx-4 mb-5 rounded-2xl bg-elevated px-4 py-3">
+        <div className="text-xs text-muted">{t.reports.depositIncomeCat}</div>
+        <select
+          className="mt-2 h-11 w-full rounded-lg bg-background px-3 text-sm"
+          value={depositCat}
+          onChange={(e) => void setDepositCategory(e.target.value)}
+        >
+          {incomeCats.map((c) => (
+            <option key={c.id} value={c.id}>
+              {pickName(locale, c.name, c.nameZh)}
+            </option>
+          ))}
+        </select>
+        <p className="mt-2 text-[11px] leading-4 text-muted">{t.reports.depositIncomeHint}</p>
       </div>
 
       <h2 className="px-5 pb-2 text-xs font-semibold uppercase tracking-wide text-muted">{t.reports.depositRecords}</h2>

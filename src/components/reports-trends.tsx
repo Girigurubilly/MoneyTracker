@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { ScreenHeader } from "@/components/shared";
 import { compactHkd, money, monthGrid, monthTitle, todayISO, weekdayLabels } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
@@ -85,7 +86,7 @@ export function TrendsPage() {
   return (
     <div className="pb-10">
       <ScreenHeader title={t.reports.trends} backTo="/reports" />
-      <p className="px-5 pb-3 text-xs text-muted">{t.reports.trendsHint}</p>
+      <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.trendsHint}</p>
       <div className="mx-4 grid grid-cols-3 gap-1 rounded-xl bg-elevated p-1">
         {([3, 6, 12] as const).map((n) => (
           <button
@@ -98,6 +99,7 @@ export function TrendsPage() {
           </button>
         ))}
       </div>
+      <p className="px-5 pt-2 text-[11px] leading-4 text-muted">{t.reports.trendsWindowHint}</p>
       <div className="mx-4 mt-4 grid grid-cols-2 gap-2">
         <Mini label={t.reports.avgSpend} value={money(avg, "HKD")} />
         <Mini label={t.reports.lastMonthSpend} value={money(last, "HKD")} />
@@ -117,6 +119,7 @@ export function TrendsPage() {
         </ResponsiveContainer>
       </div>
       <h2 className="px-5 pb-1 pt-4 text-sm font-medium text-muted">{t.reports.catGrowth}</h2>
+      <p className="px-5 pb-2 text-[11px] leading-4 text-muted">{t.reports.trendsGrowthHint}</p>
       {growthRows.map((r) => (
         <div key={r.id} className="flex items-center justify-between px-5 py-2 text-sm">
           <span>{pickName(locale, r.name, r.nameZh)}</span>
@@ -125,8 +128,17 @@ export function TrendsPage() {
       ))}
       <div className="flex items-center justify-between px-5 pt-5">
         <h2 className="text-sm font-medium text-muted">{t.reports.heatmap}</h2>
-        <input type="month" value={heatMonth} onChange={(e) => setHeatMonth(e.target.value)} className="h-9 rounded-lg bg-elevated px-2 text-sm" />
+        <div className="flex items-center gap-1">
+          <button type="button" className="grid size-9 place-items-center text-accent" onClick={() => setHeatMonth(shiftMonth(heatMonth, -1))} aria-label="prev">
+            <ChevronLeft className="size-5" />
+          </button>
+          <span className="min-w-[6.5rem] text-center text-sm tabular-nums">{heatMonth}</span>
+          <button type="button" className="grid size-9 place-items-center text-accent" onClick={() => setHeatMonth(shiftMonth(heatMonth, 1))} aria-label="next">
+            <ChevronRight className="size-5" />
+          </button>
+        </div>
       </div>
+      <p className="px-5 pb-2 text-[11px] leading-4 text-muted">{t.reports.trendsHeatHint}</p>
       <p className="px-5 pb-2 text-xs text-muted">
         {monthTitle(`${heatMonth}-01`, locale)}
         {peakWeek?.avg ? ` · ${t.reports.peakWeekday} ${weekdays[(peakWeek.i - firstDay + 7) % 7]}` : ""}
@@ -167,6 +179,12 @@ export function TrendsPage() {
       ) : null}
     </div>
   );
+}
+
+function shiftMonth(ym: string, dir: number): string {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(y, m - 1 + dir, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function Mini({ label, value, tone }: { label: string; value: string; tone?: "income" | "expense" }) {
