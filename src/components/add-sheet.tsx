@@ -403,6 +403,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
         </>
       ) : null}
       <DatePaidRow date={date} paid={paid} onDate={setDate} onPaid={setPaid} />
+      {kid ? null : (
       <ExtraIconBar
         extra={extra}
         onExtra={setExtra}
@@ -429,6 +430,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
         tripOptions={trips.filter((tr) => isTripActive(tr, todayISO())).map((tr) => ({ id: tr.id, label: pickName(locale, tr.name, tr.nameZh) }))}
         onTripChange={setTripId}
       />
+      )}
     </ComposerShell>
   );
 }

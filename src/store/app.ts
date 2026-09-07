@@ -115,6 +115,7 @@ type Dispatchers = {
   deleteTransaction: (id: string) => Promise<Transaction | undefined>;
   addAccount: (a: Account) => Promise<void>;
   updateAccount: (a: Account) => Promise<void>;
+  deleteAccount: (id: string) => Promise<boolean>;
   moveAccount: (id: string, dir: number) => Promise<void>;
   moveAccountToGroup: (id: string, group: AccountGroup | "fx") => Promise<void>;
   addCategory: (c: Category) => Promise<void>;
@@ -743,6 +744,16 @@ export const useApp = create<AppState>((set, get) => ({
       if (mortgage) await idb().mortgage.put(mortgage);
     });
     set({ accounts, mortgage });
+  },
+  deleteAccount: async (id) => {
+    const used =
+      get().transactions.some((t) => t.accountId === id || t.toAccountId === id) ||
+      get().recurring.some((r) => r.accountId === id || r.toAccountId === id) ||
+      get().deposits.some((d) => d.accountId === id);
+    if (used) return false;
+    await idb().accounts.delete(id);
+    set({ accounts: get().accounts.filter((a) => a.id !== id) });
+    return true;
   },
   moveAccount: async (id, dir) => {
     const accounts = get().accounts;

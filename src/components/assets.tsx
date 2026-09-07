@@ -13,6 +13,7 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Hairline, Overlay, ScreenHeader, SectionLabel, TxGroupedList } from "@/components/shared";
 import { AmountWithHkd } from "@/components/currency-field";
 import { money } from "@/lib/format";
@@ -385,6 +386,10 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
   const mortgage = useApp((s) => s.mortgage);
   const add = useApp((s) => s.addAccount);
   const update = useApp((s) => s.updateAccount);
+  const remove = useApp((s) => s.deleteAccount);
+  const txs = useApp((s) => s.transactions);
+  const recurring = useApp((s) => s.recurring);
+  const deposits = useApp((s) => s.deposits);
   const updateMortgage = useApp((s) => s.updateMortgage);
   const properties = accounts.filter((x) => x.type === "property" && x.id !== account?.id);
   const loans = accounts.filter((x) => (x.type === "mortgage" || x.type === "loan") && x.id !== account?.id);
@@ -521,7 +526,7 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
           />
         )}
         <LineRow label={t.assets.balance} amount={bal} active onFocusAmount={() => undefined} />
-        {linkOptions.length ? (
+        {kid ? null : linkOptions.length ? (
           <SelectLine
             label={type === "property" ? t.assets.linkedLoan : t.assets.linkedProperty}
             value={linkedId}
@@ -529,6 +534,7 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
             options={[{ id: "", label: t.common.none }, ...linkOptions.map((x) => ({ id: x.id, label: pickName(locale, x.name, x.nameZh) }))]}
           />
         ) : null}
+        {kid ? null : (
         <ExtraIconBar
           extra={extra}
           onExtra={(v) => setExtra(v === "note" ? "note" : extra)}
@@ -539,6 +545,23 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
           noteValue={notes}
           onNoteChange={setNotes}
         />
+        )}
+        {account &&
+        !txs.some((t) => t.accountId === account.id || t.toAccountId === account.id) &&
+        !recurring.some((r) => r.accountId === account.id || r.toAccountId === account.id) &&
+        !deposits.some((d) => d.accountId === account.id) ? (
+          <button
+            type="button"
+            className="mx-4 mt-4 h-12 rounded-xl bg-expense-soft text-sm font-semibold text-expense"
+            onClick={async () => {
+              const ok = await remove(account.id);
+              toast(ok ? t.assets.removed : t.assets.removeBlocked);
+              if (ok) onClose();
+            }}
+          >
+            {t.assets.remove}
+          </button>
+        ) : null}
       </ComposerShell>
     </Overlay>
   );

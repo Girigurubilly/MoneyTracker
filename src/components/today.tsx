@@ -79,6 +79,7 @@ function TodayBody() {
   const setSelected = useUi((s) => s.setSelectedDate);
   const firstDay = useUi((s) => s.firstDayOfWeek);
   const setTx = useUi((s) => s.setTxDetailId);
+  const kid = useUi((s) => s.accessMode) === "kid";
   const transactions = useApp((s) => s.transactions);
   const budgets = useApp((s) => s.budgets);
   const categories = useApp((s) => s.categories);
@@ -144,6 +145,7 @@ function TodayBody() {
           </div>
         </div>
 
+      {kid ? null : (
       <button
         type="button"
         className="mx-4 mb-2 flex w-[calc(100%-2rem)] items-center justify-center gap-1 text-xs font-medium text-accent"
@@ -152,7 +154,8 @@ function TodayBody() {
         {showSummary ? t.today.hideSummary : t.today.showSummary}
         <ChevronDown className={cn("size-3.5 transition", showSummary && "rotate-180")} />
       </button>
-      {showSummary ? (
+      )}
+      {!kid && showSummary ? (
         <>
           <div className="mx-4 mb-4 rounded-xl bg-elevated px-4 py-1">
             <SummaryRow label={t.today.incomeMonth} value={money(stats.flow.income, "HKD")} tone="income" />

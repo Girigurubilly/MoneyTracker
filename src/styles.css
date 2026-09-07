@@ -99,6 +99,13 @@ html[data-access="elderly"] select {
 }
 html[data-access="kid"] {
   --color-accent: #ff7a59;
+  font-size: 19px;
+}
+html[data-access="kid"] button,
+html[data-access="kid"] a,
+html[data-access="kid"] input,
+html[data-access="kid"] select {
+  min-height: 2.75rem;
 }
 html[data-access="kid"] .mx-auto.min-h-dvh {
   letter-spacing: 0.01em;

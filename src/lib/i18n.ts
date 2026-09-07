@@ -166,6 +166,9 @@ export const messages = {
       linkedLoan: "Linked mortgage",
       transactions: "Transactions",
       noTransactions: "No transactions yet",
+      remove: "Delete account",
+      removed: "Account deleted.",
+      removeBlocked: "This account still has transactions.",
     },
     budget: {
       title: "Budget",
@@ -719,6 +722,9 @@ export const messages = {
       linkedLoan: "連結按揭",
       transactions: "交易紀錄",
       noTransactions: "尚未有交易",
+      remove: "刪除帳戶",
+      removed: "已刪除帳戶。",
+      removeBlocked: "此帳戶仍有交易，未能刪除。",
     },
     budget: {
       title: "預算",
