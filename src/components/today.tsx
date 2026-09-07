@@ -99,7 +99,8 @@ function TodayBody() {
   const monthPlanned = transactions
     .filter((x) => x.planned && x.type !== "miles" && x.date.startsWith(monthKey))
     .sort((a, b) => a.date.localeCompare(b.date) || b.id.localeCompare(a.id));
-  const upcoming = upcomingExpenseRegulars(recurring, asOf);
+  const plannedRegularIds = new Set(monthPlanned.map((tx) => tx.recurringId).filter(Boolean));
+  const upcomingOnly = upcomingExpenseRegulars(recurring, asOf).filter((r) => !plannedRegularIds.has(r.id));
   const cells = monthGrid(selected, firstDay);
   const active = activityDates(transactions);
   const plannedDays = plannedIso(transactions);
@@ -196,42 +197,46 @@ function TodayBody() {
             </span>
           </Link>
           <Hairline />
+        </>
+      ) : null}
 
-          {upcoming.length ? (
-            <>
-              <SectionLabel>{t.today.upcoming}</SectionLabel>
-              <Hairline />
-              {upcoming.map((r, i) => (
-                <div key={r.id}>
-                  {i > 0 ? <Hairline /> : null}
-                  <div className="flex items-center justify-between px-5 py-3">
-                    <div>
-                      <div className="text-sm">{pickName(locale, r.label, r.labelZh)}</div>
-                      <div className="text-xs text-muted">
-                        {t.budget.chargedDay} {chargedDayOf(r)}
-                      </div>
-                    </div>
-                    <div className={cn("shrink-0", r.type === "income" ? "text-income" : "text-foreground")}>
-                      <AmountWithHkd
-                        amount={r.type === "expense" || r.countsAsExpense ? -r.amount : r.amount}
-                        currency={r.currency}
-                        rates={rates}
-                        sign
-                        className="text-sm font-semibold"
-                      />
-                    </div>
+      {monthPlanned.length || upcomingOnly.length ? (
+        <>
+          <SectionLabel>{t.today.monthPlanned}</SectionLabel>
+          <Hairline />
+          {monthPlanned.map((tx, i) => (
+            <div key={tx.id}>
+              {i > 0 ? <Hairline /> : null}
+              <TransactionRow tx={tx} showDate onClick={() => setTx(tx.id)} />
+            </div>
+          ))}
+          {upcomingOnly.map((r, i) => (
+            <div key={r.id}>
+              {monthPlanned.length || i > 0 ? <Hairline /> : null}
+              <Link to="/budget" className="flex items-center justify-between px-5 py-3">
+                <div>
+                  <div className="text-sm">{pickName(locale, r.label, r.labelZh)}</div>
+                  <div className="text-xs text-muted">
+                    {t.budget.chargedDay} {chargedDayOf(r)}
                   </div>
                 </div>
-              ))}
-            </>
-          ) : null}
+                <AmountWithHkd
+                  amount={r.type === "expense" || r.countsAsExpense ? -r.amount : r.amount}
+                  currency={r.currency}
+                  rates={rates}
+                  sign
+                  className="text-sm font-semibold"
+                />
+              </Link>
+            </div>
+          ))}
         </>
       ) : null}
 
       <SectionLabel>{t.today.dayTx}</SectionLabel>
       <Hairline />
       <p className="px-5 pt-2 text-xs text-muted">{longDate(selected, locale)}</p>
-      {paid.length === 0 && monthPlanned.length === 0 ? (
+      {paid.length === 0 ? (
         <p className="px-5 py-6 text-sm text-muted">{t.today.noTxDay}</p>
       ) : (
         <>
@@ -241,18 +246,6 @@ function TodayBody() {
               <TransactionRow tx={tx} onClick={() => setTx(tx.id)} />
             </div>
           ))}
-          {monthPlanned.length ? (
-            <>
-              <SectionLabel>{t.today.monthPlanned}</SectionLabel>
-              <Hairline />
-              {monthPlanned.map((tx, i) => (
-                <div key={tx.id}>
-                  {i > 0 ? <Hairline /> : null}
-                  <TransactionRow tx={tx} showDate onClick={() => setTx(tx.id)} />
-                </div>
-              ))}
-            </>
-          ) : null}
         </>
       )}
     </div>
