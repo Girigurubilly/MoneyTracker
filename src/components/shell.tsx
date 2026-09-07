@@ -83,8 +83,8 @@ function Nav() {
     { to: "/reports", label: t.nav.reports, icon: pack.reports, match: (p: string) => p.startsWith("/reports") },
     { to: "/more", label: t.nav.more, icon: pack.more, match: (p: string) => p.startsWith("/more") },
   ] as const;
-  const items = access === "kid" ? all.filter((it) => it.to !== "/reports" && it.to !== "/assets") : all;
-  const cols = items.length === 3 ? "grid-cols-3" : "grid-cols-5";
+  const items = access === "kid" ? all.filter((it) => it.to !== "/reports") : all;
+  const cols = items.length === 4 ? "grid-cols-4" : items.length === 3 ? "grid-cols-3" : "grid-cols-5";
   return (
     <>
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-elevated pb-[env(safe-area-inset-bottom)] lg:hidden">

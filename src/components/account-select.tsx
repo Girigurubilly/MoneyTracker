@@ -22,6 +22,7 @@ export function AccountSelect({
 }) {
   const t = useT();
   const locale = useUi((s) => s.locale);
+  const kid = useUi((s) => s.accessMode) === "kid";
   const labels: Record<AccountGroup, string> = {
     cash: t.assets.cash,
     credit: t.assets.credit,
@@ -29,8 +30,8 @@ export function AccountSelect({
     housing: t.assets.housing,
     loyalty: t.assets.loyalty,
   };
-  const rows = moneyAccountsForPicker(accounts, { includeId: value }).filter((a) => a.id !== excludeId);
-  const groups = BALANCE_GROUP_ORDER.map((group) => ({
+  const rows = moneyAccountsForPicker(accounts, { includeId: value, kid }).filter((a) => a.id !== excludeId);
+  const groups = BALANCE_GROUP_ORDER.filter((group) => !kid || group === "cash" || group === "credit").map((group) => ({
     group,
     items: rows.filter((a) => a.group === group),
   })).filter((g) => g.items.length);

@@ -31,7 +31,7 @@ import {
 } from "@/components/txn-composer";
 import { netWorthNow } from "@/lib/calc/networth";
 import { toHkd } from "@/lib/calc/fx";
-import { accountsInGroup, BALANCE_GROUP_ORDER, nextSortOrder } from "@/lib/accounts";
+import { accountsInGroup, BALANCE_GROUP_ORDER, isKidVisibleAccount, nextSortOrder } from "@/lib/accounts";
 import {
   ACCOUNT_TYPE_OPTIONS,
   CURRENCIES,
@@ -91,9 +91,11 @@ function isForeignSection(a: Account) {
 
 export function AssetsScreen() {
   const t = useT();
+  const kid = useUi((s) => s.accessMode) === "kid";
   const accounts = useApp((s) => s.accounts);
   const rates = useApp((s) => s.fxRates);
-  const nw = netWorthNow(accounts, rates);
+  const scoped = kid ? accounts.filter(isKidVisibleAccount) : accounts;
+  const nw = netWorthNow(scoped, rates);
   const [editingId, setEditingId] = useState<string | null | "new">(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [reorder, setReorder] = useState(false);
@@ -105,11 +107,15 @@ export function AssetsScreen() {
     housing: t.assets.housing,
     loyalty: t.assets.loyalty,
   };
-  const visible = accounts.filter((a) => !a.hidden);
-  const hiddenRows = accounts.filter((a) => a.hidden);
+  const visible = scoped.filter((a) => !a.hidden);
+  const hiddenRows = scoped.filter((a) => a.hidden);
   const fxRows = visible.filter(isForeignSection);
   const fxIds = new Set(fxRows.map((a) => a.id));
-  const groups = BALANCE_GROUP_ORDER.filter((id) => id !== "loyalty").map((id) => ({ id, label: labels[id] }));
+  const groups = BALANCE_GROUP_ORDER.filter((id) => {
+    if (id === "loyalty") return false;
+    if (kid && (id === "assets" || id === "housing")) return false;
+    return true;
+  }).map((id) => ({ id, label: labels[id] }));
 
   function openAccount(id: string) {
     setViewingId(id);
@@ -250,6 +256,7 @@ function AccountCard({
   onEdit: () => void;
 }) {
   const locale = useUi((s) => s.locale);
+  const kid = useUi((s) => s.accessMode) === "kid";
   const t = useT();
   const move = useApp((s) => s.moveAccount);
   const moveTo = useApp((s) => s.moveAccountToGroup);
@@ -295,7 +302,7 @@ function AccountCard({
             onChange={(e) => void moveTo(a.id, e.target.value as AccountGroup | "fx")}
             className="h-8 max-w-[5.5rem] rounded-md bg-background px-1 text-[10px] text-accent outline-none"
           >
-            {(Object.keys(groupLabels) as AccountGroup[]).map((g) => (
+            {(kid ? (["cash", "credit"] as AccountGroup[]) : (Object.keys(groupLabels) as AccountGroup[])).map((g) => (
               <option key={g} value={g}>
                 {groupLabels[g]}
               </option>
@@ -373,6 +380,7 @@ function AccountDetail({
 function AccountEditor({ open, account, onClose }: { open: boolean; account: Account | null; onClose: () => void }) {
   const t = useT();
   const locale = useUi((s) => s.locale);
+  const kid = useUi((s) => s.accessMode) === "kid";
   const accounts = useApp((s) => s.accounts);
   const mortgage = useApp((s) => s.mortgage);
   const add = useApp((s) => s.addAccount);
@@ -477,13 +485,21 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
             if (nextType === "miles") setCurrency("MILES");
             else if (currency === "MILES") setCurrency("HKD");
           }}
-          options={[
-            { id: "cash", label: t.assets.cash },
-            { id: "credit", label: t.assets.credit },
-            { id: "assets", label: t.assets.investments },
-            { id: "housing", label: t.assets.housing },
-            { id: "fx", label: t.assets.foreign },
-          ]}
+          options={
+            kid
+              ? [
+                  { id: "cash", label: t.assets.cash },
+                  { id: "credit", label: t.assets.credit },
+                  { id: "fx", label: t.assets.foreign },
+                ]
+              : [
+                  { id: "cash", label: t.assets.cash },
+                  { id: "credit", label: t.assets.credit },
+                  { id: "assets", label: t.assets.investments },
+                  { id: "housing", label: t.assets.housing },
+                  { id: "fx", label: t.assets.foreign },
+                ]
+          }
         />
         {type === "fx" ? null : (
           <SelectLine

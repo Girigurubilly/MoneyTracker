@@ -47,6 +47,7 @@ export function AddFlow() {
 
 function AddTypePicker({ onPick, onWallet, onClose }: { onPick: (t: TxType) => void; onWallet: () => void; onClose: () => void }) {
   const t = useT();
+  const kid = useUi((s) => s.accessMode) === "kid";
   const opts: { id: TxType; tone: string }[] = [
     { id: "expense", tone: "bg-expense-soft text-expense" },
     { id: "income", tone: "bg-success-soft text-income" },
@@ -73,6 +74,7 @@ function AddTypePicker({ onPick, onWallet, onClose }: { onPick: (t: TxType) => v
               {t.add[k.id]}
             </button>
           ))}
+          {kid ? null : (
           <button
             type="button"
             className="flex min-h-28 flex-col items-center justify-center rounded-2xl bg-watch-soft text-base font-semibold text-watch"
@@ -80,6 +82,7 @@ function AddTypePicker({ onPick, onWallet, onClose }: { onPick: (t: TxType) => v
           >
             {t.add.applePay}
           </button>
+          )}
         </div>
       </div>
     </Overlay>
@@ -89,6 +92,7 @@ function AddTypePicker({ onPick, onWallet, onClose }: { onPick: (t: TxType) => v
 function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () => void }) {
   const t = useT();
   const locale = useUi((s) => s.locale);
+  const kid = useUi((s) => s.accessMode) === "kid";
   const selectedDate = useUi((s) => s.selectedDate);
   const accounts = useApp((s) => s.accounts);
   const categories = useApp((s) => s.categories);
@@ -96,7 +100,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
   const rates = useApp((s) => s.fxRates);
   const defaultCurrency = useApp((s) => s.defaultCurrency);
   const addTransaction = useApp((s) => s.addTransaction);
-  const moneyAccounts = moneyAccountsForPicker(accounts);
+  const moneyAccounts = moneyAccountsForPicker(accounts, { kid });
   const [type, setType] = useState<TxType>(initialType);
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState<Currency>(defaultCurrency);

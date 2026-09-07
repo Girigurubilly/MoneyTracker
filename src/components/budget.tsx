@@ -35,6 +35,7 @@ import { applyTxRules } from "@/lib/tx-rules";
 export function BudgetScreen() {
   const t = useT();
   const locale = useUi((s) => s.locale);
+  const kid = useUi((s) => s.accessMode) === "kid";
   const budgets = useApp((s) => s.budgets);
   const txs = useApp((s) => s.transactions);
   const rates = useApp((s) => s.fxRates);
@@ -174,6 +175,9 @@ export function BudgetScreen() {
           setRegOpen(true);
         }}
       />
+
+      {kid ? null : (
+        <>
       <AdhocBlock
         month={month}
         onAdd={() => {
@@ -236,6 +240,8 @@ export function BudgetScreen() {
       })}
 
       <WishlistBlock compact />
+        </>
+      )}
 
       <Overlay open={editCap} onClose={() => setEditCap(false)} title={t.budget.monthlyTotal}>
         <div className="px-5 pb-8">

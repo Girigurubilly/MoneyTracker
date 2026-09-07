@@ -47,8 +47,12 @@ export function MoreScreen() {
           </>
         )}
         <Row icon={<Wallet className="size-4" />} title={t.more.budgets} to="/budget" chevron />
-        <Hairline />
-        <Row icon={<ShoppingBag className="size-4" />} title={t.more.wishlist} to="/more/wishlist" chevron />
+        {kid ? null : (
+          <>
+            <Hairline />
+            <Row icon={<ShoppingBag className="size-4" />} title={t.more.wishlist} to="/more/wishlist" chevron />
+          </>
+        )}
         {kid ? null : (
           <>
             <Hairline />
