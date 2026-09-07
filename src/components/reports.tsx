@@ -1,17 +1,20 @@
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ChevronRight } from "lucide-react";
 import { Disclaimer, Group, Hairline, ScreenHeader, StatusChip, BudgetChip } from "@/components/shared";
-import { compactHkd, money, todayISO } from "@/lib/format";
+import { compactHkd, money, shortDate, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
-import { cashflowSeries, monthKeysBack, monthLabel } from "@/lib/derived";
-import { livingEssentials, monthCashflowForecast } from "@/lib/calc/budget";
+import { monthKeysBack, monthLabel } from "@/lib/derived";
+import { livingEssentials } from "@/lib/calc/budget";
 import { nextTrip, travelSpendYtd, tripCashSpent } from "@/lib/calc/trips";
 import { effectiveRate, monthlyPayment } from "@/lib/calc/mortgage";
 import { housingStatus, monthlyHousingCost } from "@/lib/calc/housing";
 import { investableNow } from "@/lib/calc/networth";
 import { ageFromBirthday, retirementStatus, runRetirement, savingsLast12Months, sustainableMonthly } from "@/lib/calc/retirement";
+import { periodCashflowPoints, periodRange, type PeriodPreset } from "@/lib/calc/period";
 import { monthKey } from "@/lib/calc/ledger";
+import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 
@@ -27,6 +30,7 @@ export function ReportsHub() {
   const items = [
     { to: "/reports/dashboard", title: t.reports.dashboard, modes: ["standard", "elderly"] },
     { to: "/reports/spending", title: t.reports.spending, modes: ["standard", "elderly", "kid"] },
+    { to: "/reports/cashflow", title: t.reports.cashflow, modes: ["standard", "elderly", "kid"] },
     { to: "/reports/compare", title: t.reports.yearCompare, modes: ["standard"] },
     { to: "/reports/balance", title: t.reports.balance, modes: ["standard", "elderly"] },
     { to: "/reports/deposits", title: t.reports.deposits, modes: ["standard", "elderly"] },
@@ -36,7 +40,7 @@ export function ReportsHub() {
     { to: "/reports/retirement", title: t.reports.retirement, modes: ["standard", "elderly"] },
   ].filter((it) => it.modes.includes(access));
   const groups = [
-    { id: "flow", title: t.reports.groupFlow, items: items.filter((it) => ["/reports/dashboard", "/reports/spending", "/reports/compare"].includes(it.to)) },
+    { id: "flow", title: t.reports.groupFlow, items: items.filter((it) => ["/reports/dashboard", "/reports/spending", "/reports/cashflow", "/reports/compare"].includes(it.to)) },
     { id: "save", title: t.reports.groupSave, items: items.filter((it) => ["/reports/balance", "/reports/deposits", "/reports/yearly"].includes(it.to)) },
     { id: "life", title: t.reports.groupLife, items: items.filter((it) => ["/reports/living", "/reports/travel", "/reports/retirement"].includes(it.to)) },
   ].filter((g) => g.items.length);
@@ -186,57 +190,95 @@ export function CashflowPage() {
   const t = useT();
   const locale = useUi((s) => s.locale);
   const txs = useApp((s) => s.transactions);
-  const rec = useApp((s) => s.recurring);
-  const adhoc = useApp((s) => s.adhocBudgets);
   const rates = useApp((s) => s.fxRates);
   const today = todayISO();
-  const from = today.slice(0, 7);
-  const series = cashflowSeries(txs, rec, adhoc, rates, from, 6, today);
-  const current = monthCashflowForecast(txs, rec, adhoc, from, rates, today);
+  const [preset, setPreset] = useState<PeriodPreset>("this-month");
+  const [customFrom, setCustomFrom] = useState(`${today.slice(0, 4)}-01-01`);
+  const [customTo, setCustomTo] = useState(today);
+  const range = periodRange(preset, today, customFrom, customTo);
+  const from = preset === "custom" ? customFrom : range.from;
+  const to = preset === "custom" ? customTo : range.to;
+  const flow = periodCashflowPoints(txs, rates, from, to);
+  const presets: { id: PeriodPreset; label: string }[] = [
+    { id: "this-month", label: t.reports.thisMonth },
+    { id: "last-month", label: t.reports.lastMonth },
+    { id: "this-year", label: t.reports.thisYear },
+    { id: "last-year", label: t.reports.lastYear },
+    { id: "all", label: t.reports.all },
+    { id: "custom", label: t.reports.custom },
+  ];
   return (
     <div className="pb-10">
       <ScreenHeader title={t.reports.cashflow} backTo="/reports" />
-      <p className="px-5 pb-3 text-xs text-muted">
-        {locale === "zh-HK"
-          ? "收入含本月已入帳及尚未扣帳的定期收入。本月開支含已入帳開支、尚未扣帳的每月定期，以及尚未扣帳的本月臨時。"
-          : "Income includes posted and still-scheduled income this month. This month’s expense includes posted spend, uncharged monthly regulars, and uncharged this-month-only holds."}
-      </p>
-      <div className="mx-4 mb-4 grid grid-cols-3 gap-2 rounded-xl bg-elevated px-4 py-3 text-center">
+      <div className="mx-4 grid grid-cols-2 overflow-hidden rounded-xl bg-elevated">
+        <label className="border-r border-line px-4 py-3">
+          <div className="text-xs text-muted">{t.reports.start}</div>
+          {preset === "custom" ? (
+            <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="mt-1 w-full bg-transparent text-sm outline-none" />
+          ) : (
+            <div className="mt-1 text-sm">{shortDate(from, locale)}</div>
+          )}
+        </label>
+        <label className="px-4 py-3">
+          <div className="text-xs text-muted">{t.reports.end}</div>
+          {preset === "custom" ? (
+            <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="mt-1 w-full bg-transparent text-sm outline-none" />
+          ) : (
+            <div className="mt-1 text-sm">{shortDate(to, locale)}</div>
+          )}
+        </label>
+      </div>
+      <div className="flex flex-wrap gap-2 px-4 pt-3">
+        {presets.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            className={cn("rounded-full px-3 py-1.5 text-xs font-medium", preset === p.id ? "bg-accent text-on-accent" : "bg-elevated text-muted")}
+            onClick={() => setPreset(p.id)}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <div className="mx-4 my-4 grid grid-cols-3 gap-2 rounded-xl bg-elevated px-3 py-3 text-center">
         <div>
           <div className="text-xs text-muted">{t.reports.income}</div>
-          <div className="mt-1 text-sm font-semibold tabular-nums text-income">{money(current.income, "HKD")}</div>
+          <div className="mt-1 text-sm font-semibold tabular-nums text-income">{money(flow.income, "HKD")}</div>
         </div>
         <div>
           <div className="text-xs text-muted">{t.reports.expense}</div>
-          <div className="mt-1 text-sm font-semibold tabular-nums text-expense">{money(current.expense, "HKD")}</div>
+          <div className="mt-1 text-sm font-semibold tabular-nums text-expense">{money(flow.expense, "HKD")}</div>
         </div>
         <div>
           <div className="text-xs text-muted">{t.reports.net}</div>
-          <div className="mt-1 text-sm font-semibold tabular-nums">{money(current.net, "HKD", { sign: true })}</div>
+          <div className={cn("mt-1 text-sm font-semibold tabular-nums", flow.net >= 0 ? "text-income" : "text-expense")}>
+            {money(flow.net, "HKD", { sign: true })}
+          </div>
         </div>
       </div>
       <div className="h-64 px-2">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={series.map((s) => ({ ...s, label: monthLabel(s.month, locale) }))}>
+          <BarChart data={flow.points.map((p) => ({ ...p, label: flow.grain === "month" ? monthLabel(p.key, locale) : p.key.slice(8) }))}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
             <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 10 }} />
-            <Tooltip />
-            <Bar dataKey="income" fill="var(--color-income)" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="expense" fill="var(--color-expense)" radius={[4, 4, 0, 0]} />
+            <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => compactHkd(Number(v))} />
+            <Tooltip formatter={(v) => money(Number(v), "HKD")} />
+            <Bar dataKey="income" name={t.reports.income} fill="var(--color-income)" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="expense" name={t.reports.expense} fill="var(--color-expense)" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <div className="px-5 pt-4">
-        {series.map((s) => (
-          <div key={s.month} className="flex items-center justify-between border-t border-line py-3 text-sm first:border-0">
-            <span>{monthLabel(s.month, locale)}</span>
+      <div className="px-5 pt-2">
+        {flow.points.map((p) => (
+          <div key={p.key} className="flex items-center justify-between border-t border-line py-3 text-sm first:border-0">
+            <span>{flow.grain === "month" ? monthLabel(p.key, locale) : shortDate(p.key, locale)}</span>
             <span className="tabular-nums text-muted">
-              {money(s.income, "HKD")} / {money(s.expense, "HKD")}
+              {money(p.income, "HKD")} / {money(p.expense, "HKD")}
             </span>
-            <span className="tabular-nums font-medium">{money(s.net, "HKD", { sign: true })}</span>
+            <span className={cn("tabular-nums font-medium", p.net >= 0 ? "text-income" : "text-expense")}>{money(p.net, "HKD", { sign: true })}</span>
           </div>
         ))}
+        {flow.points.length === 0 ? <p className="py-6 text-sm text-muted">{t.today.noTxDay}</p> : null}
       </div>
     </div>
   );

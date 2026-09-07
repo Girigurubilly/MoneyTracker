@@ -360,6 +360,17 @@ export function BackupPage() {
       <ScreenHeader title={t.backup.title} />
       <h2 className="px-5 pb-2 text-sm font-medium text-muted">{t.backup.drive}</h2>
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.backup.driveHint}</p>
+      <div className="mx-4 mb-4 space-y-1 rounded-xl bg-elevated px-4 py-3 text-[11px] leading-5 text-muted">
+        <div className="font-medium text-foreground">{t.backup.driveSetup}</div>
+        <p>{t.backup.driveStep1}</p>
+        <p>{t.backup.driveStep2}</p>
+        <p>{t.backup.driveStep3}</p>
+        <p>{t.backup.driveStep4}</p>
+        <p>{t.backup.driveStep5}</p>
+        <p>{t.backup.driveStep6}</p>
+        <p>{t.backup.driveStep7}</p>
+        <p>{t.backup.driveStep8}</p>
+      </div>
       <div className="px-5 space-y-3">
         <button
           type="button"

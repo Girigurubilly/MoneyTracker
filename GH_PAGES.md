@@ -28,4 +28,12 @@ Two separate CI failures stacked:
 - No login, no backend
 - Data stays on the device (IndexedDB)
 - Import / backup still run in the browser
-- Google Drive backup redirects to Google Sign-In. Add repo secret `VITE_GOOGLE_CLIENT_ID` (Web OAuth client). Origins: `https://girigurubilly.github.io`. Redirect URIs: `https://girigurubilly.github.io/MoneyTracker/` and `https://girigurubilly.github.io/MoneyTracker/more/backup`. Drive API on. Scope is only files this app creates (folder `HK Life Money`).
+- Google Drive backup (one-time owner setup):
+  1. [Google Cloud Console](https://console.cloud.google.com/) → New project
+  2. APIs & Services → Library → enable **Google Drive API**
+  3. OAuth consent screen → External → app name `HK Life Money`
+  4. Credentials → Create credentials → OAuth client ID → **Web application**
+  5. Authorised JavaScript origins: `https://girigurubilly.github.io`
+  6. Authorised redirect URIs: `https://girigurubilly.github.io/MoneyTracker/` and `https://girigurubilly.github.io/MoneyTracker/more/backup`
+  7. Copy the Client ID → GitHub repo **Settings → Secrets and variables → Actions → New repository secret** name `VITE_GOOGLE_CLIENT_ID`
+  8. Re-run **Deploy GitHub Pages**. Users then only tap Sign in with Google. File lands in that user’s Drive folder `HK Life Money`.

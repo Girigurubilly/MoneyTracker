@@ -107,6 +107,43 @@ export function periodCategoryTotals(
   return { rows, expense, income };
 }
 
+export type CashflowPoint = {
+  key: string;
+  income: number;
+  expense: number;
+  net: number;
+};
+
+export function periodCashflowPoints(
+  txs: Transaction[],
+  rates: FxRate[],
+  from: string,
+  to: string,
+): { points: CashflowPoint[]; income: number; expense: number; net: number; grain: "day" | "month" } {
+  const days = (Date.parse(`${to}T00:00:00`) - Date.parse(`${from}T00:00:00`)) / 86400000;
+  const grain: "day" | "month" = days <= 45 ? "day" : "month";
+  const map = new Map<string, CashflowPoint>();
+  let income = 0;
+  let expense = 0;
+  for (const tx of txs) {
+    if (tx.planned) continue;
+    if (!inPeriod(tx.date, from, to)) continue;
+    const side = cashflowSide(tx);
+    if (side === "none") continue;
+    const hkd = Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
+    if (side === "income") income += hkd;
+    else expense += hkd;
+    const key = grain === "day" ? tx.date : tx.date.slice(0, 7);
+    const row = map.get(key) ?? { key, income: 0, expense: 0, net: 0 };
+    if (side === "income") row.income += hkd;
+    else row.expense += hkd;
+    row.net = row.income - row.expense;
+    map.set(key, row);
+  }
+  const points = [...map.values()].sort((a, b) => a.key.localeCompare(b.key));
+  return { points, income, expense, net: income - expense, grain };
+}
+
 /** Posted txs that make up one 費用/收入 chart row for the selected timeframe. */
 export function periodCategoryTxs(
   txs: Transaction[],
