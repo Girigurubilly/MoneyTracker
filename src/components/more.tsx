@@ -7,6 +7,14 @@ import { CurrencySelect } from "@/components/currency-field";
 import { CategoryPicker } from "@/components/category-picker";
 import { pickName } from "@/lib/i18n";
 import { decryptSnapshot, downloadBlob, encryptSnapshot } from "@/lib/backup";
+import {
+  downloadBackup,
+  loadGis,
+  readGoogleClientId,
+  requestDriveToken,
+  uploadBackup,
+  writeGoogleClientId,
+} from "@/lib/google-drive";
 import { transactionsToCsv } from "@/lib/derived";
 import { convertBtp, isAppSnapshot, isBtpFile } from "@/lib/import-btp";
 import { CURRENCIES, type BudgetTargetMode } from "@/lib/types";
@@ -269,10 +277,104 @@ export function BackupPage() {
   const replaceAll = useApp((s) => s.replaceAll);
   const txs = useApp((s) => s.transactions);
   const [password, setPassword] = useState("");
+  const [clientId, setClientId] = useState(() => readGoogleClientId());
+  const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  async function withDriveToken() {
+    const id = clientId.trim();
+    if (!id) {
+      toast(t.backup.driveNeedClient);
+      throw new Error("client");
+    }
+    writeGoogleClientId(id);
+    await loadGis();
+    return requestDriveToken(id);
+  }
+
+  async function payloadForDrive() {
+    const raw = JSON.stringify(exportSnap());
+    if (password) return encryptSnapshot(raw, password);
+    return raw;
+  }
+
+  async function importPayload(text: string) {
+    let json = text;
+    try {
+      const parsed = JSON.parse(text) as { data?: string; salt?: string };
+      if (parsed.salt && parsed.data) {
+        if (!password) {
+          toast(t.backup.needPassword);
+          return;
+        }
+        json = await decryptSnapshot(text, password);
+      }
+    } catch {
+      /* plain snapshot */
+    }
+    const snap = JSON.parse(json) as AppSnapshot;
+    if (!isAppSnapshot(snap)) throw new Error("format");
+    await replaceAll(snap);
+    toast(t.backup.restored);
+  }
+
   return (
     <div className="pb-10">
       <ScreenHeader title={t.backup.title} />
+      <h2 className="px-5 pb-2 text-sm font-medium text-muted">{t.backup.drive}</h2>
+      <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.backup.driveHint}</p>
+      <div className="px-5 space-y-3">
+        <input
+          value={clientId}
+          onChange={(e) => setClientId(e.target.value)}
+          onBlur={() => writeGoogleClientId(clientId)}
+          className="h-11 w-full rounded-lg bg-elevated px-3 text-sm"
+          placeholder={t.backup.driveClient}
+          autoComplete="off"
+        />
+        <p className="text-[11px] leading-4 text-faint">{t.backup.driveClientHint}</p>
+        <button
+          type="button"
+          disabled={busy}
+          className="h-11 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent disabled:opacity-60"
+          onClick={async () => {
+            setBusy(true);
+            try {
+              const token = await withDriveToken();
+              await uploadBackup(token, await payloadForDrive());
+              toast(t.backup.driveSaved);
+            } catch (err) {
+              if ((err as Error).message !== "client") toast(t.backup.driveFail);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {t.backup.driveSave}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          className="h-11 w-full rounded-xl bg-elevated text-sm disabled:opacity-60"
+          onClick={async () => {
+            setBusy(true);
+            try {
+              const token = await withDriveToken();
+              const text = await downloadBackup(token);
+              await importPayload(text);
+            } catch (err) {
+              const msg = (err as Error).message;
+              if (msg === "missing") toast(t.backup.driveMissing);
+              else if (msg !== "client") toast(t.backup.driveFail);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {t.backup.driveRestore}
+        </button>
+      </div>
+      <h2 className="px-5 pb-2 pt-6 text-sm font-medium text-muted">{locale === "zh-HK" ? "本機檔案" : "This device"}</h2>
       <div className="px-5 space-y-3">
         <button type="button" className="h-11 w-full rounded-xl bg-elevated text-sm" onClick={() => downloadBlob("hk-life-money.json", JSON.stringify(exportSnap(), null, 2))}>
           {t.backup.exportJson}
