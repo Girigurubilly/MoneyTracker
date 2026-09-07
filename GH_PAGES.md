@@ -28,4 +28,4 @@ Two separate CI failures stacked:
 - No login, no backend
 - Data stays on the device (IndexedDB)
 - Import / backup still run in the browser
-- Google Drive backup needs a Web OAuth client ID (Drive API). Authorised JavaScript origin: `https://girigurubilly.github.io`. Paste the client ID on More → Backup.
+- Google Drive backup uses Sign in with Google. Add repo secret `VITE_GOOGLE_CLIENT_ID` (Web OAuth client, origin `https://girigurubilly.github.io`, Drive API on). End users never paste a key.

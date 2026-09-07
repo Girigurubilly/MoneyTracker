@@ -13,7 +13,6 @@ import {
   readGoogleClientId,
   requestDriveToken,
   uploadBackup,
-  writeGoogleClientId,
 } from "@/lib/google-drive";
 import { transactionsToCsv } from "@/lib/derived";
 import { convertBtp, isAppSnapshot, isBtpFile } from "@/lib/import-btp";
@@ -277,17 +276,15 @@ export function BackupPage() {
   const replaceAll = useApp((s) => s.replaceAll);
   const txs = useApp((s) => s.transactions);
   const [password, setPassword] = useState("");
-  const [clientId, setClientId] = useState(() => readGoogleClientId());
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function withDriveToken() {
-    const id = clientId.trim();
+    const id = readGoogleClientId();
     if (!id) {
       toast(t.backup.driveNeedClient);
       throw new Error("client");
     }
-    writeGoogleClientId(id);
     await loadGis();
     return requestDriveToken(id);
   }
@@ -324,15 +321,6 @@ export function BackupPage() {
       <h2 className="px-5 pb-2 text-sm font-medium text-muted">{t.backup.drive}</h2>
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.backup.driveHint}</p>
       <div className="px-5 space-y-3">
-        <input
-          value={clientId}
-          onChange={(e) => setClientId(e.target.value)}
-          onBlur={() => writeGoogleClientId(clientId)}
-          className="h-11 w-full rounded-lg bg-elevated px-3 text-sm"
-          placeholder={t.backup.driveClient}
-          autoComplete="off"
-        />
-        <p className="text-[11px] leading-4 text-faint">{t.backup.driveClientHint}</p>
         <button
           type="button"
           disabled={busy}

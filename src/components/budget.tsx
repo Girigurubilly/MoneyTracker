@@ -174,7 +174,6 @@ export function BudgetScreen() {
           setRegOpen(true);
         }}
       />
-      <PlannedTransfersBlock month={month} />
       <AdhocBlock
         month={month}
         onAdd={() => {
@@ -352,40 +351,6 @@ function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recur
           })}
         </div>
       )}
-    </div>
-  );
-}
-
-function PlannedTransfersBlock({ month }: { month: string }) {
-  const t = useT();
-  const setTx = useUi((s) => s.setTxDetailId);
-  const rates = useApp((s) => s.fxRates);
-  const rows = useApp((s) => s.transactions)
-    .filter((tx) => tx.planned && tx.type === "transfer" && tx.date.startsWith(month))
-    .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
-  if (!rows.length) return null;
-  return (
-    <div className="pt-4">
-      <div className="flex items-center justify-between px-5 pb-1">
-        <h2 className="text-sm font-medium text-muted">{t.today.monthPlanned}</h2>
-      </div>
-      <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
-        {rows.map((tx) => (
-          <button
-            key={tx.id}
-            type="button"
-            className="flex w-full items-center gap-3 border-t border-line px-4 py-3 text-left first:border-0"
-            onClick={() => setTx(tx.id)}
-          >
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium">{tx.payeeZh || tx.payee}</div>
-              <div className="mt-0.5 text-xs text-muted">{tx.date.slice(8)}</div>
-            </div>
-            <AmountWithHkd amount={tx.amount} currency={tx.currency} rates={rates} className="text-sm font-semibold" />
-            <ChevronRight className="size-4 shrink-0 text-faint" />
-          </button>
-        ))}
-      </div>
     </div>
   );
 }

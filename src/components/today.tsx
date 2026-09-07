@@ -200,6 +200,22 @@ function TodayBody() {
         </>
       ) : null}
 
+      <SectionLabel>{t.today.dayTx}</SectionLabel>
+      <Hairline />
+      <p className="px-5 pt-2 text-xs text-muted">{longDate(selected, locale)}</p>
+      {paid.length === 0 ? (
+        <p className="px-5 py-6 text-sm text-muted">{t.today.noTxDay}</p>
+      ) : (
+        <>
+          {paid.map((tx, i) => (
+            <div key={tx.id}>
+              {i > 0 ? <Hairline /> : null}
+              <TransactionRow tx={tx} onClick={() => setTx(tx.id)} />
+            </div>
+          ))}
+        </>
+      )}
+
       {monthPlanned.length || upcomingOnly.length ? (
         <>
           <SectionLabel>{t.today.monthPlanned}</SectionLabel>
@@ -232,22 +248,6 @@ function TodayBody() {
           ))}
         </>
       ) : null}
-
-      <SectionLabel>{t.today.dayTx}</SectionLabel>
-      <Hairline />
-      <p className="px-5 pt-2 text-xs text-muted">{longDate(selected, locale)}</p>
-      {paid.length === 0 ? (
-        <p className="px-5 py-6 text-sm text-muted">{t.today.noTxDay}</p>
-      ) : (
-        <>
-          {paid.map((tx, i) => (
-            <div key={tx.id}>
-              {i > 0 ? <Hairline /> : null}
-              <TransactionRow tx={tx} onClick={() => setTx(tx.id)} />
-            </div>
-          ))}
-        </>
-      )}
     </div>
   );
 }
