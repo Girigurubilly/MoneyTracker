@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Archive, FolderTree, Globe, Palette, PiggyBank, Settings2, ShoppingBag, SlidersHorizontal, Undo2, Upload, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
@@ -9,9 +9,10 @@ import { pickName } from "@/lib/i18n";
 import { decryptSnapshot, downloadBlob, encryptSnapshot } from "@/lib/backup";
 import {
   downloadBackup,
-  loadGis,
   readGoogleClientId,
-  requestDriveToken,
+  startGoogleSignIn,
+  takePendingDriveAction,
+  takeRedirectToken,
   uploadBackup,
 } from "@/lib/google-drive";
 import { transactionsToCsv } from "@/lib/derived";
@@ -279,16 +280,6 @@ export function BackupPage() {
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  async function withDriveToken() {
-    const id = readGoogleClientId();
-    if (!id) {
-      toast(t.backup.driveNeedClient);
-      throw new Error("client");
-    }
-    await loadGis();
-    return requestDriveToken(id);
-  }
-
   async function payloadForDrive() {
     const raw = JSON.stringify(exportSnap());
     if (password) return encryptSnapshot(raw, password);
@@ -315,6 +306,51 @@ export function BackupPage() {
     toast(t.backup.restored);
   }
 
+  async function runDrive(action: "save" | "restore", token: string) {
+    if (action === "save") {
+      await uploadBackup(token, await payloadForDrive());
+      toast(t.backup.driveSaved);
+      return;
+    }
+    const text = await downloadBackup(token);
+    await importPayload(text);
+  }
+
+  useEffect(() => {
+    let token: string | null = null;
+    try {
+      token = takeRedirectToken();
+    } catch {
+      toast(t.backup.driveFail);
+      return;
+    }
+    if (!token) return;
+    const action = takePendingDriveAction();
+    if (!action) return;
+    setBusy(true);
+    void runDrive(action, token)
+      .catch((err) => {
+        const msg = (err as Error).message;
+        if (msg === "missing") toast(t.backup.driveMissing);
+        else toast(t.backup.driveFail);
+      })
+      .finally(() => setBusy(false));
+    // snapshot + password from this render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function beginDrive(action: "save" | "restore") {
+    if (!readGoogleClientId()) {
+      toast(t.backup.driveNeedClient);
+      return;
+    }
+    try {
+      startGoogleSignIn(action);
+    } catch {
+      toast(t.backup.driveFail);
+    }
+  }
+
   return (
     <div className="pb-10">
       <ScreenHeader title={t.backup.title} />
@@ -325,18 +361,7 @@ export function BackupPage() {
           type="button"
           disabled={busy}
           className="h-11 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent disabled:opacity-60"
-          onClick={async () => {
-            setBusy(true);
-            try {
-              const token = await withDriveToken();
-              await uploadBackup(token, await payloadForDrive());
-              toast(t.backup.driveSaved);
-            } catch (err) {
-              if ((err as Error).message !== "client") toast(t.backup.driveFail);
-            } finally {
-              setBusy(false);
-            }
-          }}
+          onClick={() => beginDrive("save")}
         >
           {t.backup.driveSave}
         </button>
@@ -344,20 +369,7 @@ export function BackupPage() {
           type="button"
           disabled={busy}
           className="h-11 w-full rounded-xl bg-elevated text-sm disabled:opacity-60"
-          onClick={async () => {
-            setBusy(true);
-            try {
-              const token = await withDriveToken();
-              const text = await downloadBackup(token);
-              await importPayload(text);
-            } catch (err) {
-              const msg = (err as Error).message;
-              if (msg === "missing") toast(t.backup.driveMissing);
-              else if (msg !== "client") toast(t.backup.driveFail);
-            } finally {
-              setBusy(false);
-            }
-          }}
+          onClick={() => beginDrive("restore")}
         >
           {t.backup.driveRestore}
         </button>

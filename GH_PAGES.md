@@ -28,4 +28,4 @@ Two separate CI failures stacked:
 - No login, no backend
 - Data stays on the device (IndexedDB)
 - Import / backup still run in the browser
-- Google Drive backup uses Sign in with Google. Add repo secret `VITE_GOOGLE_CLIENT_ID` (Web OAuth client, origin `https://girigurubilly.github.io`, Drive API on). End users never paste a key.
+- Google Drive backup redirects to Google Sign-In. Add repo secret `VITE_GOOGLE_CLIENT_ID` (Web OAuth client). Origins: `https://girigurubilly.github.io`. Redirect URIs: `https://girigurubilly.github.io/MoneyTracker/` and `https://girigurubilly.github.io/MoneyTracker/more/backup`. Drive API on. Scope is only files this app creates (folder `HK Life Money`).

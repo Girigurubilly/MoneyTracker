@@ -1,24 +1,12 @@
 const FILE_NAME = "hk-life-money.backup.json";
+const FOLDER_NAME = "HK Life Money";
 const SCOPE = "https://www.googleapis.com/auth/drive.file";
 const CLIENT_KEY = "hk-life-money-google-client-id";
 const FILE_ID_KEY = "hk-life-money-drive-file-id";
-const GIS_SRC = "https://accounts.google.com/gsi/client";
+const FOLDER_ID_KEY = "hk-life-money-drive-folder-id";
+const ACTION_KEY = "hk-life-money-drive-action";
 
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        oauth2: {
-          initTokenClient: (cfg: {
-            client_id: string;
-            scope: string;
-            callback: (resp: { access_token?: string; error?: string; error_description?: string }) => void;
-          }) => { requestAccessToken: (opts?: { prompt?: string }) => void };
-        };
-      };
-    };
-  }
-}
+export type DriveAction = "save" | "restore";
 
 export function readGoogleClientId(): string {
   try {
@@ -30,67 +18,61 @@ export function readGoogleClientId(): string {
   return String(import.meta.env.VITE_GOOGLE_CLIENT_ID ?? "").trim();
 }
 
-export function writeGoogleClientId(id: string) {
+function readStored(key: string): string {
   try {
-    if (id.trim()) localStorage.setItem(CLIENT_KEY, id.trim());
-    else localStorage.removeItem(CLIENT_KEY);
-  } catch {
-    /* ignore */
-  }
-}
-
-function readFileId(): string {
-  try {
-    return localStorage.getItem(FILE_ID_KEY) ?? "";
+    return localStorage.getItem(key) ?? "";
   } catch {
     return "";
   }
 }
 
-function writeFileId(id: string) {
+function writeStored(key: string, id: string) {
   try {
-    if (id) localStorage.setItem(FILE_ID_KEY, id);
-    else localStorage.removeItem(FILE_ID_KEY);
+    if (id) localStorage.setItem(key, id);
+    else localStorage.removeItem(key);
   } catch {
     /* ignore */
   }
 }
 
-export function loadGis(): Promise<void> {
-  if (window.google?.accounts?.oauth2) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const existing = document.querySelector(`script[src="${GIS_SRC}"]`);
-    if (existing) {
-      existing.addEventListener("load", () => resolve());
-      existing.addEventListener("error", () => reject(new Error("gis")));
-      return;
-    }
-    const s = document.createElement("script");
-    s.src = GIS_SRC;
-    s.async = true;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error("gis"));
-    document.head.appendChild(s);
-  });
+export function redirectUri(): string {
+  return `${window.location.origin}${window.location.pathname}`;
 }
 
-export function requestDriveToken(clientId: string, prompt = ""): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const api = window.google?.accounts?.oauth2;
-    if (!api) {
-      reject(new Error("gis"));
-      return;
-    }
-    const client = api.initTokenClient({
-      client_id: clientId,
-      scope: SCOPE,
-      callback: (resp) => {
-        if (resp.access_token) resolve(resp.access_token);
-        else reject(new Error(resp.error_description || resp.error || "denied"));
-      },
-    });
-    client.requestAccessToken({ prompt });
+/** Send the user to Google Sign-In, then back to this page with a token. */
+export function startGoogleSignIn(action: DriveAction): void {
+  const clientId = readGoogleClientId();
+  if (!clientId) throw new Error("client");
+  sessionStorage.setItem(ACTION_KEY, action);
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri(),
+    response_type: "token",
+    scope: SCOPE,
+    include_granted_scopes: "true",
+    prompt: "select_account consent",
   });
+  window.location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+}
+
+export function takePendingDriveAction(): DriveAction | null {
+  const action = sessionStorage.getItem(ACTION_KEY);
+  if (action === "save" || action === "restore") {
+    sessionStorage.removeItem(ACTION_KEY);
+    return action;
+  }
+  return null;
+}
+
+export function takeRedirectToken(): string | null {
+  const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : "";
+  if (!hash) return null;
+  const params = new URLSearchParams(hash);
+  const token = params.get("access_token");
+  const err = params.get("error");
+  history.replaceState(null, "", window.location.pathname + window.location.search);
+  if (err) throw new Error(err);
+  return token;
 }
 
 async function driveFetch(url: string, token: string, init?: RequestInit) {
@@ -105,40 +87,60 @@ async function driveFetch(url: string, token: string, init?: RequestInit) {
   return res;
 }
 
-export async function findBackupFileId(token: string): Promise<string> {
-  const known = readFileId();
+async function ensureFolder(token: string): Promise<string> {
+  const known = readStored(FOLDER_ID_KEY);
   if (known) return known;
-  const q = encodeURIComponent(`name='${FILE_NAME}' and trashed=false`);
-  const res = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&pageSize=5`, token);
+  const q = encodeURIComponent(`name='${FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const found = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&pageSize=1`, token);
+  const data = (await found.json()) as { files?: { id: string }[] };
+  if (data.files?.[0]?.id) {
+    writeStored(FOLDER_ID_KEY, data.files[0].id);
+    return data.files[0].id;
+  }
+  const created = await driveFetch("https://www.googleapis.com/drive/v3/files", token, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: FOLDER_NAME, mimeType: "application/vnd.google-apps.folder" }),
+  });
+  const folder = (await created.json()) as { id: string };
+  writeStored(FOLDER_ID_KEY, folder.id);
+  return folder.id;
+}
+
+export async function findBackupFileId(token: string): Promise<string> {
+  const known = readStored(FILE_ID_KEY);
+  if (known) return known;
+  const folder = await ensureFolder(token);
+  const q = encodeURIComponent(`name='${FILE_NAME}' and '${folder}' in parents and trashed=false`);
+  const res = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&pageSize=1`, token);
   const data = (await res.json()) as { files?: { id: string }[] };
   const id = data.files?.[0]?.id ?? "";
-  if (id) writeFileId(id);
+  if (id) writeStored(FILE_ID_KEY, id);
   return id;
 }
 
 export async function uploadBackup(token: string, body: string): Promise<void> {
+  const folder = await ensureFolder(token);
   const existing = await findBackupFileId(token);
-  const meta = { name: FILE_NAME, mimeType: "application/json" };
+  const meta = existing
+    ? { name: FILE_NAME, mimeType: "application/json" }
+    : { name: FILE_NAME, mimeType: "application/json", parents: [folder] };
   const form = new FormData();
   form.append("metadata", new Blob([JSON.stringify(meta)], { type: "application/json" }));
   form.append("file", new Blob([body], { type: "application/json" }));
-  if (existing) {
-    const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${existing}?uploadType=multipart`, {
-      method: "PATCH",
-      headers: { Authorization: `Bearer ${token}` },
-      body: form,
-    });
-    if (!res.ok) throw new Error(`drive ${res.status}`);
-    return;
-  }
-  const res = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
-    method: "POST",
+  const url = existing
+    ? `https://www.googleapis.com/upload/drive/v3/files/${existing}?uploadType=multipart`
+    : "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart";
+  const res = await fetch(url, {
+    method: existing ? "PATCH" : "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: form,
   });
   if (!res.ok) throw new Error(`drive ${res.status}`);
-  const created = (await res.json()) as { id?: string };
-  if (created.id) writeFileId(created.id);
+  if (!existing) {
+    const created = (await res.json()) as { id?: string };
+    if (created.id) writeStored(FILE_ID_KEY, created.id);
+  }
 }
 
 export async function downloadBackup(token: string): Promise<string> {
