@@ -6,13 +6,15 @@ import { ComposerHeader, ComposerShell, LineRow, TextLine, ActiveKeypad } from "
 import { AmountWithHkd } from "@/components/currency-field";
 import { money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
+import { toHkd } from "@/lib/calc/fx";
+import { cashflowSide } from "@/lib/calc/ledger";
 import {
   travelSpendYtd,
   tripBudgetUsed,
   tripCashSpent,
   tripLinkedTxs,
 } from "@/lib/calc/trips";
-import type { Trip } from "@/lib/types";
+import type { Category, FxRate, Locale, Transaction, Trip } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 
@@ -158,6 +160,7 @@ export function TripDetailPage({ id }: { id: string }) {
   const trip = useApp((s) => s.trips.find((x) => x.id === id));
   const del = useApp((s) => s.deleteTrip);
   const txs = useApp((s) => s.transactions);
+  const cats = useApp((s) => s.categories);
   const rates = useApp((s) => s.fxRates);
   const setTx = useUi((s) => s.setTxDetailId);
   const [edit, setEdit] = useState(false);
@@ -212,6 +215,10 @@ export function TripDetailPage({ id }: { id: string }) {
           </div>
         </div>
       </div>
+      <h2 className="px-5 pb-1 pt-5 text-sm font-medium text-muted">{t.reports.tripCats}</h2>
+      <TripCatRows txs={linked} cats={cats} rates={rates} locale={loc} />
+      <h2 className="px-5 pb-1 pt-4 text-sm font-medium text-muted">{t.reports.tripHeat}</h2>
+      <TripHeat start={trip.start} end={trip.end} txs={linked} rates={rates} />
       <TxGroupedList txs={linked} onClick={(tx) => setTx(tx.id)} empty={t.common.none} />
       <TripEditor
         key={edit ? trip.id : "edit-idle"}
@@ -312,5 +319,85 @@ function TripEditor({
         ) : null}
       </ComposerShell>
     </Overlay>
+  );
+}
+
+function TripCatRows({
+  txs,
+  cats,
+  rates,
+  locale,
+}: {
+  txs: Transaction[];
+  cats: Category[];
+  rates: FxRate[];
+  locale: Locale;
+}) {
+  const sums = new Map<string, number>();
+  let total = 0;
+  for (const tx of txs) {
+    if (tx.planned || cashflowSide(tx) !== "expense") continue;
+    const hkd = Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
+    const id = tx.categoryId ?? "uncat";
+    sums.set(id, (sums.get(id) ?? 0) + hkd);
+    total += hkd;
+  }
+  const rows = [...sums.entries()]
+    .map(([id, value]) => {
+      const cat = cats.find((c) => c.id === id);
+      return { id, value, name: cat ? pickName(locale, cat.name, cat.nameZh) : id };
+    })
+    .sort((a, b) => b.value - a.value);
+  if (!rows.length) return <p className="px-5 py-3 text-sm text-muted">—</p>;
+  return (
+    <div className="px-5">
+      {rows.map((r) => (
+        <div key={r.id} className="flex items-center justify-between py-2 text-sm">
+          <span className="truncate pr-3">{r.name}</span>
+          <span className="tabular-nums text-muted">
+            {money(r.value, "HKD")}
+            <span className="ml-2 text-xs text-faint">{total ? `${Math.round((r.value / total) * 100)}%` : ""}</span>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TripHeat({ start, end, txs, rates }: { start: string; end: string; txs: Transaction[]; rates: FxRate[] }) {
+  const days: string[] = [];
+  const cursor = new Date(`${start}T12:00:00`);
+  const last = new Date(`${end}T12:00:00`);
+  while (cursor.getTime() <= last.getTime() && days.length < 60) {
+    days.push(cursor.toISOString().slice(0, 10));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  const daily = new Map<string, number>();
+  for (const tx of txs) {
+    if (tx.planned || cashflowSide(tx) !== "expense") continue;
+    daily.set(tx.date, (daily.get(tx.date) ?? 0) + Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd)));
+  }
+  const max = Math.max(1, ...daily.values());
+  return (
+    <div className="mx-4 mb-4 flex flex-wrap gap-1 rounded-xl bg-elevated px-3 py-3">
+      {days.map((iso) => {
+        const amt = daily.get(iso) ?? 0;
+        const heat = amt / max;
+        return (
+          <div key={iso} className="flex flex-col items-center gap-0.5">
+            <span
+              className="grid size-8 place-items-center rounded-md text-[10px] tabular-nums"
+              title={`${iso} ${money(amt, "HKD")}`}
+              style={{
+                background: amt ? `color-mix(in srgb, var(--color-expense) ${Math.round(20 + heat * 70)}%, transparent)` : "var(--color-background)",
+                color: heat > 0.55 ? "var(--color-on-accent, #fff)" : undefined,
+              }}
+            >
+              {iso.slice(8)}
+            </span>
+          </div>
+        );
+      })}
+    </div>
   );
 }

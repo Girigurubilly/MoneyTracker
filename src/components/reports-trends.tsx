@@ -7,6 +7,7 @@ import { pickName } from "@/lib/i18n";
 import { monthKeysBack, monthLabel } from "@/lib/derived";
 import { cashflowSide } from "@/lib/calc/ledger";
 import { toHkd } from "@/lib/calc/fx";
+import { taxCategoryIds } from "@/lib/categories";
 import { periodCategoryTotals } from "@/lib/calc/period";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
@@ -22,11 +23,17 @@ export function TrendsPage() {
   const today = todayISO();
   const [windowN, setWindowN] = useState<3 | 6 | 12>(6);
   const [heatMonth, setHeatMonth] = useState(today.slice(0, 7));
+  const [skipTax, setSkipTax] = useState(true);
+  const taxIds = useMemo(() => taxCategoryIds(cats), [cats]);
+  const scopedTxs = useMemo(
+    () => (skipTax ? txs.filter((tx) => !tx.categoryId || !taxIds.has(tx.categoryId)) : txs),
+    [txs, skipTax, taxIds],
+  );
   const months = monthKeysBack(today.slice(0, 7), windowN);
   const series = useMemo(() => {
     const raw = months.map((month) => {
       let spend = 0;
-      for (const tx of txs) {
+      for (const tx of scopedTxs) {
         if (tx.planned || !tx.date.startsWith(month)) continue;
         if (cashflowSide(tx) !== "expense") continue;
         spend += Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
@@ -38,7 +45,7 @@ export function TrendsPage() {
       const avg = slice.reduce((s, r) => s + r.spend, 0) / slice.length;
       return { ...row, label: monthLabel(row.month, locale), avg };
     });
-  }, [months, txs, rates, locale]);
+  }, [months, scopedTxs, rates, locale]);
   const last = series.at(-1)?.spend ?? 0;
   const avg = series.length ? series.reduce((s, r) => s + r.spend, 0) / series.length : 0;
   const firstHalf = series.slice(0, Math.max(1, Math.floor(series.length / 2)));
@@ -49,9 +56,9 @@ export function TrendsPage() {
 
   const from = `${months[0]}-01`;
   const to = today;
-  const catNow = periodCategoryTotals(txs, cats, rates, from, to, "expense", true);
+  const catNow = periodCategoryTotals(scopedTxs, cats, rates, from, to, "expense", true);
   const mid = months[Math.floor(months.length / 2)] ?? months[0];
-  const catPrev = periodCategoryTotals(txs, cats, rates, from, `${mid}-28`, "expense", true);
+  const catPrev = periodCategoryTotals(scopedTxs, cats, rates, from, `${mid}-28`, "expense", true);
   const growthRows = catNow.rows.slice(0, 6).map((r) => {
     const prev = catPrev.rows.find((x) => x.id === r.id)?.value ?? 0;
     const g = prev > 0 ? (r.value - prev) / prev : r.value > 0 ? 1 : 0;
@@ -63,7 +70,7 @@ export function TrendsPage() {
   let peakAmt = 0;
   const weekday = [0, 0, 0, 0, 0, 0, 0];
   const weekdayN = [0, 0, 0, 0, 0, 0, 0];
-  for (const tx of txs) {
+  for (const tx of scopedTxs) {
     if (tx.planned || !tx.date.startsWith(heatMonth)) continue;
     if (cashflowSide(tx) !== "expense") continue;
     const amt = Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
@@ -100,6 +107,13 @@ export function TrendsPage() {
         ))}
       </div>
       <p className="px-5 pt-2 text-[11px] leading-4 text-muted">{t.reports.trendsWindowHint}</p>
+      <button
+        type="button"
+        className={cn("mx-5 mt-3 h-8 rounded-full px-3 text-sm font-medium", skipTax ? "bg-accent text-on-accent" : "bg-elevated text-muted")}
+        onClick={() => setSkipTax((v) => !v)}
+      >
+        {t.reports.excludeTax}
+      </button>
       <div className="mx-4 mt-4 grid grid-cols-2 gap-2">
         <Mini label={t.reports.avgSpend} value={money(avg, "HKD")} />
         <Mini label={t.reports.lastMonthSpend} value={money(last, "HKD")} />

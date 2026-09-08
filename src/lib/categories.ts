@@ -8,6 +8,17 @@ function mortgageLeaf(c: Category): string {
   return compactHay(`${c.name} ${c.nameZh}`);
 }
 
+export function taxCategoryIds(categories: Category[]): Set<string> {
+  const ids = new Set<string>();
+  for (const c of categories) {
+    if (/稅|tax/i.test(`${c.id} ${c.name} ${c.nameZh}`)) ids.add(c.id);
+  }
+  for (const c of categories) {
+    if (c.parentId && ids.has(c.parentId)) ids.add(c.id);
+  }
+  return ids;
+}
+
 export function isHousingGroup(c: Category): boolean {
   if (c.parentId) return false;
   return c.id === "p-housing" || /房屋|housing|居住/.test(`${c.name} ${c.nameZh}`);

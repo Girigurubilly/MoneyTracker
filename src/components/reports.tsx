@@ -3,16 +3,17 @@ import { Link } from "@tanstack/react-router";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ChevronRight } from "lucide-react";
 import { Disclaimer, Group, Hairline, ScreenHeader, StatusChip, BudgetChip } from "@/components/shared";
-import { compactHkd, money, shortDate, todayISO } from "@/lib/format";
+import { compactHkd, money, pct, shortDate, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { monthKeysBack, monthLabel } from "@/lib/derived";
-import { livingEssentials } from "@/lib/calc/budget";
+import { chargedIso, isExpenseRegular, livingEssentials, monthFlow } from "@/lib/calc/budget";
 import { nextTrip, travelSpendYtd, tripCashSpent } from "@/lib/calc/trips";
 import { effectiveRate, monthlyPayment } from "@/lib/calc/mortgage";
 import { housingStatus, monthlyHousingCost } from "@/lib/calc/housing";
-import { investableNow } from "@/lib/calc/networth";
+import { investableNow, netWorthNow } from "@/lib/calc/networth";
 import { ageFromBirthday, retirementStatus, runRetirement, savingsLast12Months, sustainableMonthly } from "@/lib/calc/retirement";
 import { periodCashflowPoints, periodRange, type PeriodPreset } from "@/lib/calc/period";
+import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
 import { monthKey } from "@/lib/calc/ledger";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
@@ -77,6 +78,9 @@ export function DashboardPage() {
   const rates = useApp((s) => s.fxRates);
   const rec = useApp((s) => s.recurring);
   const accounts = useApp((s) => s.accounts);
+  const budgets = useApp((s) => s.budgets);
+  const adhoc = useApp((s) => s.adhocBudgets);
+  const snaps = useApp((s) => s.snapshots);
   const m = useApp((s) => s.mortgage);
   const trips = useApp((s) => s.trips);
   const annual = useApp((s) => s.annualTravelBudget);
@@ -114,10 +118,53 @@ export function DashboardPage() {
   const sustain = sustainableMonthly(inputs, ctx);
   const retStatus = retirementStatus(result.depletes, sustain, inputs.targetMonthly, result.series);
   const nxtSpent = nxt ? tripCashSpent(txs, nxt.id, rates) : 0;
+  const month = monthKey(today);
+  const flow = monthFlow(txs, month, rates);
+  const ytdFlow = monthKeysBack(month, Number(today.slice(5, 7))).reduce(
+    (acc, m) => {
+      const f = monthFlow(txs, m, rates);
+      return { income: acc.income + f.income, expense: acc.expense + f.expense };
+    },
+    { income: 0, expense: 0 },
+  );
+  const essentials = rec.filter((r) => r.essential && isExpenseRegular(r) && r.frequency === "monthly").reduce((s, r) => s + r.amount, 0);
+  const plannedXfer = rec.filter((r) => r.type === "transfer" && !r.countsAsExpense && r.frequency === "monthly").reduce((s, r) => s + r.amount, 0);
+  const cap = budgets.find((b) => b.id === MONTH_TOTAL_BUDGET_ID)?.monthly ?? 0;
+  const available = flow.income - essentials - plannedXfer - cap;
+  const until = addDaysIso(today, 14);
+  let next14 = 0;
+  for (const r of rec) {
+    if (!isExpenseRegular(r) && r.type !== "transfer") continue;
+    const dates = r.frequency === "monthly" ? [chargedIso(month, r.chargedDay ?? 1), chargedIso(shiftYm(month, 1), r.chargedDay ?? 1)] : [r.nextDate];
+    for (const iso of dates) {
+      if (iso > today && iso <= until) next14 += r.amount;
+    }
+  }
+  for (const a of adhoc) {
+    if (a.date > today && a.date <= until) next14 += a.amount;
+  }
+  for (const tx of txs) {
+    if (!tx.planned) continue;
+    if (tx.date <= today || tx.date > until) continue;
+    if (tx.type === "expense" || (tx.type === "transfer" && tx.countsAsExpense)) next14 += tx.amount;
+  }
+  const nw = netWorthNow(accounts, rates);
+  const prevSnap = snaps.find((s) => s.month === shiftYm(month, -1));
+  const nwDelta = prevSnap ? nw.net - prevSnap.net : 0;
+  const saveM = flow.income > 0 ? flow.net / flow.income : 0;
+  const saveY = ytdFlow.income > 0 ? (ytdFlow.income - ytdFlow.expense) / ytdFlow.income : 0;
 
   return (
     <div className="pb-10">
       <ScreenHeader title={t.reports.dashboard} backTo="/reports" />
+      <div className="mx-4 mb-3 rounded-xl bg-elevated px-4 py-3">
+        <DashRow label={t.reports.availableSpend} value={money(available, "HKD", { sign: true })} />
+        <DashRow label={t.reports.mtdVsBudget} value={cap ? `${money(flow.expense, "HKD")} / ${money(cap, "HKD")}` : money(flow.expense, "HKD")} />
+        <DashRow label={t.reports.next14} value={money(next14, "HKD")} />
+        <DashRow label={t.reports.netWorthNow} value={`${money(nw.net, "HKD")} (${t.reports.vsLastMonth} ${money(nwDelta, "HKD", { sign: true })})`} />
+        <DashRow label={t.reports.saveRateMonth} value={pct(saveM)} />
+        <DashRow label={t.reports.saveRateYtd} value={pct(saveY)} />
+      </div>
       <Link to="/reports/living" className="mx-4 block rounded-xl bg-elevated p-4">
         <div className="flex items-start justify-between gap-2">
           <h2 className="text-base font-semibold">{t.reports.living}</h2>
@@ -177,6 +224,27 @@ export function DashboardPage() {
       <Disclaimer>{t.reports.disclaimer}</Disclaimer>
     </div>
   );
+}
+
+function DashRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-line py-2.5 last:border-0">
+      <span className="text-xs text-muted">{label}</span>
+      <span className="max-w-[58%] text-right text-sm font-semibold tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+function addDaysIso(iso: string, n: number): string {
+  const d = new Date(`${iso}T12:00:00`);
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function shiftYm(ym: string, dir: number): string {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(y, m - 1 + dir, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
