@@ -33,8 +33,9 @@ export function AddFlow() {
   const pickType = useUi((s) => s.openAdd);
   const pickWallet = useUi((s) => s.openOctopus);
   const close = useUi((s) => s.closeAdd);
+  const closeWallet = useUi((s) => s.closeOctopus);
   if (!open) return null;
-  if (wallet) return <ApplePayImport onClose={close} />;
+  if (wallet) return <ApplePayImport onClose={type ? closeWallet : close} />;
   if (!type) {
     return <AddTypePicker onPick={pickType} onWallet={pickWallet} onClose={close} />;
   }
@@ -273,7 +274,12 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
         kind={type === "income" ? "income" : "expense"}
         selectedId={categoryId || undefined}
         txType={type === "miles" ? "expense" : type}
+        includeBulk={!kid}
         onTxTypeChange={(next) => {
+          if (next === "bulk") {
+            pickWallet();
+            return;
+          }
           setType(next);
           if (next === "miles" || next === "transfer") {
             setPickCat(false);

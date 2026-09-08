@@ -62,6 +62,7 @@ type UiState = {
   openAdd: (t: TxType) => void;
   openOctopus: () => void;
   closeAdd: () => void;
+  closeOctopus: () => void;
   setSearchOpen: (v: boolean) => void;
   setTxDetailId: (id: string | null) => void;
   setInfoKey: (k: string | null) => void;
@@ -160,8 +161,9 @@ export const useUi = create<UiState>((set, get) => ({
   setTodayView: (v) => set({ todayView: v }),
   openAddPicker: () => set({ addOpen: true, addType: null, addOctopus: false }),
   openAdd: (t) => set({ addOpen: true, addType: t, addOctopus: false }),
-  openOctopus: () => set({ addOpen: true, addType: null, addOctopus: true }),
+  openOctopus: () => set((s) => ({ addOpen: true, addType: s.addType ?? "expense", addOctopus: true })),
   closeAdd: () => set({ addOpen: false, addType: null, addOctopus: false }),
+  closeOctopus: () => set({ addOctopus: false }),
   setSearchOpen: (v) => set({ searchOpen: v }),
   setTxDetailId: (id) => set({ txDetailId: id }),
   setInfoKey: (k) => set({ infoKey: k }),

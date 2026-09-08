@@ -25,24 +25,38 @@ export function TypeSwitch({
   includeBulk?: boolean;
 }) {
   const t = useT();
-  const opts: (TxType | "bulk")[] = ["expense", "income", "transfer"];
-  if (includeBulk) opts.push("bulk");
+  const [open, setOpen] = useState(false);
+  const opts: { id: TxType | "bulk"; label: string }[] = [
+    { id: "expense", label: t.add.expense },
+    { id: "income", label: t.add.income },
+    { id: "transfer", label: t.add.transfer },
+  ];
+  if (includeBulk) opts.push({ id: "bulk", label: t.add.applePay });
+  const current = value === "income" || value === "transfer" ? t.add[value] : t.add.expense;
   return (
-    <label className="relative inline-flex min-h-11 items-center justify-center">
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as TxType | "bulk")}
-        className="h-11 appearance-none bg-transparent pr-5 text-center text-base font-semibold outline-none"
-        aria-label={t.more.kind}
-      >
-        {opts.map((k) => (
-          <option key={k} value={k}>
-            {k === "bulk" ? t.add.applePay : t.add[k]}
-          </option>
-        ))}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-0 size-4 text-foreground" />
-    </label>
+    <div className="relative inline-flex min-h-11 items-center justify-center">
+      <button type="button" className="inline-flex h-11 items-center gap-1 px-2 text-base font-semibold" onClick={() => setOpen((v) => !v)}>
+        {current}
+        <ChevronDown className={cn("size-4 text-foreground transition", open && "rotate-180")} />
+      </button>
+      {open ? (
+        <div className="absolute left-1/2 top-full z-[80] mt-1 w-40 -translate-x-1/2 overflow-hidden rounded-xl bg-elevated py-1 shadow-lg">
+          {opts.map((o) => (
+            <button
+              key={o.id}
+              type="button"
+              className={cn("flex h-11 w-full items-center justify-center text-sm font-medium", o.id === value && "text-accent")}
+              onClick={() => {
+                setOpen(false);
+                onChange(o.id);
+              }}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -56,16 +70,18 @@ export function CategoryPicker({
   onSelect,
   embedded,
   manageOnly,
+  includeBulk,
 }: {
   categories: Category[];
   kind: "expense" | "income";
   selectedId?: string;
   txType?: TxType;
-  onTxTypeChange?: (t: TxType) => void;
+  onTxTypeChange?: (t: TxType | "bulk") => void;
   onClose: () => void;
   onSelect: (c: Category | null) => void;
   embedded?: boolean;
   manageOnly?: boolean;
+  includeBulk?: boolean;
 }) {
   const t = useT();
   const locale = useUi((s) => s.locale);
@@ -161,8 +177,8 @@ export function CategoryPicker({
           {onTxTypeChange && txType ? (
             <TypeSwitch
               value={txType}
+              includeBulk={includeBulk}
               onChange={(next) => {
-                if (next === "bulk") return;
                 onTxTypeChange(next);
                 setParent(null);
               }}

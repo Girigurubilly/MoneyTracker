@@ -706,7 +706,9 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
         kind={kind === "income" ? "income" : "expense"}
         selectedId={categoryId || undefined}
         txType={kind}
-        onTxTypeChange={(next) => setKind(next)}
+        onTxTypeChange={(next) => {
+          if (next !== "bulk") setKind(next);
+        }}
         onClose={() => setPickCat(false)}
         onSelect={(c) => {
           setCategoryId(c?.id ?? "");
