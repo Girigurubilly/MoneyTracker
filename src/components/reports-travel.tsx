@@ -34,7 +34,7 @@ export function TravelPage() {
   const [editAnnual, setEditAnnual] = useState(false);
   const visible = trips.filter((tr) => tr.status !== "cancelled");
   const current = visible.filter((tr) => tr.end >= todayISO());
-  const past = visible.filter((tr) => tr.end < todayISO());
+  const past = visible.filter((tr) => tr.end < todayISO()).sort((a, b) => b.end.localeCompare(a.end) || b.start.localeCompare(a.start));
 
   return (
     <div className="pb-10">

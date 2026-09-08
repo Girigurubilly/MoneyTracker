@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { ScreenHeader } from "@/components/shared";
+import { Overlay, ScreenHeader } from "@/components/shared";
 import { compactHkd, money, monthGrid, monthTitle, todayISO, weekdayLabels } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { monthKeysBack, monthLabel } from "@/lib/derived";
@@ -10,6 +10,7 @@ import { toHkd } from "@/lib/calc/fx";
 import { taxCategoryIds } from "@/lib/categories";
 import { periodCategoryTotals } from "@/lib/calc/period";
 import { cn } from "@/lib/utils";
+import type { Category, FxRate, Locale, Transaction } from "@/lib/types";
 import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 
@@ -23,6 +24,7 @@ export function TrendsPage() {
   const today = todayISO();
   const [windowN, setWindowN] = useState<3 | 6 | 12>(6);
   const [heatMonth, setHeatMonth] = useState(today.slice(0, 7));
+  const [openDay, setOpenDay] = useState<string | null>(null);
   const [skipTax, setSkipTax] = useState(true);
   const taxIds = useMemo(() => taxCategoryIds(cats), [cats]);
   const scopedTxs = useMemo(
@@ -171,7 +173,7 @@ export function TrendsPage() {
             const amt = daily.get(c.iso) ?? 0;
             const heat = amt / maxDay;
             return (
-              <div key={c.iso} className="grid aspect-square place-items-center">
+              <button key={c.iso} type="button" className="grid aspect-square place-items-center" onClick={() => setOpenDay(c.iso)}>
                 <span
                   className="grid size-8 place-items-center rounded-md text-[11px] tabular-nums"
                   style={{
@@ -181,7 +183,7 @@ export function TrendsPage() {
                 >
                   {c.day}
                 </span>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -191,6 +193,56 @@ export function TrendsPage() {
           {t.reports.peakDay}: {peakDay} · {money(peakAmt, "HKD")}
         </p>
       ) : null}
+      {openDay ? (
+        <Overlay open onClose={() => setOpenDay(null)} title={`${t.reports.tripDaySpend} · ${openDay}`}>
+          <DaySpendList date={openDay} txs={scopedTxs} cats={cats} rates={rates} locale={locale} />
+        </Overlay>
+      ) : null}
+    </div>
+  );
+}
+
+function DaySpendList({
+  date,
+  txs,
+  cats,
+  rates,
+  locale,
+}: {
+  date: string;
+  txs: Transaction[];
+  cats: Category[];
+  rates: FxRate[];
+  locale: Locale;
+}) {
+  const sums = new Map<string, number>();
+  let total = 0;
+  for (const tx of txs) {
+    if (tx.planned || tx.date !== date || cashflowSide(tx) !== "expense") continue;
+    const hkd = Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
+    const id = tx.categoryId ?? "uncat";
+    sums.set(id, (sums.get(id) ?? 0) + hkd);
+    total += hkd;
+  }
+  const rows = [...sums.entries()]
+    .map(([id, value]) => {
+      const cat = cats.find((c) => c.id === id);
+      return { id, value, name: cat ? pickName(locale, cat.name, cat.nameZh) : id };
+    })
+    .sort((a, b) => b.value - a.value);
+  return (
+    <div className="px-5 pb-8">
+      <div className="mb-3 text-2xl font-semibold tabular-nums">{money(total, "HKD")}</div>
+      {rows.length === 0 ? <p className="text-sm text-muted">—</p> : null}
+      {rows.map((r) => (
+        <div key={r.id} className="flex items-center justify-between py-2 text-sm">
+          <span className="truncate pr-3">{r.name}</span>
+          <span className="tabular-nums text-muted">
+            {money(r.value, "HKD")}
+            <span className="ml-2 text-xs text-faint">{total ? `${Math.round((r.value / total) * 100)}%` : ""}</span>
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
