@@ -18,7 +18,7 @@ import { pickName } from "@/lib/i18n";
 import { defaultMortgageAccountId, moneyAccountsForPicker } from "@/lib/accounts";
 import { canSplitMortgage, categoryPath, mortgageEntryKind, resolvedDefaultAccountId } from "@/lib/categories";
 import { captureFxToHkd } from "@/lib/calc/fx";
-import { isTripActive } from "@/lib/calc/trips";
+import { isTripActive, tripForDate } from "@/lib/calc/trips";
 import { applyTxRules, infersHousing, splitMortgageAmounts } from "@/lib/tx-rules";
 import { resolveAmountInput } from "@/lib/money-expr";
 import type { Category, Currency, MoneyUnit, TxType } from "@/lib/types";
@@ -30,9 +30,9 @@ export function AddFlow() {
   const open = useUi((s) => s.addOpen);
   const type = useUi((s) => s.addType);
   const wallet = useUi((s) => s.addOctopus);
-  const close = useUi((s) => s.closeAdd);
   const pickType = useUi((s) => s.openAdd);
   const pickWallet = useUi((s) => s.openOctopus);
+  const close = useUi((s) => s.closeAdd);
   if (!open) return null;
   if (wallet) return <ApplePayImport onClose={close} />;
   if (!type) {
@@ -101,6 +101,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
   const defaultCurrency = useApp((s) => s.defaultCurrency);
   const addTransaction = useApp((s) => s.addTransaction);
   const moneyAccounts = moneyAccountsForPicker(accounts, { kid });
+  const pickWallet = useUi((s) => s.openOctopus);
   const [type, setType] = useState<TxType>(initialType);
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState<Currency>(defaultCurrency);
@@ -112,7 +113,8 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
     moneyAccounts.find((a) => a.id !== moneyAccounts[0]?.id)?.id ?? defaultMortgageAccountId(accounts) ?? "",
   );
   const [categoryId, setCategoryId] = useState("");
-  const [tripId, setTripId] = useState("");
+  const [tripId, setTripId] = useState(() => tripForDate(trips, selectedDate || todayISO()) ?? "");
+  const tripTouched = useRef(false);
   const [payee, setPayee] = useState("");
   const [pickCat, setPickCat] = useState(initialType !== "miles" && initialType !== "transfer");
   const pickedCat = useRef(false);
@@ -253,6 +255,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
             planned,
             milesType: type === "miles" ? "earn" : undefined,
             tripId: type === "expense" && tripId ? tripId : undefined,
+            tripManual: tripTouched.current,
             housing,
           },
           ctx,
@@ -294,7 +297,18 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
             {t.add.cancel}
           </button>
           <div className="min-w-0 flex-1 text-center">
-            <TypeSwitch value={type} onChange={changeType} includeMiles />
+            <TypeSwitch
+              value={type}
+              includeMiles
+              includeBulk={!kid}
+              onChange={(next) => {
+                if (next === "bulk") {
+                  pickWallet();
+                  return;
+                }
+                changeType(next);
+              }}
+            />
           </div>
           <button type="button" className="h-11 min-w-11 px-2 text-sm font-medium text-accent" onClick={() => void save()}>
             {t.add.save}
@@ -402,7 +416,15 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
           />
         </>
       ) : null}
-      <DatePaidRow date={date} paid={paid} onDate={setDate} onPaid={setPaid} />
+      <DatePaidRow
+        date={date}
+        paid={paid}
+        onDate={(iso) => {
+          setDate(iso);
+          if (!tripTouched.current) setTripId(tripForDate(trips, iso) ?? "");
+        }}
+        onPaid={setPaid}
+      />
       {kid ? null : (
       <ExtraIconBar
         extra={extra}
@@ -428,7 +450,10 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
         onNoteChange={setPayee}
         tripValue={tripId}
         tripOptions={trips.filter((tr) => isTripActive(tr, todayISO())).map((tr) => ({ id: tr.id, label: pickName(locale, tr.name, tr.nameZh) }))}
-        onTripChange={setTripId}
+        onTripChange={(id) => {
+          tripTouched.current = true;
+          setTripId(id);
+        }}
       />
       )}
     </ComposerShell>

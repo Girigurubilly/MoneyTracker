@@ -721,7 +721,7 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
 
   return (
     <ComposerShell
-      header={<ComposerHeader onClose={onClose} onSave={() => void save()} center={<TypeSwitch value={kind} onChange={setKind} />} />}
+      header={<ComposerHeader onClose={onClose} onSave={() => void save()} center={<TypeSwitch value={kind} onChange={(next) => { if (next !== "bulk") setKind(next); }} />} />}
       keypad={
         <ActiveKeypad
           field={field}

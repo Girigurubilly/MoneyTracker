@@ -18,7 +18,7 @@ export function TodayScreen() {
   const setLocale = useUi((s) => s.setLocale);
   const selected = useUi((s) => s.selectedDate);
   const setSelected = useUi((s) => s.setSelectedDate);
-  const openAdd = useUi((s) => s.openAddPicker);
+  const openAdd = useUi((s) => s.openAdd);
   const setSearch = useUi((s) => s.setSearchOpen);
   const today = todayISO();
   const onThisMonth = selected.slice(0, 7) === today.slice(0, 7);
@@ -45,7 +45,7 @@ export function TodayScreen() {
             <button type="button" aria-label={t.today.search} onClick={() => setSearch(true)} className="grid size-11 place-items-center">
               <Search className="size-6" strokeWidth={1.7} />
             </button>
-            <button type="button" aria-label={t.add.title} onClick={openAdd} className="grid size-11 place-items-center">
+            <button type="button" aria-label={t.add.title} onClick={() => openAdd("expense")} className="grid size-11 place-items-center">
               <Plus className="size-7" strokeWidth={1.7} />
             </button>
           </div>

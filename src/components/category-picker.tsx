@@ -17,24 +17,27 @@ export function TypeSwitch({
   value,
   onChange,
   includeMiles,
+  includeBulk,
 }: {
   value: TxType;
-  onChange: (t: TxType) => void;
+  onChange: (t: TxType | "bulk") => void;
   includeMiles?: boolean;
+  includeBulk?: boolean;
 }) {
   const t = useT();
-  const opts: TxType[] = ["expense", "income", "transfer"];
+  const opts: (TxType | "bulk")[] = ["expense", "income", "transfer"];
+  if (includeBulk) opts.push("bulk");
   return (
     <label className="relative inline-flex min-h-11 items-center justify-center">
       <select
         value={value}
-        onChange={(e) => onChange(e.target.value as TxType)}
+        onChange={(e) => onChange(e.target.value as TxType | "bulk")}
         className="h-11 appearance-none bg-transparent pr-5 text-center text-base font-semibold outline-none"
         aria-label={t.more.kind}
       >
         {opts.map((k) => (
           <option key={k} value={k}>
-            {t.add[k]}
+            {k === "bulk" ? t.add.applePay : t.add[k]}
           </option>
         ))}
       </select>
@@ -159,6 +162,7 @@ export function CategoryPicker({
             <TypeSwitch
               value={txType}
               onChange={(next) => {
+                if (next === "bulk") return;
                 onTxTypeChange(next);
                 setParent(null);
               }}

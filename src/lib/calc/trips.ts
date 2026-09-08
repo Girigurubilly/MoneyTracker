@@ -77,6 +77,33 @@ export function asiaMilesBalance(accounts: Account[]): number {
   return accounts.filter((a) => a.currency === "MILES").reduce((s, a) => s + a.balance, 0);
 }
 
+export function tripCoversDate(t: Trip, date: string): boolean {
+  if (t.status === "cancelled") return false;
+  return date >= t.start && date <= t.end;
+}
+
+export function tripForDate(trips: Trip[], date: string, current?: string): string | undefined {
+  const hits = trips.filter((t) => tripCoversDate(t, date));
+  if (current && hits.some((t) => t.id === current)) return current;
+  return [...hits].sort((a, b) => a.end.localeCompare(b.end) || a.start.localeCompare(b.start))[0]?.id;
+}
+
+export function applyAutoTrip(tx: Transaction, trips: Trip[]): Transaction {
+  if (tx.tripManual) return tx;
+  const eligible = tx.type === "expense" || (tx.type === "transfer" && tx.countsAsExpense);
+  if (tx.planned || !eligible) {
+    if (tx.tripId && !tx.tripManual) return { ...tx, tripId: undefined };
+    return tx;
+  }
+  const id = tripForDate(trips, tx.date, tx.tripId);
+  if (id === tx.tripId) return tx;
+  return { ...tx, tripId: id };
+}
+
+export function patchAutoTrips(txs: Transaction[], trips: Trip[]): Transaction[] {
+  return txs.map((tx) => applyAutoTrip(tx, trips));
+}
+
 export function tripLinkedTxs(txs: Transaction[], tripId: string): Transaction[] {
   return txs
     .filter((tx) => tx.tripId === tripId && !tx.planned)

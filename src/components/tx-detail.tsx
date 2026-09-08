@@ -248,6 +248,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
           payeeZh: payee || tx.payeeZh,
           planned,
           tripId: type === "expense" && tripId ? tripId : undefined,
+          tripManual: true,
           housing,
           countsAsExpense: type === "transfer" ? tx.countsAsExpense : undefined,
         },
@@ -286,7 +287,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
               {t.add.cancel}
             </button>
             <div className="min-w-0 flex-1 text-center">
-              {moneyTx ? <TypeSwitch value={type} onChange={changeType} /> : <div className="text-base font-semibold">{t.tx.edit}</div>}
+              {moneyTx ? <TypeSwitch value={type} onChange={(next) => { if (next !== "bulk") changeType(next); }} /> : <div className="text-base font-semibold">{t.tx.edit}</div>}
             </div>
             <button type="button" className="h-11 min-w-11 px-2 text-sm font-medium text-accent" onClick={() => void save()}>
               {t.add.save}

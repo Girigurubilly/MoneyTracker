@@ -353,6 +353,7 @@ export type Transaction = {
   noteZh?: string;
   tags?: string[];
   tripId?: string;
+  tripManual?: boolean;
   milesType?: "earn" | "burn" | "adjust" | "expiry";
   planned?: boolean;
   recurringId?: string;

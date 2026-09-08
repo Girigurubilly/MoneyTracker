@@ -218,7 +218,7 @@ export function TripDetailPage({ id }: { id: string }) {
       <h2 className="px-5 pb-1 pt-5 text-sm font-medium text-muted">{t.reports.tripCats}</h2>
       <TripCatRows txs={linked} cats={cats} rates={rates} locale={loc} />
       <h2 className="px-5 pb-1 pt-4 text-sm font-medium text-muted">{t.reports.tripHeat}</h2>
-      <TripHeat start={trip.start} end={trip.end} txs={linked} rates={rates} />
+      <TripHeat start={trip.start} end={trip.end} txs={linked} cats={cats} rates={rates} locale={loc} />
       <TxGroupedList txs={linked} onClick={(tx) => setTx(tx.id)} empty={t.common.none} />
       <TripEditor
         key={edit ? trip.id : "edit-idle"}
@@ -364,7 +364,23 @@ function TripCatRows({
   );
 }
 
-function TripHeat({ start, end, txs, rates }: { start: string; end: string; txs: Transaction[]; rates: FxRate[] }) {
+function TripHeat({
+  start,
+  end,
+  txs,
+  cats,
+  rates,
+  locale,
+}: {
+  start: string;
+  end: string;
+  txs: Transaction[];
+  cats: Category[];
+  rates: FxRate[];
+  locale: Locale;
+}) {
+  const t = useT();
+  const [openDay, setOpenDay] = useState<string | null>(null);
   const days: string[] = [];
   const cursor = new Date(`${start}T12:00:00`);
   const last = new Date(`${end}T12:00:00`);
@@ -378,16 +394,22 @@ function TripHeat({ start, end, txs, rates }: { start: string; end: string; txs:
     daily.set(tx.date, (daily.get(tx.date) ?? 0) + Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd)));
   }
   const max = Math.max(1, ...daily.values());
+  const dayTxs = openDay ? txs.filter((tx) => tx.date === openDay && !tx.planned && cashflowSide(tx) === "expense") : [];
   return (
+    <>
     <div className="mx-4 mb-4 flex flex-wrap gap-1 rounded-xl bg-elevated px-3 py-3">
       {days.map((iso) => {
         const amt = daily.get(iso) ?? 0;
         const heat = amt / max;
         return (
-          <div key={iso} className="flex flex-col items-center gap-0.5">
+          <button
+            key={iso}
+            type="button"
+            className="flex flex-col items-center gap-0.5"
+            onClick={() => setOpenDay(iso)}
+          >
             <span
               className="grid size-8 place-items-center rounded-md text-[10px] tabular-nums"
-              title={`${iso} ${money(amt, "HKD")}`}
               style={{
                 background: amt ? `color-mix(in srgb, var(--color-expense) ${Math.round(20 + heat * 70)}%, transparent)` : "var(--color-background)",
                 color: heat > 0.55 ? "var(--color-on-accent, #fff)" : undefined,
@@ -395,9 +417,18 @@ function TripHeat({ start, end, txs, rates }: { start: string; end: string; txs:
             >
               {iso.slice(8)}
             </span>
-          </div>
+          </button>
         );
       })}
     </div>
+    {openDay ? (
+      <Overlay open onClose={() => setOpenDay(null)} title={`${t.reports.tripDaySpend} · ${openDay}`}>
+        <div className="px-5 pb-8">
+          <div className="mb-3 text-2xl font-semibold tabular-nums">{money(daily.get(openDay) ?? 0, "HKD")}</div>
+          <TripCatRows txs={dayTxs} cats={cats} rates={rates} locale={locale} />
+        </div>
+      </Overlay>
+    ) : null}
+    </>
   );
 }

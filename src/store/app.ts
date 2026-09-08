@@ -42,13 +42,14 @@ import {
   annualTravelBudget as seedTravelBudget,
   netWorthSeries as seedNw,
 } from "@/lib/mock";
-import { applyDeltas, balanceDeltas, monthKey } from "@/lib/calc/ledger";
+import { applyAutoTrip, patchAutoTrips } from "@/lib/calc/trips";
 import { netWorthNow } from "@/lib/calc/networth";
 import { fetchLiveFx } from "@/lib/calc/fx";
 import { chargedDayOf, chargedIso, inferLivingRegular, isExpenseRegular } from "@/lib/calc/budget";
 import { isMortgageInterestCategory, isMortgagePrincipalCategory } from "@/lib/categories";
 import { accountsInGroup, nextSortOrder } from "@/lib/accounts";
 import { applyTxRules } from "@/lib/tx-rules";
+import { applyDeltas, balanceDeltas, monthKey } from "@/lib/calc/ledger";
 import { todayISO } from "@/lib/format";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
 
@@ -85,8 +86,14 @@ function idb() {
   return d;
 }
 
-function nid(): string {
-  return crypto.randomUUID();
+async function persistTripLinks(get: () => AppState, set: (p: Partial<AppState>) => void) {
+  const next = patchAutoTrips(get().transactions, get().trips);
+  const changed = next.filter((tx, i) => tx !== get().transactions[i]);
+  if (!changed.length) return;
+  await idb().transaction("rw", [idb().transactions], async () => {
+    for (const tx of changed) await idb().transactions.put(tx);
+  });
+  set({ transactions: next });
 }
 
 async function writeMeta(
@@ -104,6 +111,10 @@ async function writeMeta(
     budgetTargetMode: patch.budgetTargetMode ?? prev?.budgetTargetMode ?? "all",
     depositCategoryId: "depositCategoryId" in patch ? patch.depositCategoryId : prev?.depositCategoryId,
   });
+}
+
+function nid(): string {
+  return crypto.randomUUID();
 }
 
 export function newId(): string {
@@ -654,6 +665,7 @@ export const useApp = create<AppState>((set, get) => ({
         data.snapshots = [...data.snapshots, row];
       }
       set({ ...data, ready: true });
+      await persistTripLinks(get, set);
     } catch {
       set({ ready: true });
     }
@@ -661,7 +673,7 @@ export const useApp = create<AppState>((set, get) => ({
 
   addTransaction: async (partial) => {
     const ctx = { categories: get().categories, accounts: get().accounts };
-    const tx: Transaction = applyTxRules({ ...partial, id: partial.id ?? nid() }, ctx);
+    const tx: Transaction = applyAutoTrip(applyTxRules({ ...partial, id: partial.id ?? nid() }, ctx), get().trips);
     const accounts = applyDeltas(get().accounts, balanceDeltas(tx, get().accounts, get().fxRates));
     const mortgage = syncMortgageOutstanding(get().mortgage, accounts, tx.toAccountId);
     await idb().transaction("rw", [idb().transactions, idb().accounts, idb().mortgage], async () => {
@@ -683,7 +695,7 @@ export const useApp = create<AppState>((set, get) => ({
 
   updateTransaction: async (tx, previous) => {
     const ctx = { categories: get().categories, accounts: get().accounts };
-    const next = applyTxRules(tx, ctx);
+    const next = applyAutoTrip(applyTxRules(tx, ctx), get().trips);
     const prev = previous ?? get().transactions.find((t) => t.id === next.id);
     let accounts = get().accounts;
     if (prev) accounts = applyDeltas(accounts, balanceDeltas(prev, accounts, get().fxRates), -1);
@@ -864,14 +876,17 @@ export const useApp = create<AppState>((set, get) => ({
   addTrip: async (t) => {
     await idb().trips.add(t);
     set({ trips: [...get().trips, t] });
+    await persistTripLinks(get, set);
   },
   updateTrip: async (t) => {
     await idb().trips.put(t);
     set({ trips: get().trips.map((x) => (x.id === t.id ? t : x)) });
+    await persistTripLinks(get, set);
   },
   deleteTrip: async (id) => {
     await idb().trips.delete(id);
     set({ trips: get().trips.filter((t) => t.id !== id) });
+    await persistTripLinks(get, set);
   },
   addRecurring: async (r) => {
     const row = applyTxRules(r, { categories: get().categories, accounts: get().accounts });
