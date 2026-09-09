@@ -27,7 +27,7 @@ export function AppGate({ children }: { children: ReactNode }) {
   }, [hydrate, setOnboarded]);
 
   if (!onboarded && path !== "/onboarding") {
-    return <Navigate to="/onboarding" replace />;
+    return <Navigate to="/onboarding" search={{ replay: false }} replace />;
   }
   if (path === "/onboarding") {
     return (

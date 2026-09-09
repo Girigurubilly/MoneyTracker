@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Archive, FolderTree, Globe, Palette, PiggyBank, Settings2, ShoppingBag, SlidersHorizontal, Undo2, Upload, Wallet } from "lucide-react";
+import { Archive, BookOpen, FolderTree, Globe, Palette, PiggyBank, Settings2, ShoppingBag, SlidersHorizontal, Undo2, Upload, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
 import { Disclaimer, Group, Hairline, Overlay, Row, ScreenHeader } from "@/components/shared";
@@ -831,6 +831,7 @@ function ColorRow({
 
 export function OtherSettingsPage() {
   const t = useT();
+  const nav = useNavigate();
   const resetSample = useApp((s) => s.resetSample);
   const clearAll = useApp((s) => s.clearAll);
   const [confirm, setConfirm] = useState<"sample" | "clear" | null>(null);
@@ -839,7 +840,15 @@ export function OtherSettingsPage() {
       <ScreenHeader title={t.more.other} backTo="/more" />
       <p className="px-5 pb-3 text-sm text-muted">{t.more.otherHint}</p>
       <div className="px-5">
-        <button type="button" className="h-12 w-full rounded-xl bg-elevated text-sm font-medium" onClick={() => setConfirm("sample")}>
+        <button
+          type="button"
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-elevated text-sm font-medium"
+          onClick={() => void nav({ to: "/onboarding", search: { replay: true } })}
+        >
+          <BookOpen className="size-4" />
+          {t.more.replayIntro}
+        </button>
+        <button type="button" className="mt-3 h-12 w-full rounded-xl bg-elevated text-sm font-medium" onClick={() => setConfirm("sample")}>
           {t.more.sample}
         </button>
         <button type="button" className="mt-3 h-12 w-full rounded-xl bg-elevated text-sm font-medium text-expense" onClick={() => setConfirm("clear")}>
@@ -877,45 +886,6 @@ export function OtherSettingsPage() {
           </button>
         </div>
       </Overlay>
-    </div>
-  );
-}
-
-export function OnboardingScreen() {
-  const t = useT();
-  const navigate = useNavigate();
-  const ready = useApp((s) => s.ready);
-  const setOnboarded = useUi((s) => s.setOnboarded);
-  const reset = useApp((s) => s.resetSample);
-  const clear = useApp((s) => s.clearAll);
-  return (
-    <div className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center px-6">
-      <h1 className="text-3xl font-semibold">{t.onboarding.title}</h1>
-      <p className="mt-3 text-sm leading-relaxed text-muted">{t.onboarding.body}</p>
-      <button
-        type="button"
-        disabled={!ready}
-        className="mt-8 h-12 w-full rounded-xl bg-accent font-semibold text-on-accent disabled:opacity-50"
-        onClick={async () => {
-          await clear();
-          setOnboarded(true);
-          void navigate({ to: "/" });
-        }}
-      >
-        {t.onboarding.start}
-      </button>
-      <button
-        type="button"
-        disabled={!ready}
-        className="mt-3 h-12 w-full rounded-xl bg-elevated font-medium disabled:opacity-50"
-        onClick={async () => {
-          await reset();
-          setOnboarded(true);
-          void navigate({ to: "/" });
-        }}
-      >
-        {t.onboarding.sample}
-      </button>
     </div>
   );
 }
