@@ -23,7 +23,7 @@ import { asOfForMonth, budgetActuals, chargedDayOf, forecastTone } from "@/lib/c
 import { travelSpendYtd } from "@/lib/calc/trips";
 import { monthKey } from "@/lib/calc/ledger";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
-import type { AdhocBudget, Currency, Recurring, TxType } from "@/lib/types";
+import type { AdhocBudget, Budget, Currency, Recurring, TxType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -45,6 +45,7 @@ export function BudgetScreen() {
   const targetMode = useApp((s) => s.budgetTargetMode);
   const annual = useApp((s) => s.annualTravelBudget);
   const updateBudget = useApp((s) => s.updateBudget);
+  const deleteBudget = useApp((s) => s.deleteBudget);
   const month = monthKey();
   const asOf = asOfForMonth(month, todayISO());
   const actuals = budgetActuals(budgets, txs, month, rates, categories, recurring, asOf, adhocRows, targetMode);
@@ -75,6 +76,7 @@ export function BudgetScreen() {
   const [adhocOpen, setAdhocOpen] = useState(false);
   const [editingAdhoc, setEditingAdhoc] = useState<AdhocBudget | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
   const [addCat, setAddCat] = useState("");
   const [addAmt, setAddAmt] = useState("");
   const [showBreakdown, setShowBreakdown] = useState(false);
@@ -85,7 +87,17 @@ export function BudgetScreen() {
         title={t.budget.title}
         large
         right={
-          <button type="button" aria-label={t.budget.addCategoryBudget} onClick={() => setAddOpen(true)} className="grid size-11 place-items-center text-accent">
+          <button
+            type="button"
+            aria-label={t.budget.addCategoryBudget}
+            onClick={() => {
+              setEditingBudget(null);
+              setAddCat("");
+              setAddAmt("");
+              setAddOpen(true);
+            }}
+            className="grid size-11 place-items-center text-accent"
+          >
             <Plus className="size-6" />
           </button>
         }
@@ -211,20 +223,35 @@ export function BudgetScreen() {
       </Link>
 
       <h2 className="px-5 pb-1 pt-6 text-sm font-medium text-muted">{t.budget.byCategory}</h2>
+      {categoryActuals.length === 0 ? <p className="px-5 py-4 text-sm text-muted">{t.common.none}</p> : null}
       {categoryActuals.map((b) => {
         const ratio = b.ratio;
         const tone = forecastTone(ratio);
         const status = tone === "income" ? "on-track" : tone === "watch" ? "watch" : "at-risk";
+        const src = budgets.find((x) => x.id === b.id);
         return (
-          <div key={b.id} className="px-5 py-3">
+          <button
+            key={b.id}
+            type="button"
+            className="w-full px-5 py-3 text-left"
+            onClick={() => {
+              setEditingBudget(src ?? { id: b.id, label: b.label, labelZh: b.labelZh, monthly: b.monthly, spent: 0, categoryId: b.categoryId });
+              setAddCat(src?.categoryId ?? b.categoryId ?? "");
+              setAddAmt(String(src?.monthly ?? b.monthly ?? ""));
+              setAddOpen(true);
+            }}
+          >
             <div className="flex items-center justify-between gap-3">
-              <div>
+              <div className="min-w-0">
                 <div className="text-sm">{pickName(locale, b.label, b.labelZh)}</div>
                 <div className="text-xs text-muted">
                   {money(b.spent, "HKD")} / {money(b.monthly, "HKD")} · {pct(ratio)} {t.budget.used}
                 </div>
               </div>
-              <StatusChip status={status} />
+              <div className="flex items-center gap-2">
+                <StatusChip status={status} />
+                <ChevronRight className="size-4 text-faint" />
+              </div>
             </div>
             <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ring-track">
               <div
@@ -235,7 +262,7 @@ export function BudgetScreen() {
                 style={{ width: `${Math.min(100, ratio * 100)}%` }}
               />
             </div>
-          </div>
+          </button>
         );
       })}
 
@@ -265,7 +292,7 @@ export function BudgetScreen() {
         </div>
       </Overlay>
 
-      <Overlay open={addOpen} onClose={() => setAddOpen(false)} title={t.budget.addCategoryBudget}>
+      <Overlay open={addOpen} onClose={() => { setAddOpen(false); setEditingBudget(null); }} title={editingBudget ? t.tx.edit : t.budget.addCategoryBudget}>
         <div className="px-5 pb-8">
           <select value={addCat} onChange={(e) => setAddCat(e.target.value)} className="h-11 w-full rounded-lg bg-elevated px-3">
             <option value="">{t.budget.noCategory}</option>
@@ -284,19 +311,34 @@ export function BudgetScreen() {
             onClick={async () => {
               const cat = categories.find((c) => c.id === addCat);
               await updateBudget({
-                id: `b-${newId().slice(0, 8)}`,
+                id: editingBudget?.id ?? `b-${newId().slice(0, 8)}`,
                 categoryId: cat?.id,
-                label: cat?.name ?? "Budget",
-                labelZh: cat?.nameZh ?? "預算",
+                label: cat?.name ?? editingBudget?.label ?? "Budget",
+                labelZh: cat?.nameZh ?? editingBudget?.labelZh ?? "預算",
                 monthly: Number(addAmt) || 0,
                 spent: 0,
               });
               toast(t.add.savedToast);
               setAddOpen(false);
+              setEditingBudget(null);
             }}
           >
             {t.add.save}
           </button>
+          {editingBudget && editingBudget.id !== MONTH_TOTAL_BUDGET_ID ? (
+            <button
+              type="button"
+              className="mt-2 h-12 w-full text-sm text-expense"
+              onClick={async () => {
+                await deleteBudget(editingBudget.id);
+                toast(t.tx.deleted);
+                setAddOpen(false);
+                setEditingBudget(null);
+              }}
+            >
+              {t.tx.delete}
+            </button>
+          ) : null}
         </div>
       </Overlay>
 

@@ -17,6 +17,7 @@ import { MONTH_TOTAL_BUDGET_ID } from "../types.ts";
 import type { AdhocBudget, Budget, Category, Recurring, Transaction } from "../types.ts";
 import { monthlyLivingEssentials, monthlyHousingCost, isPrincipalRegular, housingRegularRows, housingMonthLines } from "./housing.ts";
 import { periodCategoryTotals, periodCategoryTxs, periodRange, yearCategoryCompare, yearCompareRanges } from "./period.ts";
+import { periodNetWorthPoints } from "./networth.ts";
 import { runRetirement, sustainableMonthly } from "./retirement.ts";
 
 function rec(partial: Partial<Recurring> & Pick<Recurring, "id" | "type" | "amount" | "chargedDay">): Recurring {
@@ -415,6 +416,36 @@ describe("year compare", () => {
     assert.equal(same.rows[0].delta, 60);
     const full = yearCategoryCompare(txs, cats, [], "2026-09-03", "full-last-year", "expense", true);
     assert.equal(full.rows[0].lastYear, 50);
+  });
+});
+
+describe("period net worth", () => {
+  it("reverses posted cash flow to rebuild daily net worth", () => {
+    const cash = {
+      id: "cash",
+      name: "Cash",
+      nameZh: "現金",
+      type: "cash" as const,
+      currency: "HKD" as const,
+      balance: 12000,
+      includeInNetWorth: true,
+      group: "cash" as const,
+    };
+    const rows = periodNetWorthPoints(
+      [cash],
+      [
+        tx({ id: "in", type: "income", amount: 5000, date: "2026-09-02", accountId: "cash" }),
+        tx({ id: "out", type: "expense", amount: 2000, date: "2026-09-03", accountId: "cash" }),
+      ],
+      [],
+      "2026-09-01",
+      "2026-09-03",
+    );
+    assert.equal(rows.length, 3);
+    assert.equal(rows[0].date, "2026-09-01");
+    assert.equal(rows[0].net, 9000);
+    assert.equal(rows[1].net, 14000);
+    assert.equal(rows[2].net, 12000);
   });
 });
 

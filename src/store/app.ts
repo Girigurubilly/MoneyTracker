@@ -137,6 +137,7 @@ type Dispatchers = {
   updateMortgage: (m: Mortgage) => Promise<void>;
   updateRetirement: (r: RetirementInputs & { id: string }) => Promise<void>;
   updateBudget: (b: Budget) => Promise<void>;
+  deleteBudget: (id: string) => Promise<void>;
   addTrip: (t: Trip) => Promise<void>;
   updateTrip: (t: Trip) => Promise<void>;
   deleteTrip: (id: string) => Promise<void>;
@@ -872,6 +873,11 @@ export const useApp = create<AppState>((set, get) => ({
         .budgets.map((x) => (x.id === b.id ? b : x))
         .concat(get().budgets.some((x) => x.id === b.id) ? [] : [b]),
     });
+  },
+  deleteBudget: async (id) => {
+    if (id === MONTH_TOTAL_BUDGET_ID) return;
+    await idb().budgets.delete(id);
+    set({ budgets: get().budgets.filter((b) => b.id !== id) });
   },
   addTrip: async (t) => {
     await idb().trips.add(t);

@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import {
   Building2,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   CreditCard,
   Globe,
@@ -13,6 +14,7 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Hairline, Overlay, ScreenHeader, SectionLabel, TxGroupedList } from "@/components/shared";
 import { AmountWithHkd } from "@/components/currency-field";
@@ -138,8 +140,11 @@ export function AssetsScreen() {
           </div>
         }
       />
-      <div className="mx-4 mb-5 overflow-hidden rounded-2xl bg-elevated px-4 py-5 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
-        <div className="text-sm text-muted">{t.assets.netWorth}</div>
+      <Link to="/reports/balance" className="mx-4 mb-5 block overflow-hidden rounded-2xl bg-elevated px-4 py-5 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+        <div className="flex items-start justify-between gap-2">
+          <div className="text-sm text-muted">{t.assets.netWorth}</div>
+          <ChevronRight className="size-4 shrink-0 text-faint" />
+        </div>
         <div className="mt-1 text-3xl font-semibold tracking-tight tabular-nums">{money(nw.net, "HKD")}</div>
         <div className="mt-4 grid grid-cols-2 gap-3">
           <div className="rounded-xl bg-success-soft px-3 py-2">
@@ -151,7 +156,7 @@ export function AssetsScreen() {
             <div className="mt-0.5 text-sm font-semibold tabular-nums text-expense">{money(nw.liab, "HKD")}</div>
           </div>
         </div>
-      </div>
+      </Link>
       {groups.map((g) => {
         const rows = accountsInGroup(visible, g.id).filter((a) => !fxIds.has(a.id));
         if (!rows.length) return null;
