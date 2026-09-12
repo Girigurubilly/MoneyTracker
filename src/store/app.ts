@@ -47,7 +47,7 @@ import { applyAutoTrip, patchAutoTrips } from "@/lib/calc/trips";
 import { netWorthNow } from "@/lib/calc/networth";
 import { fetchLiveFx } from "@/lib/calc/fx";
 import { applyHoldingBalances, mergeHoldings, parseHoldingsFile } from "@/lib/holdings";
-import { fetchHoldingQuotes } from "@/lib/quotes";
+import { fetchHoldingQuotes, quoteKey } from "@/lib/quotes";
 import { chargedDayOf, chargedIso, inferLivingRegular, isExpenseRegular } from "@/lib/calc/budget";
 import { isMortgageInterestCategory, isMortgagePrincipalCategory } from "@/lib/categories";
 import { accountsInGroup, nextSortOrder } from "@/lib/accounts";
@@ -1089,7 +1089,7 @@ export const useApp = create<AppState>((set, get) => ({
     const now = new Date().toISOString();
     let n = 0;
     const holdings = rows.map((h) => {
-      const hit = quotes.get(`${h.market}:${h.symbol}`);
+      const hit = quotes.get(quoteKey(h.market, h.symbol));
       if (!hit) return h;
       n += 1;
       const named = hit.name && hit.name !== h.symbol ? hit.name : h.name;

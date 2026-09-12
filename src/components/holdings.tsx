@@ -1,8 +1,8 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowDownAZ, ArrowUpAZ, Pencil, RefreshCw, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Group, Hairline, Overlay, ScreenHeader } from "@/components/shared";
-import { money } from "@/lib/format";
+import { money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { holdingMarketValue, holdingTitle, normalizeSymbol, sortHoldingsBySymbol } from "@/lib/holdings";
 import type { Currency, Holding, HoldingMarket } from "@/lib/types";
@@ -27,6 +27,38 @@ export function HoldingsPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [editing, setEditing] = useState<Holding | "new" | null>(null);
   const invest = accounts.filter((a) => a.type === "investment" && !a.hidden);
+
+  useEffect(() => {
+    if (!holdings.length) return;
+    const today = todayISO();
+    try {
+      if (sessionStorage.getItem("hk-life-quotes-day") === today) return;
+    } catch {
+      /* ignore */
+    }
+    const stale = holdings.some((h) => !h.lastPriceAt || h.lastPriceAt.slice(0, 10) !== today);
+    if (!stale) {
+      try {
+        sessionStorage.setItem("hk-life-quotes-day", today);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    try {
+      sessionStorage.setItem("hk-life-quotes-day", today);
+    } catch {
+      /* ignore */
+    }
+    setBusy(true);
+    void refresh()
+      .then((n) => {
+        if (n) toast(t.holdings.priced.replace("{n}", String(n)));
+        else toast(t.holdings.priceFail);
+      })
+      .catch(() => toast(t.holdings.priceFail))
+      .finally(() => setBusy(false));
+  }, [holdings.length]);
 
   async function onFile(file: File) {
     setBusy(true);

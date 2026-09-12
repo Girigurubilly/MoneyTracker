@@ -1,13 +1,13 @@
-import { normalizeSymbol, yahooCandidates } from "./holdings.ts";
+import { isLondonEtf, normalizeSymbol, yahooSymbol } from "./holdings.ts";
 import type { HoldingMarket } from "./types.ts";
 
 export type QuoteHit = { price: number; name?: string; prevClose?: number };
 
-function keyOf(market: HoldingMarket, symbol: string): string {
+export function quoteKey(market: HoldingMarket, symbol: string): string {
   return `${market}:${normalizeSymbol(market, symbol)}`;
 }
 
-async function pull(url: string, ms = 9000): Promise<string> {
+async function pull(url: string, ms = 4000): Promise<string> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ms);
   try {
@@ -19,11 +19,17 @@ async function pull(url: string, ms = 9000): Promise<string> {
   }
 }
 
+async function pullFirst(urls: string[], ms = 4000): Promise<string> {
+  return await Promise.any(urls.map((u) => pull(u, ms)));
+}
+
 function tencentCode(market: HoldingMarket, symbol: string): string {
   const s = normalizeSymbol(market, symbol);
-  if (s.includes(".")) return "";
+  const base = s.replace(/\.[A-Z]+$/, "");
   if (market === "hk") return `r_hk${s.padStart(5, "0")}`;
-  if (/^[A-Z]{1,5}$/.test(s) && s.length <= 5) return `us${s}`;
+  if (isLondonEtf(s)) return `uk${base}`;
+  if (s.includes(".")) return "";
+  if (/^[A-Z]{1,5}$/.test(s)) return `us${s}`;
   return "";
 }
 
@@ -72,60 +78,66 @@ function loadTencentScript(codes: string[]): Promise<Map<string, QuoteHit>> {
       el.remove();
       resolve(new Map());
     };
-    setTimeout(finish, 9000);
+    setTimeout(finish, 4000);
     document.head.appendChild(el);
   });
 }
 
-function parseYahooQuote(text: string): Map<string, QuoteHit> {
-  const out = new Map<string, QuoteHit>();
+function parseYahooChart(text: string): { hit?: QuoteHit; closes: ClosePt[] } {
   try {
     const data = JSON.parse(text) as {
-      quoteResponse?: {
-        result?: { symbol?: string; shortName?: string; longName?: string; regularMarketPrice?: number; regularMarketPreviousClose?: number }[];
+      chart?: {
+        result?: {
+          timestamp?: number[];
+          indicators?: { quote?: { close?: (number | null)[] }[] };
+          meta?: { symbol?: string; shortName?: string; regularMarketPrice?: number; previousClose?: number; chartPreviousClose?: number };
+        }[];
       };
-      chart?: { result?: { meta?: { symbol?: string; shortName?: string; regularMarketPrice?: number; previousClose?: number; instrumentName?: string } }[] };
     };
-    for (const row of data.quoteResponse?.result ?? []) {
-      const price = row.regularMarketPrice;
-      if (!(typeof price === "number" && price > 0) || !row.symbol) continue;
-      out.set(row.symbol.toUpperCase(), {
-        price,
-        name: row.shortName || row.longName,
-        prevClose: row.regularMarketPreviousClose,
-      });
+    const r = data.chart?.result?.[0];
+    const ts = r?.timestamp ?? [];
+    const closesRaw = r?.indicators?.quote?.[0]?.close ?? [];
+    const closes: ClosePt[] = [];
+    for (let i = 0; i < ts.length; i++) {
+      const c = closesRaw[i];
+      if (typeof c === "number" && c > 0) closes.push({ date: new Date(ts[i]! * 1000).toISOString().slice(0, 10), close: c });
     }
-    const meta = data.chart?.result?.[0]?.meta;
-    if (meta?.symbol && typeof meta.regularMarketPrice === "number" && meta.regularMarketPrice > 0) {
-      out.set(meta.symbol.toUpperCase(), {
-        price: meta.regularMarketPrice,
-        name: meta.shortName || meta.instrumentName,
-        prevClose: meta.previousClose,
-      });
-    }
+    const price = r?.meta?.regularMarketPrice ?? closes[closes.length - 1]?.close;
+    const prev = r?.meta?.previousClose ?? r?.meta?.chartPreviousClose ?? closes[closes.length - 2]?.close;
+    const hit =
+      typeof price === "number" && price > 0
+        ? { price, name: r?.meta?.shortName, prevClose: typeof prev === "number" && prev > 0 ? prev : undefined }
+        : undefined;
+    return { hit, closes };
   } catch {
-    /* ignore */
+    return { closes: [] };
   }
-  return out;
 }
 
-async function yahooBatch(symbols: string[]): Promise<Map<string, QuoteHit>> {
-  if (!symbols.length) return new Map();
-  const yahooUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols.join(","))}&fields=shortName,longName,regularMarketPrice,regularMarketPreviousClose,symbol`;
-  const urls = [
-    yahooUrl,
-    `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`,
-  ];
-  for (const url of urls) {
-    try {
-      const map = parseYahooQuote(await pull(url, 10000));
-      if (map.size) return map;
-    } catch {
-      /* try next */
+function yahooChartUrls(symbol: string, range: string): string[] {
+  const u = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}`;
+  return [u, `https://corsproxy.io/?${encodeURIComponent(u)}`];
+}
+
+async function yahooChart(symbol: string, range: string): Promise<{ hit?: QuoteHit; closes: ClosePt[] }> {
+  try {
+    return parseYahooChart(await pullFirst(yahooChartUrls(symbol, range), 4000));
+  } catch {
+    return { closes: [] };
+  }
+}
+
+async function yahooCharts(symbols: string[], range: string): Promise<Map<string, QuoteHit>> {
+  const out = new Map<string, QuoteHit>();
+  const conc = 6;
+  for (let i = 0; i < symbols.length; i += conc) {
+    const slice = symbols.slice(i, i + conc);
+    const got = await Promise.all(slice.map(async (s) => ({ s, ...(await yahooChart(s, range)) })));
+    for (const row of got) {
+      if (row.hit) out.set(row.s.toUpperCase(), row.hit);
     }
   }
-  return new Map();
+  return out;
 }
 
 function parseEastmoney(text: string): { code: string; hit: QuoteHit }[] {
@@ -146,37 +158,31 @@ function parseEastmoney(text: string): { code: string; hit: QuoteHit }[] {
   }
 }
 
-async function eastmoneyBatch(rows: { market: HoldingMarket; symbol: string }[]): Promise<Map<string, QuoteHit>> {
-  const secids = rows
-    .map((r) => {
-      const s = normalizeSymbol(r.market, r.symbol);
-      if (r.market === "hk") return `116.${s.padStart(5, "0")}`;
-      return `105.${s}`;
-    })
-    .join(",");
-  if (!secids) return new Map();
+async function eastmoneyHk(rows: { market: HoldingMarket; symbol: string }[]): Promise<Map<string, QuoteHit>> {
+  const hk = rows.filter((r) => r.market === "hk");
+  if (!hk.length) return new Map();
+  const secids = hk.map((r) => `116.${normalizeSymbol(r.market, r.symbol).padStart(5, "0")}`).join(",");
   const url = `https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&invt=2&fields=f2,f12,f14,f18&secids=${encodeURIComponent(secids)}`;
   try {
-    const hits = parseEastmoney(await pull(url));
+    const hits = parseEastmoney(await pull(url, 4000));
     const byCode = new Map(hits.map((h) => [h.code, h.hit]));
     const out = new Map<string, QuoteHit>();
-    for (const r of rows) {
+    for (const r of hk) {
       const s = normalizeSymbol(r.market, r.symbol);
-      const hit = byCode.get(s) ?? byCode.get(s.replace(/^0+/, "")) ?? byCode.get(s.padStart(5, "0"));
-      if (hit) out.set(keyOf(r.market, r.symbol), hit);
+      const hit = byCode.get(s) ?? byCode.get(s.padStart(5, "0")) ?? byCode.get(s.replace(/^0+/, ""));
+      if (hit) out.set(quoteKey(r.market, r.symbol), hit);
     }
-    if (out.size) return out;
+    return out;
   } catch {
-    /* ignore */
+    return new Map();
   }
-  return new Map();
 }
 
 export async function fetchHoldingQuotes(
   rows: { market: HoldingMarket; symbol: string }[],
 ): Promise<Map<string, QuoteHit>> {
   const uniq = new Map<string, { market: HoldingMarket; symbol: string }>();
-  for (const r of rows) uniq.set(keyOf(r.market, r.symbol), { market: r.market, symbol: normalizeSymbol(r.market, r.symbol) });
+  for (const r of rows) uniq.set(quoteKey(r.market, r.symbol), { market: r.market, symbol: normalizeSymbol(r.market, r.symbol) });
   const list = [...uniq.values()];
   const out = new Map<string, QuoteHit>();
 
@@ -185,24 +191,24 @@ export async function fetchHoldingQuotes(
   for (const r of list) {
     const code = tencentCode(r.market, r.symbol);
     const hit = code ? tencent.get(code) : undefined;
-    if (hit) out.set(keyOf(r.market, r.symbol), hit);
+    if (hit) out.set(quoteKey(r.market, r.symbol), hit);
   }
 
-  const missing = list.filter((r) => !out.has(keyOf(r.market, r.symbol)));
-  if (missing.length) {
-    const em = await eastmoneyBatch(missing);
+  const missing = list.filter((r) => !out.has(quoteKey(r.market, r.symbol)));
+  if (missing.some((r) => r.market === "hk")) {
+    const em = await eastmoneyHk(missing);
     for (const [k, v] of em) if (!out.has(k)) out.set(k, v);
   }
 
-  const still = list.filter((r) => !out.has(keyOf(r.market, r.symbol)));
+  const still = list.filter((r) => !out.has(quoteKey(r.market, r.symbol)));
   if (still.length) {
-    const ysyms = still.flatMap((r) => yahooCandidates(r.market, r.symbol));
-    const ymap = await yahooBatch(ysyms);
+    const ymap = await yahooCharts(
+      still.map((r) => yahooSymbol(r.market, r.symbol)),
+      "5d",
+    );
     for (const r of still) {
-      const hit = yahooCandidates(r.market, r.symbol)
-        .map((s) => ymap.get(s.toUpperCase()))
-        .find(Boolean);
-      if (hit) out.set(keyOf(r.market, r.symbol), hit);
+      const hit = ymap.get(yahooSymbol(r.market, r.symbol).toUpperCase());
+      if (hit) out.set(quoteKey(r.market, r.symbol), hit);
     }
   }
 
@@ -243,27 +249,6 @@ function yahooRange(range: PriceRange): string {
 
 type ClosePt = { date: string; close: number };
 
-function parseYahooCloses(text: string): ClosePt[] {
-  try {
-    const data = JSON.parse(text) as {
-      chart?: { result?: { timestamp?: number[]; indicators?: { quote?: { close?: (number | null)[] }[] } }[] };
-    };
-    const r = data.chart?.result?.[0];
-    const ts = r?.timestamp ?? [];
-    const closes = r?.indicators?.quote?.[0]?.close ?? [];
-    const out: ClosePt[] = [];
-    for (let i = 0; i < ts.length; i++) {
-      const c = closes[i];
-      if (typeof c === "number" && c > 0) {
-        out.push({ date: new Date(ts[i]! * 1000).toISOString().slice(0, 10), close: c });
-      }
-    }
-    return out;
-  } catch {
-    return [];
-  }
-}
-
 function parseEastKline(text: string): ClosePt[] {
   try {
     const data = JSON.parse(text) as { data?: { klines?: string[] } };
@@ -289,76 +274,74 @@ function closeOnOrBefore(points: ClosePt[], iso: string): number | undefined {
 }
 
 async function historyFor(market: HoldingMarket, symbol: string, range: PriceRange): Promise<ClosePt[]> {
-  for (const y of yahooCandidates(market, symbol)) {
-    const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(y)}?interval=1d&range=${yahooRange(range)}`;
-    for (const url of [yahooUrl, `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`, `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`]) {
-      try {
-        const pts = parseYahooCloses(await pull(url, 10000));
-        if (pts.length) return pts;
-      } catch {
-        /* next */
-      }
-    }
-  }
+  const y = yahooSymbol(market, symbol);
+  const { closes } = await yahooChart(y, yahooRange(range));
+  if (closes.length) return closes;
+  if (market !== "hk") return [];
   const s = normalizeSymbol(market, symbol);
-  const secid = market === "hk" ? `116.${s.padStart(5, "0")}` : `105.${s}`;
-  const em = `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${encodeURIComponent(secid)}&klt=101&fqt=1&lmt=320&end=20500101&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58`;
+  const em = `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=${encodeURIComponent(`116.${s.padStart(5, "0")}`)}&klt=101&fqt=1&lmt=320&end=20500101&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58`;
   try {
-    const pts = parseEastKline(await pull(em, 10000));
-    if (pts.length) return pts;
+    return parseEastKline(await pull(em, 4000));
   } catch {
-    /* ignore */
+    return [];
   }
-  return [];
 }
+
+const moveCache = new Map<string, { at: number; data: Map<string, PriceMove> }>();
 
 export async function fetchHoldingMoves(
   rows: { market: HoldingMarket; symbol: string }[],
   range: PriceRange,
 ): Promise<Map<string, PriceMove>> {
-  const out = new Map<string, PriceMove>();
   const uniq = new Map<string, { market: HoldingMarket; symbol: string }>();
-  for (const r of rows) uniq.set(keyOf(r.market, r.symbol), { market: r.market, symbol: normalizeSymbol(r.market, r.symbol) });
+  for (const r of rows) uniq.set(quoteKey(r.market, r.symbol), { market: r.market, symbol: normalizeSymbol(r.market, r.symbol) });
   const list = [...uniq.values()];
+  const cacheKey = `${range}:${list.map((r) => quoteKey(r.market, r.symbol)).sort().join(",")}`;
+  const cached = moveCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < 5 * 60 * 1000) return cached.data;
 
-  if (range === "1d") {
-    const quotes = await fetchHoldingQuotes(list);
-    for (const r of list) {
-      const hit = quotes.get(keyOf(r.market, r.symbol));
-      if (!hit) continue;
-      const start = hit.prevClose && hit.prevClose > 0 ? hit.prevClose : hit.price;
-      out.set(keyOf(r.market, r.symbol), {
-        last: hit.price,
-        start,
-        change: hit.price - start,
-        pct: start ? (hit.price - start) / start : 0,
-        name: hit.name,
-      });
-    }
-    return out;
+  const out = new Map<string, PriceMove>();
+  const quotes = await fetchHoldingQuotes(list);
+  for (const r of list) {
+    const hit = quotes.get(quoteKey(r.market, r.symbol));
+    if (!hit) continue;
+    const start = hit.prevClose && hit.prevClose > 0 ? hit.prevClose : hit.price;
+    out.set(quoteKey(r.market, r.symbol), {
+      last: hit.price,
+      start,
+      change: hit.price - start,
+      pct: start ? (hit.price - start) / start : 0,
+      name: hit.name,
+    });
   }
 
-  const from = rangeStartIso(range);
-  const batch = 3;
-  for (let i = 0; i < list.length; i += batch) {
-    const slice = list.slice(i, i + batch);
-    const got = await Promise.all(
-      slice.map(async (r) => {
-        const pts = await historyFor(r.market, r.symbol, range);
-        const last = pts[pts.length - 1]?.close;
-        const start = last != null ? closeOnOrBefore(pts, from) : undefined;
-        return { r, last, start };
-      }),
-    );
-    for (const { r, last, start } of got) {
-      if (!last || !start) continue;
-      out.set(keyOf(r.market, r.symbol), {
-        last,
-        start,
-        change: last - start,
-        pct: start ? (last - start) / start : 0,
-      });
+  if (range !== "1d") {
+    const from = rangeStartIso(range);
+    const missing = list;
+    const conc = 6;
+    for (let i = 0; i < missing.length; i += conc) {
+      const slice = missing.slice(i, i + conc);
+      const got = await Promise.all(
+        slice.map(async (r) => {
+          const pts = await historyFor(r.market, r.symbol, range);
+          const last = pts[pts.length - 1]?.close;
+          const start = last != null ? closeOnOrBefore(pts, from) : undefined;
+          return { r, last, start };
+        }),
+      );
+      for (const { r, last, start } of got) {
+        if (!last || !start) continue;
+        const live = out.get(quoteKey(r.market, r.symbol))?.last ?? last;
+        out.set(quoteKey(r.market, r.symbol), {
+          last: live,
+          start,
+          change: live - start,
+          pct: start ? (live - start) / start : 0,
+        });
+      }
     }
   }
+
+  moveCache.set(cacheKey, { at: Date.now(), data: out });
   return out;
 }

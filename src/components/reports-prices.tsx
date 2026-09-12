@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { ScreenHeader, Group, Hairline } from "@/components/shared";
-import { money } from "@/lib/format";
+import { money, todayISO } from "@/lib/format";
 import { toHkd } from "@/lib/calc/fx";
 import { holdingTitle, sortHoldingsBySymbol } from "@/lib/holdings";
-import { fetchHoldingMoves, type PriceMove, type PriceRange } from "@/lib/quotes";
+import { fetchHoldingMoves, quoteKey, type PriceMove, type PriceRange } from "@/lib/quotes";
 import type { HoldingMarket } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { useT } from "@/store/ui";
+import { toast } from "sonner";
 
 type BookFilter = "both" | "hk" | "us";
 
@@ -16,10 +17,38 @@ export function StockPricesPage() {
   const holdings = useApp((s) => s.holdings);
   const rates = useApp((s) => s.fxRates);
   const [book, setBook] = useState<BookFilter>("both");
-  const [range, setRange] = useState<PriceRange>("1m");
+  const [range, setRange] = useState<PriceRange>("1d");
   const [dir, setDir] = useState<"asc" | "desc">("asc");
   const [busy, setBusy] = useState(false);
   const [moves, setMoves] = useState<Map<string, PriceMove>>(new Map());
+  const refresh = useApp((s) => s.refreshHoldingPrices);
+
+  useEffect(() => {
+    if (!holdings.length) return;
+    const today = todayISO();
+    try {
+      if (sessionStorage.getItem("hk-life-quotes-day") === today) return;
+    } catch {
+      /* ignore */
+    }
+    const stale = holdings.some((h) => !h.lastPriceAt || h.lastPriceAt.slice(0, 10) !== today);
+    if (!stale) {
+      try {
+        sessionStorage.setItem("hk-life-quotes-day", today);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    try {
+      sessionStorage.setItem("hk-life-quotes-day", today);
+    } catch {
+      /* ignore */
+    }
+    void refresh().then((n) => {
+      if (n) toast(t.holdings.priced.replace("{n}", String(n)));
+    });
+  }, [holdings.length]);
 
   const rows = useMemo(() => {
     const list = holdings.filter((h) => book === "both" || h.market === book);
@@ -49,7 +78,7 @@ export function StockPricesPage() {
     let now = 0;
     let start = 0;
     for (const h of rows) {
-      const mv = moves.get(`${h.market}:${h.symbol}`);
+      const mv = moves.get(quoteKey(h.market, h.symbol));
       const last = mv?.last ?? h.lastPrice;
       const open = mv?.start ?? last;
       now += toHkd(h.quantity * (last || 0), h.currency, rates);
@@ -127,7 +156,7 @@ export function StockPricesPage() {
       ) : (
         <Group>
           {rows.map((h, i) => {
-            const mv = moves.get(`${h.market}:${h.symbol}`);
+            const mv = moves.get(quoteKey(h.market, h.symbol));
             const last = mv?.last ?? h.lastPrice;
             const pct = mv?.pct;
             const up = (pct ?? 0) > 0;

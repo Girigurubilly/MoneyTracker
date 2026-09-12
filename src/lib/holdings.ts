@@ -114,10 +114,16 @@ const LONDON_ETFS = new Set([
   "IDTL",
 ]);
 
+export function isLondonEtf(symbol: string): boolean {
+  const s = symbol.trim().toUpperCase().replace(/[^A-Z0-9.]/g, "");
+  const base = s.replace(/\.[A-Z]+$/, "");
+  return s.endsWith(".L") || LONDON_ETFS.has(base);
+}
+
 export function yahooSymbol(market: HoldingMarket, symbol: string): string {
   const s = normalizeSymbol(market, symbol);
   if (market === "hk") return `${s}.HK`;
-  if (s.includes(".")) return s;
+  if (s.endsWith(".L") || s.includes(".")) return s;
   if (LONDON_ETFS.has(s)) return `${s}.L`;
   return s;
 }

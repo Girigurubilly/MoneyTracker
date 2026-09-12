@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { detectMarket, mergeHoldings, normalizeSymbol, parseHoldingsFile, yahooSymbol } from "./holdings.ts";
+import { detectMarket, isLondonEtf, mergeHoldings, normalizeSymbol, parseHoldingsFile, yahooSymbol } from "./holdings.ts";
 
 const IBKR = `Statement,Header,Field Name,Field Value
 Open Positions,Header,DataDiscriminator,Asset Category,Currency,Symbol,Quantity,Mark Price,Position Value
@@ -38,6 +38,9 @@ describe("holdings import", () => {
     assert.equal(yahooSymbol("hk", "700"), "0700.HK");
     assert.equal(yahooSymbol("us", "aapl"), "AAPL");
     assert.equal(yahooSymbol("us", "CSPX"), "CSPX.L");
+    assert.equal(yahooSymbol("us", "CSPX.L"), "CSPX.L");
+    assert.equal(isLondonEtf("CSPX"), true);
+    assert.equal(isLondonEtf("cspx.l"), true);
     assert.equal(normalizeSymbol("hk", "00700.HK"), "0700");
     assert.equal(detectMarket("00700"), "hk");
     assert.equal(detectMarket("AAPL"), "us");
