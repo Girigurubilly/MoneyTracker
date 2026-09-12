@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Group, Hairline, ScreenHeader } from "@/components/shared";
 import { money } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
-import { holdingMarketValue } from "@/lib/holdings";
+import { holdingMarketValue, sortHoldings } from "@/lib/holdings";
 import type { Holding, HoldingMarket } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -43,8 +43,8 @@ export function HoldingsPage() {
     }
   }
 
-  const hk = holdings.filter((h) => h.market === "hk");
-  const us = holdings.filter((h) => h.market === "us");
+  const hk = sortHoldings(holdings.filter((h) => h.market === "hk"));
+  const us = sortHoldings(holdings.filter((h) => h.market === "us"));
 
   return (
     <div className="pb-10">
@@ -179,9 +179,12 @@ function Book({
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="text-sm font-medium">
-                    {h.symbol} <span className="font-normal text-muted">{h.name !== h.symbol ? h.name : ""}</span>
+                    {h.name && h.name !== h.symbol ? h.name : h.symbol}
                   </div>
                   <div className="mt-0.5 text-xs tabular-nums text-muted">
+                    {h.symbol}
+                    {h.name && h.name !== h.symbol ? "" : ""}
+                    {" · "}
                     {h.quantity} × {h.lastPrice ? money(h.lastPrice, h.currency) : "—"} = {money(h.quantity * (h.lastPrice || 0), h.currency)}
                   </div>
                 </div>

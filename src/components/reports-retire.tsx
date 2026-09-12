@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { Area, AreaChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { Hairline, InfoButton, ProgressRing, ScreenHeader, SectionLabel, StatusChip } from "@/components/shared";
 import { money, todayISO } from "@/lib/format";
+import { downloadBlob } from "@/lib/backup";
+import { toHkd } from "@/lib/calc/fx";
 import { pickName } from "@/lib/i18n";
 import { livingEssentials } from "@/lib/calc/budget";
 import { monthlyPayment, effectiveRate } from "@/lib/calc/mortgage";
@@ -52,7 +54,8 @@ export function RetirementPage() {
     fireSwr: ret?.fireSwr ?? 0.04,
     birthday: ret?.birthday,
   };
-  const pack = retirementSleeves(accounts, rates, 0.02, base.preReturn);
+  const holdings = useApp((s) => s.holdings);
+  const pack = retirementSleeves(accounts, rates, 0.02, base.preReturn, holdings);
   const yearsRetired = Math.max(1, base.deathAge - base.retireAge);
   const rmMonthly = reverseMortgageMonthly(pack.property, base.reverseMortgageLtv ?? 0, yearsRetired);
   const ctx = {
@@ -83,6 +86,8 @@ export function RetirementPage() {
     ctx.housingAfterPayoff,
     oneOffs,
     allowances,
+    holdings,
+    pack.sleeves,
   ]);
   const sustain = useMemo(() => sustainableMonthly(base, ctx), [
     base.currentAge,
@@ -101,6 +106,7 @@ export function RetirementPage() {
     pack.sleeves,
     oneOffs,
     allowances,
+    holdings,
   ]);
   const fire = useMemo(() => firePlan(base, ctx), [
     base.currentAge,
@@ -115,7 +121,9 @@ export function RetirementPage() {
     ctx.investableNow,
     ctx.propertyEquity,
     pack.sleeves,
+    holdings,
   ]);
+  const locale = useUi((s) => s.locale);
   const surplus = sustain - base.targetMonthly;
   const status = retirementStatus(result.depletes, sustain, base.targetMonthly, result.series);
   const [chartPoint, setChartPoint] = useState<{ age: number; corpus: number } | null>(null);
@@ -124,9 +132,85 @@ export function RetirementPage() {
     void update({ ...base, ...patch, id: ret?.id ?? "base" });
   }
 
+  function exportBrief() {
+    const acctName = (id?: string) => {
+      const a = accounts.find((x) => x.id === id);
+      return a ? pickName(locale, a.name, a.nameZh) : "—";
+    };
+    const lines = [
+      "# HK Life Money — retirement brief",
+      `Generated: ${new Date().toISOString()}`,
+      "",
+      "## Profile",
+      `- Current age: ${base.currentAge}${base.birthday ? ` (birthday ${base.birthday})` : ""}`,
+      `- Retire age: ${base.retireAge}`,
+      `- Plan to: ${base.deathAge}`,
+      `- Monthly income now (HKD): ${Math.round(base.monthlyIncomeNow)}`,
+      `- Monthly spend now (HKD): ${Math.round(base.monthlySpendNow)}`,
+      `- Target monthly spend in retirement (HKD): ${Math.round(base.targetMonthly)}`,
+      `- Inflation: ${(base.inflation * 100).toFixed(2)}%`,
+      `- Expected return before retire: ${(base.preReturn * 100).toFixed(2)}%`,
+      `- Expected return after retire: ${(base.postReturn * 100).toFixed(2)}%`,
+      `- FIRE withdrawal rate: ${((base.fireSwr ?? 0.04) * 100).toFixed(2)}%`,
+      `- Reverse mortgage LTV: ${((base.reverseMortgageLtv ?? 0) * 100).toFixed(1)}%`,
+      "",
+      "## FIRE snapshot",
+      `- FIRE number (HKD): ${Math.round(fire.fireNumber)}`,
+      `- Investable now (HKD): ${Math.round(fire.current)}`,
+      `- Property equity (HKD): ${Math.round(fire.property)}`,
+      `- Gap (HKD): ${Math.round(Math.max(0, fire.fireNumber - fire.current))}`,
+      `- Progress: ${(fire.progress * 100).toFixed(1)}%`,
+      `- Earliest FIRE age: ${fire.reachable ? fire.fireAge : "not within horizon"}`,
+      `- Corpus at retire age (HKD): ${Math.round(result.corpusAtRetire)}`,
+      `- Sustainable monthly (HKD): ${Math.round(sustain)}`,
+      `- Status: ${status}`,
+      `- Depletes: ${result.depletes ? `yes${result.depletionAge ? ` at ${result.depletionAge}` : ""}` : "no"}`,
+      "",
+      "## Holdings (marked to market)",
+      "market,symbol,name,quantity,price,currency,value_hkd,account",
+      ...holdings.map((h) =>
+        [
+          h.market,
+          h.symbol,
+          `"${(h.name || h.symbol).replace(/"/g, "'")}"`,
+          h.quantity,
+          h.lastPrice,
+          h.currency,
+          Math.round(toHkd(h.quantity * (h.lastPrice || 0), h.currency, rates)),
+          acctName(h.accountId),
+        ].join(","),
+      ),
+      holdings.length ? "" : "(none)",
+      "",
+      "## Forecast sleeves",
+      "label,kind,amount_hkd,annual_return_pct,included",
+      ...pack.sleeves.map((s) =>
+        [`"${s.label.replace(/"/g, "'")}"`, s.kind, Math.round(s.amount), ((s.annualReturn ?? 0) * 100).toFixed(2), s.included ? "yes" : "no"].join(","),
+      ),
+      "",
+      "## Corpus by age (HKD)",
+      "age,corpus",
+      ...result.series.map((s) => `${s.age},${Math.round(s.corpus)}`),
+      "",
+      "Use this brief to comment on FIRE feasibility, concentration risk in holdings, return assumptions, and whether the monthly target is sustainable.",
+    ];
+    downloadBlob(`hk-life-retirement-${todayISO()}.md`, lines.join("\n"), "text/markdown");
+  }
+
   return (
     <div className="pb-10">
-      <ScreenHeader title={t.reports.retirement} backTo="/reports" right={<InfoButton k="retirement" />} />
+      <ScreenHeader
+        title={t.reports.retirement}
+        backTo="/reports"
+        right={
+          <div className="flex items-center gap-1">
+            <button type="button" className="px-2 text-sm font-medium text-accent" onClick={exportBrief}>
+              {t.reports.exportBrief}
+            </button>
+            <InfoButton k="retirement" />
+          </div>
+        }
+      />
       <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">

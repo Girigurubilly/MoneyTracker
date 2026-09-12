@@ -167,6 +167,7 @@ export function mergeHoldings(existing: Holding[], incoming: ParsedHolding[], ac
         ...prev,
         ...row,
         id: prev.id,
+        name: row.name && row.name !== row.symbol ? row.name : prev.name,
         accountId: accountId ?? prev.accountId,
         lastPrice: row.lastPrice || prev.lastPrice,
         lastPriceAt: row.lastPrice ? new Date().toISOString() : prev.lastPriceAt,
@@ -205,8 +206,17 @@ export function applyHoldingBalances(accounts: Account[], holdings: Holding[], r
     if (a.type !== "investment" || a.holdingSync === false) return a;
     if (!a.stockBook && !holdings.some((h) => h.accountId === a.id)) return a;
     const value = accountHoldingValue(holdings, a, rates);
-    if (!a.stockBook && !holdings.some((h) => h.accountId === a.id)) return a;
     if (Math.abs(value - a.balance) < 0.005) return a;
     return { ...a, balance: Math.round(value * 100) / 100 };
+  });
+}
+
+export function sortHoldings<T extends { name: string; symbol: string }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => {
+    const an = (a.name || a.symbol).trim();
+    const bn = (b.name || b.symbol).trim();
+    const byName = an.localeCompare(bn, "zh-Hant", { sensitivity: "base", numeric: true });
+    if (byName) return byName;
+    return a.symbol.localeCompare(b.symbol, "en", { numeric: true });
   });
 }

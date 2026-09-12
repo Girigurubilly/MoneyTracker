@@ -1,6 +1,7 @@
-import type { Account, Allowance, OneOff, Transaction, FxRate } from "../types.ts";
+import type { Account, Allowance, FxRate, Holding, OneOff, Transaction } from "../types.ts";
 import { cashflowSide, inMonth } from "./ledger.ts";
 import { toHkd } from "./fx.ts";
+import { holdingsForAccount } from "../holdings.ts";
 
 export type RetirementInputs = {
   currentAge: number;
@@ -183,13 +184,67 @@ export function retirementSleeves(
   rates: FxRate[],
   fallbackCash: number,
   fallbackInvest: number,
+  holdings: Holding[] = [],
 ): { sleeves: AssetSleeve[]; cash: number; invest: number; property: number } {
   const sleeves: AssetSleeve[] = [];
   let cash = 0;
   let invest = 0;
   let property = 0;
+  const covered = new Set<string>();
+  const usedHoldings = new Set<string>();
+
   for (const a of accounts) {
     if (a.hidden || a.currency === "MILES") continue;
+    const rows = holdingsForAccount(holdings, a);
+    if (!rows.length) continue;
+    covered.add(a.id);
+    const included = a.retireInclude !== false;
+    const annualReturn = typeof a.expectedReturn === "number" ? a.expectedReturn : fallbackInvest;
+    let heldHkd = 0;
+    for (const h of rows) {
+      usedHoldings.add(h.id);
+      const amount = toHkd(h.quantity * (h.lastPrice || 0), h.currency, rates);
+      heldHkd += amount;
+      sleeves.push({
+        id: `hold-${h.id}`,
+        label: h.name && h.name !== h.symbol ? `${h.name} (${h.symbol})` : h.symbol,
+        amount,
+        annualReturn,
+        kind: "invest",
+        included,
+      });
+      if (included) invest += amount;
+    }
+    const leftover = toHkd(a.balance, a.currency, rates) - heldHkd;
+    if (leftover > 1) {
+      sleeves.push({
+        id: a.id,
+        label: a.nameZh || a.name,
+        amount: leftover,
+        annualReturn,
+        kind: "invest",
+        included,
+      });
+      if (included) invest += leftover;
+    }
+  }
+
+  for (const h of holdings) {
+    if (usedHoldings.has(h.id)) continue;
+    const amount = toHkd(h.quantity * (h.lastPrice || 0), h.currency, rates);
+    sleeves.push({
+      id: `hold-${h.id}`,
+      label: h.name && h.name !== h.symbol ? `${h.name} (${h.symbol})` : h.symbol,
+      amount,
+      annualReturn: fallbackInvest,
+      kind: "invest",
+      included: true,
+    });
+    invest += amount;
+  }
+
+  for (const a of accounts) {
+    if (a.hidden || a.currency === "MILES" || covered.has(a.id)) continue;
     const amount = toHkd(a.balance, a.currency, rates);
     const group = a.group || (a.type === "property" || a.type === "mortgage" ? "housing" : a.type === "investment" || a.type === "mpf" || a.type === "other_asset" ? "assets" : a.type === "credit" || a.type === "loan" ? "credit" : a.type === "miles" ? "loyalty" : "cash");
     if (group === "housing" && a.type !== "mortgage" && a.type !== "loan") {
