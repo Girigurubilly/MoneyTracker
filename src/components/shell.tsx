@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import { Link, Navigate, useRouterState } from "@tanstack/react-router";
 import { BarChart3, Bone, Building2, Cat, Cpu, Fish, Heart, Home, Landmark, Leaf, Moon, MoreHorizontal, PawPrint, PieChart, Sparkles, TreePine, Wallet, WalletCards } from "lucide-react";
-import { Toaster } from "sonner";
+import { Toaster, toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { useT, useUi, readOnboarded } from "@/store/ui";
@@ -12,7 +12,7 @@ import { AddFlow } from "@/components/add-sheet";
 import { SearchFlow } from "@/components/search-sheet";
 import { TxDetail } from "@/components/tx-detail";
 import { assetUrl } from "@/lib/base";
-import { markLocalEdit } from "@/lib/drive-sync";
+import { isApplyingRemote, markLocalEdit, runDailyDriveSync } from "@/lib/drive-sync";
 
 export function AppGate({ children }: { children: ReactNode }) {
   const ready = useApp((s) => s.ready);
@@ -54,16 +54,31 @@ export function AppGate({ children }: { children: ReactNode }) {
       <TxDetail />
       <InfoDialog />
       <LocalEditMark />
+      <DailyDriveSync />
       <Toaster theme={isDarkTheme(theme) ? "dark" : "light"} position="top-center" richColors={false} />
     </div>
   );
+}
+
+function DailyDriveSync() {
+  const ready = useApp((s) => s.ready);
+  const exportSnapshot = useApp((s) => s.exportSnapshot);
+  const replaceAll = useApp((s) => s.replaceAll);
+  const t = useT();
+  useEffect(() => {
+    if (!ready) return;
+    void runDailyDriveSync({ exportSnapshot, replaceAll }).then((r) => {
+      if (r === "pulled") toast(t.backup.synced);
+    });
+  }, [ready, exportSnapshot, replaceAll, t]);
+  return null;
 }
 
 function LocalEditMark() {
   useEffect(() => {
     let skip = true;
     const unsub = useApp.subscribe(() => {
-      if (skip) return;
+      if (skip || isApplyingRemote()) return;
       markLocalEdit();
     });
     const timer = window.setTimeout(() => {

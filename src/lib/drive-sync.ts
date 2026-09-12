@@ -1,7 +1,10 @@
 import { pickSyncSide } from "@/lib/sync-side";
 import { isAppSnapshot } from "@/lib/import-btp";
+import { todayISO } from "@/lib/format";
 import {
+  backupModifiedAt,
   downloadBackup,
+  hasDriveGrant,
   readGoogleClientId,
   rememberAccessToken,
   requestSilentToken,
@@ -10,28 +13,12 @@ import {
 } from "@/lib/google-drive";
 import type { AppSnapshot } from "@/store/app";
 
-const SYNC_ON_KEY = "hk-life-money-drive-sync";
 const LOCAL_EDIT_KEY = "hk-life-money-local-edited";
 const LAST_SYNC_KEY = "hk-life-money-last-sync";
+const DAILY_KEY = "hk-life-money-daily-sync-day";
+const DAILY_TRIED_KEY = "hk-life-money-daily-sync-tried";
 
 export type SyncResult = "pulled" | "pushed" | "ok" | "offline" | "off" | "need-auth" | "fail";
-
-export function isDriveSyncEnabled(): boolean {
-  try {
-    return localStorage.getItem(SYNC_ON_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-export function setDriveSyncEnabled(on: boolean) {
-  try {
-    if (on) localStorage.setItem(SYNC_ON_KEY, "1");
-    else localStorage.removeItem(SYNC_ON_KEY);
-  } catch {
-    /* ignore */
-  }
-}
 
 export function markLocalEdit(iso = new Date().toISOString()) {
   try {
@@ -65,6 +52,24 @@ function writeLastSync(iso = new Date().toISOString()) {
   }
 }
 
+export function markDailyDriveSync(today = todayISO()) {
+  try {
+    localStorage.setItem(DAILY_KEY, today);
+    sessionStorage.setItem(DAILY_TRIED_KEY, today);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function dailyDriveSyncDue(today = todayISO()): boolean {
+  try {
+    if (sessionStorage.getItem(DAILY_TRIED_KEY) === today) return false;
+    return localStorage.getItem(DAILY_KEY) !== today;
+  } catch {
+    return true;
+  }
+}
+
 let applyingRemote = false;
 export function isApplyingRemote(): boolean {
   return applyingRemote;
@@ -75,46 +80,74 @@ export async function syncWithDrive(opts: {
   replaceAll: (snap: AppSnapshot) => Promise<void>;
 }): Promise<SyncResult> {
   if (typeof navigator !== "undefined" && !navigator.onLine) return "offline";
-  if (!isDriveSyncEnabled()) return "off";
   if (!readGoogleClientId()) return "need-auth";
   const token = storedAccessToken() ?? (await requestSilentToken());
   if (!token) return "need-auth";
   rememberAccessToken(token);
 
-  let remote: AppSnapshot | undefined;
+  let remoteIso: string | undefined;
   try {
-    const text = await downloadBackup(token);
-    const parsed: unknown = JSON.parse(text);
-    if (isAppSnapshot(parsed)) remote = parsed;
+    remoteIso = await backupModifiedAt(token);
   } catch (err) {
     if ((err as Error).message !== "missing") return "fail";
   }
 
-  const side = pickSyncSide(localEditedAt(), remote?.exportedAt);
-  if (side === "pull" && remote) {
-    applyingRemote = true;
-    try {
-      await opts.replaceAll(remote);
-      markLocalEdit(remote.exportedAt);
-      writeLastSync(remote.exportedAt);
-    } finally {
-      applyingRemote = false;
-    }
-    return "pulled";
+  const side = pickSyncSide(localEditedAt() || lastDriveSyncAt(), remoteIso);
+  if (side === "ok") {
+    writeLastSync();
+    return "ok";
   }
-  if (side === "push" || !remote) {
+  if (side === "pull" && remoteIso) {
+    try {
+      const text = await downloadBackup(token);
+      const parsed: unknown = JSON.parse(text);
+      if (!isAppSnapshot(parsed)) return "fail";
+      applyingRemote = true;
+      try {
+        await opts.replaceAll(parsed);
+        markLocalEdit(parsed.exportedAt);
+        writeLastSync(parsed.exportedAt);
+      } finally {
+        applyingRemote = false;
+      }
+      return "pulled";
+    } catch {
+      return "fail";
+    }
+  }
+  try {
     const snap = opts.exportSnapshot();
     await uploadBackup(token, JSON.stringify(snap));
     markLocalEdit(snap.exportedAt);
     writeLastSync(snap.exportedAt);
     return "pushed";
+  } catch {
+    return "fail";
   }
-  writeLastSync();
-  return "ok";
 }
 
-let pushTimer: ReturnType<typeof setTimeout> | undefined;
-export function scheduleDrivePush(run: () => void) {
-  if (pushTimer) clearTimeout(pushTimer);
-  pushTimer = setTimeout(run, 2500);
+let dailyInflight: Promise<SyncResult> | null = null;
+
+/** Once per local day, and only if the user has already signed in to Drive. Never opens a Google login. */
+export function runDailyDriveSync(opts: {
+  exportSnapshot: () => AppSnapshot;
+  replaceAll: (snap: AppSnapshot) => Promise<void>;
+}): Promise<SyncResult> {
+  if (dailyInflight) return dailyInflight;
+  dailyInflight = (async () => {
+    const today = todayISO();
+    if (!dailyDriveSyncDue(today)) return "ok";
+    try {
+      sessionStorage.setItem(DAILY_TRIED_KEY, today);
+    } catch {
+      /* ignore */
+    }
+    if (!readGoogleClientId() || (!storedAccessToken() && !hasDriveGrant())) return "off";
+    const result = await syncWithDrive(opts);
+    if (result === "pulled" || result === "pushed" || result === "ok") markDailyDriveSync(today);
+    return result;
+  })();
+  return dailyInflight.finally(() => {
+    dailyInflight = null;
+  });
 }

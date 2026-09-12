@@ -42,7 +42,7 @@ export function redirectUri(): string {
   return `${window.location.origin}${window.location.pathname}`;
 }
 
-function hasGranted(): boolean {
+export function hasDriveGrant(): boolean {
   return readStored(GRANTED_KEY) === "1";
 }
 
@@ -60,7 +60,7 @@ export function startGoogleSignIn(action: DriveAction): void {
   });
   // After the first grant, skip the account/consent screens so Google can
   // bounce back with a token. First-time users still see consent once.
-  if (!hasGranted()) params.set("prompt", "select_account consent");
+  if (!hasDriveGrant()) params.set("prompt", "select_account consent");
   window.location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
 }
 
@@ -148,7 +148,7 @@ export async function requestSilentToken(): Promise<string | null> {
   const existing = storedAccessToken();
   if (existing) return existing;
   const clientId = readGoogleClientId();
-  if (!clientId || !hasGranted()) return null;
+  if (!clientId || !hasDriveGrant()) return null;
   try {
     await loadGis();
   } catch {

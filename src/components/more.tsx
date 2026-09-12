@@ -17,7 +17,7 @@ import {
   takeRedirectToken,
   uploadBackup,
 } from "@/lib/google-drive";
-import { lastDriveSyncAt, localEditedAt, markLocalEdit } from "@/lib/drive-sync";
+import { lastDriveSyncAt, localEditedAt, markDailyDriveSync, markLocalEdit } from "@/lib/drive-sync";
 import { pickSyncSide } from "@/lib/sync-side";
 import { transactionsToCsv } from "@/lib/derived";
 import { convertBtp, isAppSnapshot, isBtpFile } from "@/lib/import-btp";
@@ -326,6 +326,7 @@ export function BackupPage() {
     if (action === "save") {
       await uploadBackup(token, await payloadForDrive());
       markLocalEdit();
+      markDailyDriveSync();
       toast(t.backup.driveSaved);
       return;
     }
@@ -333,6 +334,7 @@ export function BackupPage() {
       const text = await downloadBackup(token);
       await importPayload(text);
       markLocalEdit();
+      markDailyDriveSync();
       return;
     }
     const remoteIso = await backupModifiedAt(token);
@@ -341,6 +343,7 @@ export function BackupPage() {
       const text = await downloadBackup(token);
       await importPayload(text, true);
       markLocalEdit();
+      markDailyDriveSync();
       toast(t.backup.synced);
       return;
     }
@@ -348,6 +351,7 @@ export function BackupPage() {
       await uploadBackup(token, JSON.stringify(exportSnap()));
       markLocalEdit();
     }
+    markDailyDriveSync();
     toast(t.backup.synced);
   }
 
