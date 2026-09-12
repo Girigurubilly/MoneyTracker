@@ -15,6 +15,7 @@ import {
   takeRedirectToken,
   uploadBackup,
 } from "@/lib/google-drive";
+import { isDriveSyncEnabled, lastDriveSyncAt, setDriveSyncEnabled, syncWithDrive } from "@/lib/drive-sync";
 import { transactionsToCsv } from "@/lib/derived";
 import { convertBtp, isAppSnapshot, isBtpFile } from "@/lib/import-btp";
 import { CURRENCIES, type BudgetTargetMode } from "@/lib/types";
@@ -282,6 +283,8 @@ export function BackupPage() {
   const txs = useApp((s) => s.transactions);
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [syncOn, setSyncOn] = useState(() => isDriveSyncEnabled());
+  const [lastSync, setLastSync] = useState(() => lastDriveSyncAt());
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function payloadForDrive() {
@@ -308,11 +311,17 @@ export function BackupPage() {
     if (!isAppSnapshot(snap)) throw new Error("format");
     await replaceAll(snap);
     toast(t.backup.restored);
+    setDriveSyncEnabled(true);
+    setSyncOn(true);
+    setLastSync(new Date().toISOString());
   }
 
   async function runDrive(action: "save" | "restore", token: string) {
     if (action === "save") {
       await uploadBackup(token, await payloadForDrive());
+      setDriveSyncEnabled(true);
+      setSyncOn(true);
+      setLastSync(new Date().toISOString());
       toast(t.backup.driveSaved);
       return;
     }
@@ -360,6 +369,45 @@ export function BackupPage() {
       <ScreenHeader title={t.backup.title} />
       <h2 className="px-5 pb-2 text-sm font-medium text-muted">{t.backup.drive}</h2>
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.backup.driveHint}</p>
+      <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.backup.offlineHint}</p>
+      <div className="mx-4 mb-4 rounded-xl bg-elevated px-4 py-3">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-3 text-left"
+          onClick={() => {
+            const next = !syncOn;
+            setSyncOn(next);
+            setDriveSyncEnabled(next);
+            if (!next) return;
+            void syncWithDrive({ exportSnapshot: exportSnap, replaceAll }).then((result) => {
+              setLastSync(lastDriveSyncAt());
+              if (result === "need-auth") beginDrive("save");
+            });
+          }}
+        >
+          <span className="text-sm font-medium">{t.backup.syncOn}</span>
+          <span className={cn("text-xs font-semibold", syncOn ? "text-income" : "text-muted")}>{syncOn ? t.backup.syncEnabled : t.backup.syncOff}</span>
+        </button>
+        <div className="mt-2 text-[11px] text-muted">
+          {t.backup.syncLast}: {lastSync ? lastSync.replace("T", " ").slice(0, 16) : t.fx.lastSyncedNever}
+        </div>
+        <button
+          type="button"
+          disabled={busy || !syncOn}
+          className="mt-3 h-10 w-full rounded-lg bg-background text-sm font-medium disabled:opacity-50"
+          onClick={async () => {
+            setBusy(true);
+            const result = await syncWithDrive({ exportSnapshot: exportSnap, replaceAll });
+            setLastSync(lastDriveSyncAt());
+            setBusy(false);
+            if (result === "need-auth") beginDrive("save");
+            else if (result === "fail" || result === "offline") toast(t.backup.driveFail);
+            else toast(t.backup.synced);
+          }}
+        >
+          {t.backup.syncNow}
+        </button>
+      </div>
       <div className="mx-4 mb-4 space-y-1 rounded-xl bg-elevated px-4 py-3 text-[11px] leading-5 text-muted">
         <div className="font-medium text-foreground">{t.backup.driveSetup}</div>
         <p>{t.backup.driveStep1}</p>

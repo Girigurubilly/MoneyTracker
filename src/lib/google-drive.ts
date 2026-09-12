@@ -5,6 +5,8 @@ const CLIENT_KEY = "hk-life-money-google-client-id";
 const FILE_ID_KEY = "hk-life-money-drive-file-id";
 const FOLDER_ID_KEY = "hk-life-money-drive-folder-id";
 const ACTION_KEY = "hk-life-money-drive-action";
+const TOKEN_KEY = "hk-life-money-drive-token";
+const TOKEN_EXP_KEY = "hk-life-money-drive-token-exp";
 
 export type DriveAction = "save" | "restore";
 
@@ -70,9 +72,112 @@ export function takeRedirectToken(): string | null {
   const params = new URLSearchParams(hash);
   const token = params.get("access_token");
   const err = params.get("error");
+  const expires = Number(params.get("expires_in") ?? "3600");
   history.replaceState(null, "", window.location.pathname + window.location.search);
   if (err) throw new Error(err);
+  if (token) rememberAccessToken(token, expires);
   return token;
+}
+
+export function rememberAccessToken(token: string, expiresIn = 3500) {
+  try {
+    sessionStorage.setItem(TOKEN_KEY, token);
+    sessionStorage.setItem(TOKEN_EXP_KEY, String(Date.now() + Math.max(60, expiresIn - 60) * 1000));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function storedAccessToken(): string | null {
+  try {
+    const token = sessionStorage.getItem(TOKEN_KEY);
+    const exp = Number(sessionStorage.getItem(TOKEN_EXP_KEY) ?? "0");
+    if (!token || Date.now() > exp) return null;
+    return token;
+  } catch {
+    return null;
+  }
+}
+
+type GisClient = { requestAccessToken: (opts: { prompt: string }) => void };
+
+function loadGis(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  if (window.google?.accounts?.oauth2) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>("script[data-hk-gis]");
+    if (existing) {
+      existing.addEventListener("load", () => resolve());
+      existing.addEventListener("error", () => reject(new Error("gis")));
+      return;
+    }
+    const el = document.createElement("script");
+    el.src = "https://accounts.google.com/gsi/client";
+    el.async = true;
+    el.dataset.hkGis = "1";
+    el.onload = () => resolve();
+    el.onerror = () => reject(new Error("gis"));
+    document.head.appendChild(el);
+  });
+}
+
+/** Re-use a grant without bouncing through the full consent screen. */
+export async function requestSilentToken(): Promise<string | null> {
+  const existing = storedAccessToken();
+  if (existing) return existing;
+  const clientId = readGoogleClientId();
+  if (!clientId) return null;
+  try {
+    await loadGis();
+  } catch {
+    return null;
+  }
+  const oauth = window.google?.accounts?.oauth2;
+  if (!oauth) return null;
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (token: string | null) => {
+      if (done) return;
+      done = true;
+      resolve(token);
+    };
+    const timer = window.setTimeout(() => finish(null), 8000);
+    const client = oauth.initTokenClient({
+      client_id: clientId,
+      scope: SCOPE,
+      callback: (resp: { access_token?: string; expires_in?: number }) => {
+        window.clearTimeout(timer);
+        if (resp.access_token) {
+          rememberAccessToken(resp.access_token, resp.expires_in ?? 3500);
+          finish(resp.access_token);
+          return;
+        }
+        finish(null);
+      },
+      error_callback: () => {
+        window.clearTimeout(timer);
+        finish(null);
+      },
+    }) as GisClient;
+    try {
+      client.requestAccessToken({ prompt: "none" });
+    } catch {
+      window.clearTimeout(timer);
+      finish(null);
+    }
+  });
+}
+
+declare global {
+  interface Window {
+    google?: {
+      accounts?: {
+        oauth2?: {
+          initTokenClient: (opts: Record<string, unknown>) => GisClient;
+        };
+      };
+    };
+  }
 }
 
 async function driveFetch(url: string, token: string, init?: RequestInit) {

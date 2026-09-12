@@ -108,6 +108,8 @@ if (!isUsableShell(html)) {
 writeFileSync(indexPath, html);
 copyFileSync(indexPath, join(publicDir, "404.html"));
 writeFileSync(join(publicDir, ".nojekyll"), "");
+const swSrc = join(ROOT, "public", "sw.js");
+if (existsSync(swSrc)) copyFileSync(swSrc, join(publicDir, "sw.js"));
 
 const start = base === "./" ? "./" : base;
 mkdirSync(join(publicDir, "__grok"), { recursive: true });

@@ -11,6 +11,8 @@ import { Overlay } from "@/components/shared";
 import { AddFlow } from "@/components/add-sheet";
 import { SearchFlow } from "@/components/search-sheet";
 import { TxDetail } from "@/components/tx-detail";
+import { assetUrl } from "@/lib/base";
+import { isApplyingRemote, markLocalEdit, scheduleDrivePush, syncWithDrive } from "@/lib/drive-sync";
 
 export function AppGate({ children }: { children: ReactNode }) {
   const ready = useApp((s) => s.ready);
@@ -24,6 +26,9 @@ export function AppGate({ children }: { children: ReactNode }) {
     void hydrate();
     setOnboarded(readOnboarded());
     applyPwaIcon(readSavedPwaIcon());
+    if ("serviceWorker" in navigator) {
+      void navigator.serviceWorker.register(assetUrl("sw.js")).catch(() => undefined);
+    }
   }, [hydrate, setOnboarded]);
 
   if (!onboarded && path !== "/onboarding") {
@@ -48,9 +53,35 @@ export function AppGate({ children }: { children: ReactNode }) {
       <SearchFlow />
       <TxDetail />
       <InfoDialog />
+      <DriveSyncHost ready={ready} />
       <Toaster theme={isDarkTheme(theme) ? "dark" : "light"} position="top-center" richColors={false} />
     </div>
   );
+}
+
+function DriveSyncHost({ ready }: { ready: boolean }) {
+  const exportSnapshot = useApp((s) => s.exportSnapshot);
+  const replaceAll = useApp((s) => s.replaceAll);
+
+  useEffect(() => {
+    if (!ready) return;
+    const run = () => {
+      void syncWithDrive({ exportSnapshot, replaceAll });
+    };
+    run();
+    const unsub = useApp.subscribe(() => {
+      if (isApplyingRemote()) return;
+      markLocalEdit();
+      scheduleDrivePush(run);
+    });
+    const onOnline = () => run();
+    window.addEventListener("online", onOnline);
+    return () => {
+      unsub();
+      window.removeEventListener("online", onOnline);
+    };
+  }, [ready, exportSnapshot, replaceAll]);
+  return null;
 }
 
 function Nav() {
