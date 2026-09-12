@@ -1,7 +1,9 @@
-import type { Account, Allowance, FxRate, Holding, OneOff, Transaction } from "../types.ts";
+import type { Account, Allowance, FxRate, Holding, Mortgage, OneOff, RetirementAccount, RetirementPhaseExpenseRule, TimeSaving, Transaction } from "../types.ts";
 import { cashflowSide, inMonth } from "./ledger.ts";
 import { toHkd } from "./fx.ts";
 import { holdingsForAccount } from "../holdings.ts";
+import { mortgageFlowForYear, mortgageSchedule } from "./mortgage.ts";
+import { projectRetirementAccountYear, type RetirementAccountProjectionYear } from "./mpf.ts";
 
 export type RetirementInputs = {
   currentAge: number;
@@ -17,7 +19,15 @@ export type RetirementInputs = {
   reverseMortgageLtv?: number;
   fireSwr?: number;
   birthday?: string;
+  emergencyReserve?: number;
+  liquidityFloor?: number;
+  desiredEndBuffer?: number;
+  laterLifeAge?: number;
+  payOffMortgageAtRetire?: boolean;
+  phaseRules?: RetirementPhaseExpenseRule[];
 };
+
+export const DEFAULT_RETIREMENT_AGES = [52, 53, 54, 55, 56];
 
 export type AssetSleeve = {
   id: string;
@@ -38,6 +48,78 @@ export type RetirementCtx = {
   sleeves?: AssetSleeve[];
   propertyEquity?: number;
   reverseMortgageMonthly?: number;
+  retirementAccounts?: RetirementAccount[];
+  deposits?: TimeSaving[];
+  mortgage?: Mortgage | null;
+  today?: string;
+  calendarYear?: number;
+};
+
+export type RetirementYearFlags = {
+  isPreRetirement: boolean;
+  isEarlyRetirement: boolean;
+  hasAge65PlusIncome: boolean;
+  isMortgageFree: boolean;
+  isLaterLife: boolean;
+};
+
+export type RetirementReadinessStatus =
+  | "funded"
+  | "funded_with_low_buffer"
+  | "bridge_risk"
+  | "shortfall_projected"
+  | "insufficient_data";
+
+export type RetirementYearRow = {
+  calendarYear: number;
+  age: number;
+  phaseLabel: string;
+  flags: RetirementYearFlags;
+  openingAccessible: number;
+  openingLocked: number;
+  openingMortgage: number;
+  salary: number;
+  depositInterest: number;
+  dividendIncome: number;
+  annuityIncome: number;
+  mpfWithdrawal: number;
+  employeeContribution: number;
+  employerContribution: number;
+  voluntaryContribution: number;
+  essentialSpend: number;
+  discretionarySpend: number;
+  irregularSpend: number;
+  healthcareSpend: number;
+  housingSpend: number;
+  travelSpend: number;
+  mortgagePayment: number;
+  mortgagePrincipal: number;
+  mortgageInterest: number;
+  portfolioWithdrawal: number;
+  investmentReturn: number;
+  closingAccessible: number;
+  closingLocked: number;
+  closingMortgage: number;
+  milestones: string[];
+  accounts: RetirementAccountProjectionYear[];
+};
+
+export type RetirementPlanResult = {
+  years: RetirementYearRow[];
+  series: { age: number; corpus: number; accessible: number; locked: number }[];
+  depletes: boolean;
+  depletionAge?: number;
+  corpusAtRetire: number;
+  lockedAtRetire: number;
+  extraMonthly: number;
+  requiredCorpus: number;
+  minBridgeAccessible: number;
+  bridgeYears: number;
+  firstShortfallAge?: number;
+  mortgageFreeAge?: number;
+  status: RetirementReadinessStatus;
+  statusWhy: string;
+  earliestAccessAge: number;
 };
 
 export function savingsLast12Months(txs: Transaction[], rates: FxRate[], asOfMonth: string): {
@@ -67,81 +149,306 @@ export function savingsLast12Months(txs: Transaction[], rates: FxRate[], asOfMon
 }
 
 export function runRetirement(inputs: RetirementInputs, ctx: RetirementCtx) {
+  const plan = runRetirementPlan(inputs, ctx);
+  return {
+    series: plan.series.map((s) => ({ age: s.age, corpus: s.corpus })),
+    depletes: plan.depletes,
+    corpusAtRetire: plan.corpusAtRetire,
+    extraMonthly: plan.extraMonthly,
+    requiredCorpus: plan.requiredCorpus,
+    depletionAge: plan.depletionAge,
+    plan,
+  };
+}
+
+function phaseMultipliers(inputs: RetirementInputs, flags: RetirementYearFlags) {
+  const rules = inputs.phaseRules ?? [];
+  const pick = (phase: RetirementPhaseExpenseRule["phase"]) => rules.find((r) => r.phase === phase);
+  const r =
+    (flags.isLaterLife && pick("later_life")) ||
+    (flags.hasAge65PlusIncome && pick("age_65_plus")) ||
+    (flags.isEarlyRetirement && pick("early_retirement")) ||
+    (flags.isPreRetirement && pick("pre_retirement")) ||
+    undefined;
+  const housing = flags.isMortgageFree ? pick("mortgage_free") : undefined;
+  return {
+    essential: r?.essentialSpendMultiplier ?? 1,
+    discretionary: r?.discretionarySpendMultiplier ?? 1,
+    travel: r?.travelSpendMultiplier ?? 1,
+    healthcare: r?.healthcareSpendMultiplier ?? 1,
+    irregular: r?.irregularSpendMultiplier ?? 1,
+    housing: housing?.propertyMaintenanceMultiplier ?? r?.propertyMaintenanceMultiplier ?? 1,
+  };
+}
+
+export function phaseLabel(flags: RetirementYearFlags): string {
+  const life = flags.isPreRetirement
+    ? "Pre-retirement"
+    : flags.isLaterLife
+      ? "Later life"
+      : flags.hasAge65PlusIncome
+        ? "Age 65+"
+        : "Early retirement";
+  return `${life} · ${flags.isMortgageFree ? "mortgage-free" : "mortgage active"}`;
+}
+
+export function runRetirementPlan(inputs: RetirementInputs, ctx: RetirementCtx): RetirementPlanResult {
   const years = Math.max(1, inputs.deathAge - inputs.currentAge);
-  const sleeves = (ctx.sleeves ?? []).filter((s) => s.kind !== "property" && s.included !== false).map((s) => ({ ...s }));
-  let corpus = sleeves.length ? sleeves.reduce((s, x) => s + x.amount, 0) : ctx.investableNow;
-  const series: { age: number; corpus: number }[] = [];
-  let depletes = false;
-  let depletionAge: number | undefined;
-  let corpusAtRetire = corpus;
+  const today = ctx.today ?? new Date().toISOString().slice(0, 10);
+  const startYear = ctx.calendarYear ?? Number(today.slice(0, 4));
+  const accounts = (ctx.retirementAccounts ?? []).filter((a) => a.includeInRetirementProjection && a.status !== "closed");
+  const linked = new Set(accounts.map((a) => a.linkedAccountId).filter(Boolean) as string[]);
+  const sleeves = (ctx.sleeves ?? [])
+    .filter((s) => s.kind !== "property" && s.included !== false && !linked.has(s.id))
+    .map((s) => ({ ...s }));
+  let accessible = sleeves.length ? sleeves.reduce((s, x) => s + x.amount, 0) : ctx.investableNow;
+  const balances = new Map(accounts.map((a) => [a.id, a.currentBalance]));
+  const lumpDone = new Set<string>();
+  const mRows = ctx.mortgage ? mortgageSchedule(ctx.mortgage, today) : [];
   const fallbackPre = inputs.preReturn;
   const fallbackPost = inputs.postReturn;
   const rm = ctx.reverseMortgageMonthly ?? 0;
+  const later = inputs.laterLifeAge ?? 75;
+  const earliestAccess = accounts.length ? Math.min(...accounts.map((a) => a.accessibleAge)) : 65;
+  const rows: RetirementYearRow[] = [];
+  let depletes = false;
+  let depletionAge: number | undefined;
+  let firstShortfallAge: number | undefined;
+  let corpusAtRetire = accessible;
+  let lockedAtRetire = accounts.reduce((s, a) => s + a.currentBalance, 0);
+  let mortgageFreeAge: number | undefined;
+  let paidOffThisPlan = false;
 
   for (let i = 0; i <= years; i++) {
     const age = inputs.currentAge + i;
+    const calendarYear = startYear + i;
     const inf = (1 + inputs.inflation) ** i;
     const retired = age >= inputs.retireAge;
+    const mFlow = mortgageFlowForYear(mRows, calendarYear, ctx.mortgage?.outstanding ?? 0);
+    if (inputs.payOffMortgageAtRetire && age === inputs.retireAge && !paidOffThisPlan && mFlow.opening > 0) {
+      accessible -= mFlow.opening;
+      paidOffThisPlan = true;
+    }
+    const mortgageCleared = paidOffThisPlan || (inputs.payOffMortgageAtRetire && age >= inputs.retireAge);
+    const mortgagePayment = mortgageCleared ? 0 : mFlow.payment;
+    const mortgagePrincipal = mortgageCleared ? 0 : mFlow.principalPaid;
+    const mortgageInterest = mortgageCleared ? 0 : mFlow.interestPaid;
+    const closingMortgage = mortgageCleared ? 0 : mFlow.remainingAtEnd;
+    if (closingMortgage < 0.5 && mortgageFreeAge === undefined) mortgageFreeAge = age;
+    const flags: RetirementYearFlags = {
+      isPreRetirement: !retired,
+      isEarlyRetirement: retired && age < earliestAccess,
+      hasAge65PlusIncome: age >= 65 || (retired && age >= earliestAccess),
+      isMortgageFree: closingMortgage < 0.5,
+      isLaterLife: age >= later,
+    };
+    const mul = phaseMultipliers(inputs, flags);
+    const openingAccessible = accessible;
+    const openingLocked = [...balances.values()].reduce((s, n) => s + n, 0);
+    const openingMortgage = mortgageCleared ? 0 : mFlow.opening;
 
+    const rate = retired ? fallbackPost : fallbackPre;
+    let investmentReturn = 0;
     if (sleeves.length) {
       for (const s of sleeves) {
-        const r = s.annualReturn ?? (retired ? fallbackPost : fallbackPre);
+        const r = s.annualReturn ?? rate;
+        const before = s.amount;
         s.amount = s.amount * (1 + r);
+        investmentReturn += s.amount - before;
       }
-      corpus = sleeves.reduce((s, x) => s + x.amount, 0);
+      accessible = sleeves.reduce((s, x) => s + x.amount, 0);
     } else {
-      corpus = corpus * (1 + (retired ? fallbackPost : fallbackPre));
+      investmentReturn = accessible * rate;
+      accessible = accessible * (1 + rate);
     }
 
-    let inc = 0;
-    let spend = 0;
-    if (!retired) {
-      inc += inputs.monthlyIncomeNow * 12 * inf;
-      spend += inputs.monthlySpendNow * 12 * inf;
-    } else {
-      spend += inputs.targetMonthly * 12 * inf;
-      spend += inputs.travelInRetirement * inf;
-      if (age < ctx.mortgagePayoffAge) spend += ctx.mortgageMonthly * 12;
-      else spend += ctx.housingAfterPayoff * 12;
-      inc += rm * 12;
+    const accYears: RetirementAccountProjectionYear[] = [];
+    let employeeContribution = 0;
+    let employerContribution = 0;
+    let voluntaryContribution = 0;
+    let mpfWithdrawal = 0;
+    for (const acc of accounts) {
+      const row = projectRetirementAccountYear({
+        account: acc,
+        openingBalance: balances.get(acc.id) ?? 0,
+        age,
+        calendarYear,
+        yearsSinceStart: i,
+        retireAge: inputs.retireAge,
+        birthday: inputs.birthday,
+        alreadyLumpSum: lumpDone.has(acc.id),
+      });
+      if (row.notes.includes("lump sum at access")) lumpDone.add(acc.id);
+      balances.set(acc.id, row.closingBalance);
+      accYears.push(row);
+      employeeContribution += row.employeeContribution;
+      employerContribution += row.employerContribution;
+      voluntaryContribution += row.voluntaryContribution;
+      mpfWithdrawal += row.cashFlowAvailableToRetirementPlan;
     }
+    const closingLocked = [...balances.values()].reduce((s, n) => s + n, 0);
+
+    let salary = 0;
+    let essentialSpend = 0;
+    let travelSpend = 0;
+    let housingSpend = 0;
+    if (!retired) {
+      salary = inputs.monthlyIncomeNow * 12 * inf;
+      essentialSpend = inputs.monthlySpendNow * 12 * inf * mul.essential;
+    } else {
+      essentialSpend = inputs.targetMonthly * 12 * inf * mul.essential;
+      travelSpend = inputs.travelInRetirement * inf * mul.travel;
+      housingSpend = ctx.housingAfterPayoff * 12 * inf * mul.housing;
+    }
+    const healthcareSpend = retired ? essentialSpend * 0 : 0;
+    const discretionarySpend = 0;
+    const irregularSpend = 0;
+    let annuityIncome = rm * 12;
     for (const a of ctx.allowances ?? []) {
       if (age < a.startAge) continue;
       if (a.endAge && age >= a.endAge) continue;
-      inc += a.monthly * 12 * (a.inflationAdjusted ? inf : 1);
+      annuityIncome += a.monthly * 12 * (a.inflationAdjusted ? inf : 1);
     }
+    let oneOff = 0;
     for (const o of ctx.oneOffs) {
-      if (o.age === age) inc += o.amount;
+      if (o.age === age) oneOff += o.amount;
     }
+    let depositInterest = 0;
+    for (const d of ctx.deposits ?? []) {
+      if ((d.endDate || "").startsWith(String(calendarYear))) depositInterest += d.interest || 0;
+    }
+    const dividendIncome = 0;
+    const inc = salary + annuityIncome + mpfWithdrawal + depositInterest + dividendIncome + oneOff;
+    const spend = essentialSpend + travelSpend + housingSpend + healthcareSpend + discretionarySpend + irregularSpend + (retired ? mortgagePayment : 0);
     const net = inc - spend;
+    const beforeNet = accessible;
     if (sleeves.length) {
       const total = sleeves.reduce((s, x) => s + Math.max(0, x.amount), 0);
       if (total > 0) {
         for (const s of sleeves) s.amount += net * (Math.max(0, s.amount) / total);
-      } else if (sleeves[0]) {
-        sleeves[0].amount += net;
-      }
-      corpus = sleeves.reduce((s, x) => s + x.amount, 0);
+      } else if (sleeves[0]) sleeves[0].amount += net;
+      accessible = sleeves.reduce((s, x) => s + x.amount, 0);
     } else {
-      corpus += net;
+      accessible += net;
     }
-    if (age === inputs.retireAge) corpusAtRetire = corpus;
-    series.push({ age, corpus });
-    if (corpus < 0 && !depletes) {
+    const portfolioWithdrawal = net < 0 ? Math.min(-net, Math.max(0, beforeNet)) : 0;
+    const milestones: string[] = [];
+    if (age === inputs.retireAge) milestones.push(`Retirement at age ${age}`);
+    if (mFlow.paidOffMonth) milestones.push(`Mortgage paid off in ${mFlow.paidOffMonth}`);
+    if (inputs.payOffMortgageAtRetire && age === inputs.retireAge) milestones.push("Pay off mortgage at retirement");
+    for (const r of accYears) {
+      if (r.isAccessible && r.age === r.age && r.notes.includes("lump sum at access")) {
+        milestones.push(`${r.retirementAccountId} accessible`);
+      }
+    }
+
+    const row: RetirementYearRow = {
+      calendarYear,
+      age,
+      phaseLabel: phaseLabel(flags),
+      flags,
+      openingAccessible,
+      openingLocked,
+      openingMortgage,
+      salary,
+      depositInterest,
+      dividendIncome,
+      annuityIncome,
+      mpfWithdrawal,
+      employeeContribution,
+      employerContribution,
+      voluntaryContribution,
+      essentialSpend,
+      discretionarySpend,
+      irregularSpend,
+      healthcareSpend,
+      housingSpend,
+      travelSpend,
+      mortgagePayment: retired ? mortgagePayment : 0,
+      mortgagePrincipal: retired ? mortgagePrincipal : 0,
+      mortgageInterest: retired ? mortgageInterest : 0,
+      portfolioWithdrawal,
+      investmentReturn,
+      closingAccessible: accessible,
+      closingLocked,
+      closingMortgage,
+      milestones,
+      accounts: accYears,
+    };
+    rows.push(row);
+    if (age === inputs.retireAge) {
+      corpusAtRetire = accessible - (inputs.emergencyReserve ?? 0);
+      lockedAtRetire = closingLocked;
+    }
+    if (accessible < 0 && !depletes) {
       depletes = true;
       depletionAge = age;
+      firstShortfallAge = age;
     }
   }
 
-  const extraMonthly = Math.max(0, inputs.monthlyIncomeNow - inputs.monthlySpendNow);
+  const bridgeYears = Math.max(0, earliestAccess - inputs.retireAge);
+  const bridgeRows = rows.filter((r) => r.age >= inputs.retireAge && r.age < earliestAccess);
+  const minBridgeAccessible = bridgeRows.length ? Math.min(...bridgeRows.map((r) => r.closingAccessible)) : rows.find((r) => r.age === inputs.retireAge)?.closingAccessible ?? accessible;
+  const endAccessible = rows[rows.length - 1]?.closingAccessible ?? 0;
+  const liquidity = inputs.liquidityFloor ?? 0;
+  const buffer = inputs.desiredEndBuffer ?? 0;
+  let status: RetirementReadinessStatus = "funded";
+  let statusWhy = "Funded under current assumptions.";
+  if (inputs.currentAge <= 0 && !inputs.birthday) {
+    status = "insufficient_data";
+    statusWhy = "Add a birthday or current age to project.";
+  } else if (depletes) {
+    status = "shortfall_projected";
+    statusWhy = `Projected accessible-asset shortfall at age ${firstShortfallAge} before the plan ends. Locked MPF/ORSO is not used to cover this.`;
+  } else if (bridgeYears > 0 && minBridgeAccessible < liquidity) {
+    status = "bridge_risk";
+    statusWhy = `No projected shortfall, but accessible bridge assets fall below your liquidity floor at some point before access age ${earliestAccess}.`;
+  } else if (endAccessible < buffer) {
+    status = "funded_with_low_buffer";
+    statusWhy = "Funded, but end-of-plan accessible assets are below your desired buffer.";
+  }
+
   return {
-    series,
+    years: rows,
+    series: rows.map((r) => ({ age: r.age, corpus: r.closingAccessible, accessible: r.closingAccessible, locked: r.closingLocked })),
     depletes,
-    corpusAtRetire,
-    extraMonthly,
-    requiredCorpus: corpusAtRetire,
     depletionAge,
+    corpusAtRetire,
+    lockedAtRetire,
+    extraMonthly: Math.max(0, inputs.monthlyIncomeNow - inputs.monthlySpendNow),
+    requiredCorpus: corpusAtRetire,
+    minBridgeAccessible,
+    bridgeYears,
+    firstShortfallAge,
+    mortgageFreeAge,
+    status,
+    statusWhy,
+    earliestAccessAge: earliestAccess,
   };
+}
+
+export function compareRetirementAges(inputs: RetirementInputs, ctx: RetirementCtx, ages = DEFAULT_RETIREMENT_AGES) {
+  return ages.map((retireAge) => {
+    const plan = runRetirementPlan({ ...inputs, retireAge }, ctx);
+    const workYears = Math.max(0, retireAge - inputs.currentAge);
+    return {
+      retireAge,
+      workYears,
+      accessibleAtRetire: plan.corpusAtRetire,
+      lockedAtRetire: plan.lockedAtRetire,
+      bridgeYears: plan.bridgeYears,
+      mortgageFreeAge: plan.mortgageFreeAge,
+      firstShortfallAge: plan.firstShortfallAge,
+      minBridgeAccessible: plan.minBridgeAccessible,
+      endAccessible: plan.years[plan.years.length - 1]?.closingAccessible ?? 0,
+      endTotal:
+        (plan.years[plan.years.length - 1]?.closingAccessible ?? 0) + (plan.years[plan.years.length - 1]?.closingLocked ?? 0),
+      status: plan.status,
+      statusWhy: plan.statusWhy,
+      plan,
+    };
+  });
 }
 
 export function firePlan(inputs: RetirementInputs, ctx: RetirementCtx) {

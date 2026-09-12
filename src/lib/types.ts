@@ -530,3 +530,92 @@ export type FxRate = {
   asOf: string;
   source: string;
 };
+
+export type RetirementAccountType =
+  | "MPF"
+  | "ORSO"
+  | "TVC"
+  | "QDAP"
+  | "PENSION"
+  | "ANNUITY"
+  | "OTHER_LOCKED_RETIREMENT";
+
+export type ContributionFrequency = "monthly" | "quarterly" | "annual" | "one_off";
+
+export type RetirementWithdrawalStrategy =
+  | "lump_sum"
+  | "annual_drawdown"
+  | "scheduled_income"
+  | "do_not_use_in_projection";
+
+export type RetirementAccount = {
+  id: string;
+  name: string;
+  type: RetirementAccountType;
+  provider?: string;
+  accountReferenceMasked?: string;
+  currency: Currency;
+  currentBalance: number;
+  balanceAsOf: string;
+  status: "active" | "contribution_stopped" | "withdrawal_phase" | "closed";
+  accessibleAge: number;
+  accessRule: "age_based" | "scheduled_income" | "manual";
+  contributionFrequency: ContributionFrequency;
+  employeeContributionAmount: number;
+  employerContributionAmount: number;
+  voluntaryContributionAmount: number;
+  contributionStartDate?: string;
+  contributionEndDate?: string;
+  employeeContributionGrowthRate: number;
+  employerContributionGrowthRate: number;
+  voluntaryContributionGrowthRate: number;
+  expectedAnnualReturnRate: number;
+  annualFeeRate?: number;
+  annualContributionChargeRate?: number;
+  withdrawalStrategy: RetirementWithdrawalStrategy;
+  plannedAnnualWithdrawal?: number;
+  plannedWithdrawalStartAge?: number;
+  plannedWithdrawalEndAge?: number;
+  scheduledAnnualIncome?: number;
+  scheduledIncomeStartAge?: number;
+  scheduledIncomeEndAge?: number;
+  scheduledIncomeGrowthRate?: number;
+  includeInRetirementProjection: boolean;
+  notes?: string;
+  linkedAccountId?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RetirementAssetBucket =
+  | "emergency_reserve"
+  | "near_term_cash"
+  | "pre_retirement_growth"
+  | "early_retirement_bridge"
+  | "mpf_orso_locked"
+  | "annuity_or_pension_income"
+  | "property_equity"
+  | "other";
+
+export type RetirementAssetAccess = {
+  assetId: string;
+  assetType: "account" | "holding" | "property" | "retirement_account";
+  bucket: RetirementAssetBucket;
+  accessibleFromAge?: number;
+  reserveAmount?: number;
+  canFundRetirementSpending: boolean;
+  canFundBridgePeriod: boolean;
+  includeInRetirementProjection: boolean;
+};
+
+export type RetirementPhaseExpenseRule = {
+  phase: "pre_retirement" | "early_retirement" | "age_65_plus" | "mortgage_free" | "later_life";
+  essentialSpendMultiplier: number;
+  discretionarySpendMultiplier: number;
+  travelSpendMultiplier: number;
+  healthcareSpendMultiplier: number;
+  irregularSpendMultiplier: number;
+  propertyMaintenanceMultiplier: number;
+  inflationRateOverride?: number;
+};
+

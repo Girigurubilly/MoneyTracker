@@ -20,6 +20,8 @@ import type {
   WishItem,
   YearlyPlan,
   Holding,
+  RetirementAccount,
+  RetirementAssetAccess,
 } from "@/lib/types";
 import { defaultTypeForGroup, groupForType } from "@/lib/types";
 import type { RetirementInputs } from "@/lib/calc/retirement";
@@ -78,6 +80,8 @@ export type AppSnapshot = {
   yearlyPlans?: YearlyPlan[];
   wishlist?: WishItem[];
   holdings?: Holding[];
+  retirementAccounts?: RetirementAccount[];
+  retirementAssetAccess?: RetirementAssetAccess[];
   defaultCurrency?: Currency;
   budgetTargetMode?: BudgetTargetMode;
   depositCategoryId?: string;
@@ -172,6 +176,9 @@ type Dispatchers = {
   importHoldingsText: (text: string, accountId?: string) => Promise<number>;
   refreshHoldingPrices: () => Promise<number>;
   setHoldingBook: (book: "hk" | "us", accountId: string) => Promise<void>;
+  upsertRetirementAccount: (row: RetirementAccount) => Promise<void>;
+  deleteRetirementAccount: (id: string) => Promise<void>;
+  upsertRetirementAssetAccess: (row: RetirementAssetAccess) => Promise<void>;
   replaceAll: (snap: AppSnapshot) => Promise<void>;
   exportSnapshot: () => AppSnapshot;
   resetSample: () => Promise<void>;
@@ -196,6 +203,8 @@ type AppState = {
   yearlyPlans: YearlyPlan[];
   wishlist: WishItem[];
   holdings: Holding[];
+  retirementAccounts: RetirementAccount[];
+  retirementAssetAccess: RetirementAssetAccess[];
   lastPostedTxId?: string | null;
   fxRates: FxRate[];
   snapshots: SnapshotRow[];
@@ -228,6 +237,8 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     snapshots,
     meta,
     holdings,
+    retirementAccounts,
+    retirementAssetAccess,
   ] = await Promise.all([
     idb().accounts.toArray(),
     idb().categories.toArray(),
@@ -248,6 +259,8 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     idb().snapshots.toArray(),
     idb().meta.get("settings"),
     idb().holdings.toArray(),
+    idb().retirementAccounts.toArray().catch(() => []),
+    idb().retirementAssetAccess.toArray().catch(() => []),
   ]);
   return {
     accounts,
@@ -266,6 +279,8 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     yearlyPlans,
     wishlist,
     holdings,
+    retirementAccounts: retirementAccounts ?? [],
+    retirementAssetAccess: retirementAssetAccess ?? [],
     fxRates,
     snapshots,
     annualTravelBudget: meta?.annualTravelBudget ?? seedTravelBudget,
@@ -656,6 +671,8 @@ export const useApp = create<AppState>((set, get) => ({
   yearlyPlans: [],
   wishlist: [],
   holdings: [],
+  retirementAccounts: [],
+  retirementAssetAccess: [],
   lastPostedTxId: null as string | null,
   fxRates: seedFx,
   snapshots: [],
@@ -1110,6 +1127,20 @@ export const useApp = create<AppState>((set, get) => ({
     });
     set({ accounts });
   },
+  upsertRetirementAccount: async (row) => {
+    await idb().retirementAccounts.put(row);
+    const rows = get().retirementAccounts;
+    set({ retirementAccounts: rows.some((x) => x.id === row.id) ? rows.map((x) => (x.id === row.id ? row : x)) : [...rows, row] });
+  },
+  deleteRetirementAccount: async (id) => {
+    await idb().retirementAccounts.delete(id);
+    set({ retirementAccounts: get().retirementAccounts.filter((x) => x.id !== id) });
+  },
+  upsertRetirementAssetAccess: async (row) => {
+    await idb().retirementAssetAccess.put(row);
+    const rows = get().retirementAssetAccess;
+    set({ retirementAssetAccess: rows.some((x) => x.assetId === row.assetId) ? rows.map((x) => (x.assetId === row.assetId ? row : x)) : [...rows, row] });
+  },
   replaceAll: async (snap) => {
     await idb().transaction("rw", idb().tables, async () => {
       await Promise.all(idb().tables.map((t) => t.clear()));
@@ -1129,6 +1160,8 @@ export const useApp = create<AppState>((set, get) => ({
       await bulkChunk((rows) => idb().yearlyPlans.bulkAdd(rows), snap.yearlyPlans ?? []);
       await bulkChunk((rows) => idb().wishlist.bulkAdd(rows), snap.wishlist ?? []);
       await bulkChunk((rows) => idb().holdings.bulkAdd(rows), snap.holdings ?? []);
+      await bulkChunk((rows) => idb().retirementAccounts.bulkAdd(rows), snap.retirementAccounts ?? []);
+      await bulkChunk((rows) => idb().retirementAssetAccess.bulkAdd(rows), snap.retirementAssetAccess ?? []);
       await idb().fxRates.bulkPut(snap.fxRates.length ? snap.fxRates : seedFx);
       if (snap.snapshots.length) await idb().snapshots.bulkPut(snap.snapshots);
       await idb().meta.put({
@@ -1170,6 +1203,8 @@ export const useApp = create<AppState>((set, get) => ({
       yearlyPlans: s.yearlyPlans,
       wishlist: s.wishlist,
       holdings: s.holdings,
+      retirementAccounts: s.retirementAccounts,
+      retirementAssetAccess: s.retirementAssetAccess,
       defaultCurrency: s.defaultCurrency,
       budgetTargetMode: s.budgetTargetMode,
       depositCategoryId: s.depositCategoryId,

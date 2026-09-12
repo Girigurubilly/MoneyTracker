@@ -23,6 +23,7 @@ import { Route as MoreFxRouteImport } from './routes/more.fx'
 import { Route as MoreHoldingsRouteImport } from './routes/more.holdings'
 import { Route as MoreImportRouteImport } from './routes/more.import'
 import { Route as MoreOtherRouteImport } from './routes/more.other'
+import { Route as MoreRetirementAccountsRouteImport } from './routes/more.retirement-accounts'
 import { Route as MoreSecurityRouteImport } from './routes/more.security'
 import { Route as MoreSetupRouteImport } from './routes/more.setup'
 import { Route as MoreWishlistRouteImport } from './routes/more.wishlist'
@@ -112,6 +113,11 @@ const MoreImportRoute = MoreImportRouteImport.update({
 const MoreOtherRoute = MoreOtherRouteImport.update({
   id: '/other',
   path: '/other',
+  getParentRoute: () => MoreRoute,
+} as any)
+const MoreRetirementAccountsRoute = MoreRetirementAccountsRouteImport.update({
+  id: '/retirement-accounts',
+  path: '/retirement-accounts',
   getParentRoute: () => MoreRoute,
 } as any)
 const MoreSecurityRoute = MoreSecurityRouteImport.update({
@@ -229,6 +235,7 @@ export interface FileRoutesByFullPath {
   '/more/holdings': typeof MoreHoldingsRoute
   '/more/import': typeof MoreImportRoute
   '/more/other': typeof MoreOtherRoute
+  '/more/retirement-accounts': typeof MoreRetirementAccountsRoute
   '/more/security': typeof MoreSecurityRoute
   '/more/setup': typeof MoreSetupRoute
   '/more/wishlist': typeof MoreWishlistRoute
@@ -263,6 +270,7 @@ export interface FileRoutesByTo {
   '/more/holdings': typeof MoreHoldingsRoute
   '/more/import': typeof MoreImportRoute
   '/more/other': typeof MoreOtherRoute
+  '/more/retirement-accounts': typeof MoreRetirementAccountsRoute
   '/more/security': typeof MoreSecurityRoute
   '/more/setup': typeof MoreSetupRoute
   '/more/wishlist': typeof MoreWishlistRoute
@@ -299,6 +307,7 @@ export interface FileRoutesById {
   '/more/holdings': typeof MoreHoldingsRoute
   '/more/import': typeof MoreImportRoute
   '/more/other': typeof MoreOtherRoute
+  '/more/retirement-accounts': typeof MoreRetirementAccountsRoute
   '/more/security': typeof MoreSecurityRoute
   '/more/setup': typeof MoreSetupRoute
   '/more/wishlist': typeof MoreWishlistRoute
@@ -337,6 +346,7 @@ export interface FileRouteTypes {
     | '/more/holdings'
     | '/more/import'
     | '/more/other'
+    | '/more/retirement-accounts'
     | '/more/security'
     | '/more/setup'
     | '/more/wishlist'
@@ -371,6 +381,7 @@ export interface FileRouteTypes {
     | '/more/holdings'
     | '/more/import'
     | '/more/other'
+    | '/more/retirement-accounts'
     | '/more/security'
     | '/more/setup'
     | '/more/wishlist'
@@ -406,6 +417,7 @@ export interface FileRouteTypes {
     | '/more/holdings'
     | '/more/import'
     | '/more/other'
+    | '/more/retirement-accounts'
     | '/more/security'
     | '/more/setup'
     | '/more/wishlist'
@@ -536,6 +548,13 @@ declare module '@tanstack/react-router' {
       path: '/other'
       fullPath: '/more/other'
       preLoaderRoute: typeof MoreOtherRouteImport
+      parentRoute: typeof MoreRoute
+    }
+    '/more/retirement-accounts': {
+      id: '/more/retirement-accounts'
+      path: '/retirement-accounts'
+      fullPath: '/more/retirement-accounts'
+      preLoaderRoute: typeof MoreRetirementAccountsRouteImport
       parentRoute: typeof MoreRoute
     }
     '/more/security': {
@@ -689,6 +708,7 @@ interface MoreRouteChildren {
   MoreHoldingsRoute: typeof MoreHoldingsRoute
   MoreImportRoute: typeof MoreImportRoute
   MoreOtherRoute: typeof MoreOtherRoute
+  MoreRetirementAccountsRoute: typeof MoreRetirementAccountsRoute
   MoreSecurityRoute: typeof MoreSecurityRoute
   MoreSetupRoute: typeof MoreSetupRoute
   MoreWishlistRoute: typeof MoreWishlistRoute
@@ -703,6 +723,7 @@ const MoreRouteChildren: MoreRouteChildren = {
   MoreHoldingsRoute: MoreHoldingsRoute,
   MoreImportRoute: MoreImportRoute,
   MoreOtherRoute: MoreOtherRoute,
+  MoreRetirementAccountsRoute: MoreRetirementAccountsRoute,
   MoreSecurityRoute: MoreSecurityRoute,
   MoreSetupRoute: MoreSetupRoute,
   MoreWishlistRoute: MoreWishlistRoute,

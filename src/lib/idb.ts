@@ -18,6 +18,8 @@ import type {
   WishItem,
   YearlyPlan,
   Holding,
+  RetirementAccount,
+  RetirementAssetAccess,
 } from "./types";
 import type { RetirementInputs } from "./calc/retirement";
 
@@ -53,6 +55,8 @@ export class HKLifeDB extends Dexie {
   yearlyPlans!: EntityTable<YearlyPlan, "id">;
   wishlist!: EntityTable<WishItem, "id">;
   holdings!: EntityTable<Holding, "id">;
+  retirementAccounts!: EntityTable<RetirementAccount, "id">;
+  retirementAssetAccess!: EntityTable<RetirementAssetAccess, "assetId">;
   fxRates!: EntityTable<FxRate, "currency">;
   meta!: EntityTable<MetaRow, "key">;
   snapshots!: EntityTable<SnapshotRow, "month">;
@@ -87,6 +91,10 @@ export class HKLifeDB extends Dexie {
     });
     this.version(5).stores({
       holdings: "id, accountId, market, symbol",
+    });
+    this.version(6).stores({
+      retirementAccounts: "id, type, status",
+      retirementAssetAccess: "assetId",
     });
   }
 }

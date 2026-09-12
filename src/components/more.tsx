@@ -50,6 +50,8 @@ export function MoreScreen() {
             <Hairline />
             <Row icon={<TrendingUp className="size-4" />} title={t.more.holdings} to="/more/holdings" chevron />
             <Hairline />
+            <Row icon={<PiggyBank className="size-4" />} title={t.more.retireAccounts} to="/more/retirement-accounts" chevron />
+            <Hairline />
             <Row icon={<PiggyBank className="size-4" />} title={t.more.deposits} to="/reports/deposits" chevron />
             <Hairline />
             <Row icon={<Globe className="size-4" />} title={t.more.fx} to="/more/fx" chevron />

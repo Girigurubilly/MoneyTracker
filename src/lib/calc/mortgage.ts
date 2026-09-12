@@ -103,3 +103,70 @@ export function amortizeFrom(principal: number, annualRate: number, months: numb
     rows: full.rows.slice(start, start + take).map((r, i) => ({ ...r, n: i + 1 })),
   };
 }
+
+export type MortgageScheduleRow = {
+  date: string;
+  payment: number;
+  principalPaid: number;
+  interestPaid: number;
+  remainingPrincipal: number;
+};
+
+export function mortgageSchedule(
+  m: {
+    outstanding: number;
+    rate: number;
+    pRate?: number;
+    spread?: number;
+    type: string;
+    remainingMonths: number;
+    paymentDay: number;
+    startDate?: string;
+    termYears?: number;
+    paymentOverride?: number;
+  },
+  today: string,
+): MortgageScheduleRow[] {
+  const left = remainingFromStart(m, today).remainingMonths;
+  if (left <= 0 || m.outstanding <= 0) return [];
+  const rate = effectiveRate(m);
+  const pmt = m.paymentOverride && m.paymentOverride > 0 ? m.paymentOverride : monthlyPayment(m.outstanding, rate, left);
+  const r = rate / 12;
+  let bal = m.outstanding;
+  const day = Math.min(28, Math.max(1, m.paymentDay || 1));
+  const [ty, tm] = today.split("-").map(Number);
+  const rows: MortgageScheduleRow[] = [];
+  for (let i = 0; i < left && bal > 0.5; i++) {
+    const d = new Date(ty, (tm || 1) - 1 + i, day);
+    const interest = Math.max(0, bal * r);
+    const principal = Math.min(Math.max(0, pmt - interest), bal);
+    bal = Math.max(0, bal - principal);
+    rows.push({
+      date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+      payment: principal + interest,
+      principalPaid: principal,
+      interestPaid: interest,
+      remainingPrincipal: bal,
+    });
+  }
+  return rows;
+}
+
+export function mortgageFlowForYear(rows: MortgageScheduleRow[], year: number, openingIfEmpty = 0) {
+  const ofYear = rows.filter((r) => r.date.startsWith(String(year)));
+  const before = rows.filter((r) => Number(r.date.slice(0, 4)) < year);
+  const opening = before.length
+    ? before[before.length - 1]!.remainingPrincipal
+    : rows[0]
+      ? rows[0].remainingPrincipal + rows[0].principalPaid
+      : openingIfEmpty;
+  const paidOff = ofYear.find((r) => r.remainingPrincipal < 0.5);
+  return {
+    payment: ofYear.reduce((s, r) => s + r.payment, 0),
+    principalPaid: ofYear.reduce((s, r) => s + r.principalPaid, 0),
+    interestPaid: ofYear.reduce((s, r) => s + r.interestPaid, 0),
+    opening,
+    remainingAtEnd: ofYear.length ? ofYear[ofYear.length - 1]!.remainingPrincipal : opening,
+    paidOffMonth: paidOff?.date.slice(0, 7),
+  };
+}
