@@ -1,31 +1,36 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowDownAZ, ArrowUpAZ, Pencil, RefreshCw, Trash2, Upload } from "lucide-react";
+import { ArrowDownAZ, ArrowUpAZ, Pencil, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Group, Hairline, Overlay, ScreenHeader } from "@/components/shared";
 import { money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
-import { holdingMarketValue, holdingTitle, normalizeSymbol, sortHoldingsBySymbol } from "@/lib/holdings";
+import { bookAccountId, holdingMarketValue, holdingTitle, normalizeSymbol, sortHoldingsBySymbol } from "@/lib/holdings";
 import type { Currency, Holding, HoldingMarket } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 import { cn } from "@/lib/utils";
+
+type BookFilter = "both" | "hk" | "us";
 
 export function HoldingsPage() {
   const t = useT();
   const locale = useUi((s) => s.locale);
   const holdings = useApp((s) => s.holdings);
   const accounts = useApp((s) => s.accounts);
+  const rates = useApp((s) => s.fxRates);
   const importText = useApp((s) => s.importHoldingsText);
   const refresh = useApp((s) => s.refreshHoldingPrices);
   const upsert = useApp((s) => s.upsertHolding);
+  const setBook = useApp((s) => s.setHoldingBook);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [accountId, setAccountId] = useState("");
   const [busy, setBusy] = useState(false);
   const [symbol, setSymbol] = useState("");
   const [qty, setQty] = useState("");
-  const [market, setMarket] = useState<HoldingMarket>("hk");
+  const [addMarket, setAddMarket] = useState<HoldingMarket>("hk");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [editing, setEditing] = useState<Holding | "new" | null>(null);
+  const [filter, setFilter] = useState<BookFilter>("both");
+  const [editing, setEditing] = useState<Holding | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
   const invest = accounts.filter((a) => a.type === "investment" && !a.hidden);
 
   useEffect(() => {
@@ -54,9 +59,7 @@ export function HoldingsPage() {
     void refresh()
       .then((n) => {
         if (n) toast(t.holdings.priced.replace("{n}", String(n)));
-        else toast(t.holdings.priceFail);
       })
-      .catch(() => toast(t.holdings.priceFail))
       .finally(() => setBusy(false));
   }, [holdings.length]);
 
@@ -64,7 +67,7 @@ export function HoldingsPage() {
     setBusy(true);
     try {
       const text = await file.text();
-      const n = await importText(text, accountId || undefined);
+      const n = await importText(text);
       if (!n) toast(t.holdings.parseFail);
       else toast(t.holdings.imported.replace("{n}", String(n)));
     } catch {
@@ -75,8 +78,11 @@ export function HoldingsPage() {
     }
   }
 
-  const hk = sortHoldingsBySymbol(holdings.filter((h) => h.market === "hk"), sortDir);
-  const us = sortHoldingsBySymbol(holdings.filter((h) => h.market === "us"), sortDir);
+  const visible = sortHoldingsBySymbol(
+    holdings.filter((h) => filter === "both" || h.market === filter),
+    sortDir,
+  );
+  const totalHkd = visible.reduce((s, h) => s + holdingMarketValue(h, "HKD", rates), 0);
 
   return (
     <div className="pb-10">
@@ -93,29 +99,51 @@ export function HoldingsPage() {
           </button>
         }
       />
-      <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.holdings.hint}</p>
-      <div className="px-5 space-y-3">
-        <label className="block text-xs text-muted">{t.holdings.targetAccount}</label>
-        <select
-          value={accountId}
-          onChange={(e) => setAccountId(e.target.value)}
-          className="h-11 w-full rounded-xl bg-elevated px-3 text-sm"
-        >
-          <option value="">{t.holdings.noAccount}</option>
-          {invest.map((a) => (
-            <option key={a.id} value={a.id}>
-              {pickName(locale, a.name, a.nameZh)}
-            </option>
-          ))}
-        </select>
+
+      <div className="flex gap-2 overflow-x-auto px-5 pb-3">
+        {(["both", "hk", "us"] as BookFilter[]).map((id) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setFilter(id)}
+            className={cn("h-8 shrink-0 rounded-full px-3.5 text-xs font-medium", filter === id ? "bg-accent text-on-accent" : "bg-elevated text-muted")}
+          >
+            {id === "both" ? t.prices.both : id === "hk" ? t.holdings.hk : t.holdings.us}
+          </button>
+        ))}
+      </div>
+
+      <div className="mx-4 mb-3 rounded-2xl bg-elevated px-4 py-3">
+        <div className="text-[11px] text-muted">{t.holdings.bookValue}</div>
+        <div className="mt-0.5 text-2xl font-semibold tabular-nums tracking-tight">{money(totalHkd, "HKD")}</div>
+        <div className="mt-0.5 text-xs text-muted">{t.prices.heldCount.replace("{n}", String(visible.length))}</div>
+      </div>
+
+      <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
+        <BookAccountRow
+          label={t.holdings.bookHk}
+          value={bookAccountId(accounts, "hk")}
+          invest={invest}
+          onChange={(id) => void setBook("hk", id)}
+        />
+        <Hairline />
+        <BookAccountRow
+          label={t.holdings.bookUs}
+          value={bookAccountId(accounts, "us")}
+          invest={invest}
+          onChange={(id) => void setBook("us", id)}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 px-4">
         <button
           type="button"
           disabled={busy}
-          className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent text-sm font-semibold text-on-accent disabled:opacity-60"
+          className="flex h-11 items-center justify-center gap-1.5 rounded-xl bg-accent text-sm font-semibold text-on-accent disabled:opacity-60"
           onClick={() => fileRef.current?.click()}
         >
           <Upload className="size-4" />
-          {t.holdings.upload}
+          {t.holdings.uploadShort}
         </button>
         <input
           ref={fileRef}
@@ -130,7 +158,7 @@ export function HoldingsPage() {
         <button
           type="button"
           disabled={busy || !holdings.length}
-          className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-elevated text-sm disabled:opacity-50"
+          className="flex h-11 items-center justify-center gap-1.5 rounded-xl bg-elevated text-sm disabled:opacity-50"
           onClick={async () => {
             setBusy(true);
             try {
@@ -144,142 +172,136 @@ export function HoldingsPage() {
           }}
         >
           <RefreshCw className={cn("size-4", busy && "animate-spin")} />
-          {t.holdings.refresh}
+          {t.holdings.refreshShort}
         </button>
       </div>
 
-      <h2 className="px-5 pb-2 pt-6 text-sm font-medium text-muted">{t.holdings.manual}</h2>
-      <div className="mx-4 mb-4 grid grid-cols-2 gap-2">
-        <select value={market} onChange={(e) => setMarket(e.target.value as HoldingMarket)} className="h-11 rounded-xl bg-elevated px-3 text-sm">
-          <option value="hk">{t.holdings.hk}</option>
-          <option value="us">{t.holdings.us}</option>
-        </select>
-        <input value={symbol} onChange={(e) => setSymbol(e.target.value)} placeholder={t.holdings.symbol} className="h-11 rounded-xl bg-elevated px-3 text-sm" />
-        <input value={qty} onChange={(e) => setQty(e.target.value)} placeholder={t.holdings.qty} inputMode="decimal" className="h-11 rounded-xl bg-elevated px-3 text-sm" />
-        <button
-          type="button"
-          className="h-11 rounded-xl bg-elevated text-sm font-medium"
-          onClick={() => {
-            const q = Number(qty.replace(/,/g, ""));
-            const s = symbol.trim().toUpperCase();
-            if (!s || !q) {
-              toast(t.holdings.needFields);
-              return;
-            }
-            const row: Holding = {
-              id: newId(),
-              symbol: normalizeSymbol(market, s),
-              name: s,
-              market,
-              source: "manual",
-              quantity: q,
-              currency: market === "hk" ? "HKD" : "USD",
-              lastPrice: 0,
-              accountId: accountId || undefined,
-            };
-            void upsert(row);
-            setSymbol("");
-            setQty("");
-          }}
-        >
-          {t.holdings.add}
-        </button>
-      </div>
+      <button
+        type="button"
+        className="mx-4 mt-3 flex h-11 w-[calc(100%-2rem)] items-center justify-center gap-1.5 rounded-xl bg-elevated text-sm"
+        onClick={() => setShowAdd((v) => !v)}
+      >
+        <Plus className="size-4" />
+        {t.holdings.manual}
+      </button>
+      {showAdd ? (
+        <div className="mx-4 mt-2 space-y-2">
+          <div className="flex gap-2">
+            {(["hk", "us"] as HoldingMarket[]).map((id) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setAddMarket(id)}
+                className={cn("h-10 flex-1 rounded-xl text-sm font-medium", addMarket === id ? "bg-accent text-on-accent" : "bg-elevated")}
+              >
+                {id === "hk" ? t.holdings.hk : t.holdings.us}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input value={symbol} onChange={(e) => setSymbol(e.target.value)} placeholder={t.holdings.symbol} className="h-11 min-w-0 flex-1 rounded-xl bg-elevated px-3 text-sm" />
+            <input value={qty} onChange={(e) => setQty(e.target.value)} placeholder={t.holdings.qty} inputMode="decimal" className="h-11 w-20 shrink-0 rounded-xl bg-elevated px-2 text-sm" />
+            <button
+              type="button"
+              className="h-11 shrink-0 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent"
+              onClick={() => {
+                const q = Number(qty.replace(/,/g, ""));
+                const s = symbol.trim().toUpperCase();
+                if (!s || !q) {
+                  toast(t.holdings.needFields);
+                  return;
+                }
+                void upsert({
+                  id: newId(),
+                  symbol: normalizeSymbol(addMarket, s),
+                  name: s,
+                  market: addMarket,
+                  source: "manual",
+                  quantity: q,
+                  currency: addMarket === "hk" ? "HKD" : "USD",
+                  lastPrice: 0,
+                });
+                setSymbol("");
+                setQty("");
+              }}
+            >
+              {t.holdings.add}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
-      <Book title={t.holdings.hk} rows={hk} invest={invest} onEdit={setEditing} />
-      <Book title={t.holdings.us} rows={us} invest={invest} onEdit={setEditing} usTicker />
-      {!holdings.length ? <p className="px-5 py-6 text-sm text-muted">{t.holdings.empty}</p> : null}
-      {editing && editing !== "new" ? <HoldingEditor holding={editing} invest={invest} onClose={() => setEditing(null)} /> : null}
+      <div className="pt-4">
+        {!visible.length ? (
+          <p className="px-5 py-6 text-sm text-muted">{t.holdings.empty}</p>
+        ) : (
+          <Group>
+            {visible.map((h, i) => (
+              <div key={h.id}>
+                {i > 0 ? <Hairline /> : null}
+                <div className="flex items-center gap-1 px-3 py-2.5">
+                  <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setEditing(h)}>
+                    <div className="truncate text-sm font-medium">{h.market === "us" ? h.symbol : holdingTitle(h)}</div>
+                    <div className="mt-0.5 text-[11px] tabular-nums text-muted">
+                      {h.market === "us" ? t.holdings.us : h.symbol}
+                      {" · "}
+                      {h.quantity} × {h.lastPrice ? money(h.lastPrice, h.currency) : "—"}
+                    </div>
+                  </button>
+                  <div className="shrink-0 text-right">
+                    <div className="text-sm font-semibold tabular-nums">{money(h.quantity * (h.lastPrice || 0), h.currency)}</div>
+                  </div>
+                  <button type="button" className="grid size-9 shrink-0 place-items-center text-muted" onClick={() => setEditing(h)} aria-label={t.common.edit}>
+                    <Pencil className="size-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </Group>
+        )}
+      </div>
+      {editing ? <HoldingEditor holding={editing} onClose={() => setEditing(null)} /> : null}
     </div>
   );
 }
 
-function Book({
-  title,
-  rows,
+function BookAccountRow({
+  label,
+  value,
   invest,
-  onEdit,
-  usTicker,
+  onChange,
 }: {
-  title: string;
-  rows: Holding[];
+  label: string;
+  value: string;
   invest: { id: string; name: string; nameZh: string }[];
-  onEdit: (h: Holding) => void;
-  usTicker?: boolean;
+  onChange: (id: string) => void;
 }) {
   const t = useT();
   const locale = useUi((s) => s.locale);
-  const rates = useApp((s) => s.fxRates);
+  return (
+    <label className="flex items-center gap-3 px-4 py-2.5">
+      <span className="w-20 shrink-0 text-sm">{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="h-10 min-w-0 flex-1 rounded-lg bg-background px-2 text-sm">
+        <option value="">{t.holdings.noAccount}</option>
+        {invest.map((a) => (
+          <option key={a.id} value={a.id}>
+            {pickName(locale, a.name, a.nameZh)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function HoldingEditor({ holding, onClose }: { holding: Holding; onClose: () => void }) {
+  const t = useT();
   const upsert = useApp((s) => s.upsertHolding);
   const remove = useApp((s) => s.deleteHolding);
-  if (!rows.length) return null;
-  const totalHkd = rows.reduce((s, h) => s + holdingMarketValue(h, "HKD", rates), 0);
-  return (
-    <div className="pt-4">
-      <div className="flex items-baseline justify-between px-5 pb-2">
-        <h2 className="text-sm font-medium text-muted">{title}</h2>
-        <span className="text-xs tabular-nums text-muted">{money(totalHkd, "HKD")}</span>
-      </div>
-      <Group>
-        {rows.map((h, i) => (
-          <div key={h.id}>
-            {i > 0 ? <Hairline /> : null}
-            <div className="px-4 py-3">
-              <div className="flex items-start justify-between gap-2">
-                <button type="button" className="min-w-0 flex-1 text-left" onClick={() => onEdit(h)}>
-                  <div className="text-sm font-medium">{usTicker ? h.symbol : holdingTitle(h)}</div>
-                  <div className="mt-0.5 text-xs tabular-nums text-muted">
-                    {usTicker ? "" : `${h.symbol} · `}
-                    {h.quantity} × {h.lastPrice ? money(h.lastPrice, h.currency) : "—"} = {money(h.quantity * (h.lastPrice || 0), h.currency)}
-                  </div>
-                </button>
-                <button type="button" className="grid size-9 place-items-center text-muted" onClick={() => onEdit(h)} aria-label={t.common.edit}>
-                  <Pencil className="size-4" />
-                </button>
-                <button type="button" className="grid size-9 place-items-center text-muted" onClick={() => void remove(h.id)} aria-label={t.holdings.remove}>
-                  <Trash2 className="size-4" />
-                </button>
-              </div>
-              {invest.length ? (
-                <select
-                  value={h.accountId ?? ""}
-                  onChange={(e) => void upsert({ ...h, accountId: e.target.value || undefined })}
-                  className="mt-2 h-9 w-full rounded-lg bg-background px-2 text-xs"
-                >
-                  <option value="">{t.holdings.noAccount}</option>
-                  {invest.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {pickName(locale, a.name, a.nameZh)}
-                    </option>
-                  ))}
-                </select>
-              ) : null}
-            </div>
-          </div>
-        ))}
-      </Group>
-    </div>
-  );
-}
-
-function HoldingEditor({
-  holding,
-  invest,
-  onClose,
-}: {
-  holding: Holding;
-  invest: { id: string; name: string; nameZh: string }[];
-  onClose: () => void;
-}) {
-  const t = useT();
-  const locale = useUi((s) => s.locale);
-  const upsert = useApp((s) => s.upsertHolding);
   const [market, setMarket] = useState<HoldingMarket>(holding.market);
   const [symbol, setSymbol] = useState(holding.symbol);
   const [name, setName] = useState(holding.name);
   const [qty, setQty] = useState(String(holding.quantity));
   const [price, setPrice] = useState(holding.lastPrice ? String(holding.lastPrice) : "");
-  const [accountId, setAccountId] = useState(holding.accountId ?? "");
 
   function save() {
     const quantity = Number(qty.replace(/,/g, ""));
@@ -288,7 +310,7 @@ function HoldingEditor({
       toast(t.holdings.needFields);
       return;
     }
-    const next: Holding = {
+    void upsert({
       ...holding,
       market,
       symbol: normalizeSymbol(market, symbol),
@@ -296,44 +318,46 @@ function HoldingEditor({
       quantity,
       lastPrice,
       currency: (market === "hk" ? "HKD" : "USD") as Currency,
-      accountId: accountId || undefined,
+      accountId: undefined,
       lastPriceAt: lastPrice ? new Date().toISOString() : holding.lastPriceAt,
-    };
-    void upsert(next);
+    });
     onClose();
   }
 
   return (
     <Overlay open onClose={onClose} variant="page" title={t.holdings.edit}>
       <div className="space-y-3 px-5 pt-4">
-        <label className="block text-xs text-muted">{t.holdings.market}</label>
-        <select value={market} onChange={(e) => setMarket(e.target.value as HoldingMarket)} className="h-11 w-full rounded-xl bg-elevated px-3 text-sm">
-          <option value="hk">{t.holdings.hk}</option>
-          <option value="us">{t.holdings.us}</option>
-        </select>
-        <label className="block text-xs text-muted">{t.holdings.symbol}</label>
-        <input value={symbol} onChange={(e) => setSymbol(e.target.value)} className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
-        {market === "hk" ? (
-          <>
-            <label className="block text-xs text-muted">{t.holdings.stockName}</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
-          </>
-        ) : null}
-        <label className="block text-xs text-muted">{t.holdings.qty}</label>
-        <input value={qty} onChange={(e) => setQty(e.target.value)} inputMode="decimal" className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
-        <label className="block text-xs text-muted">{t.holdings.price}</label>
-        <input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
-        <label className="block text-xs text-muted">{t.holdings.targetAccount}</label>
-        <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="h-11 w-full rounded-xl bg-elevated px-3 text-sm">
-          <option value="">{t.holdings.noAccount}</option>
-          {invest.map((a) => (
-            <option key={a.id} value={a.id}>
-              {pickName(locale, a.name, a.nameZh)}
-            </option>
+        <div className="flex gap-2">
+          {(["hk", "us"] as HoldingMarket[]).map((id) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setMarket(id)}
+              className={cn("h-10 flex-1 rounded-xl text-sm font-medium", market === id ? "bg-accent text-on-accent" : "bg-elevated")}
+            >
+              {id === "hk" ? t.holdings.hk : t.holdings.us}
+            </button>
           ))}
-        </select>
+        </div>
+        <input value={symbol} onChange={(e) => setSymbol(e.target.value)} placeholder={t.holdings.symbol} className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
+        {market === "hk" ? (
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.holdings.stockName} className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
+        ) : null}
+        <input value={qty} onChange={(e) => setQty(e.target.value)} placeholder={t.holdings.qty} inputMode="decimal" className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
+        <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder={t.holdings.price} inputMode="decimal" className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
         <button type="button" className="h-12 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={save}>
           {t.common.done}
+        </button>
+        <button
+          type="button"
+          className="flex h-11 w-full items-center justify-center gap-1.5 rounded-xl text-sm text-expense"
+          onClick={() => {
+            void remove(holding.id);
+            onClose();
+          }}
+        >
+          <Trash2 className="size-4" />
+          {t.holdings.remove}
         </button>
       </div>
     </Overlay>

@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { detectMarket, isLondonEtf, mergeHoldings, normalizeSymbol, parseHoldingsFile, yahooSymbol } from "./holdings.ts";
+import { assignHoldingBook, bookAccountId, detectMarket, holdingsForAccount, isLondonEtf, mergeHoldings, normalizeSymbol, parseHoldingsFile, yahooSymbol } from "./holdings.ts";
+import type { Account } from "./types.ts";
 
 const IBKR = `Statement,Header,Field Name,Field Value
 Open Positions,Header,DataDiscriminator,Asset Category,Currency,Symbol,Quantity,Mark Price,Position Value
@@ -53,5 +54,19 @@ describe("holdings import", () => {
     assert.equal(again.filter((h) => h.symbol === "AAPL").length, 1);
     assert.equal(again.find((h) => h.symbol === "AAPL")?.quantity, 80);
     assert.equal(again.find((h) => h.symbol === "AAPL")?.id, first.find((h) => h.symbol === "AAPL")?.id);
+  });
+
+  it("maps a whole book to one account", () => {
+    const a = { id: "ibkr", type: "investment", stockBook: undefined } as Account;
+    const b = { id: "aastocks", type: "investment", stockBook: undefined } as Account;
+    const next = assignHoldingBook(assignHoldingBook([a, b], "hk", "aastocks"), "us", "ibkr");
+    assert.equal(bookAccountId(next, "hk"), "aastocks");
+    assert.equal(bookAccountId(next, "us"), "ibkr");
+    const rows = [
+      { market: "hk", accountId: undefined },
+      { market: "us", accountId: "legacy" },
+    ] as Parameters<typeof holdingsForAccount>[0];
+    assert.equal(holdingsForAccount(rows, next[1]!).length, 1);
+    assert.equal(holdingsForAccount(rows, next[0]!).length, 1);
   });
 });

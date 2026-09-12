@@ -225,12 +225,32 @@ export function mergeHoldings(existing: Holding[], incoming: ParsedHolding[], ac
 }
 
 export function holdingsForAccount(holdings: Holding[], account: Account): Holding[] {
-  const assigned = holdings.filter((h) => h.accountId === account.id);
-  if (assigned.length) return assigned;
-  if (!account.stockBook) return [];
-  const unassigned = holdings.filter((h) => !h.accountId);
-  if (account.stockBook === "all") return unassigned;
-  return unassigned.filter((h) => h.market === account.stockBook);
+  if (account.type !== "investment") return [];
+  if (account.holdingSync === false) return [];
+  if (account.stockBook === "all") return holdings;
+  if (account.stockBook === "hk" || account.stockBook === "us") {
+    return holdings.filter((h) => h.market === account.stockBook);
+  }
+  return holdings.filter((h) => h.accountId === account.id);
+}
+
+export function bookAccountId(accounts: Account[], book: "hk" | "us"): string {
+  const exact = accounts.find((a) => a.type === "investment" && a.stockBook === book);
+  if (exact) return exact.id;
+  return accounts.find((a) => a.type === "investment" && a.stockBook === "all")?.id ?? "";
+}
+
+export function assignHoldingBook(accounts: Account[], book: "hk" | "us", accountId: string): Account[] {
+  const other: "hk" | "us" = book === "hk" ? "us" : "hk";
+  return accounts.map((a) => {
+    if (accountId && a.id === accountId) {
+      const both = a.stockBook === "all" || a.stockBook === other;
+      return { ...a, stockBook: both ? "all" : book, holdingSync: true };
+    }
+    if (a.stockBook === book) return { ...a, stockBook: undefined, holdingSync: false };
+    if (a.stockBook === "all") return { ...a, stockBook: other, holdingSync: true };
+    return a;
+  });
 }
 
 export function holdingMarketValue(h: Holding, accountCcy: Currency, rates: FxRate[]): number {

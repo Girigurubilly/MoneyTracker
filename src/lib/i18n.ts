@@ -226,9 +226,11 @@ export const messages = {
     },
     holdings: {
       title: "Stocks & holdings",
-      hint: "Upload an AASTOCKS or Interactive Brokers (IBHK) positions CSV. Refresh prices so linked investment accounts follow market value.",
+      hint: "Upload a positions CSV. Link one investment account to Hong Kong stocks and one to US stocks — individual tickers do not need their own account.",
       upload: "Upload CSV / report",
+      uploadShort: "Upload",
       refresh: "Refresh market prices",
+      refreshShort: "Prices",
       targetAccount: "Put these holdings into",
       noAccount: "No account yet — assign later",
       imported: "Imported {n} holdings.",
@@ -254,6 +256,7 @@ export const messages = {
       bookHk: "Hong Kong stocks",
       bookUs: "US stocks",
       bookAll: "All holdings",
+      bookValue: "Market value",
     },
     reports: {
       title: "Reports",
@@ -914,9 +917,11 @@ export const messages = {
     },
     holdings: {
       title: "股票持股",
-      hint: "上載 AASTOCKS 或 IBHK（Interactive Brokers）持倉 CSV／報告。之後更新市價，已連結嘅投資帳戶結餘會跟住變。",
+      hint: "上載持倉 CSV。港股同美股各自揀一個投資帳戶即可，唔使逐隻股票對帳戶。",
       upload: "上載 CSV／報告",
+      uploadShort: "上載",
       refresh: "更新市價",
+      refreshShort: "市價",
       targetAccount: "呢批持股放入",
       noAccount: "暫不指定帳戶",
       imported: "已匯入 {n} 隻持股。",
@@ -942,6 +947,7 @@ export const messages = {
       bookHk: "港股持股",
       bookUs: "美股持股",
       bookAll: "全部持股",
+      bookValue: "市值",
     },
     reports: {
       title: "報表",

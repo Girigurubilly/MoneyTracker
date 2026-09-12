@@ -46,7 +46,7 @@ import {
 import { applyAutoTrip, patchAutoTrips } from "@/lib/calc/trips";
 import { netWorthNow } from "@/lib/calc/networth";
 import { fetchLiveFx } from "@/lib/calc/fx";
-import { applyHoldingBalances, mergeHoldings, parseHoldingsFile } from "@/lib/holdings";
+import { applyHoldingBalances, assignHoldingBook, mergeHoldings, parseHoldingsFile } from "@/lib/holdings";
 import { fetchHoldingQuotes, quoteKey } from "@/lib/quotes";
 import { chargedDayOf, chargedIso, inferLivingRegular, isExpenseRegular } from "@/lib/calc/budget";
 import { isMortgageInterestCategory, isMortgagePrincipalCategory } from "@/lib/categories";
@@ -171,6 +171,7 @@ type Dispatchers = {
   deleteHolding: (id: string) => Promise<void>;
   importHoldingsText: (text: string, accountId?: string) => Promise<number>;
   refreshHoldingPrices: () => Promise<number>;
+  setHoldingBook: (book: "hk" | "us", accountId: string) => Promise<void>;
   replaceAll: (snap: AppSnapshot) => Promise<void>;
   exportSnapshot: () => AppSnapshot;
   resetSample: () => Promise<void>;
@@ -1097,6 +1098,17 @@ export const useApp = create<AppState>((set, get) => ({
     });
     await writeHoldings(holdings, get, set);
     return n;
+  },
+  setHoldingBook: async (book, accountId) => {
+    const accounts = applyHoldingBalances(
+      assignHoldingBook(get().accounts, book, accountId),
+      get().holdings,
+      get().fxRates,
+    );
+    await idb().transaction("rw", [idb().accounts], async () => {
+      for (const a of accounts) await idb().accounts.put(a);
+    });
+    set({ accounts });
   },
   replaceAll: async (snap) => {
     await idb().transaction("rw", idb().tables, async () => {
