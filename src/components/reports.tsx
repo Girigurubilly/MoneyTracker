@@ -23,7 +23,7 @@ export { SpendingPage } from "@/components/reports-spend";
 export { CashflowPage } from "@/components/reports-cashflow";
 export { LivingPage } from "@/components/reports-living";
 export { TravelPage, TripDetailPage } from "@/components/reports-travel";
-export { RetirementPage } from "@/components/reports-retire";
+export { RetirementPage, RetirementProjectionPage } from "@/components/reports-retire";
 export { BalancePage } from "@/components/reports-balance";
 
 export function ReportsHub() {

@@ -42,6 +42,8 @@ import { Route as ReportsTravelRouteImport } from './routes/reports.travel'
 import { Route as ReportsTrendsRouteImport } from './routes/reports.trends'
 import { Route as ReportsWorthRouteImport } from './routes/reports.worth'
 import { Route as ReportsYearlyRouteImport } from './routes/reports.yearly'
+import { Route as ReportsRetirementIndexRouteImport } from './routes/reports.retirement.index'
+import { Route as ReportsRetirementProjectionRouteImport } from './routes/reports.retirement.projection'
 import { Route as ReportsTravelIndexRouteImport } from './routes/reports.travel.index'
 import { Route as ReportsTravelIdRouteImport } from './routes/reports.travel.$id'
 
@@ -210,6 +212,17 @@ const ReportsYearlyRoute = ReportsYearlyRouteImport.update({
   path: '/yearly',
   getParentRoute: () => ReportsRoute,
 } as any)
+const ReportsRetirementIndexRoute = ReportsRetirementIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ReportsRetirementRoute,
+} as any)
+const ReportsRetirementProjectionRoute =
+  ReportsRetirementProjectionRouteImport.update({
+    id: '/projection',
+    path: '/projection',
+    getParentRoute: () => ReportsRetirementRoute,
+  } as any)
 const ReportsTravelIndexRoute = ReportsTravelIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -247,7 +260,7 @@ export interface FileRoutesByFullPath {
   '/reports/history': typeof ReportsHistoryRoute
   '/reports/living': typeof ReportsLivingRoute
   '/reports/prices': typeof ReportsPricesRoute
-  '/reports/retirement': typeof ReportsRetirementRoute
+  '/reports/retirement': typeof ReportsRetirementRouteWithChildren
   '/reports/spending': typeof ReportsSpendingRoute
   '/reports/travel': typeof ReportsTravelRouteWithChildren
   '/reports/trends': typeof ReportsTrendsRoute
@@ -255,7 +268,9 @@ export interface FileRoutesByFullPath {
   '/reports/yearly': typeof ReportsYearlyRoute
   '/more/': typeof MoreIndexRoute
   '/reports/': typeof ReportsIndexRoute
+  '/reports/retirement/projection': typeof ReportsRetirementProjectionRoute
   '/reports/travel/$id': typeof ReportsTravelIdRoute
+  '/reports/retirement/': typeof ReportsRetirementIndexRoute
   '/reports/travel/': typeof ReportsTravelIndexRoute
 }
 export interface FileRoutesByTo {
@@ -282,14 +297,15 @@ export interface FileRoutesByTo {
   '/reports/history': typeof ReportsHistoryRoute
   '/reports/living': typeof ReportsLivingRoute
   '/reports/prices': typeof ReportsPricesRoute
-  '/reports/retirement': typeof ReportsRetirementRoute
   '/reports/spending': typeof ReportsSpendingRoute
   '/reports/trends': typeof ReportsTrendsRoute
   '/reports/worth': typeof ReportsWorthRoute
   '/reports/yearly': typeof ReportsYearlyRoute
   '/more': typeof MoreIndexRoute
   '/reports': typeof ReportsIndexRoute
+  '/reports/retirement/projection': typeof ReportsRetirementProjectionRoute
   '/reports/travel/$id': typeof ReportsTravelIdRoute
+  '/reports/retirement': typeof ReportsRetirementIndexRoute
   '/reports/travel': typeof ReportsTravelIndexRoute
 }
 export interface FileRoutesById {
@@ -319,7 +335,7 @@ export interface FileRoutesById {
   '/reports/history': typeof ReportsHistoryRoute
   '/reports/living': typeof ReportsLivingRoute
   '/reports/prices': typeof ReportsPricesRoute
-  '/reports/retirement': typeof ReportsRetirementRoute
+  '/reports/retirement': typeof ReportsRetirementRouteWithChildren
   '/reports/spending': typeof ReportsSpendingRoute
   '/reports/travel': typeof ReportsTravelRouteWithChildren
   '/reports/trends': typeof ReportsTrendsRoute
@@ -327,7 +343,9 @@ export interface FileRoutesById {
   '/reports/yearly': typeof ReportsYearlyRoute
   '/more/': typeof MoreIndexRoute
   '/reports/': typeof ReportsIndexRoute
+  '/reports/retirement/projection': typeof ReportsRetirementProjectionRoute
   '/reports/travel/$id': typeof ReportsTravelIdRoute
+  '/reports/retirement/': typeof ReportsRetirementIndexRoute
   '/reports/travel/': typeof ReportsTravelIndexRoute
 }
 export interface FileRouteTypes {
@@ -366,7 +384,9 @@ export interface FileRouteTypes {
     | '/reports/yearly'
     | '/more/'
     | '/reports/'
+    | '/reports/retirement/projection'
     | '/reports/travel/$id'
+    | '/reports/retirement/'
     | '/reports/travel/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -393,14 +413,15 @@ export interface FileRouteTypes {
     | '/reports/history'
     | '/reports/living'
     | '/reports/prices'
-    | '/reports/retirement'
     | '/reports/spending'
     | '/reports/trends'
     | '/reports/worth'
     | '/reports/yearly'
     | '/more'
     | '/reports'
+    | '/reports/retirement/projection'
     | '/reports/travel/$id'
+    | '/reports/retirement'
     | '/reports/travel'
   id:
     | '__root__'
@@ -437,7 +458,9 @@ export interface FileRouteTypes {
     | '/reports/yearly'
     | '/more/'
     | '/reports/'
+    | '/reports/retirement/projection'
     | '/reports/travel/$id'
+    | '/reports/retirement/'
     | '/reports/travel/'
   fileRoutesById: FileRoutesById
 }
@@ -683,6 +706,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReportsYearlyRouteImport
       parentRoute: typeof ReportsRoute
     }
+    '/reports/retirement/': {
+      id: '/reports/retirement/'
+      path: '/'
+      fullPath: '/reports/retirement/'
+      preLoaderRoute: typeof ReportsRetirementIndexRouteImport
+      parentRoute: typeof ReportsRetirementRoute
+    }
+    '/reports/retirement/projection': {
+      id: '/reports/retirement/projection'
+      path: '/projection'
+      fullPath: '/reports/retirement/projection'
+      preLoaderRoute: typeof ReportsRetirementProjectionRouteImport
+      parentRoute: typeof ReportsRetirementRoute
+    }
     '/reports/travel/': {
       id: '/reports/travel/'
       path: '/'
@@ -732,6 +769,19 @@ const MoreRouteChildren: MoreRouteChildren = {
 
 const MoreRouteWithChildren = MoreRoute._addFileChildren(MoreRouteChildren)
 
+interface ReportsRetirementRouteChildren {
+  ReportsRetirementProjectionRoute: typeof ReportsRetirementProjectionRoute
+  ReportsRetirementIndexRoute: typeof ReportsRetirementIndexRoute
+}
+
+const ReportsRetirementRouteChildren: ReportsRetirementRouteChildren = {
+  ReportsRetirementProjectionRoute: ReportsRetirementProjectionRoute,
+  ReportsRetirementIndexRoute: ReportsRetirementIndexRoute,
+}
+
+const ReportsRetirementRouteWithChildren =
+  ReportsRetirementRoute._addFileChildren(ReportsRetirementRouteChildren)
+
 interface ReportsTravelRouteChildren {
   ReportsTravelIdRoute: typeof ReportsTravelIdRoute
   ReportsTravelIndexRoute: typeof ReportsTravelIndexRoute
@@ -755,7 +805,7 @@ interface ReportsRouteChildren {
   ReportsHistoryRoute: typeof ReportsHistoryRoute
   ReportsLivingRoute: typeof ReportsLivingRoute
   ReportsPricesRoute: typeof ReportsPricesRoute
-  ReportsRetirementRoute: typeof ReportsRetirementRoute
+  ReportsRetirementRoute: typeof ReportsRetirementRouteWithChildren
   ReportsSpendingRoute: typeof ReportsSpendingRoute
   ReportsTravelRoute: typeof ReportsTravelRouteWithChildren
   ReportsTrendsRoute: typeof ReportsTrendsRoute
@@ -773,7 +823,7 @@ const ReportsRouteChildren: ReportsRouteChildren = {
   ReportsHistoryRoute: ReportsHistoryRoute,
   ReportsLivingRoute: ReportsLivingRoute,
   ReportsPricesRoute: ReportsPricesRoute,
-  ReportsRetirementRoute: ReportsRetirementRoute,
+  ReportsRetirementRoute: ReportsRetirementRouteWithChildren,
   ReportsSpendingRoute: ReportsSpendingRoute,
   ReportsTravelRoute: ReportsTravelRouteWithChildren,
   ReportsTrendsRoute: ReportsTrendsRoute,

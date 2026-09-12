@@ -23,13 +23,11 @@ import {
   type RetirementReadinessStatus,
 } from "@/lib/calc/retirement";
 import { monthKey } from "@/lib/calc/ledger";
-import type { Allowance } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { useApp, newId } from "@/store/app";
+import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 
-export function RetirementPage() {
-  const t = useT();
+export function useRetirementModel() {
   const accounts = useApp((s) => s.accounts);
   const rates = useApp((s) => s.fxRates);
   const txs = useApp((s) => s.transactions);
@@ -41,7 +39,7 @@ export function RetirementPage() {
   const mortgage = useApp((s) => s.mortgage);
   const deposits = useApp((s) => s.deposits);
   const retirementAccounts = useApp((s) => s.retirementAccounts);
-  const updateAccount = useApp((s) => s.updateAccount);
+  const holdings = useApp((s) => s.holdings);
   const avg = savingsLast12Months(txs, rates, monthKey(todayISO()));
   const born = ret?.birthday;
   const derivedAge = born ? ageFromBirthday(born, todayISO()) : ret?.currentAge ?? 40;
@@ -65,7 +63,6 @@ export function RetirementPage() {
     laterLifeAge: ret?.laterLifeAge ?? 75,
     payOffMortgageAtRetire: ret?.payOffMortgageAtRetire ?? false,
   };
-  const holdings = useApp((s) => s.holdings);
   const pack = retirementSleeves(accounts, rates, 0.02, base.preReturn, holdings);
   const yearsRetired = Math.max(1, base.deathAge - base.retireAge);
   const rmMonthly = reverseMortgageMonthly(pack.property, base.reverseMortgageLtv ?? 0, yearsRetired);
@@ -146,15 +143,21 @@ export function RetirementPage() {
     pack.sleeves,
     holdings,
   ]);
+  function persist(patch: Partial<RetirementInputs>) {
+    void update({ ...base, ...patch, id: ret?.id ?? "base" });
+  }
+  return { accounts, holdings, rates, avg, base, ctx, pack, result, sustain, fire, persist, rmMonthly, mortgage, updateAccount: useApp.getState().updateAccount };
+}
+
+export function RetirementPage() {
+  const t = useT();
   const locale = useUi((s) => s.locale);
+  const { accounts, holdings, rates, avg, base, ctx, pack, result, sustain, fire, persist, rmMonthly, mortgage } = useRetirementModel();
+  const updateAccount = useApp((s) => s.updateAccount);
   const surplus = sustain - base.targetMonthly;
   const status = retirementStatus(result.depletes, sustain, base.targetMonthly, result.series);
   const [chartPoint, setChartPoint] = useState<{ age: number; corpus: number } | null>(null);
   const [showSetup, setShowSetup] = useState(false);
-
-  function persist(patch: Partial<RetirementInputs>) {
-    void update({ ...base, ...patch, id: ret?.id ?? "base" });
-  }
 
   function exportBrief() {
     const acctName = (id?: string) => {
@@ -291,8 +294,10 @@ export function RetirementPage() {
       <AgeCompare base={base} ctx={ctx} persist={persist} />
       <AccessCard plan={result.plan} cash={pack.cash} invest={pack.invest} reserve={base.emergencyReserve ?? 0} />
       <HousingCard plan={result.plan} mortgage={mortgage} housing={ctx.housingAfterPayoff} persist={persist} payOff={base.payOffMortgageAtRetire ?? false} />
-      <YearTable years={result.plan.years} />
-      <div className="px-4 pb-3">
+      <div className="px-4 pb-3 space-y-2">
+        <Link to="/reports/retirement/projection" className="flex h-11 items-center justify-center rounded-xl bg-elevated text-sm font-medium">
+          {t.reports.annualProjection}
+        </Link>
         <Link to="/more/retirement-accounts" className="flex h-11 items-center justify-center rounded-xl bg-elevated text-sm font-medium">
           {t.reports.manageRa}
         </Link>
@@ -456,11 +461,21 @@ export function RetirementPage() {
         }}
       />
 
-      <AllowanceSection />
         </>
       ) : null}
 
       <p className="px-5 py-4 text-xs leading-relaxed text-faint">{t.reports.disclaimer}</p>
+    </div>
+  );
+}
+
+export function RetirementProjectionPage() {
+  const t = useT();
+  const { result } = useRetirementModel();
+  return (
+    <div className="pb-10">
+      <ScreenHeader title={t.reports.annualProjection} backTo="/reports/retirement" />
+      <YearTable years={result.plan.years} />
     </div>
   );
 }
@@ -780,120 +795,4 @@ function SleeveReturns({
   );
 }
 
-function kindLabel(kind: Allowance["kind"], t: ReturnType<typeof useT>): string {
-  if (kind === "oaa") return t.reports.oaa;
-  if (kind === "annuity") return t.reports.annuity;
-  return t.reports.addAllowance;
-}
-
-function AllowanceSection() {
-  const t = useT();
-  const locale = useUi((s) => s.locale);
-  const rows = useApp((s) => s.allowances);
-  const add = useApp((s) => s.addAllowance);
-  const update = useApp((s) => s.updateAllowance);
-  const del = useApp((s) => s.deleteAllowance);
-  const hasOaa = rows.some((a) => a.kind === "oaa");
-  const hasAnnuity = rows.some((a) => a.kind === "annuity");
-
-  function seed(kind: "oaa" | "annuity" | "other") {
-    if (kind === "oaa") {
-      void add({
-        id: newId(),
-        label: "Old Age Allowance",
-        labelZh: "生果金",
-        monthly: 1620,
-        startAge: 70,
-        kind: "oaa",
-        inflationAdjusted: true,
-      });
-      return;
-    }
-    if (kind === "annuity") {
-      void add({
-        id: newId(),
-        label: "Annuity",
-        labelZh: "年金",
-        monthly: 0,
-        startAge: 65,
-        kind: "annuity",
-        inflationAdjusted: false,
-      });
-      return;
-    }
-    void add({
-      id: newId(),
-      label: "Other retirement income",
-      labelZh: "其他退休收入",
-      monthly: 0,
-      startAge: 65,
-      kind: "other",
-      inflationAdjusted: false,
-    });
-  }
-
-  return (
-    <>
-      <SectionLabel>{t.reports.hkIncome}</SectionLabel>
-      {rows.length === 0 ? (
-        <p className="px-5 pb-2 text-xs text-muted">{t.reports.hkIncome}</p>
-      ) : (
-        <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
-          {rows.map((a, i) => (
-            <div key={a.id}>
-              {i > 0 ? <Hairline /> : null}
-              <div className="px-4 py-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium">{kindLabel(a.kind, t)}</div>
-                    <div className="text-xs text-muted">{pickName(locale, a.label, a.labelZh)}</div>
-                  </div>
-                  <button type="button" className="h-11 px-2 text-sm text-expense" onClick={() => void del(a.id)}>
-                    {t.tx.delete}
-                  </button>
-                </div>
-                <NumRow
-                  label={t.reports.allowanceMonthly}
-                  value={a.monthly}
-                  money
-                  onCommit={(n) => void update({ ...a, monthly: n })}
-                />
-                <NumRow label={t.reports.startAge} value={a.startAge} onCommit={(n) => void update({ ...a, startAge: n })} />
-                <NumRow
-                  label={t.reports.endAge}
-                  value={a.endAge ?? 0}
-                  blankZero
-                  onCommit={(n) => void update({ ...a, endAge: n > 0 ? n : undefined })}
-                />
-                <label className="flex items-center gap-2 py-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={a.inflationAdjusted}
-                    onChange={(e) => void update({ ...a, inflationAdjusted: e.target.checked })}
-                  />
-                  {t.reports.inflationAdj}
-                </label>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      <div className="mx-4 mt-3 flex flex-col gap-2">
-        {!hasOaa ? (
-          <button type="button" className="h-11 rounded-xl bg-elevated text-sm font-medium" onClick={() => seed("oaa")}>
-            {t.reports.addOaa}
-          </button>
-        ) : null}
-        {!hasAnnuity ? (
-          <button type="button" className="h-11 rounded-xl bg-elevated text-sm font-medium" onClick={() => seed("annuity")}>
-            {t.reports.addAnnuity}
-          </button>
-        ) : null}
-        <button type="button" className="h-11 rounded-xl bg-elevated text-sm" onClick={() => seed("other")}>
-          {t.reports.addAllowance}
-        </button>
-      </div>
-    </>
-  );
-}
 

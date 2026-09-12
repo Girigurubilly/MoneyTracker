@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Group, Hairline, Overlay, ScreenHeader } from "@/components/shared";
+import { pickName } from "@/lib/i18n";
 import { money, todayISO } from "@/lib/format";
-import { blankRetirementAccount } from "@/lib/calc/mpf";
-import { projectRetirementAccountYear } from "@/lib/calc/mpf";
-import type { RetirementAccount, RetirementAccountType, RetirementWithdrawalStrategy } from "@/lib/types";
-import { useApp } from "@/store/app";
-import { useT } from "@/store/ui";
+import { blankRetirementAccount, projectRetirementAccountYear } from "@/lib/calc/mpf";
+import type { Allowance, RetirementAccount, RetirementAccountType, RetirementWithdrawalStrategy } from "@/lib/types";
+import { useApp, newId } from "@/store/app";
+import { useT, useUi } from "@/store/ui";
 import { cn } from "@/lib/utils";
 
 const TYPES: RetirementAccountType[] = ["MPF", "ORSO", "TVC", "QDAP", "PENSION", "ANNUITY", "OTHER_LOCKED_RETIREMENT"];
@@ -87,6 +87,7 @@ export function RetirementAccountsPage() {
         <p className="px-5 py-6 text-sm text-muted">{t.reports.raEmpty}</p>
       )}
       {editing ? <AccountEditor initial={editing === "new" ? blankRetirementAccount("MPF") : editing} isNew={editing === "new"} onClose={() => setEditing(null)} /> : null}
+      <HkIncomeSection />
     </div>
   );
 }
@@ -186,5 +187,109 @@ function Num({ label, value, onChange }: { label: string; value: number; onChang
       <span className="text-xs text-muted">{label}</span>
       <input inputMode="decimal" defaultValue={String(value)} onBlur={(e) => { const n = Number(e.target.value); if (Number.isFinite(n)) onChange(n); }} className="mt-1 h-11 w-full rounded-xl bg-elevated px-3 text-sm tabular-nums" />
     </label>
+  );
+}
+
+function kindLabel(kind: Allowance["kind"], t: ReturnType<typeof useT>): string {
+  if (kind === "oaa") return t.reports.oaa;
+  if (kind === "annuity") return t.reports.annuity;
+  return t.reports.addAllowance;
+}
+
+function HkIncomeSection() {
+  const t = useT();
+  const locale = useUi((s) => s.locale);
+  const rows = useApp((s) => s.allowances);
+  const add = useApp((s) => s.addAllowance);
+  const update = useApp((s) => s.updateAllowance);
+  const del = useApp((s) => s.deleteAllowance);
+  const hasOaa = rows.some((a) => a.kind === "oaa");
+  const hasAnnuity = rows.some((a) => a.kind === "annuity");
+
+  function seed(kind: "oaa" | "annuity" | "other") {
+    if (kind === "oaa") {
+      void add({
+        id: newId(),
+        label: "Old Age Allowance",
+        labelZh: "生果金",
+        monthly: 1620,
+        startAge: 70,
+        kind: "oaa",
+        inflationAdjusted: true,
+      });
+      return;
+    }
+    if (kind === "annuity") {
+      void add({
+        id: newId(),
+        label: "Annuity",
+        labelZh: "年金",
+        monthly: 0,
+        startAge: 65,
+        kind: "annuity",
+        inflationAdjusted: false,
+      });
+      return;
+    }
+    void add({
+      id: newId(),
+      label: "Other retirement income",
+      labelZh: "其他退休收入",
+      monthly: 0,
+      startAge: 65,
+      kind: "other",
+      inflationAdjusted: false,
+    });
+  }
+
+  return (
+    <div className="pt-6">
+      <h2 className="px-5 pb-1 text-sm font-medium text-muted">{t.reports.hkIncome}</h2>
+      <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.hkIncomeHint}</p>
+      {rows.length ? (
+        <Group>
+          {rows.map((a, i) => (
+            <div key={a.id}>
+              {i > 0 ? <Hairline /> : null}
+              <div className="px-4 py-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium">{kindLabel(a.kind, t)}</div>
+                    <div className="text-xs text-muted">{pickName(locale, a.label, a.labelZh)}</div>
+                  </div>
+                  <button type="button" className="grid size-9 place-items-center text-expense" onClick={() => void del(a.id)} aria-label={t.common.delete}>
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
+                <Num label={t.reports.allowanceMonthly} value={a.monthly} onChange={(n) => void update({ ...a, monthly: n })} />
+                <Num label={t.reports.startAge} value={a.startAge} onChange={(n) => void update({ ...a, startAge: n })} />
+                <Num label={t.reports.endAge} value={a.endAge ?? 0} onChange={(n) => void update({ ...a, endAge: n > 0 ? n : undefined })} />
+                <label className="mt-2 flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={a.inflationAdjusted} onChange={(e) => void update({ ...a, inflationAdjusted: e.target.checked })} />
+                  {t.reports.inflationAdj}
+                </label>
+              </div>
+            </div>
+          ))}
+        </Group>
+      ) : (
+        <p className="px-5 pb-2 text-sm text-muted">{t.reports.raEmpty}</p>
+      )}
+      <div className="mx-4 mt-3 flex flex-col gap-2">
+        {!hasOaa ? (
+          <button type="button" className="h-11 rounded-xl bg-elevated text-sm font-medium" onClick={() => seed("oaa")}>
+            {t.reports.addOaa}
+          </button>
+        ) : null}
+        {!hasAnnuity ? (
+          <button type="button" className="h-11 rounded-xl bg-elevated text-sm font-medium" onClick={() => seed("annuity")}>
+            {t.reports.addAnnuity}
+          </button>
+        ) : null}
+        <button type="button" className="h-11 rounded-xl bg-elevated text-sm" onClick={() => seed("other")}>
+          {t.reports.addAllowance}
+        </button>
+      </div>
+    </div>
   );
 }
