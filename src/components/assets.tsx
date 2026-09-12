@@ -409,6 +409,7 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
   const [linkedId, setLinkedId] = useState(
     account?.linkedAccountId ?? (account?.type === "mortgage" ? mortgage?.propertyAccountId ?? "" : ""),
   );
+  const [stockBook, setStockBook] = useState(account?.stockBook ?? "");
   const [extra, setExtra] = useState<"note" | null>(null);
 
   async function save() {
@@ -433,6 +434,10 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
       notesZh: notes || undefined,
       sortOrder: account?.group === group ? account.sortOrder : nextSortOrder(accounts, group),
       linkedAccountId: type === "mortgage" || type === "loan" || type === "property" ? linkedId || undefined : undefined,
+      expectedReturn: account?.expectedReturn,
+      retireInclude: account?.retireInclude,
+      stockBook: type === "investment" && stockBook ? (stockBook as Account["stockBook"]) : undefined,
+      holdingSync: type === "investment" ? stockBook !== "" : undefined,
     };
     if (account) await update(row);
     else await add(row);
@@ -539,6 +544,19 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
             options={[{ id: "", label: t.common.none }, ...linkOptions.map((x) => ({ id: x.id, label: pickName(locale, x.name, x.nameZh) }))]}
           />
         ) : null}
+        {kid || type !== "investment" ? null : (
+          <SelectLine
+            label={t.holdings.book}
+            value={stockBook}
+            onChange={setStockBook}
+            options={[
+              { id: "", label: t.holdings.bookNone },
+              { id: "hk", label: t.holdings.bookHk },
+              { id: "us", label: t.holdings.bookUs },
+              { id: "all", label: t.holdings.bookAll },
+            ]}
+          />
+        )}
         {kid ? null : (
         <ExtraIconBar
           extra={extra}

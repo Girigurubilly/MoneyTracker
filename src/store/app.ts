@@ -19,6 +19,7 @@ import type {
   Trip,
   WishItem,
   YearlyPlan,
+  Holding,
 } from "@/lib/types";
 import { defaultTypeForGroup, groupForType } from "@/lib/types";
 import type { RetirementInputs } from "@/lib/calc/retirement";
@@ -45,6 +46,8 @@ import {
 import { applyAutoTrip, patchAutoTrips } from "@/lib/calc/trips";
 import { netWorthNow } from "@/lib/calc/networth";
 import { fetchLiveFx } from "@/lib/calc/fx";
+import { applyHoldingBalances, mergeHoldings, parseHoldingsFile } from "@/lib/holdings";
+import { fetchHoldingPrices } from "@/lib/quotes";
 import { chargedDayOf, chargedIso, inferLivingRegular, isExpenseRegular } from "@/lib/calc/budget";
 import { isMortgageInterestCategory, isMortgagePrincipalCategory } from "@/lib/categories";
 import { accountsInGroup, nextSortOrder } from "@/lib/accounts";
@@ -74,6 +77,7 @@ export type AppSnapshot = {
   deposits?: TimeSaving[];
   yearlyPlans?: YearlyPlan[];
   wishlist?: WishItem[];
+  holdings?: Holding[];
   defaultCurrency?: Currency;
   budgetTargetMode?: BudgetTargetMode;
   depositCategoryId?: string;
@@ -163,6 +167,10 @@ type Dispatchers = {
   addWishItem: (row: WishItem) => Promise<void>;
   updateWishItem: (row: WishItem) => Promise<void>;
   deleteWishItem: (id: string) => Promise<void>;
+  upsertHolding: (row: Holding) => Promise<void>;
+  deleteHolding: (id: string) => Promise<void>;
+  importHoldingsText: (text: string, accountId?: string) => Promise<number>;
+  refreshHoldingPrices: () => Promise<number>;
   replaceAll: (snap: AppSnapshot) => Promise<void>;
   exportSnapshot: () => AppSnapshot;
   resetSample: () => Promise<void>;
@@ -186,6 +194,7 @@ type AppState = {
   deposits: TimeSaving[];
   yearlyPlans: YearlyPlan[];
   wishlist: WishItem[];
+  holdings: Holding[];
   lastPostedTxId?: string | null;
   fxRates: FxRate[];
   snapshots: SnapshotRow[];
@@ -217,6 +226,7 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     fxRates,
     snapshots,
     meta,
+    holdings,
   ] = await Promise.all([
     idb().accounts.toArray(),
     idb().categories.toArray(),
@@ -236,6 +246,7 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     idb().fxRates.toArray(),
     idb().snapshots.toArray(),
     idb().meta.get("settings"),
+    idb().holdings.toArray(),
   ]);
   return {
     accounts,
@@ -253,6 +264,7 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     deposits,
     yearlyPlans,
     wishlist,
+    holdings,
     fxRates,
     snapshots,
     annualTravelBudget: meta?.annualTravelBudget ?? seedTravelBudget,
@@ -608,6 +620,23 @@ function mortgageFromAccount(m: Mortgage | null, row: Account, accounts: Account
   return syncMortgageOutstanding(next, accounts);
 }
 
+async function writeHoldings(
+  holdings: Holding[],
+  get: () => AppState,
+  set: (p: Partial<AppState>) => void,
+) {
+  const accounts = applyHoldingBalances(get().accounts, holdings, get().fxRates);
+  await idb().transaction("rw", [idb().holdings, idb().accounts], async () => {
+    await idb().holdings.clear();
+    if (holdings.length) await idb().holdings.bulkAdd(holdings);
+    for (const a of accounts) {
+      const before = get().accounts.find((x) => x.id === a.id);
+      if (!before || before.balance !== a.balance) await idb().accounts.put(a);
+    }
+  });
+  set({ holdings, accounts });
+}
+
 export const useApp = create<AppState>((set, get) => ({
   ready: false,
   accounts: [],
@@ -625,6 +654,7 @@ export const useApp = create<AppState>((set, get) => ({
   deposits: [],
   yearlyPlans: [],
   wishlist: [],
+  holdings: [],
   lastPostedTxId: null as string | null,
   fxRates: seedFx,
   snapshots: [],
@@ -758,6 +788,7 @@ export const useApp = create<AppState>((set, get) => ({
       if (mortgage) await idb().mortgage.put(mortgage);
     });
     set({ accounts, mortgage });
+    await writeHoldings(get().holdings, get, set);
   },
   updateAccount: async (a) => {
     const accounts = withLinkedCounterpart(get().accounts, a);
@@ -770,6 +801,7 @@ export const useApp = create<AppState>((set, get) => ({
       if (mortgage) await idb().mortgage.put(mortgage);
     });
     set({ accounts, mortgage });
+    await writeHoldings(get().holdings, get, set);
   },
   deleteAccount: async (id) => {
     const used =
@@ -1024,6 +1056,47 @@ export const useApp = create<AppState>((set, get) => ({
     await idb().wishlist.delete(id);
     set({ wishlist: get().wishlist.filter((x) => x.id !== id) });
   },
+  upsertHolding: async (row) => {
+    const holdings = get().holdings.some((h) => h.id === row.id)
+      ? get().holdings.map((h) => (h.id === row.id ? row : h))
+      : [...get().holdings, row];
+    await writeHoldings(holdings, get, set);
+  },
+  deleteHolding: async (id) => {
+    await writeHoldings(
+      get().holdings.filter((h) => h.id !== id),
+      get,
+      set,
+    );
+  },
+  importHoldingsText: async (text, accountId) => {
+    const { rows } = parseHoldingsFile(text);
+    if (!rows.length) return 0;
+    const withIds = rows.map((r) => ({
+      ...r,
+      id: nid(),
+      accountId,
+      lastPriceAt: r.lastPrice ? new Date().toISOString() : undefined,
+    }));
+    const holdings = mergeHoldings(get().holdings, withIds, accountId);
+    await writeHoldings(holdings, get, set);
+    return rows.length;
+  },
+  refreshHoldingPrices: async () => {
+    const rows = get().holdings;
+    if (!rows.length) return 0;
+    const prices = await fetchHoldingPrices(rows);
+    const now = new Date().toISOString();
+    let n = 0;
+    const holdings = rows.map((h) => {
+      const px = prices.get(`${h.market}:${h.symbol}`);
+      if (!px) return h;
+      n += 1;
+      return { ...h, lastPrice: px, lastPriceAt: now };
+    });
+    await writeHoldings(holdings, get, set);
+    return n;
+  },
   replaceAll: async (snap) => {
     await idb().transaction("rw", idb().tables, async () => {
       await Promise.all(idb().tables.map((t) => t.clear()));
@@ -1042,6 +1115,7 @@ export const useApp = create<AppState>((set, get) => ({
       await bulkChunk((rows) => idb().deposits.bulkAdd(rows), snap.deposits ?? []);
       await bulkChunk((rows) => idb().yearlyPlans.bulkAdd(rows), snap.yearlyPlans ?? []);
       await bulkChunk((rows) => idb().wishlist.bulkAdd(rows), snap.wishlist ?? []);
+      await bulkChunk((rows) => idb().holdings.bulkAdd(rows), snap.holdings ?? []);
       await idb().fxRates.bulkPut(snap.fxRates.length ? snap.fxRates : seedFx);
       if (snap.snapshots.length) await idb().snapshots.bulkPut(snap.snapshots);
       await idb().meta.put({
@@ -1082,6 +1156,7 @@ export const useApp = create<AppState>((set, get) => ({
       deposits: s.deposits,
       yearlyPlans: s.yearlyPlans,
       wishlist: s.wishlist,
+      holdings: s.holdings,
       defaultCurrency: s.defaultCurrency,
       budgetTargetMode: s.budgetTargetMode,
       depositCategoryId: s.depositCategoryId,

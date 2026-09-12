@@ -112,6 +112,9 @@ export type Account = {
   linkedAccountId?: string;
   expectedReturn?: number;
   retireInclude?: boolean;
+  /** When set, this investment account’s balance follows matching holdings. */
+  stockBook?: "hk" | "us" | "all";
+  holdingSync?: boolean;
 };
 
 export type CategoryIconName =
@@ -453,6 +456,23 @@ export type WishItem = {
   note?: string;
   priceCards?: WishCard[];
   valueCards?: WishCard[];
+};
+
+export type HoldingSource = "aastocks" | "ibkr" | "manual";
+export type HoldingMarket = "hk" | "us";
+
+export type Holding = {
+  id: string;
+  symbol: string;
+  name: string;
+  market: HoldingMarket;
+  source: HoldingSource;
+  quantity: number;
+  currency: Currency;
+  lastPrice: number;
+  avgCost?: number;
+  lastPriceAt?: string;
+  accountId?: string;
 };
 
 export type Goal = {

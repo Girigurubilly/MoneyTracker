@@ -17,6 +17,7 @@ import type {
   Trip,
   WishItem,
   YearlyPlan,
+  Holding,
 } from "./types";
 import type { RetirementInputs } from "./calc/retirement";
 
@@ -51,6 +52,7 @@ export class HKLifeDB extends Dexie {
   deposits!: EntityTable<TimeSaving, "id">;
   yearlyPlans!: EntityTable<YearlyPlan, "id">;
   wishlist!: EntityTable<WishItem, "id">;
+  holdings!: EntityTable<Holding, "id">;
   fxRates!: EntityTable<FxRate, "currency">;
   meta!: EntityTable<MetaRow, "key">;
   snapshots!: EntityTable<SnapshotRow, "month">;
@@ -82,6 +84,9 @@ export class HKLifeDB extends Dexie {
     });
     this.version(4).stores({
       wishlist: "id",
+    });
+    this.version(5).stores({
+      holdings: "id, accountId, market, symbol",
     });
   }
 }
