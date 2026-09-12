@@ -13,6 +13,7 @@ export type TxRuleFields = {
   categoryId?: string;
   countsAsExpense?: boolean;
   housing?: boolean;
+  adhoc?: boolean;
 };
 
 export function infersHousing(categoryId: string | undefined, categories: Category[]): boolean {
@@ -20,6 +21,19 @@ export function infersHousing(categoryId: string | undefined, categories: Catego
   const cat = categories.find((c) => c.id === categoryId);
   if (mortgageEntryKind(cat, categories)) return true;
   return housingCategoryIds(categories).has(categoryId);
+}
+
+export function infersAdhoc(categoryId: string | undefined, categories: Category[]): boolean {
+  if (!categoryId) return false;
+  let cur = categories.find((c) => c.id === categoryId);
+  const seen = new Set<string>();
+  while (cur && !seen.has(cur.id)) {
+    seen.add(cur.id);
+    if (cur.adhocDefault === true) return true;
+    if (cur.adhocDefault === false) return false;
+    cur = cur.parentId ? categories.find((c) => c.id === cur!.parentId) : undefined;
+  }
+  return false;
 }
 
 export function applyTxRules<T extends TxRuleFields>(
@@ -36,8 +50,16 @@ export function applyTxRules<T extends TxRuleFields>(
         : infersHousing(draft.categoryId, ctx.categories)
           ? true
           : undefined;
+  const adhoc =
+    draft.adhoc === false
+      ? false
+      : draft.adhoc === true
+        ? true
+        : infersAdhoc(draft.categoryId, ctx.categories)
+          ? true
+          : undefined;
 
-  let next: T & TxRuleFields = { ...draft, housing };
+  let next: T & TxRuleFields = { ...draft, housing, adhoc };
 
   if (kind === "principal" && (draft.type === "expense" || draft.type === "transfer")) {
     const dest = draft.toAccountId || defaultMortgageAccountId(ctx.accounts);
