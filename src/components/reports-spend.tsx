@@ -31,6 +31,7 @@ export function SpendingPage() {
   const [preset, setPreset] = useState<PeriodPreset>("this-month");
   const [tab, setTab] = useState<PeriodTab>("expense");
   const [merge, setMerge] = useState(true);
+  const [hideAdhoc, setHideAdhoc] = useState(false);
   const [customFrom, setCustomFrom] = useState(`${today.slice(0, 4)}-01-01`);
   const [customTo, setCustomTo] = useState(today);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -39,8 +40,8 @@ export function SpendingPage() {
   const from = preset === "custom" ? customFrom : range.from;
   const to = preset === "custom" ? customTo : range.to;
   const totals = useMemo(
-    () => periodCategoryTotals(txs, cats, rates, from, to, tab, merge),
-    [txs, cats, rates, from, to, tab, merge],
+    () => periodCategoryTotals(txs, cats, rates, from, to, tab, merge, hideAdhoc),
+    [txs, cats, rates, from, to, tab, merge, hideAdhoc],
   );
   const presets: { id: PeriodPreset; label: string }[] = [
     { id: "this-month", label: t.reports.thisMonth },
@@ -57,7 +58,7 @@ export function SpendingPage() {
   ];
   const childTotals = useMemo(() => {
     if (!focusParent) return null;
-    const raw = periodCategoryTotals(txs, cats, rates, from, to, tab, false);
+    const raw = periodCategoryTotals(txs, cats, rates, from, to, tab, false, hideAdhoc);
     const kidIds = new Set(cats.filter((c) => c.parentId === focusParent).map((c) => c.id));
     let rows = raw.rows.filter((r) => kidIds.has(r.id));
     if (!rows.length) rows = raw.rows.filter((r) => r.id === focusParent);
@@ -65,7 +66,7 @@ export function SpendingPage() {
       ...raw,
       rows: rows.map((r, i) => ({ ...r, colorIndex: i % 8 })),
     };
-  }, [txs, cats, rates, from, to, tab, focusParent]);
+  }, [txs, cats, rates, from, to, tab, focusParent, hideAdhoc]);
   const view = childTotals ?? totals;
   const netSave = totals.income - totals.expense;
   const bothPie =
@@ -165,7 +166,7 @@ export function SpendingPage() {
           </button>
         ))}
       </div>
-      <div className="px-4 pt-3">
+      <div className="flex flex-wrap gap-2 px-4 pt-3">
         <button
           type="button"
           onClick={() => setMerge((v) => !v)}
@@ -176,6 +177,18 @@ export function SpendingPage() {
         >
           {t.reports.mergeParents}
         </button>
+        {tab === "income" ? null : (
+          <button
+            type="button"
+            onClick={() => setHideAdhoc((v) => !v)}
+            className={cn(
+              "h-8 rounded-full px-3 text-sm font-medium",
+              hideAdhoc ? "bg-accent text-on-accent" : "bg-elevated text-muted",
+            )}
+          >
+            {t.reports.hideAdhoc}
+          </button>
+        )}
       </div>
       {focusParent ? (
         <div className="flex items-center justify-between px-5 pt-3">
@@ -257,6 +270,7 @@ export function SpendingPage() {
           to={to}
           tab={tab}
           merge={Boolean(focusParent) ? false : merge}
+          hideAdhoc={hideAdhoc}
           onClose={() => setOpenId(null)}
         />
       ) : null}
@@ -282,6 +296,7 @@ function CategoryTxList({
   to,
   tab,
   merge,
+  hideAdhoc,
   onClose,
 }: {
   row: { id: string; name: string; nameZh: string; value: number };
@@ -289,6 +304,7 @@ function CategoryTxList({
   to: string;
   tab: PeriodTab;
   merge: boolean;
+  hideAdhoc: boolean;
   onClose: () => void;
 }) {
   const t = useT();
@@ -297,8 +313,8 @@ function CategoryTxList({
   const txs = useApp((s) => s.transactions);
   const cats = useApp((s) => s.categories);
   const rows = useMemo(
-    () => periodCategoryTxs(txs, cats, from, to, tab, merge, row.id),
-    [txs, cats, from, to, tab, merge, row.id],
+    () => periodCategoryTxs(txs, cats, from, to, tab, merge, row.id, hideAdhoc),
+    [txs, cats, from, to, tab, merge, row.id, hideAdhoc],
   );
   return (
     <Overlay open onClose={onClose} variant="page">

@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { Hash, Home, MessageSquare, Plane } from "lucide-react";
+import { Hash, Home, MessageSquare, Plane, Sparkles } from "lucide-react";
 import { AmountKeypad } from "@/components/amount-keypad";
 import { AccountSelect } from "@/components/account-select";
 import { Overlay } from "@/components/shared";
@@ -221,6 +221,8 @@ export function DatePaidRow({
   );
 }
 
+export type ExtraPanel = "note" | "trip" | "housing" | "split" | "adhoc" | null;
+
 export function ExtraIconBar({
   extra,
   onExtra,
@@ -228,28 +230,34 @@ export function ExtraIconBar({
   tripOn,
   housingOn,
   splitOn,
+  adhocOn,
   showTrip,
   showHousing,
   showSplit,
+  showAdhoc,
   onHousing,
   onSplit,
+  onAdhoc,
   noteValue,
   onNoteChange,
   tripValue,
   tripOptions,
   onTripChange,
 }: {
-  extra?: "note" | "trip" | "housing" | "split" | null;
-  onExtra?: (v: "note" | "trip" | "housing" | "split" | null) => void;
+  extra?: ExtraPanel;
+  onExtra?: (v: ExtraPanel) => void;
   noteOn?: boolean;
   tripOn?: boolean;
   housingOn?: boolean;
   splitOn?: boolean;
+  adhocOn?: boolean;
   showTrip?: boolean;
   showHousing?: boolean;
   showSplit?: boolean;
+  showAdhoc?: boolean;
   onHousing?: () => void;
   onSplit?: () => void;
+  onAdhoc?: () => void;
   noteValue?: string;
   onNoteChange?: (v: string) => void;
   tripValue?: string;
@@ -257,7 +265,7 @@ export function ExtraIconBar({
   onTripChange?: (id: string) => void;
 }) {
   const t = useT();
-  function toggle(id: "note" | "trip" | "housing" | "split") {
+  function toggle(id: Exclude<ExtraPanel, null>) {
     if (id === "housing") {
       onHousing?.();
       onExtra?.(extra === "housing" ? null : "housing");
@@ -266,6 +274,11 @@ export function ExtraIconBar({
     if (id === "split") {
       onSplit?.();
       onExtra?.(extra === "split" ? null : "split");
+      return;
+    }
+    if (id === "adhoc") {
+      onAdhoc?.();
+      onExtra?.(extra === "adhoc" ? null : "adhoc");
       return;
     }
     onExtra?.(extra === id ? null : id);
@@ -286,6 +299,11 @@ export function ExtraIconBar({
         {showHousing ? (
           <IconBtn active={housingOn} label={t.add.housing} onClick={() => toggle("housing")}>
             <Home className="size-5" />
+          </IconBtn>
+        ) : null}
+        {showAdhoc ? (
+          <IconBtn active={adhocOn} label={t.add.adhoc} onClick={() => toggle("adhoc")}>
+            <Sparkles className="size-5" />
           </IconBtn>
         ) : null}
         {showSplit ? (
@@ -315,6 +333,9 @@ export function ExtraIconBar({
       ) : null}
       {extra === "housing" || housingOn ? (
         <p className="px-4 pb-3 text-[11px] leading-relaxed text-muted">{t.add.housingHint}</p>
+      ) : null}
+      {extra === "adhoc" || adhocOn ? (
+        extra === "adhoc" ? <p className="px-4 pb-3 text-[11px] leading-relaxed text-muted">{t.add.adhocHint}</p> : null
       ) : null}
       {extra === "split" || splitOn ? (
         extra === "split" ? <p className="px-4 pb-3 text-[11px] leading-relaxed text-muted">{t.add.splitHint}</p> : null

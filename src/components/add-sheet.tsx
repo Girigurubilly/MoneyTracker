@@ -11,6 +11,7 @@ import {
   ExtraIconBar,
   LineRow,
   type AmountField,
+  type ExtraPanel,
 } from "@/components/txn-composer";
 import { asFiat, autoDestAmount } from "@/components/currency-field";
 import { todayISO } from "@/lib/format";
@@ -19,7 +20,7 @@ import { defaultMortgageAccountId, moneyAccountsForPicker } from "@/lib/accounts
 import { canSplitMortgage, categoryPath, mortgageEntryKind, resolvedDefaultAccountId } from "@/lib/categories";
 import { captureFxToHkd } from "@/lib/calc/fx";
 import { isTripActive, tripForDate } from "@/lib/calc/trips";
-import { applyTxRules, infersHousing, splitMortgageAmounts } from "@/lib/tx-rules";
+import { applyTxRules, infersAdhoc, infersHousing, splitMortgageAmounts } from "@/lib/tx-rules";
 import { resolveAmountInput } from "@/lib/money-expr";
 import type { Category, Currency, MoneyUnit, TxType } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
@@ -123,9 +124,11 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
   const [interest, setInterest] = useState("");
   const [doSplit, setDoSplit] = useState(false);
   const [housing, setHousing] = useState(false);
+  const [adhoc, setAdhoc] = useState(false);
+  const adhocTouched = useRef(false);
   const [paid, setPaid] = useState(true);
   const [field, setField] = useState<AmountField>("amount");
-  const [extra, setExtra] = useState<"note" | "trip" | "housing" | "split" | null>(null);
+  const [extra, setExtra] = useState<ExtraPanel>(null);
   const cat = categories.find((c) => c.id === categoryId);
   const mortgageKind = mortgageEntryKind(cat, categories);
   const canSplit = type !== "income" && type !== "miles" && canSplitMortgage(mortgageKind);
@@ -155,6 +158,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
     pickedCat.current = true;
     setCategoryId(c?.id ?? "");
     if (infersHousing(c?.id, categories)) setHousing(true);
+    if (!adhocTouched.current) setAdhoc(infersAdhoc(c?.id, categories));
     const kind = mortgageEntryKind(c, categories);
     if (canSplitMortgage(kind)) {
       setDoSplit(true);
@@ -212,6 +216,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
               planned,
               countsAsExpense: true,
               housing,
+              adhoc: type === "expense" ? adhoc : false,
             },
             ctx,
           ),
@@ -232,6 +237,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
               payeeZh: payee || t.add.interest,
               planned,
               housing,
+              adhoc: type === "expense" ? adhoc : false,
             },
             ctx,
           ),
@@ -258,6 +264,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
             tripId: type === "expense" && tripId ? tripId : undefined,
             tripManual: tripTouched.current,
             housing,
+            adhoc: type === "expense" ? adhoc : false,
           },
           ctx,
         ),
@@ -438,11 +445,17 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
         noteOn={!!payee}
         tripOn={!!tripId}
         housingOn={housing}
+        adhocOn={adhoc}
         splitOn={doSplit}
         showTrip={type === "expense"}
         showHousing={type !== "miles"}
+        showAdhoc={type === "expense"}
         showSplit={canSplit}
         onHousing={() => setHousing((v) => !v)}
+        onAdhoc={() => {
+          adhocTouched.current = true;
+          setAdhoc((v) => !v);
+        }}
         onSplit={() => {
           const on = !doSplit;
           setDoSplit(on);

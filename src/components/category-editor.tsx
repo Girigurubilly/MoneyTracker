@@ -4,6 +4,7 @@ import { Overlay } from "@/components/shared";
 import { CategoryIcon } from "@/components/category-icon";
 import { AccountLine, ComposerHeader, SelectLine, TextLine } from "@/components/txn-composer";
 import { pickName } from "@/lib/i18n";
+import { infersAdhoc } from "@/lib/tx-rules";
 import { CATEGORY_ICON_GROUPS, type Category, type CategoryIconName, type LifeTheme } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -65,6 +66,9 @@ function CategoryEditorBody({
   const [defaultAccountId, setDefaultAccountId] = useState(
     initial?.defaultAccountId ?? cats.find((c) => c.id === (initial?.parentId ?? defaultParentId))?.defaultAccountId ?? "",
   );
+  const [adhocDefault, setAdhocDefault] = useState(
+    initial?.adhocDefault ?? infersAdhoc(initial?.id ?? defaultParentId, cats),
+  );
 
   async function save() {
     const n = name.trim();
@@ -81,6 +85,7 @@ function CategoryEditorBody({
       icon,
       parentId: nextParentId,
       essential: initial?.essential,
+      adhocDefault: (parent?.kind ?? kind) === "expense" ? adhocDefault : undefined,
       defaultAccountId: defaultAccountId || undefined,
     };
     if (initial) await update(row);
@@ -119,6 +124,20 @@ function CategoryEditorBody({
       ) : null}
       <AccountLine accounts={accounts} value={defaultAccountId} onChange={setDefaultAccountId} placeholder={t.add.defaultAccount} />
       <p className="px-4 py-2 text-xs text-muted">{t.add.defaultAccountHint}</p>
+      {(parentId ? parents.find((p) => p.id === parentId)?.kind ?? kind : kind) === "expense" ? (
+        <label className="flex items-start gap-3 border-b border-line px-4 py-3">
+          <input
+            type="checkbox"
+            className="mt-1 size-4"
+            checked={adhocDefault}
+            onChange={(e) => setAdhocDefault(e.target.checked)}
+          />
+          <span>
+            <span className="block text-sm">{t.add.adhocDefault}</span>
+            <span className="mt-0.5 block text-xs text-muted">{t.add.adhocDefaultHint}</span>
+          </span>
+        </label>
+      ) : null}
       <div className="px-4 pb-8 pt-1">
         <div className="text-xs text-muted">{t.add.icon}</div>
         <div className="mt-2 space-y-3">

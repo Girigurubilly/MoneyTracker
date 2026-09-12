@@ -12,6 +12,7 @@ import {
   ExtraIconBar,
   LineRow,
   type AmountField,
+  type ExtraPanel,
 } from "@/components/txn-composer";
 import { todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
@@ -19,7 +20,7 @@ import { defaultMortgageAccountId } from "@/lib/accounts";
 import { canSplitMortgage, categoryPath, mortgageEntryKind, resolvedDefaultAccountId } from "@/lib/categories";
 import { captureFxToHkd } from "@/lib/calc/fx";
 import { isTripActive } from "@/lib/calc/trips";
-import { applyTxRules, infersHousing, splitMortgageAmounts } from "@/lib/tx-rules";
+import { applyTxRules, infersAdhoc, infersHousing, splitMortgageAmounts } from "@/lib/tx-rules";
 import { resolveAmountInput } from "@/lib/money-expr";
 import type { Category, Currency, MoneyUnit, Transaction, TxType } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
@@ -69,6 +70,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
   const [tripId, setTripId] = useState(tx.tripId ?? "");
   const [payee, setPayee] = useState(pickName(locale, tx.payee, tx.payeeZh));
   const [housing, setHousing] = useState(tx.housing === true || infersHousing(tx.categoryId, categories));
+  const [adhoc, setAdhoc] = useState(tx.adhoc === true || infersAdhoc(tx.categoryId, categories));
   const [pickCat, setPickCat] = useState(false);
   const [principal, setPrincipal] = useState(tx.type === "transfer" && tx.countsAsExpense ? String(tx.amount) : "");
   const [interest, setInterest] = useState(tx.type === "expense" && mortgageEntryKind(categories.find((c) => c.id === tx.categoryId), categories) === "interest" ? String(tx.amount) : "");
@@ -77,7 +79,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
   );
   const [paid, setPaid] = useState(!tx.planned);
   const [field, setField] = useState<AmountField>("amount");
-  const [extra, setExtra] = useState<"note" | "trip" | "housing" | "split" | null>(null);
+  const [extra, setExtra] = useState<ExtraPanel>(null);
   const cat = categories.find((c) => c.id === categoryId);
   const mortgageKind = mortgageEntryKind(cat, categories);
   const canSplit = type !== "income" && type !== "miles" && canSplitMortgage(mortgageKind);
@@ -104,6 +106,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
   function onPickCategory(c: Category | null) {
     setCategoryId(c?.id ?? "");
     if (infersHousing(c?.id, categories)) setHousing(true);
+    setAdhoc(infersAdhoc(c?.id, categories) || adhoc);
     const kind = mortgageEntryKind(c, categories);
     if (canSplitMortgage(kind)) {
       setDoSplit(true);
@@ -150,6 +153,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
             payeeZh: payee || t.add.principal,
             planned,
             housing,
+            adhoc: type === "expense" ? adhoc : false,
             countsAsExpense: true,
           },
           ctx,
@@ -171,6 +175,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
             payeeZh: payee || t.add.interest,
             planned,
             housing,
+            adhoc: false,
             countsAsExpense: undefined,
           },
           ctx,
@@ -200,6 +205,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
               payeeZh: payee || tx.payeeZh,
               planned,
               housing,
+              adhoc: false,
             },
             ctx,
           ),
@@ -221,6 +227,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
               payeeZh: payee || tx.payeeZh,
               planned,
               housing,
+              adhoc: false,
             },
             ctx,
           ),
@@ -250,6 +257,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
           tripId: type === "expense" && tripId ? tripId : undefined,
           tripManual: true,
           housing,
+          adhoc: type === "expense" ? adhoc : false,
           countsAsExpense: type === "transfer" ? tx.countsAsExpense : undefined,
         },
         ctx,
@@ -382,11 +390,14 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
           noteOn={!!payee}
           tripOn={!!tripId}
           housingOn={housing}
+          adhocOn={adhoc}
           splitOn={doSplit}
           showTrip={type === "expense"}
           showHousing={moneyTx}
+          showAdhoc={type === "expense"}
           showSplit={canSplit}
           onHousing={() => setHousing((v) => !v)}
+          onAdhoc={() => setAdhoc((v) => !v)}
           onSplit={() => {
             const on = !doSplit;
             setDoSplit(on);

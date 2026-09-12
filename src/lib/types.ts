@@ -334,6 +334,7 @@ export type Category = {
   kind: "expense" | "income";
   icon: CategoryIconName;
   essential?: boolean;
+  adhocDefault?: boolean;
   defaultAccountId?: string;
   parentId?: string;
 };
@@ -363,6 +364,7 @@ export type Transaction = {
   depositId?: string;
   countsAsExpense?: boolean;
   housing?: boolean;
+  adhoc?: boolean;
   fxToHkd?: number;
 };
 

@@ -102,6 +102,22 @@ describe("budget formulas", () => {
     assert.equal(regularOnly.remaining, 20_000 - (10_000 - 500) - 4_000);
   });
 
+  it("regular target excludes posted ad-hoc txs as well as this-month holds", () => {
+    const budgets: Budget[] = [
+      { id: MONTH_TOTAL_BUDGET_ID, label: "cap", labelZh: "上限", monthly: 20_000, spent: 0 },
+    ];
+    const txs: Transaction[] = [
+      tx({ id: "t-reg", type: "expense", amount: 6_000, date: "2026-08-04" }),
+      tx({ id: "t-adhoc", type: "expense", amount: 3_000, date: "2026-08-08", adhoc: true }),
+    ];
+    const [all] = budgetActuals(budgets, txs, "2026-08", [], [], [], "2026-08-15");
+    assert.equal(all.spent, 9_000);
+    assert.equal(all.remaining, 20_000 - 9_000);
+    const [regularOnly] = budgetActuals(budgets, txs, "2026-08", [], [], [], "2026-08-15", [], "regular");
+    assert.equal(regularOnly.spent, 9_000);
+    assert.equal(regularOnly.remaining, 20_000 - 6_000);
+  });
+
   it("a regular whose charged day has not arrived stays reserved even if the category spent", () => {
     const budgets: Budget[] = [
       { id: MONTH_TOTAL_BUDGET_ID, label: "cap", labelZh: "上限", monthly: 20_000, spent: 0 },
@@ -379,6 +395,19 @@ describe("period merge", () => {
     assert.equal(incomeBoth[0].id, "c");
     const outOfRange = periodCategoryTxs(txs, cats, "2026-07-01", "2026-07-31", "expense", true, "p-food");
     assert.equal(outOfRange.length, 0);
+  });
+  it("can exclude ad-hoc spend from the pie", () => {
+    const mixed: Transaction[] = [
+      ...txs,
+      tx({ id: "d", type: "expense", amount: 500, date: "2026-08-05", categoryId: "dining", adhoc: true }),
+    ];
+    const all = periodCategoryTotals(mixed, cats, [], "2026-08-01", "2026-08-31", "expense", true);
+    assert.equal(all.expense, 640);
+    const filtered = periodCategoryTotals(mixed, cats, [], "2026-08-01", "2026-08-31", "expense", true, true);
+    assert.equal(filtered.expense, 140);
+    assert.equal(filtered.rows[0]?.value, 140);
+    const listed = periodCategoryTxs(mixed, cats, "2026-08-01", "2026-08-31", "expense", true, "p-food", true);
+    assert.deepEqual(listed.map((x) => x.id).sort(), ["a", "b"]);
   });
   it("this-year range is inclusive calendar year", () => {
     const r = periodRange("this-year", "2026-08-28");

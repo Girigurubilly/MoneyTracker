@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { applyTxRules, infersHousing } from "./tx-rules.ts";
+import { applyTxRules, infersAdhoc, infersHousing } from "./tx-rules.ts";
 import { housingTransactions } from "./calc/housing.ts";
 import type { Account, Category, Transaction } from "./types.ts";
 
@@ -10,6 +10,9 @@ const cats: Category[] = [
   { id: "mortgage-i", name: "Mortgage interest", nameZh: "按揭利息", theme: "living", kind: "expense", icon: "home", parentId: "p-housing" },
   { id: "mgmt", name: "Management fee", nameZh: "管理費", theme: "living", kind: "expense", icon: "building", parentId: "p-housing" },
   { id: "dining", name: "Dining", nameZh: "外出就餐", theme: "living", kind: "expense", icon: "utensils" },
+  { id: "p-gadget", name: "Gadgets", nameZh: "電子", theme: "living", kind: "expense", icon: "phone", adhocDefault: true },
+  { id: "phone", name: "Phone", nameZh: "手機", theme: "living", kind: "expense", icon: "phone", parentId: "p-gadget" },
+  { id: "repair", name: "Repair", nameZh: "維修", theme: "living", kind: "expense", icon: "phone", parentId: "p-gadget", adhocDefault: false },
 ];
 
 const accounts: Account[] = [
@@ -83,6 +86,17 @@ describe("applyTxRules", () => {
     );
     assert.equal(next.housing, undefined);
     assert.equal(next.type, "expense");
+  });
+
+  it("inherits ad-hoc default from the category, with child override", () => {
+    assert.equal(infersAdhoc("p-gadget", cats), true);
+    assert.equal(infersAdhoc("phone", cats), true);
+    assert.equal(infersAdhoc("repair", cats), false);
+    assert.equal(infersAdhoc("dining", cats), false);
+    const tagged = applyTxRules({ type: "expense", amount: 800, accountId: "cash", categoryId: "phone" }, { categories: cats, accounts });
+    assert.equal(tagged.adhoc, true);
+    const off = applyTxRules({ type: "expense", amount: 80, accountId: "cash", categoryId: "phone", adhoc: false }, { categories: cats, accounts });
+    assert.equal(off.adhoc, false);
   });
 });
 

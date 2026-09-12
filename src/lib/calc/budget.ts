@@ -103,6 +103,17 @@ export function chargedIso(month: string, day: number): string {
   return `${month}-${String(d).padStart(2, "0")}`;
 }
 
+export function spentAdhocInMonth(txs: Transaction[], month: string, rates: FxRate[]): number {
+  let sum = 0;
+  for (const tx of txs) {
+    if (!tx.adhoc) continue;
+    if (cashflowSide(tx) !== "expense") continue;
+    if (!inMonth(tx.date, month)) continue;
+    sum += Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
+  }
+  return sum;
+}
+
 export function plannedAdhocSpend(txs: Transaction[], month: string, rates: FxRate[]): number {
   let sum = 0;
   for (const tx of txs) {
@@ -341,6 +352,7 @@ export function budgetActuals(
   const realizedR = realizedRegulars(recurring, rates, asOf);
   const realized = realizedR + realizedA;
   const adhoc = adhocTotal(adhocRows, month, rates);
+  const postedAdhoc = spentAdhocInMonth(txs, month, rates);
   const ignoreAdhoc = mode === "regular";
   return budgets.map((b) => {
     const unscoped = !b.categoryId && !b.theme;
@@ -355,7 +367,7 @@ export function budgetActuals(
           categories,
         });
     const reservedA = ignoreAdhoc ? 0 : reservedAAll;
-    const spentForTarget = isMonth && ignoreAdhoc ? Math.max(0, spent - realizedA) : spent;
+    const spentForTarget = isMonth && ignoreAdhoc ? Math.max(0, spent - realizedA - postedAdhoc) : spent;
     const hold = isMonth ? reservedReg + reservedA : 0;
     const paceBase = isMonth ? Math.max(0, spent - realized) : 0;
     const avgDaily = isMonth ? avgDailyNonRegular(paceBase, asOf) : 0;

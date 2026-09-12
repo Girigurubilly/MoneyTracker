@@ -463,6 +463,7 @@ function AdhocBlock({
                       payee: a.label,
                       payeeZh: a.labelZh,
                       note: a.label,
+                      adhoc: true,
                     });
                     await delAdhoc(a.id);
                     toast(t.add.savedToast);

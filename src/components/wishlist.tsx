@@ -314,6 +314,7 @@ function ConvertSheet({ item, onClose }: { item: WishItem | null; onClose: () =>
           payee: item.name,
           payeeZh: item.name,
           planned: !paid,
+          adhoc: true,
         },
         { categories, accounts },
       ),
