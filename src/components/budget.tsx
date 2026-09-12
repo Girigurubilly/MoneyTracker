@@ -56,14 +56,12 @@ export function BudgetScreen() {
   const realized = storedTotal?.realized ?? 0;
   const projected = storedTotal?.projected ?? 0;
   const projectedRemain = storedTotal?.projectedRemain ?? 0;
-  const avgDaily = storedTotal?.avgDaily ?? 0;
-  const dailyAllowed = storedTotal?.dailyAllowed ?? 0;
   const daysRemaining = storedTotal?.daysRemaining ?? 0;
   const monthCap = storedTotal?.monthly ?? 0;
   const monthUsed = storedTotal?.expected ?? monthSpent + reserved + (targetMode === "regular" ? 0 : reservedA) + projectedRemain;
   const monthRemain = storedTotal?.remaining ?? monthCap - monthSpent - reserved - (targetMode === "regular" ? 0 : reservedA);
-  const monthRatio = storedTotal?.ratio ?? (monthCap > 0 ? monthUsed / monthCap : 0);
-  const monthTone = forecastTone(monthRatio);
+  const monthRatio = monthCap > 0 ? monthSpent / monthCap : 0;
+  const monthTone = forecastTone(monthCap > 0 ? monthUsed / monthCap : 0);
   const categoryActuals = actuals.filter((b) => b.id !== MONTH_TOTAL_BUDGET_ID);
   const travelIds = new Set(categories.filter((c) => c.theme === "travel").map((c) => c.id));
   const spent = travelSpendYtd(txs, Number(month.slice(0, 4)), travelIds, rates);
@@ -113,23 +111,14 @@ export function BudgetScreen() {
               setEditCap(true);
             }}
           >
-            <span className="text-sm text-muted">{t.budget.monthlyTotal}</span>
-            <div className="mt-1 text-xl font-semibold tabular-nums">
-              {money(monthUsed, "HKD")}
-              <span className="ml-2 text-sm font-normal text-muted">/ {monthCap > 0 ? money(monthCap, "HKD") : "—"}</span>
+            <span className="text-sm text-muted">{t.budget.spent}</span>
+            <div className="mt-1 text-3xl font-semibold tabular-nums tracking-tight">{money(monthSpent, "HKD")}</div>
+            <div className="mt-1 text-sm text-muted">
+              {t.budget.expectedMonth}: <span className="font-medium text-foreground tabular-nums">{money(monthUsed, "HKD")}</span>
+              <span className="text-faint"> / {monthCap > 0 ? money(monthCap, "HKD") : "—"}</span>
             </div>
           </button>
           <InfoButton k="cap" />
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <div className="rounded-xl bg-accent-soft px-3 py-3">
-            <div className="text-[11px] font-medium text-accent">{t.budget.dailyAllowed}</div>
-            <div className="mt-1 text-xl font-semibold tabular-nums text-accent">{money(dailyAllowed, "HKD")}</div>
-          </div>
-          <div className="rounded-xl px-3 py-3 ring-1 ring-line">
-            <div className="text-[11px] font-medium text-muted">{t.budget.avgDaily}</div>
-            <div className="mt-1 text-xl font-semibold tabular-nums">{money(avgDaily, "HKD")}</div>
-          </div>
         </div>
         <div className="mt-3 text-sm font-medium">
           {t.budget.remaining}: {money(monthRemain, "HKD")}

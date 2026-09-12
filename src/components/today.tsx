@@ -89,12 +89,13 @@ function TodayBody() {
   const targetMode = useApp((s) => s.budgetTargetMode);
   const stats = monthStats(transactions, budgets, categories, rates, selected, recurring, adhoc, targetMode);
   const cap = stats.actuals.find((b) => b.id === MONTH_TOTAL_BUDGET_ID) ?? stats.actuals.find((b) => !b.categoryId && !b.theme);
-  const used = cap?.expected ?? stats.flow.expense;
+  const spentNow = stats.flow.expense;
+  const expected = cap?.expected ?? spentNow;
   const target = cap?.monthly ?? 0;
   const today = todayISO();
   const asOf = asOfForMonth(selected.slice(0, 7), today);
   const onThisMonth = selected.slice(0, 7) === today.slice(0, 7);
-  const ringTone = forecastTone(target > 0 ? used / target : 0);
+  const ringTone = forecastTone(target > 0 ? spentNow / target : 0);
   const paid = transactions.filter((x) => x.date === selected && !x.planned && x.type !== "miles").sort((a, b) => b.id.localeCompare(a.id));
   const monthKey = selected.slice(0, 7);
   const monthPlanned = transactions
@@ -167,7 +168,6 @@ function TodayBody() {
               <div className="mx-4 mb-2 rounded-xl bg-elevated px-4 py-1">
                 <SummaryRow label={t.today.remainingBudget} value={money(stats.remainingBudget, "HKD")} />
                 <SummaryRow label={t.today.remainingDisc} value={money(stats.remainingDisc, "HKD")} info="disc" />
-                <SummaryRow label={t.today.dailySpend} value={money(stats.daily.daily, "HKD")} info="daily" />
               </div>
               <p className="px-5 pb-2 text-xs text-faint">{t.today.guidance}</p>
             </>
@@ -180,23 +180,20 @@ function TodayBody() {
           <Hairline />
           <Link to="/budget" className="flex w-full items-center gap-3 px-5 py-3.5 text-left">
             <span className="relative">
-              <ProgressRing value={target ? used / target : 0} size={40} stroke={3} tone={ringTone} />
+              <ProgressRing value={target ? spentNow / target : 0} size={40} stroke={3} tone={ringTone} />
               <span className={cn("pointer-events-none absolute inset-0 grid place-items-center", ringTone === "expense" ? "text-expense" : ringTone === "watch" ? "text-watch" : "text-income")}>
                 <Wallet className="size-3.5" />
               </span>
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-sm font-medium">{t.budget.monthlyTotal}</span>
+              <span className="block text-sm font-medium">{t.today.expenseMonth}</span>
               <span className="text-xs text-muted">
-                {t.today.expenseMonth}: {money(stats.flow.expense, "HKD")}
-                <span className="block">
-                  {t.today.dailySpend}: {money(stats.daily.daily, "HKD")}
-                </span>
+                {t.budget.expectedMonth}: {money(expected, "HKD")}
+                {target > 0 ? ` · ${t.budget.monthlyTotal} ${money(target, "HKD")}` : ""}
               </span>
             </span>
             <span className="text-right">
-              <span className="block text-sm font-semibold tabular-nums">{money(used, "HKD")}</span>
-              <span className="text-xs tabular-nums text-muted">{target > 0 ? money(target, "HKD") : "—"}</span>
+              <span className="block text-lg font-semibold tabular-nums">{money(spentNow, "HKD")}</span>
             </span>
           </Link>
           <Hairline />

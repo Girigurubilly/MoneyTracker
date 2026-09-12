@@ -8,7 +8,7 @@ const ACTION_KEY = "hk-life-money-drive-action";
 const TOKEN_KEY = "hk-life-money-drive-token";
 const TOKEN_EXP_KEY = "hk-life-money-drive-token-exp";
 
-export type DriveAction = "save" | "restore";
+export type DriveAction = "save" | "restore" | "sync";
 
 export function readGoogleClientId(): string {
   try {
@@ -59,7 +59,7 @@ export function startGoogleSignIn(action: DriveAction): void {
 
 export function takePendingDriveAction(): DriveAction | null {
   const action = sessionStorage.getItem(ACTION_KEY);
-  if (action === "save" || action === "restore") {
+  if (action === "save" || action === "restore" || action === "sync") {
     sessionStorage.removeItem(ACTION_KEY);
     return action;
   }
