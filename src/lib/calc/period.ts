@@ -70,12 +70,14 @@ export function periodCategoryTotals(
   to: string,
   tab: PeriodTab,
   mergeParents: boolean,
+  excludeAdhoc = false,
 ): { rows: PeriodRow[]; expense: number; income: number } {
   const sums = new Map<string, number>();
   let expense = 0;
   let income = 0;
   for (const tx of txs) {
     if (tx.planned) continue;
+    if (excludeAdhoc && tx.adhoc) continue;
     if (!inPeriod(tx.date, from, to)) continue;
     const side = cashflowSide(tx);
     if (side === "none") continue;
@@ -153,10 +155,12 @@ export function periodCategoryTxs(
   tab: PeriodTab,
   mergeParents: boolean,
   categoryId: string,
+  excludeAdhoc = false,
 ): Transaction[] {
   const rows: Transaction[] = [];
   for (const tx of txs) {
     if (tx.planned) continue;
+    if (excludeAdhoc && tx.adhoc) continue;
     if (!inPeriod(tx.date, from, to)) continue;
     const side = cashflowSide(tx);
     if (side === "none") continue;
