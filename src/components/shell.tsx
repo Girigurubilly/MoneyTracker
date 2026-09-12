@@ -69,6 +69,7 @@ function DailyDriveSync() {
     if (!ready) return;
     void runDailyDriveSync({ exportSnapshot, replaceAll }).then((r) => {
       if (r === "pulled") toast(t.backup.synced);
+      if (r === "need-pass") toast(t.backup.driveNeedPass);
     });
   }, [ready, exportSnapshot, replaceAll, t]);
   return null;

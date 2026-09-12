@@ -42,6 +42,15 @@ export async function encryptSnapshot(json: string, password: string): Promise<s
   });
 }
 
+export function isEncryptedBackup(text: string): boolean {
+  try {
+    const parsed = JSON.parse(text) as { alg?: string; salt?: string; data?: string };
+    return Boolean(parsed.alg === "AES-GCM" && parsed.salt && parsed.data);
+  } catch {
+    return false;
+  }
+}
+
 export async function decryptSnapshot(payload: string, password: string): Promise<string> {
   const parsed = JSON.parse(payload) as { salt: string; iv: string; data: string };
   const key = await deriveKey(password, fromB64(parsed.salt));

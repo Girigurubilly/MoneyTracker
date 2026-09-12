@@ -86,22 +86,35 @@ export function takeRedirectToken(): string | null {
   return token;
 }
 
-export function rememberAccessToken(token: string, expiresIn = 3500) {
+let memToken = "";
+let memExp = 0;
+
+function forgetLocalToken() {
   try {
-    const exp = String(Date.now() + Math.max(60, expiresIn - 60) * 1000);
-    localStorage.setItem(TOKEN_KEY, token);
-    localStorage.setItem(TOKEN_EXP_KEY, exp);
-    localStorage.setItem(GRANTED_KEY, "1");
-    sessionStorage.setItem(TOKEN_KEY, token);
-    sessionStorage.setItem(TOKEN_EXP_KEY, exp);
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(TOKEN_EXP_KEY);
   } catch {
     /* ignore */
   }
 }
 
+export function rememberAccessToken(token: string, expiresIn = 3500) {
+  memToken = token;
+  memExp = Date.now() + Math.max(60, expiresIn - 60) * 1000;
+  try {
+    localStorage.setItem(GRANTED_KEY, "1");
+    sessionStorage.setItem(TOKEN_KEY, token);
+    sessionStorage.setItem(TOKEN_EXP_KEY, String(memExp));
+  } catch {
+    /* ignore */
+  }
+  forgetLocalToken();
+}
+
 export function clearAccessToken() {
-  writeStored(TOKEN_KEY, "");
-  writeStored(TOKEN_EXP_KEY, "");
+  memToken = "";
+  memExp = 0;
+  forgetLocalToken();
   try {
     sessionStorage.removeItem(TOKEN_KEY);
     sessionStorage.removeItem(TOKEN_EXP_KEY);
@@ -111,10 +124,14 @@ export function clearAccessToken() {
 }
 
 export function storedAccessToken(): string | null {
+  forgetLocalToken();
+  if (memToken && Date.now() < memExp) return memToken;
   try {
-    const token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
-    const exp = Number(localStorage.getItem(TOKEN_EXP_KEY) || sessionStorage.getItem(TOKEN_EXP_KEY) || "0");
+    const token = sessionStorage.getItem(TOKEN_KEY);
+    const exp = Number(sessionStorage.getItem(TOKEN_EXP_KEY) || "0");
     if (!token || Date.now() > exp) return null;
+    memToken = token;
+    memExp = exp;
     return token;
   } catch {
     return null;

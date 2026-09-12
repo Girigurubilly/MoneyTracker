@@ -6,7 +6,7 @@ import { Disclaimer, Group, Hairline, Overlay, Row, ScreenHeader } from "@/compo
 import { CurrencySelect } from "@/components/currency-field";
 import { CategoryPicker } from "@/components/category-picker";
 import { pickName } from "@/lib/i18n";
-import { decryptSnapshot, downloadBlob, encryptSnapshot } from "@/lib/backup";
+import { downloadBlob, encryptSnapshot } from "@/lib/backup";
 import {
   backupModifiedAt,
   downloadBackup,
@@ -17,7 +17,7 @@ import {
   takeRedirectToken,
   uploadBackup,
 } from "@/lib/google-drive";
-import { lastDriveSyncAt, localEditedAt, markDailyDriveSync, markLocalEdit } from "@/lib/drive-sync";
+import { lastDriveSyncAt, localEditedAt, markDailyDriveSync, markLocalEdit, readDrivePass, writeDrivePass, encodeDriveBody, decodeDriveBody } from "@/lib/drive-sync";
 import { pickSyncSide } from "@/lib/sync-side";
 import { transactionsToCsv } from "@/lib/derived";
 import { convertBtp, isAppSnapshot, isBtpFile } from "@/lib/import-btp";
@@ -292,39 +292,45 @@ export function BackupPage() {
   const exportSnap = useApp((s) => s.exportSnapshot);
   const replaceAll = useApp((s) => s.replaceAll);
   const txs = useApp((s) => s.transactions);
-  const [password, setPassword] = useState("");
+  const [password, setPassword] = useState(readDrivePass());
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  async function payloadForDrive() {
-    const raw = JSON.stringify(exportSnap());
-    if (password) return encryptSnapshot(raw, password);
-    return raw;
+  function setPass(next: string) {
+    setPassword(next);
+    writeDrivePass(next.trim());
   }
 
   async function importPayload(text: string, quiet = false) {
-    let json = text;
+    const pass = password.trim() || readDrivePass();
+    let snap: AppSnapshot;
     try {
-      const parsed = JSON.parse(text) as { data?: string; salt?: string };
-      if (parsed.salt && parsed.data) {
-        if (!password) {
-          toast(t.backup.needPassword);
-          return;
-        }
-        json = await decryptSnapshot(text, password);
+      snap = await decodeDriveBody(text, pass);
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (msg === "pass") {
+        toast(t.backup.needPassword);
+        return;
       }
-    } catch {
-      /* plain snapshot */
+      if (msg === "bad-pass") {
+        toast(t.backup.badPassword);
+        return;
+      }
+      throw err;
     }
-    const snap = JSON.parse(json) as AppSnapshot;
-    if (!isAppSnapshot(snap)) throw new Error("format");
     await replaceAll(snap);
     if (!quiet) toast(t.backup.restored);
   }
 
   async function runDrive(action: "save" | "restore" | "sync", token: string) {
+    const pass = password.trim() || readDrivePass();
+    if (!pass) {
+      toast(t.backup.driveNeedPass);
+      return;
+    }
+    writeDrivePass(pass);
     if (action === "save") {
-      await uploadBackup(token, await payloadForDrive());
+      await uploadBackup(token, await encodeDriveBody(exportSnap(), pass));
       markLocalEdit();
       markDailyDriveSync();
       toast(t.backup.driveSaved);
@@ -348,7 +354,7 @@ export function BackupPage() {
       return;
     }
     if (side === "push" || !remoteIso) {
-      await uploadBackup(token, JSON.stringify(exportSnap()));
+      await uploadBackup(token, await encodeDriveBody(exportSnap(), pass));
       markLocalEdit();
     }
     markDailyDriveSync();
@@ -389,6 +395,11 @@ export function BackupPage() {
       toast(t.backup.driveNeedClient);
       return;
     }
+    if (!(password.trim() || readDrivePass())) {
+      toast(t.backup.driveNeedPass);
+      return;
+    }
+    writeDrivePass(password.trim() || readDrivePass());
     setBusy(true);
     try {
       const token = await getAccessToken();
@@ -420,6 +431,15 @@ export function BackupPage() {
       <h2 className="px-5 pb-2 text-sm font-medium text-muted">{t.backup.drive}</h2>
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.backup.driveHint}</p>
       <div className="px-5 space-y-3">
+        <input
+          value={password}
+          onChange={(e) => setPass(e.target.value)}
+          type="password"
+          autoComplete="off"
+          className="h-11 w-full rounded-lg bg-elevated px-3 text-sm"
+          placeholder={t.backup.password}
+        />
+        <p className="text-xs leading-5 text-muted">{t.backup.drivePassHint}</p>
         <button
           type="button"
           disabled={busy}
@@ -453,7 +473,7 @@ export function BackupPage() {
         <button type="button" className="h-11 w-full rounded-xl bg-elevated text-sm" onClick={() => downloadBlob("hk-life-money.csv", transactionsToCsv(txs), "text/csv")}>
           {t.backup.exportCsv}
         </button>
-        <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" className="h-11 w-full rounded-lg bg-elevated px-3" placeholder={t.backup.password} />
+        <input value={password} onChange={(e) => setPass(e.target.value)} type="password" autoComplete="off" className="h-11 w-full rounded-lg bg-elevated px-3" placeholder={t.backup.password} />
         <button
           type="button"
           className="h-11 w-full rounded-xl bg-elevated text-sm"
@@ -479,13 +499,10 @@ export function BackupPage() {
           onChange={async (e) => {
             const file = e.target.files?.[0];
             e.target.value = "";
-            if (!file || !password) {
-              toast(t.backup.needPassword);
-              return;
-            }
+            if (!file) return;
             try {
-              const json = await decryptSnapshot(await file.text(), password);
-              await replaceAll(JSON.parse(json) as AppSnapshot);
+              const snap = await decodeDriveBody(await file.text(), password.trim() || readDrivePass());
+              await replaceAll(snap);
               toast(t.backup.restored);
             } catch {
               toast(t.backup.badPassword);
