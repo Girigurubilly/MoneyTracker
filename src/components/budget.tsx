@@ -56,6 +56,8 @@ export function BudgetScreen() {
   const realized = storedTotal?.realized ?? 0;
   const projected = storedTotal?.projected ?? 0;
   const projectedRemain = storedTotal?.projectedRemain ?? 0;
+  const avgDaily = storedTotal?.avgDaily ?? 0;
+  const dailyAllowed = storedTotal?.dailyAllowed ?? 0;
   const daysRemaining = storedTotal?.daysRemaining ?? 0;
   const monthCap = storedTotal?.monthly ?? 0;
   const monthUsed = storedTotal?.expected ?? monthSpent + reserved + (targetMode === "regular" ? 0 : reservedA) + projectedRemain;
@@ -125,6 +127,16 @@ export function BudgetScreen() {
           <span className="ml-1 text-xs font-normal text-muted">
             {daysRemaining > 0 ? ` · ${daysRemaining} ${t.budget.daysLeft}` : ` · ${t.budget.lastDay}`}
           </span>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="rounded-xl bg-accent-soft px-3 py-3">
+            <div className="text-[11px] font-medium leading-4 text-accent">{t.budget.dailyAllowed}</div>
+            <div className="mt-1 text-xl font-semibold tabular-nums text-accent">{money(dailyAllowed, "HKD")}</div>
+          </div>
+          <div className="rounded-xl px-3 py-3 ring-1 ring-line">
+            <div className="text-[11px] font-medium leading-4 text-muted">{t.budget.avgDaily}</div>
+            <div className="mt-1 text-xl font-semibold tabular-nums">{money(avgDaily, "HKD")}</div>
+          </div>
         </div>
         {monthCap > 0 ? (
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ring-track">
