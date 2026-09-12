@@ -212,11 +212,15 @@ export function applyHoldingBalances(accounts: Account[], holdings: Holding[], r
 }
 
 export function sortHoldings<T extends { name: string; symbol: string }>(rows: T[]): T[] {
-  return [...rows].sort((a, b) => {
-    const an = (a.name || a.symbol).trim();
-    const bn = (b.name || b.symbol).trim();
-    const byName = an.localeCompare(bn, "zh-Hant", { sensitivity: "base", numeric: true });
-    if (byName) return byName;
-    return a.symbol.localeCompare(b.symbol, "en", { numeric: true });
-  });
+  return sortHoldingsBySymbol(rows, "asc");
+}
+
+export function sortHoldingsBySymbol<T extends { symbol: string }>(rows: T[], dir: "asc" | "desc"): T[] {
+  const m = dir === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => m * a.symbol.localeCompare(b.symbol, "en", { numeric: true }));
+}
+
+export function holdingTitle(h: { market: string; name: string; symbol: string }): string {
+  if (h.market === "us") return h.symbol;
+  return h.name && h.name !== h.symbol ? h.name : h.symbol;
 }

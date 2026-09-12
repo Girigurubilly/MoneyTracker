@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { Area, AreaChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { Hairline, InfoButton, ProgressRing, ScreenHeader, SectionLabel, StatusChip } from "@/components/shared";
 import { money, todayISO } from "@/lib/format";
@@ -127,6 +128,7 @@ export function RetirementPage() {
   const surplus = sustain - base.targetMonthly;
   const status = retirementStatus(result.depletes, sustain, base.targetMonthly, result.series);
   const [chartPoint, setChartPoint] = useState<{ age: number; corpus: number } | null>(null);
+  const [showSetup, setShowSetup] = useState(false);
 
   function persist(patch: Partial<RetirementInputs>) {
     void update({ ...base, ...patch, id: ret?.id ?? "base" });
@@ -251,6 +253,11 @@ export function RetirementPage() {
           <StatusChip status={status} />
         </div>
         {!fire.reachable ? <p className="mt-2 text-xs text-muted">{t.reports.fireUnreachable}</p> : null}
+        {holdings.length ? (
+          <p className="mt-2 text-xs text-muted">
+            {t.prices.heldCount.replace("{n}", String(holdings.length))} · {money(pack.invest, "HKD")}
+          </p>
+        ) : null}
       </div>
 
       <SectionLabel>{t.reports.assetsByAge}</SectionLabel>
@@ -295,6 +302,17 @@ export function RetirementPage() {
         </p>
       </div>
 
+      <button
+        type="button"
+        className="mx-4 mb-3 flex h-11 items-center justify-center gap-1 rounded-xl bg-elevated text-sm font-medium"
+        onClick={() => setShowSetup((v) => !v)}
+      >
+        {showSetup ? t.reports.hideAssumptions : t.reports.showAssumptions}
+        <ChevronDown className={cn("size-4 transition", showSetup && "rotate-180")} />
+      </button>
+
+      {showSetup ? (
+        <>
       <SectionLabel>{t.reports.timeline}</SectionLabel>
       <div className="mx-4 overflow-hidden rounded-2xl bg-elevated">
         <div className="flex items-center justify-between gap-3 px-4 py-3.5">
@@ -376,7 +394,7 @@ export function RetirementPage() {
       />
       <SleeveReturns
         title={t.reports.investAccounts}
-        rows={pack.sleeves.filter((s) => s.kind === "invest")}
+        rows={pack.sleeves.filter((s) => s.kind === "invest" && !s.id.startsWith("hold-"))}
         onSave={(id, annualReturn) => {
           const acc = accounts.find((a) => a.id === id);
           if (acc) void updateAccount({ ...acc, expectedReturn: annualReturn });
@@ -388,6 +406,8 @@ export function RetirementPage() {
       />
 
       <AllowanceSection />
+        </>
+      ) : null}
 
       <p className="px-5 py-4 text-xs leading-relaxed text-faint">{t.reports.disclaimer}</p>
     </div>

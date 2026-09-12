@@ -40,36 +40,42 @@ export function MoreScreen() {
   return (
     <div className="pb-10">
       <ScreenHeader title={t.more.title} large />
-      <h2 className="px-5 pb-1 text-sm font-medium text-muted">{t.more.setup}</h2>
-      <Group>
-        <Row icon={<SlidersHorizontal className="size-4" />} title={t.more.prefs} to="/more/setup" chevron />
-        <Hairline />
-        {kid ? null : (
-          <>
-            <Row icon={<FolderTree className="size-4" />} title={t.more.categories} to="/more/categories" chevron />
-            <Hairline />
-          </>
-        )}
-        <Row icon={<Wallet className="size-4" />} title={t.more.budgets} to="/budget" chevron />
-        {kid ? null : (
-          <>
+      {kid ? null : (
+        <>
+          <h2 className="px-5 pb-1 text-sm font-medium text-muted">{t.more.money}</h2>
+          <Group>
+            <Row icon={<Wallet className="size-4" />} title={t.more.budgets} to="/budget" chevron />
             <Hairline />
             <Row icon={<ShoppingBag className="size-4" />} title={t.more.wishlist} to="/more/wishlist" chevron />
-          </>
-        )}
-        {kid ? null : (
-          <>
-            <Hairline />
-            <Row icon={<PiggyBank className="size-4" />} title={t.more.deposits} to="/reports/deposits" chevron />
             <Hairline />
             <Row icon={<TrendingUp className="size-4" />} title={t.more.holdings} to="/more/holdings" chevron />
             <Hairline />
+            <Row icon={<PiggyBank className="size-4" />} title={t.more.deposits} to="/reports/deposits" chevron />
+            <Hairline />
             <Row icon={<Globe className="size-4" />} title={t.more.fx} to="/more/fx" chevron />
+          </Group>
+        </>
+      )}
+      <h2 className="px-5 pb-1 pt-6 text-sm font-medium text-muted">{t.more.setup}</h2>
+      <Group>
+        <Row icon={<SlidersHorizontal className="size-4" />} title={t.more.prefs} to="/more/setup" chevron />
+        {kid ? null : (
+          <>
+            <Hairline />
+            <Row icon={<FolderTree className="size-4" />} title={t.more.categories} to="/more/categories" chevron />
           </>
         )}
         <Hairline />
         <Row icon={<Palette className="size-4" />} title={t.more.appearance} to="/more/appearance" chevron />
       </Group>
+      {kid ? (
+        <>
+          <h2 className="px-5 pb-1 pt-6 text-sm font-medium text-muted">{t.more.money}</h2>
+          <Group>
+            <Row icon={<Wallet className="size-4" />} title={t.more.budgets} to="/budget" chevron />
+          </Group>
+        </>
+      ) : null}
       <h2 className="px-5 pb-1 pt-6 text-sm font-medium text-muted">{t.more.quickFix}</h2>
       <Group>
         <UndoLastRow />

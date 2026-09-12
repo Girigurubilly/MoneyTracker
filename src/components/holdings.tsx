@@ -1,11 +1,11 @@
 import { useRef, useState } from "react";
-import { RefreshCw, Trash2, Upload } from "lucide-react";
+import { ArrowDownAZ, ArrowUpAZ, Pencil, RefreshCw, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { Group, Hairline, ScreenHeader } from "@/components/shared";
+import { Group, Hairline, Overlay, ScreenHeader } from "@/components/shared";
 import { money } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
-import { holdingMarketValue, sortHoldings } from "@/lib/holdings";
-import type { Holding, HoldingMarket } from "@/lib/types";
+import { holdingMarketValue, holdingTitle, normalizeSymbol, sortHoldingsBySymbol } from "@/lib/holdings";
+import type { Currency, Holding, HoldingMarket } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 import { cn } from "@/lib/utils";
@@ -15,17 +15,17 @@ export function HoldingsPage() {
   const locale = useUi((s) => s.locale);
   const holdings = useApp((s) => s.holdings);
   const accounts = useApp((s) => s.accounts);
-  const rates = useApp((s) => s.fxRates);
   const importText = useApp((s) => s.importHoldingsText);
   const refresh = useApp((s) => s.refreshHoldingPrices);
   const upsert = useApp((s) => s.upsertHolding);
-  const remove = useApp((s) => s.deleteHolding);
   const fileRef = useRef<HTMLInputElement>(null);
   const [accountId, setAccountId] = useState("");
   const [busy, setBusy] = useState(false);
   const [symbol, setSymbol] = useState("");
   const [qty, setQty] = useState("");
   const [market, setMarket] = useState<HoldingMarket>("hk");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [editing, setEditing] = useState<Holding | "new" | null>(null);
   const invest = accounts.filter((a) => a.type === "investment" && !a.hidden);
 
   async function onFile(file: File) {
@@ -43,12 +43,24 @@ export function HoldingsPage() {
     }
   }
 
-  const hk = sortHoldings(holdings.filter((h) => h.market === "hk"));
-  const us = sortHoldings(holdings.filter((h) => h.market === "us"));
+  const hk = sortHoldingsBySymbol(holdings.filter((h) => h.market === "hk"), sortDir);
+  const us = sortHoldingsBySymbol(holdings.filter((h) => h.market === "us"), sortDir);
 
   return (
     <div className="pb-10">
-      <ScreenHeader title={t.holdings.title} />
+      <ScreenHeader
+        title={t.holdings.title}
+        right={
+          <button
+            type="button"
+            className="flex items-center gap-1 px-2 text-xs font-medium text-accent"
+            onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+          >
+            {sortDir === "asc" ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />}
+            {t.holdings.sortCode}
+          </button>
+        }
+      />
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.holdings.hint}</p>
       <div className="px-5 space-y-3">
         <label className="block text-xs text-muted">{t.holdings.targetAccount}</label>
@@ -124,7 +136,7 @@ export function HoldingsPage() {
             }
             const row: Holding = {
               id: newId(),
-              symbol: market === "hk" ? s.replace(/\D/g, "").replace(/^0+/, "").padStart(4, "0") : s,
+              symbol: normalizeSymbol(market, s),
               name: s,
               market,
               source: "manual",
@@ -142,9 +154,10 @@ export function HoldingsPage() {
         </button>
       </div>
 
-      <Book title={t.holdings.hk} rows={hk} invest={invest} />
-      <Book title={t.holdings.us} rows={us} invest={invest} />
+      <Book title={t.holdings.hk} rows={hk} invest={invest} onEdit={setEditing} />
+      <Book title={t.holdings.us} rows={us} invest={invest} onEdit={setEditing} usTicker />
       {!holdings.length ? <p className="px-5 py-6 text-sm text-muted">{t.holdings.empty}</p> : null}
+      {editing && editing !== "new" ? <HoldingEditor holding={editing} invest={invest} onClose={() => setEditing(null)} /> : null}
     </div>
   );
 }
@@ -153,10 +166,14 @@ function Book({
   title,
   rows,
   invest,
+  onEdit,
+  usTicker,
 }: {
   title: string;
   rows: Holding[];
   invest: { id: string; name: string; nameZh: string }[];
+  onEdit: (h: Holding) => void;
+  usTicker?: boolean;
 }) {
   const t = useT();
   const locale = useUi((s) => s.locale);
@@ -177,17 +194,16 @@ function Book({
             {i > 0 ? <Hairline /> : null}
             <div className="px-4 py-3">
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="text-sm font-medium">
-                    {h.name && h.name !== h.symbol ? h.name : h.symbol}
-                  </div>
+                <button type="button" className="min-w-0 flex-1 text-left" onClick={() => onEdit(h)}>
+                  <div className="text-sm font-medium">{usTicker ? h.symbol : holdingTitle(h)}</div>
                   <div className="mt-0.5 text-xs tabular-nums text-muted">
-                    {h.symbol}
-                    {h.name && h.name !== h.symbol ? "" : ""}
-                    {" · "}
+                    {usTicker ? "" : `${h.symbol} · `}
                     {h.quantity} × {h.lastPrice ? money(h.lastPrice, h.currency) : "—"} = {money(h.quantity * (h.lastPrice || 0), h.currency)}
                   </div>
-                </div>
+                </button>
+                <button type="button" className="grid size-9 place-items-center text-muted" onClick={() => onEdit(h)} aria-label={t.common.edit}>
+                  <Pencil className="size-4" />
+                </button>
                 <button type="button" className="grid size-9 place-items-center text-muted" onClick={() => void remove(h.id)} aria-label={t.holdings.remove}>
                   <Trash2 className="size-4" />
                 </button>
@@ -211,5 +227,83 @@ function Book({
         ))}
       </Group>
     </div>
+  );
+}
+
+function HoldingEditor({
+  holding,
+  invest,
+  onClose,
+}: {
+  holding: Holding;
+  invest: { id: string; name: string; nameZh: string }[];
+  onClose: () => void;
+}) {
+  const t = useT();
+  const locale = useUi((s) => s.locale);
+  const upsert = useApp((s) => s.upsertHolding);
+  const [market, setMarket] = useState<HoldingMarket>(holding.market);
+  const [symbol, setSymbol] = useState(holding.symbol);
+  const [name, setName] = useState(holding.name);
+  const [qty, setQty] = useState(String(holding.quantity));
+  const [price, setPrice] = useState(holding.lastPrice ? String(holding.lastPrice) : "");
+  const [accountId, setAccountId] = useState(holding.accountId ?? "");
+
+  function save() {
+    const quantity = Number(qty.replace(/,/g, ""));
+    const lastPrice = Number(price.replace(/,/g, "")) || 0;
+    if (!symbol.trim() || !Number.isFinite(quantity) || quantity === 0) {
+      toast(t.holdings.needFields);
+      return;
+    }
+    const next: Holding = {
+      ...holding,
+      market,
+      symbol: normalizeSymbol(market, symbol),
+      name: market === "us" ? normalizeSymbol(market, symbol) : name.trim() || symbol.trim(),
+      quantity,
+      lastPrice,
+      currency: (market === "hk" ? "HKD" : "USD") as Currency,
+      accountId: accountId || undefined,
+      lastPriceAt: lastPrice ? new Date().toISOString() : holding.lastPriceAt,
+    };
+    void upsert(next);
+    onClose();
+  }
+
+  return (
+    <Overlay open onClose={onClose} variant="page" title={t.holdings.edit}>
+      <div className="space-y-3 px-5 pt-4">
+        <label className="block text-xs text-muted">{t.holdings.market}</label>
+        <select value={market} onChange={(e) => setMarket(e.target.value as HoldingMarket)} className="h-11 w-full rounded-xl bg-elevated px-3 text-sm">
+          <option value="hk">{t.holdings.hk}</option>
+          <option value="us">{t.holdings.us}</option>
+        </select>
+        <label className="block text-xs text-muted">{t.holdings.symbol}</label>
+        <input value={symbol} onChange={(e) => setSymbol(e.target.value)} className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
+        {market === "hk" ? (
+          <>
+            <label className="block text-xs text-muted">{t.holdings.stockName}</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
+          </>
+        ) : null}
+        <label className="block text-xs text-muted">{t.holdings.qty}</label>
+        <input value={qty} onChange={(e) => setQty(e.target.value)} inputMode="decimal" className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
+        <label className="block text-xs text-muted">{t.holdings.price}</label>
+        <input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
+        <label className="block text-xs text-muted">{t.holdings.targetAccount}</label>
+        <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="h-11 w-full rounded-xl bg-elevated px-3 text-sm">
+          <option value="">{t.holdings.noAccount}</option>
+          {invest.map((a) => (
+            <option key={a.id} value={a.id}>
+              {pickName(locale, a.name, a.nameZh)}
+            </option>
+          ))}
+        </select>
+        <button type="button" className="h-12 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={save}>
+          {t.common.done}
+        </button>
+      </div>
+    </Overlay>
   );
 }

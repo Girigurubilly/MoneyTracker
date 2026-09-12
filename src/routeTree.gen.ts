@@ -34,6 +34,7 @@ import { Route as ReportsDashboardRouteImport } from './routes/reports.dashboard
 import { Route as ReportsDepositsRouteImport } from './routes/reports.deposits'
 import { Route as ReportsHistoryRouteImport } from './routes/reports.history'
 import { Route as ReportsLivingRouteImport } from './routes/reports.living'
+import { Route as ReportsPricesRouteImport } from './routes/reports.prices'
 import { Route as ReportsRetirementRouteImport } from './routes/reports.retirement'
 import { Route as ReportsSpendingRouteImport } from './routes/reports.spending'
 import { Route as ReportsTravelRouteImport } from './routes/reports.travel'
@@ -168,6 +169,11 @@ const ReportsLivingRoute = ReportsLivingRouteImport.update({
   path: '/living',
   getParentRoute: () => ReportsRoute,
 } as any)
+const ReportsPricesRoute = ReportsPricesRouteImport.update({
+  id: '/prices',
+  path: '/prices',
+  getParentRoute: () => ReportsRoute,
+} as any)
 const ReportsRetirementRoute = ReportsRetirementRouteImport.update({
   id: '/retirement',
   path: '/retirement',
@@ -233,6 +239,7 @@ export interface FileRoutesByFullPath {
   '/reports/deposits': typeof ReportsDepositsRoute
   '/reports/history': typeof ReportsHistoryRoute
   '/reports/living': typeof ReportsLivingRoute
+  '/reports/prices': typeof ReportsPricesRoute
   '/reports/retirement': typeof ReportsRetirementRoute
   '/reports/spending': typeof ReportsSpendingRoute
   '/reports/travel': typeof ReportsTravelRouteWithChildren
@@ -266,6 +273,7 @@ export interface FileRoutesByTo {
   '/reports/deposits': typeof ReportsDepositsRoute
   '/reports/history': typeof ReportsHistoryRoute
   '/reports/living': typeof ReportsLivingRoute
+  '/reports/prices': typeof ReportsPricesRoute
   '/reports/retirement': typeof ReportsRetirementRoute
   '/reports/spending': typeof ReportsSpendingRoute
   '/reports/trends': typeof ReportsTrendsRoute
@@ -301,6 +309,7 @@ export interface FileRoutesById {
   '/reports/deposits': typeof ReportsDepositsRoute
   '/reports/history': typeof ReportsHistoryRoute
   '/reports/living': typeof ReportsLivingRoute
+  '/reports/prices': typeof ReportsPricesRoute
   '/reports/retirement': typeof ReportsRetirementRoute
   '/reports/spending': typeof ReportsSpendingRoute
   '/reports/travel': typeof ReportsTravelRouteWithChildren
@@ -338,6 +347,7 @@ export interface FileRouteTypes {
     | '/reports/deposits'
     | '/reports/history'
     | '/reports/living'
+    | '/reports/prices'
     | '/reports/retirement'
     | '/reports/spending'
     | '/reports/travel'
@@ -371,6 +381,7 @@ export interface FileRouteTypes {
     | '/reports/deposits'
     | '/reports/history'
     | '/reports/living'
+    | '/reports/prices'
     | '/reports/retirement'
     | '/reports/spending'
     | '/reports/trends'
@@ -405,6 +416,7 @@ export interface FileRouteTypes {
     | '/reports/deposits'
     | '/reports/history'
     | '/reports/living'
+    | '/reports/prices'
     | '/reports/retirement'
     | '/reports/spending'
     | '/reports/travel'
@@ -603,6 +615,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReportsLivingRouteImport
       parentRoute: typeof ReportsRoute
     }
+    '/reports/prices': {
+      id: '/reports/prices'
+      path: '/prices'
+      fullPath: '/reports/prices'
+      preLoaderRoute: typeof ReportsPricesRouteImport
+      parentRoute: typeof ReportsRoute
+    }
     '/reports/retirement': {
       id: '/reports/retirement'
       path: '/retirement'
@@ -714,6 +733,7 @@ interface ReportsRouteChildren {
   ReportsDepositsRoute: typeof ReportsDepositsRoute
   ReportsHistoryRoute: typeof ReportsHistoryRoute
   ReportsLivingRoute: typeof ReportsLivingRoute
+  ReportsPricesRoute: typeof ReportsPricesRoute
   ReportsRetirementRoute: typeof ReportsRetirementRoute
   ReportsSpendingRoute: typeof ReportsSpendingRoute
   ReportsTravelRoute: typeof ReportsTravelRouteWithChildren
@@ -731,6 +751,7 @@ const ReportsRouteChildren: ReportsRouteChildren = {
   ReportsDepositsRoute: ReportsDepositsRoute,
   ReportsHistoryRoute: ReportsHistoryRoute,
   ReportsLivingRoute: ReportsLivingRoute,
+  ReportsPricesRoute: ReportsPricesRoute,
   ReportsRetirementRoute: ReportsRetirementRoute,
   ReportsSpendingRoute: ReportsSpendingRoute,
   ReportsTravelRoute: ReportsTravelRouteWithChildren,
