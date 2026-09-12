@@ -7,6 +7,7 @@ const FOLDER_ID_KEY = "hk-life-money-drive-folder-id";
 const ACTION_KEY = "hk-life-money-drive-action";
 const TOKEN_KEY = "hk-life-money-drive-token";
 const TOKEN_EXP_KEY = "hk-life-money-drive-token-exp";
+const GRANTED_KEY = "hk-life-money-drive-granted";
 
 export type DriveAction = "save" | "restore" | "sync";
 
@@ -41,6 +42,10 @@ export function redirectUri(): string {
   return `${window.location.origin}${window.location.pathname}`;
 }
 
+function hasGranted(): boolean {
+  return readStored(GRANTED_KEY) === "1";
+}
+
 /** Send the user to Google Sign-In, then back to this page with a token. */
 export function startGoogleSignIn(action: DriveAction): void {
   const clientId = readGoogleClientId();
@@ -52,8 +57,10 @@ export function startGoogleSignIn(action: DriveAction): void {
     response_type: "token",
     scope: SCOPE,
     include_granted_scopes: "true",
-    prompt: "select_account consent",
   });
+  // After the first grant, skip the account/consent screens so Google can
+  // bounce back with a token. First-time users still see consent once.
+  if (!hasGranted()) params.set("prompt", "select_account consent");
   window.location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
 }
 
@@ -81,8 +88,23 @@ export function takeRedirectToken(): string | null {
 
 export function rememberAccessToken(token: string, expiresIn = 3500) {
   try {
+    const exp = String(Date.now() + Math.max(60, expiresIn - 60) * 1000);
+    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(TOKEN_EXP_KEY, exp);
+    localStorage.setItem(GRANTED_KEY, "1");
     sessionStorage.setItem(TOKEN_KEY, token);
-    sessionStorage.setItem(TOKEN_EXP_KEY, String(Date.now() + Math.max(60, expiresIn - 60) * 1000));
+    sessionStorage.setItem(TOKEN_EXP_KEY, exp);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearAccessToken() {
+  writeStored(TOKEN_KEY, "");
+  writeStored(TOKEN_EXP_KEY, "");
+  try {
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(TOKEN_EXP_KEY);
   } catch {
     /* ignore */
   }
@@ -90,8 +112,8 @@ export function rememberAccessToken(token: string, expiresIn = 3500) {
 
 export function storedAccessToken(): string | null {
   try {
-    const token = sessionStorage.getItem(TOKEN_KEY);
-    const exp = Number(sessionStorage.getItem(TOKEN_EXP_KEY) ?? "0");
+    const token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
+    const exp = Number(localStorage.getItem(TOKEN_EXP_KEY) || sessionStorage.getItem(TOKEN_EXP_KEY) || "0");
     if (!token || Date.now() > exp) return null;
     return token;
   } catch {
@@ -126,7 +148,7 @@ export async function requestSilentToken(): Promise<string | null> {
   const existing = storedAccessToken();
   if (existing) return existing;
   const clientId = readGoogleClientId();
-  if (!clientId) return null;
+  if (!clientId || !hasGranted()) return null;
   try {
     await loadGis();
   } catch {
@@ -141,10 +163,11 @@ export async function requestSilentToken(): Promise<string | null> {
       done = true;
       resolve(token);
     };
-    const timer = window.setTimeout(() => finish(null), 8000);
+    const timer = window.setTimeout(() => finish(null), 6000);
     const client = oauth.initTokenClient({
       client_id: clientId,
       scope: SCOPE,
+      hint: "",
       callback: (resp: { access_token?: string; expires_in?: number }) => {
         window.clearTimeout(timer);
         if (resp.access_token) {
@@ -168,6 +191,11 @@ export async function requestSilentToken(): Promise<string | null> {
   });
 }
 
+/** Stored token, silent GIS, or null — never opens Google unless the caller redirects. */
+export async function getAccessToken(): Promise<string | null> {
+  return storedAccessToken() ?? (await requestSilentToken());
+}
+
 declare global {
   interface Window {
     google?: {
@@ -188,6 +216,11 @@ async function driveFetch(url: string, token: string, init?: RequestInit) {
       ...(init?.headers ?? {}),
     },
   });
+  if (res.status === 401) {
+    clearAccessToken();
+    throw new Error("auth");
+  }
+  if (res.status === 404) throw new Error("missing");
   if (!res.ok) throw new Error(`drive ${res.status}`);
   return res;
 }
@@ -224,12 +257,26 @@ export async function findBackupFileId(token: string): Promise<string> {
   return id;
 }
 
-export async function uploadBackup(token: string, body: string): Promise<void> {
-  const folder = await ensureFolder(token);
-  const existing = await findBackupFileId(token);
+export async function backupModifiedAt(token: string): Promise<string | undefined> {
+  const id = await findBackupFileId(token);
+  if (!id) return undefined;
+  try {
+    const res = await driveFetch(`https://www.googleapis.com/drive/v3/files/${id}?fields=modifiedTime`, token);
+    const data = (await res.json()) as { modifiedTime?: string };
+    return data.modifiedTime;
+  } catch (err) {
+    if ((err as Error).message === "missing") {
+      writeStored(FILE_ID_KEY, "");
+      return undefined;
+    }
+    throw err;
+  }
+}
+
+async function uploadTo(token: string, body: string, existing: string, folder: string | undefined) {
   const meta = existing
     ? { name: FILE_NAME, mimeType: "application/json" }
-    : { name: FILE_NAME, mimeType: "application/json", parents: [folder] };
+    : { name: FILE_NAME, mimeType: "application/json", parents: folder ? [folder] : undefined };
   const form = new FormData();
   form.append("metadata", new Blob([JSON.stringify(meta)], { type: "application/json" }));
   form.append("file", new Blob([body], { type: "application/json" }));
@@ -241,6 +288,11 @@ export async function uploadBackup(token: string, body: string): Promise<void> {
     headers: { Authorization: `Bearer ${token}` },
     body: form,
   });
+  if (res.status === 401) {
+    clearAccessToken();
+    throw new Error("auth");
+  }
+  if (res.status === 404) throw new Error("missing");
   if (!res.ok) throw new Error(`drive ${res.status}`);
   if (!existing) {
     const created = (await res.json()) as { id?: string };
@@ -248,9 +300,30 @@ export async function uploadBackup(token: string, body: string): Promise<void> {
   }
 }
 
+export async function uploadBackup(token: string, body: string): Promise<void> {
+  const existing = readStored(FILE_ID_KEY);
+  if (existing) {
+    try {
+      await uploadTo(token, body, existing, undefined);
+      return;
+    } catch (err) {
+      if ((err as Error).message !== "missing") throw err;
+      writeStored(FILE_ID_KEY, "");
+    }
+  }
+  const folder = await ensureFolder(token);
+  const found = await findBackupFileId(token);
+  await uploadTo(token, body, found, found ? undefined : folder);
+}
+
 export async function downloadBackup(token: string): Promise<string> {
   const id = await findBackupFileId(token);
   if (!id) throw new Error("missing");
-  const res = await driveFetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`, token);
-  return res.text();
+  try {
+    const res = await driveFetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`, token);
+    return res.text();
+  } catch (err) {
+    if ((err as Error).message === "missing") writeStored(FILE_ID_KEY, "");
+    throw err;
+  }
 }

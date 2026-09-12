@@ -12,6 +12,7 @@ import { AddFlow } from "@/components/add-sheet";
 import { SearchFlow } from "@/components/search-sheet";
 import { TxDetail } from "@/components/tx-detail";
 import { assetUrl } from "@/lib/base";
+import { markLocalEdit } from "@/lib/drive-sync";
 
 export function AppGate({ children }: { children: ReactNode }) {
   const ready = useApp((s) => s.ready);
@@ -52,9 +53,28 @@ export function AppGate({ children }: { children: ReactNode }) {
       <SearchFlow />
       <TxDetail />
       <InfoDialog />
+      <LocalEditMark />
       <Toaster theme={isDarkTheme(theme) ? "dark" : "light"} position="top-center" richColors={false} />
     </div>
   );
+}
+
+function LocalEditMark() {
+  useEffect(() => {
+    let skip = true;
+    const unsub = useApp.subscribe(() => {
+      if (skip) return;
+      markLocalEdit();
+    });
+    const timer = window.setTimeout(() => {
+      skip = false;
+    }, 800);
+    return () => {
+      unsub();
+      window.clearTimeout(timer);
+    };
+  }, []);
+  return null;
 }
 
 function Nav() {

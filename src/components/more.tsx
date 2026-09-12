@@ -8,13 +8,17 @@ import { CategoryPicker } from "@/components/category-picker";
 import { pickName } from "@/lib/i18n";
 import { decryptSnapshot, downloadBlob, encryptSnapshot } from "@/lib/backup";
 import {
+  backupModifiedAt,
   downloadBackup,
+  getAccessToken,
   readGoogleClientId,
   startGoogleSignIn,
   takePendingDriveAction,
   takeRedirectToken,
   uploadBackup,
 } from "@/lib/google-drive";
+import { lastDriveSyncAt, localEditedAt, markLocalEdit } from "@/lib/drive-sync";
+import { pickSyncSide } from "@/lib/sync-side";
 import { transactionsToCsv } from "@/lib/derived";
 import { convertBtp, isAppSnapshot, isBtpFile } from "@/lib/import-btp";
 import { CURRENCIES, type BudgetTargetMode } from "@/lib/types";
@@ -290,7 +294,7 @@ export function BackupPage() {
     return raw;
   }
 
-  async function importPayload(text: string) {
+  async function importPayload(text: string, quiet = false) {
     let json = text;
     try {
       const parsed = JSON.parse(text) as { data?: string; salt?: string };
@@ -307,49 +311,35 @@ export function BackupPage() {
     const snap = JSON.parse(json) as AppSnapshot;
     if (!isAppSnapshot(snap)) throw new Error("format");
     await replaceAll(snap);
-    toast(t.backup.restored);
+    if (!quiet) toast(t.backup.restored);
   }
 
   async function runDrive(action: "save" | "restore" | "sync", token: string) {
     if (action === "save") {
       await uploadBackup(token, await payloadForDrive());
+      markLocalEdit();
       toast(t.backup.driveSaved);
       return;
     }
     if (action === "restore") {
       const text = await downloadBackup(token);
       await importPayload(text);
+      markLocalEdit();
       return;
     }
-    const local = exportSnap();
-    try {
+    const remoteIso = await backupModifiedAt(token);
+    const side = pickSyncSide(localEditedAt() || lastDriveSyncAt(), remoteIso);
+    if (side === "pull" && remoteIso) {
       const text = await downloadBackup(token);
-      let json = text;
-      try {
-        const parsed = JSON.parse(text) as { data?: string; salt?: string };
-        if (parsed.salt && parsed.data) {
-          if (!password) {
-            toast(t.backup.needPassword);
-            return;
-          }
-          json = await decryptSnapshot(text, password);
-        }
-      } catch {
-        /* plain */
-      }
-      const remote = JSON.parse(json) as AppSnapshot;
-      if (!isAppSnapshot(remote)) throw new Error("format");
-      const remoteAt = Date.parse(remote.exportedAt || "") || 0;
-      const localAt = Date.parse(local.exportedAt || "") || 0;
-      if (remoteAt > localAt) {
-        await replaceAll(remote);
-        toast(t.backup.synced);
-        return;
-      }
-    } catch (err) {
-      if ((err as Error).message !== "missing") throw err;
+      await importPayload(text, true);
+      markLocalEdit();
+      toast(t.backup.synced);
+      return;
     }
-    await uploadBackup(token, JSON.stringify(local));
+    if (side === "push" || !remoteIso) {
+      await uploadBackup(token, JSON.stringify(exportSnap()));
+      markLocalEdit();
+    }
     toast(t.backup.synced);
   }
 
@@ -369,22 +359,46 @@ export function BackupPage() {
       .catch((err) => {
         const msg = (err as Error).message;
         if (msg === "missing") toast(t.backup.driveMissing);
-        else toast(t.backup.driveFail);
+        else if (msg === "auth") {
+          try {
+            startGoogleSignIn(action);
+          } catch {
+            toast(t.backup.driveFail);
+          }
+        } else toast(t.backup.driveFail);
       })
       .finally(() => setBusy(false));
     // snapshot + password from this render
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function beginDrive(action: "save" | "restore" | "sync") {
+  async function beginDrive(action: "save" | "restore" | "sync") {
     if (!readGoogleClientId()) {
       toast(t.backup.driveNeedClient);
       return;
     }
+    setBusy(true);
     try {
+      const token = await getAccessToken();
+      if (token) {
+        await runDrive(action, token);
+        return;
+      }
       startGoogleSignIn(action);
-    } catch {
-      toast(t.backup.driveFail);
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (msg === "auth") {
+        try {
+          startGoogleSignIn(action);
+          return;
+        } catch {
+          /* fall through */
+        }
+      }
+      if (msg === "missing") toast(t.backup.driveMissing);
+      else toast(t.backup.driveFail);
+    } finally {
+      setBusy(false);
     }
   }
 
