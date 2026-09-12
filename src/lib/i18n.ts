@@ -505,6 +505,8 @@ export const messages = {
       r1y: "1Y",
       ytd: "YTD",
       heldCount: "{n} holdings",
+      total: "All holdings",
+      totalChange: "Change",
     },
     more: {
       title: "More",
@@ -1188,6 +1190,8 @@ export const messages = {
       r1y: "1年",
       ytd: "今年",
       heldCount: "{n} 隻持股",
+      total: "持股總值",
+      totalChange: "升跌",
     },
     more: {
       title: "更多",

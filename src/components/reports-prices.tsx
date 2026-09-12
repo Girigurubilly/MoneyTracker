@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ScreenHeader, Group, Hairline } from "@/components/shared";
 import { money } from "@/lib/format";
+import { toHkd } from "@/lib/calc/fx";
 import { holdingTitle, sortHoldingsBySymbol } from "@/lib/holdings";
 import { fetchHoldingMoves, type PriceMove, type PriceRange } from "@/lib/quotes";
 import type { HoldingMarket } from "@/lib/types";
@@ -13,6 +14,7 @@ type BookFilter = "both" | "hk" | "us";
 export function StockPricesPage() {
   const t = useT();
   const holdings = useApp((s) => s.holdings);
+  const rates = useApp((s) => s.fxRates);
   const [book, setBook] = useState<BookFilter>("both");
   const [range, setRange] = useState<PriceRange>("1m");
   const [dir, setDir] = useState<"asc" | "desc">("asc");
@@ -42,6 +44,20 @@ export function StockPricesPage() {
       live = false;
     };
   }, [range, book, holdings]);
+
+  const totals = useMemo(() => {
+    let now = 0;
+    let start = 0;
+    for (const h of rows) {
+      const mv = moves.get(`${h.market}:${h.symbol}`);
+      const last = mv?.last ?? h.lastPrice;
+      const open = mv?.start ?? last;
+      now += toHkd(h.quantity * (last || 0), h.currency, rates);
+      start += toHkd(h.quantity * (open || 0), h.currency, rates);
+    }
+    const change = now - start;
+    return { now, start, change, pct: start ? change / start : 0 };
+  }, [rows, moves, rates]);
 
   const ranges: { id: PriceRange; label: string }[] = [
     { id: "1d", label: t.prices.r1d },
@@ -87,6 +103,25 @@ export function StockPricesPage() {
         </button>
       </div>
       {busy ? <p className="px-5 py-4 text-sm text-muted">{t.prices.loading}</p> : null}
+      {rows.length ? (
+        <div className="mx-4 mb-3 grid grid-cols-2 gap-2">
+          <div className="rounded-xl bg-elevated px-3 py-3">
+            <div className="text-[11px] text-muted">{t.prices.total}</div>
+            <div className="mt-0.5 text-lg font-semibold tabular-nums">{money(totals.now, "HKD")}</div>
+          </div>
+          <div className="rounded-xl bg-elevated px-3 py-3">
+            <div className="text-[11px] text-muted">{t.prices.totalChange}</div>
+            <div className={cn("mt-0.5 text-lg font-semibold tabular-nums", totals.change > 0 ? "text-income" : totals.change < 0 ? "text-expense" : "")}>
+              {totals.change > 0 ? "+" : ""}
+              {money(totals.change, "HKD")}
+              <span className="ml-1 text-xs font-medium">
+                {totals.change > 0 ? "+" : ""}
+                {(totals.pct * 100).toFixed(1)}%
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {!rows.length ? (
         <p className="px-5 py-6 text-sm text-muted">{t.holdings.empty}</p>
       ) : (

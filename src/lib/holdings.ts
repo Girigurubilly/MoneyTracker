@@ -90,10 +90,44 @@ export function normalizeSymbol(market: HoldingMarket, raw: string): string {
   return s.replace(/[^A-Z0-9.-]/g, "");
 }
 
+/** London-listed UCITS ETFs common on IBHK (Yahoo uses .L, not a US ticker). */
+const LONDON_ETFS = new Set([
+  "CSPX",
+  "CSP1",
+  "IWDA",
+  "SWDA",
+  "VWRA",
+  "VWRP",
+  "VUAA",
+  "VUSA",
+  "SWRD",
+  "EIMI",
+  "CNDX",
+  "EQQQ",
+  "ISF",
+  "IUSA",
+  "VWRL",
+  "VHYL",
+  "IUSN",
+  "AGGU",
+  "IGLN",
+  "IDTL",
+]);
+
 export function yahooSymbol(market: HoldingMarket, symbol: string): string {
   const s = normalizeSymbol(market, symbol);
   if (market === "hk") return `${s}.HK`;
+  if (s.includes(".")) return s;
+  if (LONDON_ETFS.has(s)) return `${s}.L`;
   return s;
+}
+
+export function yahooCandidates(market: HoldingMarket, symbol: string): string[] {
+  const s = normalizeSymbol(market, symbol);
+  const primary = yahooSymbol(market, symbol);
+  if (market === "hk") return [primary];
+  const extra = s.includes(".") ? [s, s.replace(/\.[A-Z]+$/, "")] : [s, `${s}.L`, `${s}.US`];
+  return [...new Set([primary, ...extra])];
 }
 
 function parseNum(raw: string | undefined): number {

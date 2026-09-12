@@ -37,6 +37,7 @@ describe("holdings import", () => {
   it("maps yahoo symbols", () => {
     assert.equal(yahooSymbol("hk", "700"), "0700.HK");
     assert.equal(yahooSymbol("us", "aapl"), "AAPL");
+    assert.equal(yahooSymbol("us", "CSPX"), "CSPX.L");
     assert.equal(normalizeSymbol("hk", "00700.HK"), "0700");
     assert.equal(detectMarket("00700"), "hk");
     assert.equal(detectMarket("AAPL"), "us");

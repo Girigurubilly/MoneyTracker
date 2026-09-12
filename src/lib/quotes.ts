@@ -1,4 +1,4 @@
-import { normalizeSymbol, yahooSymbol } from "./holdings.ts";
+import { normalizeSymbol, yahooCandidates } from "./holdings.ts";
 import type { HoldingMarket } from "./types.ts";
 
 export type QuoteHit = { price: number; name?: string; prevClose?: number };
@@ -21,8 +21,10 @@ async function pull(url: string, ms = 9000): Promise<string> {
 
 function tencentCode(market: HoldingMarket, symbol: string): string {
   const s = normalizeSymbol(market, symbol);
+  if (s.includes(".")) return "";
   if (market === "hk") return `r_hk${s.padStart(5, "0")}`;
-  return `us${s}`;
+  if (/^[A-Z]{1,5}$/.test(s) && s.length <= 5) return `us${s}`;
+  return "";
 }
 
 function parseTencentPayload(raw: string): QuoteHit | undefined {
@@ -126,14 +128,17 @@ async function yahooBatch(symbols: string[]): Promise<Map<string, QuoteHit>> {
   return new Map();
 }
 
-function parseEastmoney(text: string): QuoteHit[] {
+function parseEastmoney(text: string): { code: string; hit: QuoteHit }[] {
   try {
     const data = JSON.parse(text) as { data?: { diff?: { f2?: number; f12?: string; f14?: string; f18?: number }[] } };
-    const out: QuoteHit[] = [];
+    const out: { code: string; hit: QuoteHit }[] = [];
     for (const row of data.data?.diff ?? []) {
       const price = Number(row.f2);
       if (!(price > 0)) continue;
-      out.push({ price, name: row.f14, prevClose: Number(row.f18) || undefined });
+      out.push({
+        code: String(row.f12 ?? "").toUpperCase(),
+        hit: { price, name: row.f14, prevClose: Number(row.f18) || undefined },
+      });
     }
     return out;
   } catch {
@@ -153,11 +158,13 @@ async function eastmoneyBatch(rows: { market: HoldingMarket; symbol: string }[])
   const url = `https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&invt=2&fields=f2,f12,f14,f18&secids=${encodeURIComponent(secids)}`;
   try {
     const hits = parseEastmoney(await pull(url));
+    const byCode = new Map(hits.map((h) => [h.code, h.hit]));
     const out = new Map<string, QuoteHit>();
-    rows.forEach((r, i) => {
-      const hit = hits[i];
+    for (const r of rows) {
+      const s = normalizeSymbol(r.market, r.symbol);
+      const hit = byCode.get(s) ?? byCode.get(s.replace(/^0+/, "")) ?? byCode.get(s.padStart(5, "0"));
       if (hit) out.set(keyOf(r.market, r.symbol), hit);
-    });
+    }
     if (out.size) return out;
   } catch {
     /* ignore */
@@ -173,10 +180,11 @@ export async function fetchHoldingQuotes(
   const list = [...uniq.values()];
   const out = new Map<string, QuoteHit>();
 
-  const codes = list.map((r) => tencentCode(r.market, r.symbol));
+  const codes = list.map((r) => tencentCode(r.market, r.symbol)).filter(Boolean);
   const tencent = await loadTencentScript(codes);
   for (const r of list) {
-    const hit = tencent.get(tencentCode(r.market, r.symbol));
+    const code = tencentCode(r.market, r.symbol);
+    const hit = code ? tencent.get(code) : undefined;
     if (hit) out.set(keyOf(r.market, r.symbol), hit);
   }
 
@@ -188,9 +196,12 @@ export async function fetchHoldingQuotes(
 
   const still = list.filter((r) => !out.has(keyOf(r.market, r.symbol)));
   if (still.length) {
-    const ymap = await yahooBatch(still.map((r) => yahooSymbol(r.market, r.symbol)));
+    const ysyms = still.flatMap((r) => yahooCandidates(r.market, r.symbol));
+    const ymap = await yahooBatch(ysyms);
     for (const r of still) {
-      const hit = ymap.get(yahooSymbol(r.market, r.symbol).toUpperCase()) ?? ymap.get(r.symbol.toUpperCase());
+      const hit = yahooCandidates(r.market, r.symbol)
+        .map((s) => ymap.get(s.toUpperCase()))
+        .find(Boolean);
       if (hit) out.set(keyOf(r.market, r.symbol), hit);
     }
   }
@@ -278,14 +289,15 @@ function closeOnOrBefore(points: ClosePt[], iso: string): number | undefined {
 }
 
 async function historyFor(market: HoldingMarket, symbol: string, range: PriceRange): Promise<ClosePt[]> {
-  const y = yahooSymbol(market, symbol);
-  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(y)}?interval=1d&range=${yahooRange(range)}`;
-  for (const url of [yahooUrl, `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`, `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`]) {
-    try {
-      const pts = parseYahooCloses(await pull(url, 10000));
-      if (pts.length) return pts;
-    } catch {
-      /* next */
+  for (const y of yahooCandidates(market, symbol)) {
+    const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(y)}?interval=1d&range=${yahooRange(range)}`;
+    for (const url of [yahooUrl, `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`, `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`]) {
+      try {
+        const pts = parseYahooCloses(await pull(url, 10000));
+        if (pts.length) return pts;
+      } catch {
+        /* next */
+      }
     }
   }
   const s = normalizeSymbol(market, symbol);
