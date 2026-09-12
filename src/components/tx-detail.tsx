@@ -264,7 +264,6 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
       );
       await update(next, tx);
     }
-    toast(t.add.savedToast);
     onClose();
   }
 

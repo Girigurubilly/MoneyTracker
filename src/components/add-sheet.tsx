@@ -270,7 +270,6 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
         ),
       );
     }
-    toast(t.add.savedToast);
     onClose();
   }
 

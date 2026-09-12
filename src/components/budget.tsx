@@ -319,7 +319,6 @@ export function BudgetScreen() {
                 monthly: Number(addAmt) || 0,
                 spent: 0,
               });
-              toast(t.add.savedToast);
               setAddOpen(false);
               setEditingBudget(null);
             }}
@@ -466,7 +465,6 @@ function AdhocBlock({
                       adhoc: true,
                     });
                     await delAdhoc(a.id);
-                    toast(t.add.savedToast);
                   }}
                 >
                   {t.budget.postAdhoc}
@@ -541,7 +539,6 @@ function AdhocEditorBody({ initial, month, onClose }: { initial: AdhocBudget | n
     };
     if (initial) await update(row);
     else await add(row);
-    toast(t.add.savedToast);
     onClose();
   }
 
@@ -739,7 +736,6 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
       if (initial) await updateRecurring(row);
       else await addRecurring(row);
     }
-    toast(t.add.savedToast);
     onClose();
   }
 

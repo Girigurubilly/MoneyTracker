@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { toast } from "sonner";
 import { Overlay } from "@/components/shared";
 import { CategoryIcon } from "@/components/category-icon";
 import { AccountLine, ComposerHeader, SelectLine, TextLine } from "@/components/txn-composer";
@@ -90,7 +89,6 @@ function CategoryEditorBody({
     };
     if (initial) await update(row);
     else await add(row);
-    toast(t.add.savedToast);
     onClose();
   }
 
