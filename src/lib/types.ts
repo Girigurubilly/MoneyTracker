@@ -627,3 +627,92 @@ export type RetirementPhaseExpenseRule = {
   inflationRateOverride?: number;
 };
 
+export type LifePlanReturnMode = "nominal" | "real";
+
+export type LifePlanSpendingStage = {
+  id: string;
+  label: string;
+  startAge: number | null;
+  endAge: number | null;
+  monthlyLivingCostInTodayMoney: number | null;
+  followsInflation: boolean;
+  isEssential: boolean;
+  notes: string;
+};
+
+export type RetirementLifePlan = {
+  id: string;
+  version: number;
+  personal: {
+    dateOfBirth: string | null;
+    planStartDate: string | null;
+    planEndAge: number | null;
+    targetTerminalFinancialAssets: number | null;
+  };
+  currentJob: {
+    enabled: boolean;
+    endDate: string | null;
+    grossMonthlyIncome: number | null;
+    actualMonthlySpending: number | null;
+    monthlySavingsOverride: number | null;
+    annualIncomeGrowthRate: number | null;
+  };
+  lowerStressJob: {
+    enabled: boolean;
+    startDate: string | null;
+    endDate: string | null;
+    grossMonthlyIncome: number | null;
+    estimatedNetMonthlyIncomeOverride: number | null;
+    annualIncomeGrowthRate: number | null;
+    monthlyLivingCost: number | null;
+    livingCostFollowsInflation: boolean;
+  };
+  retirement: {
+    startDate: string | null;
+    annualInvestmentReturn: number | null;
+    annualInflationRate: number | null;
+    returnMode: LifePlanReturnMode;
+    cashReserveMonths: number | null;
+  };
+  spendingStages: LifePlanSpendingStage[];
+  mortgage: {
+    enabled: boolean;
+    outstandingBalance: number | null;
+    monthlyPayment: number | null;
+    endDate: string | null;
+    annualInterestRate: number | null;
+    paymentIncludedInCurrentSpending: boolean;
+    paymentIncludedInRetirementLivingCost: boolean;
+    earlyRepaymentPenaltyNotes: string;
+  };
+  assets: {
+    financialAssets: number | null;
+    selfOccupiedPropertyValue: number | null;
+    selfOccupiedPropertyGrowthRate: number | null;
+  };
+  inheritedProperty: {
+    enabled: boolean;
+    expectedValue: number | null;
+    expectedDate: string | null;
+    annualGrowthRate: number | null;
+    sell: boolean;
+    sellDate: string | null;
+    sellCostsRate: number | null;
+  };
+  publicAnnuity: {
+    enabled: boolean;
+    purchaseDate: string | null;
+    purchaseAmount: number | null;
+    useInheritedSaleProceeds: boolean;
+    monthlyPayout: number | null;
+    payoutStartAge: number | null;
+    payoutYears: number | null;
+  };
+  reverseMortgage: {
+    enabled: boolean;
+    startAge: number | null;
+    ltv: number | null;
+    monthlyPayout: number | null;
+  };
+};
+

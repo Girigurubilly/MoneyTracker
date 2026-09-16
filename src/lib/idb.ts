@@ -20,6 +20,7 @@ import type {
   Holding,
   RetirementAccount,
   RetirementAssetAccess,
+  RetirementLifePlan,
 } from "./types";
 import type { RetirementInputs } from "./calc/retirement";
 
@@ -57,6 +58,7 @@ export class HKLifeDB extends Dexie {
   holdings!: EntityTable<Holding, "id">;
   retirementAccounts!: EntityTable<RetirementAccount, "id">;
   retirementAssetAccess!: EntityTable<RetirementAssetAccess, "assetId">;
+  lifePlans!: EntityTable<RetirementLifePlan, "id">;
   fxRates!: EntityTable<FxRate, "currency">;
   meta!: EntityTable<MetaRow, "key">;
   snapshots!: EntityTable<SnapshotRow, "month">;
@@ -95,6 +97,9 @@ export class HKLifeDB extends Dexie {
     this.version(6).stores({
       retirementAccounts: "id, type, status",
       retirementAssetAccess: "assetId",
+    });
+    this.version(7).stores({
+      lifePlans: "id",
     });
   }
 }

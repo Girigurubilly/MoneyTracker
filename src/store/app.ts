@@ -22,6 +22,7 @@ import type {
   Holding,
   RetirementAccount,
   RetirementAssetAccess,
+  RetirementLifePlan,
 } from "@/lib/types";
 import { defaultTypeForGroup, groupForType } from "@/lib/types";
 import type { RetirementInputs } from "@/lib/calc/retirement";
@@ -82,6 +83,7 @@ export type AppSnapshot = {
   holdings?: Holding[];
   retirementAccounts?: RetirementAccount[];
   retirementAssetAccess?: RetirementAssetAccess[];
+  lifePlan?: RetirementLifePlan[];
   defaultCurrency?: Currency;
   budgetTargetMode?: BudgetTargetMode;
   depositCategoryId?: string;
@@ -179,6 +181,7 @@ type Dispatchers = {
   upsertRetirementAccount: (row: RetirementAccount) => Promise<void>;
   deleteRetirementAccount: (id: string) => Promise<void>;
   upsertRetirementAssetAccess: (row: RetirementAssetAccess) => Promise<void>;
+  updateLifePlan: (row: RetirementLifePlan) => Promise<void>;
   replaceAll: (snap: AppSnapshot) => Promise<void>;
   exportSnapshot: () => AppSnapshot;
   resetSample: () => Promise<void>;
@@ -205,6 +208,7 @@ type AppState = {
   holdings: Holding[];
   retirementAccounts: RetirementAccount[];
   retirementAssetAccess: RetirementAssetAccess[];
+  lifePlan: RetirementLifePlan | null;
   lastPostedTxId?: string | null;
   fxRates: FxRate[];
   snapshots: SnapshotRow[];
@@ -239,6 +243,7 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     holdings,
     retirementAccounts,
     retirementAssetAccess,
+    lifePlanRows,
   ] = await Promise.all([
     idb().accounts.toArray(),
     idb().categories.toArray(),
@@ -261,6 +266,7 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     idb().holdings.toArray(),
     idb().retirementAccounts.toArray().catch(() => []),
     idb().retirementAssetAccess.toArray().catch(() => []),
+    idb().lifePlans.toArray().catch(() => []),
   ]);
   return {
     accounts,
@@ -281,6 +287,7 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     holdings,
     retirementAccounts: retirementAccounts ?? [],
     retirementAssetAccess: retirementAssetAccess ?? [],
+    lifePlan: lifePlanRows[0] ?? null,
     fxRates,
     snapshots,
     annualTravelBudget: meta?.annualTravelBudget ?? seedTravelBudget,
@@ -673,6 +680,7 @@ export const useApp = create<AppState>((set, get) => ({
   holdings: [],
   retirementAccounts: [],
   retirementAssetAccess: [],
+  lifePlan: null,
   lastPostedTxId: null as string | null,
   fxRates: seedFx,
   snapshots: [],
@@ -1141,6 +1149,10 @@ export const useApp = create<AppState>((set, get) => ({
     const rows = get().retirementAssetAccess;
     set({ retirementAssetAccess: rows.some((x) => x.assetId === row.assetId) ? rows.map((x) => (x.assetId === row.assetId ? row : x)) : [...rows, row] });
   },
+  updateLifePlan: async (row) => {
+    await idb().lifePlans.put(row);
+    set({ lifePlan: row });
+  },
   replaceAll: async (snap) => {
     await idb().transaction("rw", idb().tables, async () => {
       await Promise.all(idb().tables.map((t) => t.clear()));
@@ -1162,6 +1174,7 @@ export const useApp = create<AppState>((set, get) => ({
       await bulkChunk((rows) => idb().holdings.bulkAdd(rows), snap.holdings ?? []);
       await bulkChunk((rows) => idb().retirementAccounts.bulkAdd(rows), snap.retirementAccounts ?? []);
       await bulkChunk((rows) => idb().retirementAssetAccess.bulkAdd(rows), snap.retirementAssetAccess ?? []);
+      await bulkChunk((rows) => idb().lifePlans.bulkAdd(rows), snap.lifePlan ?? []);
       await idb().fxRates.bulkPut(snap.fxRates.length ? snap.fxRates : seedFx);
       if (snap.snapshots.length) await idb().snapshots.bulkPut(snap.snapshots);
       await idb().meta.put({
@@ -1205,6 +1218,7 @@ export const useApp = create<AppState>((set, get) => ({
       holdings: s.holdings,
       retirementAccounts: s.retirementAccounts,
       retirementAssetAccess: s.retirementAssetAccess,
+      lifePlan: s.lifePlan ? [s.lifePlan] : [],
       defaultCurrency: s.defaultCurrency,
       budgetTargetMode: s.budgetTargetMode,
       depositCategoryId: s.depositCategoryId,

@@ -298,6 +298,9 @@ export function RetirementPage() {
         <Link to="/reports/retirement/plan" className="flex h-11 items-center justify-center rounded-xl bg-accent text-sm font-semibold text-on-accent">
           {t.reports.firePlan}
         </Link>
+        <Link to="/reports/retirement/early-retirement" className="flex h-11 items-center justify-center rounded-xl bg-elevated text-sm font-medium">
+          {t.reports.lpTitle}
+        </Link>
         <Link to="/reports/retirement/projection" className="flex h-11 items-center justify-center rounded-xl bg-elevated text-sm font-medium">
           {t.reports.annualProjection}
         </Link>
