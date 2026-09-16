@@ -43,6 +43,7 @@ import { Route as ReportsTrendsRouteImport } from './routes/reports.trends'
 import { Route as ReportsWorthRouteImport } from './routes/reports.worth'
 import { Route as ReportsYearlyRouteImport } from './routes/reports.yearly'
 import { Route as ReportsRetirementIndexRouteImport } from './routes/reports.retirement.index'
+import { Route as ReportsRetirementPlanRouteImport } from './routes/reports.retirement.plan'
 import { Route as ReportsRetirementProjectionRouteImport } from './routes/reports.retirement.projection'
 import { Route as ReportsTravelIndexRouteImport } from './routes/reports.travel.index'
 import { Route as ReportsTravelIdRouteImport } from './routes/reports.travel.$id'
@@ -217,6 +218,11 @@ const ReportsRetirementIndexRoute = ReportsRetirementIndexRouteImport.update({
   path: '/',
   getParentRoute: () => ReportsRetirementRoute,
 } as any)
+const ReportsRetirementPlanRoute = ReportsRetirementPlanRouteImport.update({
+  id: '/plan',
+  path: '/plan',
+  getParentRoute: () => ReportsRetirementRoute,
+} as any)
 const ReportsRetirementProjectionRoute =
   ReportsRetirementProjectionRouteImport.update({
     id: '/projection',
@@ -268,6 +274,7 @@ export interface FileRoutesByFullPath {
   '/reports/yearly': typeof ReportsYearlyRoute
   '/more/': typeof MoreIndexRoute
   '/reports/': typeof ReportsIndexRoute
+  '/reports/retirement/plan': typeof ReportsRetirementPlanRoute
   '/reports/retirement/projection': typeof ReportsRetirementProjectionRoute
   '/reports/travel/$id': typeof ReportsTravelIdRoute
   '/reports/retirement/': typeof ReportsRetirementIndexRoute
@@ -303,6 +310,7 @@ export interface FileRoutesByTo {
   '/reports/yearly': typeof ReportsYearlyRoute
   '/more': typeof MoreIndexRoute
   '/reports': typeof ReportsIndexRoute
+  '/reports/retirement/plan': typeof ReportsRetirementPlanRoute
   '/reports/retirement/projection': typeof ReportsRetirementProjectionRoute
   '/reports/travel/$id': typeof ReportsTravelIdRoute
   '/reports/retirement': typeof ReportsRetirementIndexRoute
@@ -343,6 +351,7 @@ export interface FileRoutesById {
   '/reports/yearly': typeof ReportsYearlyRoute
   '/more/': typeof MoreIndexRoute
   '/reports/': typeof ReportsIndexRoute
+  '/reports/retirement/plan': typeof ReportsRetirementPlanRoute
   '/reports/retirement/projection': typeof ReportsRetirementProjectionRoute
   '/reports/travel/$id': typeof ReportsTravelIdRoute
   '/reports/retirement/': typeof ReportsRetirementIndexRoute
@@ -384,6 +393,7 @@ export interface FileRouteTypes {
     | '/reports/yearly'
     | '/more/'
     | '/reports/'
+    | '/reports/retirement/plan'
     | '/reports/retirement/projection'
     | '/reports/travel/$id'
     | '/reports/retirement/'
@@ -419,6 +429,7 @@ export interface FileRouteTypes {
     | '/reports/yearly'
     | '/more'
     | '/reports'
+    | '/reports/retirement/plan'
     | '/reports/retirement/projection'
     | '/reports/travel/$id'
     | '/reports/retirement'
@@ -458,6 +469,7 @@ export interface FileRouteTypes {
     | '/reports/yearly'
     | '/more/'
     | '/reports/'
+    | '/reports/retirement/plan'
     | '/reports/retirement/projection'
     | '/reports/travel/$id'
     | '/reports/retirement/'
@@ -713,6 +725,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReportsRetirementIndexRouteImport
       parentRoute: typeof ReportsRetirementRoute
     }
+    '/reports/retirement/plan': {
+      id: '/reports/retirement/plan'
+      path: '/plan'
+      fullPath: '/reports/retirement/plan'
+      preLoaderRoute: typeof ReportsRetirementPlanRouteImport
+      parentRoute: typeof ReportsRetirementRoute
+    }
     '/reports/retirement/projection': {
       id: '/reports/retirement/projection'
       path: '/projection'
@@ -770,11 +789,13 @@ const MoreRouteChildren: MoreRouteChildren = {
 const MoreRouteWithChildren = MoreRoute._addFileChildren(MoreRouteChildren)
 
 interface ReportsRetirementRouteChildren {
+  ReportsRetirementPlanRoute: typeof ReportsRetirementPlanRoute
   ReportsRetirementProjectionRoute: typeof ReportsRetirementProjectionRoute
   ReportsRetirementIndexRoute: typeof ReportsRetirementIndexRoute
 }
 
 const ReportsRetirementRouteChildren: ReportsRetirementRouteChildren = {
+  ReportsRetirementPlanRoute: ReportsRetirementPlanRoute,
   ReportsRetirementProjectionRoute: ReportsRetirementProjectionRoute,
   ReportsRetirementIndexRoute: ReportsRetirementIndexRoute,
 }

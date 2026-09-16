@@ -34,9 +34,9 @@ export const accounts: Account[] = [
 
 export const categories: Category[] = [
   { id: "p-housing", name: "Housing", nameZh: "房屋", theme: "living", kind: "expense", icon: "home", essential: true },
-  { id: "mortgage-p", name: "Mortgage principal", nameZh: "按揭本金", theme: "living", kind: "expense", icon: "home", essential: true, parentId: "p-housing" },
-  { id: "mortgage-i", name: "Mortgage interest", nameZh: "按揭利息", theme: "living", kind: "expense", icon: "home", essential: true, parentId: "p-housing" },
-  { id: "mgmt", name: "Management fee", nameZh: "管理費", theme: "living", kind: "expense", icon: "building", essential: true, parentId: "p-housing" },
+  { id: "mortgage-p", name: "Mortgage principal", nameZh: "按揭本金", theme: "living", kind: "expense", icon: "home", essential: true, parentId: "p-housing", fireSpendKind: "work" },
+  { id: "mortgage-i", name: "Mortgage interest", nameZh: "按揭利息", theme: "living", kind: "expense", icon: "home", essential: true, parentId: "p-housing", fireSpendKind: "work" },
+  { id: "mgmt", name: "Management fee", nameZh: "管理費", theme: "living", kind: "expense", icon: "building", essential: true, parentId: "p-housing", fireSpendKind: "core" },
   { id: "p-food", name: "Food", nameZh: "飲食", theme: "living", kind: "expense", icon: "utensils" },
   { id: "dining", name: "Dining out", nameZh: "外出就餐", theme: "living", kind: "expense", icon: "utensils", parentId: "p-food" },
   { id: "groceries", name: "Groceries", nameZh: "超市", theme: "living", kind: "expense", icon: "shopping", parentId: "p-food" },
@@ -46,7 +46,7 @@ export const categories: Category[] = [
   { id: "internet", name: "Internet / mobile", nameZh: "寬頻 / 流動電話", theme: "living", kind: "expense", icon: "wifi", essential: true, parentId: "p-personal" },
   { id: "entertainment", name: "Entertainment", nameZh: "娛樂", theme: "living", kind: "expense", icon: "film", parentId: "p-personal" },
   { id: "education", name: "Education", nameZh: "教育", theme: "other", kind: "expense", icon: "graduation" },
-  { id: "insurance", name: "Insurance", nameZh: "保險", theme: "living", kind: "expense", icon: "shield", essential: true },
+  { id: "insurance", name: "Insurance", nameZh: "保險", theme: "living", kind: "expense", icon: "shield", essential: true, fireSpendKind: "core" },
   { id: "mpf-vol", name: "Voluntary MPF", nameZh: "自願性強積金", theme: "retirement", kind: "expense", icon: "piggy" },
   { id: "p-travel", name: "Travel", nameZh: "旅遊", theme: "travel", kind: "expense", icon: "plane" },
   { id: "flights", name: "Flights", nameZh: "機票", theme: "travel", kind: "expense", icon: "plane", parentId: "p-travel" },

@@ -4,7 +4,7 @@ import { CategoryIcon } from "@/components/category-icon";
 import { AccountLine, ComposerHeader, SelectLine, TextLine } from "@/components/txn-composer";
 import { pickName } from "@/lib/i18n";
 import { infersAdhoc } from "@/lib/tx-rules";
-import { CATEGORY_ICON_GROUPS, type Category, type CategoryIconName, type LifeTheme } from "@/lib/types";
+import { CATEGORY_ICON_GROUPS, type Category, type CategoryIconName, type FireSpendKind, type LifeTheme } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 import { cn } from "@/lib/utils";
@@ -68,6 +68,7 @@ function CategoryEditorBody({
   const [adhocDefault, setAdhocDefault] = useState(
     initial?.adhocDefault ?? infersAdhoc(initial?.id ?? defaultParentId, cats),
   );
+  const [fireKind, setFireKind] = useState<FireSpendKind | "">(initial?.fireSpendKind ?? "");
 
   async function save() {
     const n = name.trim();
@@ -86,6 +87,7 @@ function CategoryEditorBody({
       essential: initial?.essential,
       adhocDefault: (parent?.kind ?? kind) === "expense" ? adhocDefault : undefined,
       defaultAccountId: defaultAccountId || undefined,
+      fireSpendKind: (parent?.kind ?? kind) === "expense" && fireKind ? fireKind : undefined,
     };
     if (initial) await update(row);
     else await add(row);
@@ -135,6 +137,20 @@ function CategoryEditorBody({
             <span className="mt-0.5 block text-xs text-muted">{t.add.adhocDefaultHint}</span>
           </span>
         </label>
+      ) : null}
+      {(parentId ? parents.find((p) => p.id === parentId)?.kind ?? kind : kind) === "expense" ? (
+        <SelectLine
+          label={t.reports.fireSpendEngine}
+          value={fireKind}
+          onChange={(v) => setFireKind(v as FireSpendKind | "")}
+          options={[
+            { id: "", label: t.add.fireSpendAuto },
+            { id: "work", label: t.reports.fireKindWork },
+            { id: "core", label: t.reports.fireKindCore },
+            { id: "flex", label: t.reports.fireKindFlex },
+            { id: "irregular", label: t.reports.fireKindIrregular },
+          ]}
+        />
       ) : null}
       <div className="px-4 pb-8 pt-1">
         <div className="text-xs text-muted">{t.add.icon}</div>

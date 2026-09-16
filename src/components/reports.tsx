@@ -43,11 +43,12 @@ export function ReportsHub() {
     { to: "/reports/living", title: t.reports.living, modes: ["standard", "elderly"] },
     { to: "/reports/travel", title: t.reports.travel, modes: ["standard", "elderly", "kid"] },
     { to: "/reports/retirement", title: t.reports.retirement, modes: ["standard", "elderly"] },
+    { to: "/reports/retirement/plan", title: t.reports.firePlan, modes: ["standard", "elderly"] },
   ].filter((it) => it.modes.includes(access));
   const groups = [
     { id: "flow", title: t.reports.groupFlow, items: items.filter((it) => ["/reports/dashboard", "/reports/spending", "/reports/cashflow", "/reports/trends", "/reports/compare"].includes(it.to)) },
     { id: "save", title: t.reports.groupSave, items: items.filter((it) => ["/reports/balance", "/reports/worth", "/reports/deposits", "/reports/prices", "/reports/yearly"].includes(it.to)) },
-    { id: "life", title: t.reports.groupLife, items: items.filter((it) => ["/reports/living", "/reports/travel", "/reports/retirement"].includes(it.to)) },
+    { id: "life", title: t.reports.groupLife, items: items.filter((it) => ["/reports/living", "/reports/travel", "/reports/retirement", "/reports/retirement/plan"].includes(it.to)) },
   ].filter((g) => g.items.length);
   return (
     <div className="pb-10">

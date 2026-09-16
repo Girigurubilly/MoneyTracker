@@ -18,6 +18,59 @@ export type RetirementAccountProjectionYear = {
   notes: string[];
 };
 
+export function isGuaranteedPayout(account: RetirementAccount): boolean {
+  return account.type === "ANNUITY" || account.type === "PENSION" || account.type === "QDAP";
+}
+
+export function scheduledPayoutAnnual(account: RetirementAccount): number {
+  if (account.scheduledMonthlyIncome != null && account.scheduledMonthlyIncome > 0) {
+    return account.scheduledMonthlyIncome * 12;
+  }
+  return account.scheduledAnnualIncome ?? 0;
+}
+
+export function scheduledPayoutEndAge(account: RetirementAccount): number {
+  const start = account.scheduledIncomeStartAge ?? account.accessibleAge;
+  if (account.scheduledIncomeYears != null) {
+    if (account.scheduledIncomeYears <= 0) return 200;
+    return start + account.scheduledIncomeYears;
+  }
+  return account.scheduledIncomeEndAge ?? 200;
+}
+
+export function scheduledIncomeForAge(account: RetirementAccount, age: number): number {
+  if (account.withdrawalStrategy !== "scheduled_income") return 0;
+  const start = account.scheduledIncomeStartAge ?? account.accessibleAge;
+  if (age < start) return 0;
+  if (age >= scheduledPayoutEndAge(account)) return 0;
+  const g = account.scheduledIncomeGrowthRate ?? 0;
+  return scheduledPayoutAnnual(account) * (1 + g) ** Math.max(0, age - start);
+}
+
+export function applyAnnuityTerms(
+  account: RetirementAccount,
+  monthly: number,
+  years: number,
+  startAge: number,
+): RetirementAccount {
+  const lifetime = years <= 0;
+  return {
+    ...account,
+    accessibleAge: startAge,
+    accessRule: "scheduled_income",
+    withdrawalStrategy: "scheduled_income",
+    scheduledMonthlyIncome: monthly,
+    scheduledAnnualIncome: monthly * 12,
+    scheduledIncomeYears: lifetime ? 0 : years,
+    scheduledIncomeStartAge: startAge,
+    scheduledIncomeEndAge: lifetime ? undefined : startAge + years,
+    contributionFrequency: "one_off",
+    employeeContributionAmount: 0,
+    employerContributionAmount: 0,
+    status: account.status === "closed" ? "closed" : "withdrawal_phase",
+  };
+}
+
 export function monthlyContribution(amount: number, freq: RetirementAccount["contributionFrequency"]): number {
   if (freq === "annual") return amount / 12;
   if (freq === "quarterly") return amount / 3;
@@ -89,7 +142,11 @@ export function projectRetirementAccountYear(opts: {
   const contributionCharge = totalContribution * (account.annualContributionChargeRate ?? 0);
   const isAccessible = age >= account.accessibleAge;
   let withdrawal = 0;
-  if (isAccessible && account.withdrawalStrategy !== "do_not_use_in_projection") {
+  let guaranteedIncome = 0;
+  if (isGuaranteedPayout(account) && account.withdrawalStrategy === "scheduled_income") {
+    guaranteedIncome = scheduledIncomeForAge(account, age);
+    if (guaranteedIncome > 0) notes.push("guaranteed payout");
+  } else if (isAccessible && account.withdrawalStrategy !== "do_not_use_in_projection") {
     const startOk = !account.plannedWithdrawalStartAge || age >= account.plannedWithdrawalStartAge;
     const endOk = !account.plannedWithdrawalEndAge || age < account.plannedWithdrawalEndAge;
     if (account.withdrawalStrategy === "lump_sum" && startOk && !opts.alreadyLumpSum) {
@@ -98,12 +155,7 @@ export function projectRetirementAccountYear(opts: {
     } else if (account.withdrawalStrategy === "annual_drawdown" && startOk && endOk) {
       withdrawal = Math.max(0, account.plannedAnnualWithdrawal ?? 0);
     } else if (account.withdrawalStrategy === "scheduled_income") {
-      const s0 = account.scheduledIncomeStartAge ?? account.accessibleAge;
-      const s1 = account.scheduledIncomeEndAge ?? 200;
-      if (age >= s0 && age < s1) {
-        const g = account.scheduledIncomeGrowthRate ?? 0;
-        withdrawal = (account.scheduledAnnualIncome ?? 0) * (1 + g) ** Math.max(0, age - s0);
-      }
+      withdrawal = scheduledIncomeForAge(account, age);
     }
   }
   let pre = openingBalance + totalContribution - contributionCharge - withdrawal;
@@ -125,18 +177,17 @@ export function projectRetirementAccountYear(opts: {
     voluntaryContribution: voluntary,
     totalContribution,
     contributionCharge,
-    withdrawal,
+    withdrawal: withdrawal + guaranteedIncome,
     investmentReturn,
     closingBalance,
     isAccessible,
-    cashFlowAvailableToRetirementPlan: isAccessible ? withdrawal : 0,
+    cashFlowAvailableToRetirementPlan: withdrawal + guaranteedIncome,
     notes,
   };
 }
 
 export function blankRetirementAccount(type: RetirementAccountTypeLike, now = new Date().toISOString()): import("../types.ts").RetirementAccount {
-  const accessibleAge = type === "ANNUITY" || type === "QDAP" || type === "PENSION" ? 65 : 65;
-  const withdrawalStrategy = type === "ANNUITY" || type === "QDAP" || type === "PENSION" ? "scheduled_income" : "annual_drawdown";
+  const payout = type === "ANNUITY" || type === "QDAP" || type === "PENSION";
   const names: Record<string, string> = {
     MPF: "MPF",
     ORSO: "ORSO",
@@ -153,22 +204,25 @@ export function blankRetirementAccount(type: RetirementAccountTypeLike, now = ne
     currency: "HKD",
     currentBalance: 0,
     balanceAsOf: now.slice(0, 10),
-    status: "active",
-    accessibleAge,
-    accessRule: type === "ANNUITY" || type === "QDAP" ? "scheduled_income" : "age_based",
-    contributionFrequency: "monthly",
+    status: payout && type === "ANNUITY" ? "withdrawal_phase" : "active",
+    accessibleAge: 65,
+    accessRule: payout ? "scheduled_income" : "age_based",
+    contributionFrequency: payout && type === "ANNUITY" ? "one_off" : "monthly",
     employeeContributionAmount: 0,
     employerContributionAmount: 0,
     voluntaryContributionAmount: 0,
     employeeContributionGrowthRate: 0,
     employerContributionGrowthRate: 0,
     voluntaryContributionGrowthRate: 0,
-    expectedAnnualReturnRate: 0.05,
+    expectedAnnualReturnRate: payout && type === "ANNUITY" ? 0 : 0.05,
     annualFeeRate: type === "MPF" ? 0.008 : 0,
     annualContributionChargeRate: 0,
-    withdrawalStrategy,
+    withdrawalStrategy: payout ? "scheduled_income" : "annual_drawdown",
     scheduledAnnualIncome: 0,
+    scheduledMonthlyIncome: 0,
+    scheduledIncomeYears: type === "ANNUITY" ? 10 : 0,
     scheduledIncomeStartAge: 65,
+    scheduledIncomeEndAge: type === "ANNUITY" ? 75 : undefined,
     includeInRetirementProjection: true,
     createdAt: now,
     updatedAt: now,

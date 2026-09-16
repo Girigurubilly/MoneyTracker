@@ -295,6 +295,9 @@ export function RetirementPage() {
       <AccessCard plan={result.plan} cash={pack.cash} invest={pack.invest} reserve={base.emergencyReserve ?? 0} />
       <HousingCard plan={result.plan} mortgage={mortgage} housing={ctx.housingAfterPayoff} persist={persist} payOff={base.payOffMortgageAtRetire ?? false} />
       <div className="px-4 pb-3 space-y-2">
+        <Link to="/reports/retirement/plan" className="flex h-11 items-center justify-center rounded-xl bg-accent text-sm font-semibold text-on-accent">
+          {t.reports.firePlan}
+        </Link>
         <Link to="/reports/retirement/projection" className="flex h-11 items-center justify-center rounded-xl bg-elevated text-sm font-medium">
           {t.reports.annualProjection}
         </Link>

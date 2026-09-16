@@ -25,6 +25,12 @@ export type RetirementInputs = {
   laterLifeAge?: number;
   payOffMortgageAtRetire?: boolean;
   phaseRules?: RetirementPhaseExpenseRule[];
+  parentSupportMonthly?: number;
+  parentSupportYears?: number;
+  parentSupportMode?: "include" | "reserve";
+  postRetireJobMonthly?: number;
+  monthlySaveOverride?: number;
+  acceptedFlexCut?: boolean;
 };
 
 export const DEFAULT_RETIREMENT_AGES = [52, 53, 54, 55, 56];

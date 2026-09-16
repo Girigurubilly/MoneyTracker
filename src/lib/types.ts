@@ -326,6 +326,8 @@ export const CATEGORY_ICON_GROUPS: { id: CategoryIconGroupId; icons: CategoryIco
 
 export const CATEGORY_ICONS: CategoryIconName[] = CATEGORY_ICON_GROUPS.flatMap((g) => g.icons);
 
+export type FireSpendKind = "work" | "core" | "flex" | "irregular";
+
 export type Category = {
   id: string;
   name: string;
@@ -337,6 +339,7 @@ export type Category = {
   adhocDefault?: boolean;
   defaultAccountId?: string;
   parentId?: string;
+  fireSpendKind?: FireSpendKind;
 };
 
 export const MONTH_TOTAL_BUDGET_ID = "b-month-total";
@@ -514,6 +517,7 @@ export type Allowance = {
   monthly: number;
   startAge: number;
   endAge?: number;
+  payoutYears?: number;
   kind: "oaa" | "annuity" | "other";
   inflationAdjusted: boolean;
 };
@@ -582,6 +586,8 @@ export type RetirementAccount = {
   scheduledIncomeStartAge?: number;
   scheduledIncomeEndAge?: number;
   scheduledIncomeGrowthRate?: number;
+  scheduledMonthlyIncome?: number;
+  scheduledIncomeYears?: number;
   includeInRetirementProjection: boolean;
   notes?: string;
   linkedAccountId?: string;

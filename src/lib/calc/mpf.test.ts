@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { blankRetirementAccount, contributionMonthsInYear, projectRetirementAccountYear } from "./mpf.ts";
+import { blankRetirementAccount, contributionMonthsInYear, projectRetirementAccountYear, applyAnnuityTerms } from "./mpf.ts";
 import { mortgageFlowForYear, mortgageSchedule } from "./mortgage.ts";
 import { compareRetirementAges, runRetirementPlan } from "./retirement.ts";
 import type { RetirementAccount } from "../types.ts";
@@ -109,6 +109,47 @@ describe("MPF/ORSO projection", () => {
     assert.equal(row.isAccessible, true);
     assert.ok(row.closingBalance >= 0);
     assert.ok(row.withdrawal <= 80_000 + row.totalContribution);
+  });
+
+  it("pays a HK annuity monthly for a fixed number of years even with zero balance", () => {
+    const account = applyAnnuityTerms(blankRetirementAccount("ANNUITY", "2026-01-01T00:00:00.000Z"), 5_000, 10, 65);
+    const at64 = projectRetirementAccountYear({
+      account,
+      openingBalance: 0,
+      age: 64,
+      calendarYear: 2036,
+      yearsSinceStart: 10,
+      retireAge: 65,
+    });
+    const at65 = projectRetirementAccountYear({
+      account,
+      openingBalance: 0,
+      age: 65,
+      calendarYear: 2037,
+      yearsSinceStart: 11,
+      retireAge: 65,
+    });
+    const at74 = projectRetirementAccountYear({
+      account,
+      openingBalance: 0,
+      age: 74,
+      calendarYear: 2046,
+      yearsSinceStart: 20,
+      retireAge: 65,
+    });
+    const at75 = projectRetirementAccountYear({
+      account,
+      openingBalance: 0,
+      age: 75,
+      calendarYear: 2047,
+      yearsSinceStart: 21,
+      retireAge: 65,
+    });
+    assert.equal(at64.cashFlowAvailableToRetirementPlan, 0);
+    assert.equal(at65.cashFlowAvailableToRetirementPlan, 60_000);
+    assert.equal(at74.cashFlowAvailableToRetirementPlan, 60_000);
+    assert.equal(at75.cashFlowAvailableToRetirementPlan, 0);
+    assert.equal(at65.closingBalance, 0);
   });
 
   it("keeps two accounts with different access ages independent", () => {
