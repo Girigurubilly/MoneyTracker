@@ -14,7 +14,6 @@ import { toHkd } from "./fx.ts";
 import { cashflowSide, inMonth } from "./ledger.ts";
 import { isExpenseRegular } from "./budget.ts";
 import { investableNow as accountInvestable } from "./networth.ts";
-import type { RetirementInputs } from "./retirement.ts";
 
 export const FIRE_SWR_BASE = 0.035;
 export const FIRE_SWR_COMFORT = 0.0325;
@@ -390,22 +389,4 @@ export function fireInvestable(accounts: Account[], rates: FxRate[], retirementA
     n += Math.max(0, ra.currentBalance);
   }
   return n;
-}
-
-export function fireInputsFromRetirement(ret: RetirementInputs | null, derivedAge: number): {
-  currentAge: number;
-  retireAge: number;
-  deathAge: number;
-  preReturn: number;
-  postReturn: number;
-  inflation: number;
-} {
-  return {
-    currentAge: derivedAge || ret?.currentAge || 42,
-    retireAge: ret?.retireAge ?? 50,
-    deathAge: ret?.deathAge ?? 85,
-    preReturn: ret?.preReturn ?? 0.05,
-    postReturn: ret?.postReturn ?? 0.03,
-    inflation: ret?.inflation ?? 0.025,
-  };
 }

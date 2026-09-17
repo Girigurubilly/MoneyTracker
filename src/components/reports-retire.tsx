@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Area, AreaChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { Hairline, InfoButton, ProgressRing, ScreenHeader, SectionLabel, StatusChip } from "@/components/shared";
@@ -147,6 +147,28 @@ export function useRetirementModel() {
     void update({ ...base, ...patch, id: ret?.id ?? "base" });
   }
   return { accounts, holdings, rates, avg, base, ctx, pack, result, sustain, fire, persist, rmMonthly, mortgage, updateAccount: useApp.getState().updateAccount };
+}
+
+export function SharedRetirementStrip() {
+  const t = useT();
+  const { base } = useRetirementModel();
+  return (
+    <Link to="/reports/retirement" className="mx-4 mb-3 flex items-center gap-3 rounded-2xl bg-elevated p-3">
+      <div className="min-w-0 flex-1">
+        <div className="text-[11px] font-medium text-accent">{t.reports.sharedProfile}</div>
+        <div className="mt-1 truncate text-sm">
+          {base.currentAge} · {t.reports.retireAge} {base.retireAge} · {t.reports.deathAge} {base.deathAge}
+        </div>
+        <div className="mt-0.5 truncate text-[11px] leading-4 text-muted">
+          {money(base.targetMonthly, "HKD")} · {(base.inflation * 100).toFixed(1)}% · {(base.preReturn * 100).toFixed(1)}% / {(base.postReturn * 100).toFixed(1)}%
+        </div>
+      </div>
+      <span className="flex shrink-0 items-center gap-0.5 text-[11px] font-medium text-accent">
+        {t.reports.sharedEdit}
+        <ChevronRight className="size-4" />
+      </span>
+    </Link>
+  );
 }
 
 export function RetirementPage() {
@@ -301,12 +323,14 @@ export function RetirementPage() {
         <Link to="/reports/retirement/early-retirement" className="flex h-11 items-center justify-center rounded-xl bg-elevated text-sm font-medium">
           {t.reports.lpTitle}
         </Link>
-        <Link to="/reports/retirement/projection" className="flex h-11 items-center justify-center rounded-xl bg-elevated text-sm font-medium">
-          {t.reports.annualProjection}
-        </Link>
-        <Link to="/more/retirement-accounts" className="flex h-11 items-center justify-center rounded-xl bg-elevated text-sm font-medium">
-          {t.reports.manageRa}
-        </Link>
+        <div className="grid grid-cols-2 gap-2">
+          <Link to="/reports/retirement/projection" className="flex h-11 items-center justify-center rounded-xl bg-elevated px-2 text-center text-sm font-medium">
+            {t.reports.annualProjection}
+          </Link>
+          <Link to="/more/retirement-accounts" className="flex h-11 items-center justify-center rounded-xl bg-elevated px-2 text-center text-sm font-medium">
+            {t.reports.manageRa}
+          </Link>
+        </div>
       </div>
 
       <SectionLabel>{t.reports.assetsByAge}</SectionLabel>
@@ -362,65 +386,65 @@ export function RetirementPage() {
 
       {showSetup ? (
         <>
-      <SectionLabel>{t.reports.timeline}</SectionLabel>
-      <div className="mx-4 overflow-hidden rounded-2xl bg-elevated">
-        <div className="flex items-center justify-between gap-3 px-4 py-3.5">
-          <span className="text-sm">{t.reports.birthday}</span>
-          <input
-            type="date"
-            value={base.birthday ?? ""}
-            onChange={(e) => {
-              const birthday = e.target.value || undefined;
-              persist({ birthday, currentAge: birthday ? ageFromBirthday(birthday, todayISO()) : base.currentAge });
-            }}
-            className="h-10 bg-transparent text-sm text-accent outline-none"
-          />
-        </div>
-        {base.birthday ? (
-          <>
-            <Hairline />
-            <div className="flex items-center justify-between px-4 py-3.5">
-              <span className="text-sm">{t.reports.currentAge}</span>
-              <span className="text-sm tabular-nums text-muted">{base.currentAge}</span>
+          <SectionLabel>{t.reports.timeline}</SectionLabel>
+          <div className="mx-4 overflow-hidden rounded-2xl bg-elevated">
+            <div className="flex min-h-11 items-center justify-between gap-3 px-4">
+              <span className="text-sm">{t.reports.birthday}</span>
+              <input
+                type="date"
+                value={base.birthday ?? ""}
+                onChange={(e) => {
+                  const birthday = e.target.value || undefined;
+                  persist({ birthday, currentAge: birthday ? ageFromBirthday(birthday, todayISO()) : base.currentAge });
+                }}
+                className="h-11 max-w-[11.5rem] bg-transparent text-right text-sm text-accent outline-none"
+              />
             </div>
-          </>
-        ) : (
-          <>
             <Hairline />
-            <NumRow label={t.reports.currentAge} value={base.currentAge} onCommit={(n) => persist({ currentAge: n })} />
-          </>
-        )}
-        <Hairline />
-        <NumRow label={t.reports.retireAge} value={base.retireAge} onCommit={(n) => persist({ retireAge: n })} />
-        <Hairline />
-        <NumRow label={t.reports.deathAge} value={base.deathAge} onCommit={(n) => persist({ deathAge: n })} />
-      </div>
+            {base.birthday ? (
+              <div className="flex min-h-11 items-center justify-between px-4">
+                <span className="text-sm">{t.reports.currentAge}</span>
+                <span className="text-sm tabular-nums text-muted">{base.currentAge}</span>
+              </div>
+            ) : (
+              <NumRow label={t.reports.currentAge} value={base.currentAge} onCommit={(n) => persist({ currentAge: n })} />
+            )}
+            <Hairline />
+            <div className="grid grid-cols-2 divide-x divide-line">
+              <NumRow label={t.reports.retireAge} value={base.retireAge} onCommit={(n) => persist({ retireAge: n })} />
+              <NumRow label={t.reports.deathAge} value={base.deathAge} onCommit={(n) => persist({ deathAge: n })} />
+            </div>
+            <Hairline />
+            <NumRow label={t.reports.salaryNow} value={base.monthlyIncomeNow} money onCommit={(n) => persist({ monthlyIncomeNow: n })} />
+            <Hairline />
+            <NumRow label={t.reports.spendNow} value={base.monthlySpendNow} money onCommit={(n) => persist({ monthlySpendNow: n })} />
+            <Hairline />
+            <NumRow label={t.reports.spendRetired} value={base.targetMonthly} money onCommit={(n) => persist({ targetMonthly: n })} />
+          </div>
 
-      <SectionLabel>{t.reports.assumptions}</SectionLabel>
-      <div className="mx-4 overflow-hidden rounded-2xl bg-elevated">
-        <NumRow label={t.reports.spendRetired} value={base.targetMonthly} money onCommit={(n) => persist({ targetMonthly: n })} />
-        <Hairline />
-        <NumRow label={t.reports.travelRetired} value={base.travelInRetirement} money onCommit={(n) => persist({ travelInRetirement: n })} />
-        <Hairline />
-        <NumRow label={`${t.reports.inflation} (%)`} value={+(base.inflation * 100).toFixed(2)} onCommit={(n) => persist({ inflation: n / 100 })} />
-        <Hairline />
-        <NumRow label={`${t.reports.fireSwr} (%)`} value={+((base.fireSwr ?? 0.04) * 100).toFixed(2)} onCommit={(n) => persist({ fireSwr: n / 100 })} />
-        <Hairline />
-        <NumRow label={`${t.reports.reverseLtv} (%)`} value={+((base.reverseMortgageLtv ?? 0) * 100).toFixed(2)} onCommit={(n) => persist({ reverseMortgageLtv: n / 100 })} />
-        <Hairline />
-        <NumRow label={t.reports.emergencyReserve} value={base.emergencyReserve ?? 0} money onCommit={(n) => persist({ emergencyReserve: n })} />
-        <Hairline />
-        <NumRow label={t.reports.liquidityFloor} value={base.liquidityFloor ?? 0} money onCommit={(n) => persist({ liquidityFloor: n })} />
-        <Hairline />
-        <NumRow label={t.reports.desiredBuffer} value={base.desiredEndBuffer ?? 0} money onCommit={(n) => persist({ desiredEndBuffer: n })} />
-        <Hairline />
-        <NumRow label={t.reports.laterLifeAge} value={base.laterLifeAge ?? 75} onCommit={(n) => persist({ laterLifeAge: n })} />
-        <Hairline />
-        <label className="flex items-center justify-between gap-3 px-4 py-3.5 text-sm">
-          {t.reports.payOffAtRetire}
-          <input type="checkbox" checked={!!base.payOffMortgageAtRetire} onChange={(e) => persist({ payOffMortgageAtRetire: e.target.checked })} />
-        </label>
-      </div>
+          <FoldBlock title={t.reports.assumptions}>
+            <NumRow label={`${t.reports.inflation} (%)`} value={+(base.inflation * 100).toFixed(2)} onCommit={(n) => persist({ inflation: n / 100 })} />
+            <Hairline />
+            <NumRow label={`${t.reports.preReturn} (%)`} value={+(base.preReturn * 100).toFixed(2)} onCommit={(n) => persist({ preReturn: n / 100 })} />
+            <Hairline />
+            <NumRow label={`${t.reports.postReturn} (%)`} value={+(base.postReturn * 100).toFixed(2)} onCommit={(n) => persist({ postReturn: n / 100 })} />
+          </FoldBlock>
+
+          <FoldBlock title={t.reports.retireAdvanced}>
+            <NumRow label={t.reports.travelRetired} value={base.travelInRetirement} money onCommit={(n) => persist({ travelInRetirement: n })} />
+            <Hairline />
+            <NumRow label={`${t.reports.fireSwr} (%)`} value={+((base.fireSwr ?? 0.04) * 100).toFixed(2)} onCommit={(n) => persist({ fireSwr: n / 100 })} />
+            <Hairline />
+            <NumRow label={`${t.reports.reverseLtv} (%)`} value={+((base.reverseMortgageLtv ?? 0) * 100).toFixed(2)} onCommit={(n) => persist({ reverseMortgageLtv: n / 100 })} />
+            <Hairline />
+            <NumRow label={t.reports.emergencyReserve} value={base.emergencyReserve ?? 0} money onCommit={(n) => persist({ emergencyReserve: n })} />
+            <Hairline />
+            <NumRow label={t.reports.liquidityFloor} value={base.liquidityFloor ?? 0} money onCommit={(n) => persist({ liquidityFloor: n })} />
+            <Hairline />
+            <NumRow label={t.reports.desiredBuffer} value={base.desiredEndBuffer ?? 0} money onCommit={(n) => persist({ desiredEndBuffer: n })} />
+            <Hairline />
+            <NumRow label={t.reports.laterLifeAge} value={base.laterLifeAge ?? 75} onCommit={(n) => persist({ laterLifeAge: n })} />
+          </FoldBlock>
 
       <SectionLabel>{t.reports.propertiesOwned}</SectionLabel>
       <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
@@ -547,39 +571,26 @@ function AgeCompare({
   return (
     <div id="retire-compare" className="mb-3">
       <SectionLabel>{t.reports.readinessByAge}</SectionLabel>
-      <div className="mx-4 overflow-x-auto rounded-2xl bg-elevated">
-        <table className="min-w-[36rem] text-left text-xs">
-          <thead>
-            <tr className="text-muted">
-              <th className="px-3 py-2 font-medium">{t.reports.retireAge}</th>
-              <th className="px-3 py-2 font-medium">{t.reports.workYears}</th>
-              <th className="px-3 py-2 font-medium">{t.reports.accessibleAtRetire}</th>
-              <th className="px-3 py-2 font-medium">{t.reports.lockedAtRetire}</th>
-              <th className="px-3 py-2 font-medium">{t.reports.bridgeYears}</th>
-              <th className="px-3 py-2 font-medium">{t.reports.firstShortfall}</th>
-              <th className="px-3 py-2 font-medium">{t.reports.assetsAtEnd}</th>
-              <th className="px-3 py-2 font-medium">{t.reports.retireStatus}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.retireAge} className={cn("border-t border-line", r.retireAge === base.retireAge && "bg-accent-soft")}>
-                <td className="px-3 py-2">
-                  <button type="button" className="font-semibold text-accent" onClick={() => persist({ retireAge: r.retireAge })}>
-                    {r.retireAge}
-                  </button>
-                </td>
-                <td className="px-3 py-2 tabular-nums">{r.workYears}</td>
-                <td className="px-3 py-2 tabular-nums">{money(r.accessibleAtRetire, "HKD")}</td>
-                <td className="px-3 py-2 tabular-nums">{money(r.lockedAtRetire, "HKD")}</td>
-                <td className="px-3 py-2 tabular-nums">{r.bridgeYears}</td>
-                <td className="px-3 py-2 tabular-nums">{r.firstShortfallAge ?? "—"}</td>
-                <td className="px-3 py-2 tabular-nums">{money(r.endTotal, "HKD")}</td>
-                <td className="px-3 py-2">{statusLabel(r.status, t)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="mx-4 space-y-2">
+        {rows.map((r) => (
+          <button
+            key={r.retireAge}
+            type="button"
+            onClick={() => persist({ retireAge: r.retireAge })}
+            className={cn("w-full rounded-2xl p-3 text-left", r.retireAge === base.retireAge ? "bg-accent-soft" : "bg-elevated")}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold">{t.reports.retireAge} {r.retireAge}</span>
+              <span className="text-[11px] text-muted">{statusLabel(r.status, t)}</span>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-muted">
+              <span>{t.reports.workYears} {r.workYears}</span>
+              <span>{t.reports.bridgeYears} {r.bridgeYears}</span>
+              <span className="tabular-nums">{t.reports.accessibleAtRetire} {money(r.accessibleAtRetire, "HKD")}</span>
+              <span className="tabular-nums">{t.reports.assetsAtEnd} {money(r.endTotal, "HKD")}</span>
+            </div>
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -646,7 +657,7 @@ function HousingCard({
         <RowAmt label={t.reports.mortgageAtRetire} value={retireRow?.openingMortgage ?? 0} />
         <RowAmt label={t.reports.mortgagePayAtRetire} value={(retireRow?.mortgagePayment ?? 0) / 12} />
         <RowAmt label={t.reports.housingAfter} value={housing} />
-        <label className="mt-3 flex items-center justify-between text-sm">
+        <label className="mt-3 flex min-h-11 items-center justify-between text-sm">
           {t.reports.payOffAtRetire}
           <input type="checkbox" checked={payOff} onChange={(e) => persist({ payOffMortgageAtRetire: e.target.checked })} />
         </label>
@@ -724,7 +735,7 @@ function NumRow({
   return (
     <button
       type="button"
-      className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left"
+      className="flex min-h-11 w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
       onClick={() => {
         setRaw(String(value));
         setEditing(true);
@@ -754,6 +765,19 @@ function NumRow({
   );
 }
 
+function FoldBlock({ title, children }: { title: string; children: ReactNode }) {
+  const [on, setOn] = useState(false);
+  return (
+    <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
+      <button type="button" className="flex min-h-11 w-full items-center justify-between px-4 text-left" onClick={() => setOn(!on)}>
+        <span className="text-sm font-medium">{title}</span>
+        <ChevronDown className={cn("size-4 text-muted transition", on && "rotate-180")} />
+      </button>
+      {on ? <div className="border-t border-line">{children}</div> : null}
+    </div>
+  );
+}
+
 function SleeveReturns({
   title,
   rows,
@@ -766,38 +790,44 @@ function SleeveReturns({
   onToggle: (id: string, included: boolean) => void;
 }) {
   const t = useT();
+  const [on, setOn] = useState(false);
   return (
-    <>
-      <SectionLabel>{title}</SectionLabel>
-      {rows.length === 0 ? (
-        <p className="px-5 pb-2 text-xs text-muted">{t.common.none}</p>
-      ) : (
-        <div className="mx-4 overflow-hidden rounded-2xl bg-elevated">
-          {rows.map((s, i) => (
-            <div key={s.id} className={s.included ? "" : "opacity-50"}>
-              {i > 0 ? <Hairline /> : null}
-              <div className="px-4 py-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm">{s.label}</div>
-                    <div className="text-xs tabular-nums text-muted">{money(s.amount, "HKD")}</div>
+    <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
+      <button type="button" className="flex min-h-11 w-full items-center justify-between px-4 text-left" onClick={() => setOn(!on)}>
+        <span className="text-sm font-medium">{title}</span>
+        <ChevronDown className={cn("size-4 text-muted transition", on && "rotate-180")} />
+      </button>
+      {on ? (
+        rows.length === 0 ? (
+          <p className="border-t border-line px-4 py-3 text-xs text-muted">{t.common.none}</p>
+        ) : (
+          <div className="border-t border-line">
+            {rows.map((s, i) => (
+              <div key={s.id} className={s.included ? "" : "opacity-50"}>
+                {i > 0 ? <Hairline /> : null}
+                <div className="px-4 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm">{s.label}</div>
+                      <div className="text-xs tabular-nums text-muted">{money(s.amount, "HKD")}</div>
+                    </div>
+                    <label className="flex items-center gap-1.5 text-xs text-muted">
+                      <input type="checkbox" checked={s.included} onChange={(e) => onToggle(s.id, e.target.checked)} />
+                      {t.reports.includeInPlan}
+                    </label>
                   </div>
-                  <label className="flex items-center gap-1.5 text-xs text-muted">
-                    <input type="checkbox" checked={s.included} onChange={(e) => onToggle(s.id, e.target.checked)} />
-                    {t.reports.includeInPlan}
-                  </label>
+                  <NumRow
+                    label={`${t.reports.expectedReturn} (%)`}
+                    value={+(s.annualReturn * 100).toFixed(2)}
+                    onCommit={(n) => onSave(s.id, n / 100)}
+                  />
                 </div>
-                <NumRow
-                  label={`${t.reports.expectedReturn} (%)`}
-                  value={+(s.annualReturn * 100).toFixed(2)}
-                  onCommit={(n) => onSave(s.id, n / 100)}
-                />
               </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </>
+            ))}
+          </div>
+        )
+      ) : null}
+    </div>
   );
 }
 

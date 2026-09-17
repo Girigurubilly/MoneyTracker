@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { emptyLifePlan, estimateHkNetMonthly, lifePlanMissing, runLifePlan } from "./life-plan.ts";
+import { emptyLifePlan, estimateHkNetMonthly, lifePlanMissing, resolveLifePlan, runLifePlan } from "./life-plan.ts";
 import type { RetirementLifePlan } from "../types.ts";
 
 function filled(): RetirementLifePlan {
@@ -144,5 +144,52 @@ describe("two-path simulation", () => {
     const r = runLifePlan(filled(), "2026-01-01");
     assert.equal(typeof r.stay!.dwzGap, "number");
     assert.equal(r.stay!.dwzGap, r.stay!.terminalAssets - 500_000);
+  });
+
+  it("fills blank plan fields from the shared retirement profile", () => {
+    const resolved = resolveLifePlan(emptyLifePlan(), {
+      birthday: "1984-06-01",
+      currentAge: 42,
+      retireAge: 50,
+      deathAge: 85,
+      inflation: 0.025,
+      postReturn: 0.03,
+      monthlyIncomeNow: 70_000,
+      monthlySpendNow: 35_000,
+      targetMonthly: 28_000,
+      investable: 3_000_000,
+      property: 6_000_000,
+      reverseMortgageLtv: 0.4,
+      mortgage: { outstanding: 1_000_000, monthlyPayment: 12_000, endDate: "2035-01-01", rate: 0.03 },
+      today: "2026-01-01",
+    });
+    assert.equal(resolved.personal.dateOfBirth, "1984-06-01");
+    assert.equal(resolved.personal.planEndAge, 85);
+    assert.equal(resolved.currentJob.grossMonthlyIncome, 70_000);
+    assert.equal(resolved.assets.financialAssets, 3_000_000);
+    assert.equal(resolved.mortgage.monthlyPayment, 12_000);
+    assert.equal(resolved.retirement.annualInflationRate, 0.025);
+    assert.equal(lifePlanMissing(resolved).length, 0);
+  });
+
+  it("runs from shared age when birthday is blank", () => {
+    const resolved = resolveLifePlan(emptyLifePlan(), {
+      currentAge: 40,
+      retireAge: 65,
+      deathAge: 90,
+      inflation: 0.025,
+      postReturn: 0.035,
+      monthlyIncomeNow: 72_000,
+      monthlySpendNow: 28_000,
+      targetMonthly: 25_000,
+      investable: 2_000_000,
+      property: 6_000_000,
+      mortgage: null,
+      today: "2026-09-16",
+    });
+    const r = runLifePlan(resolved, "2026-09-16");
+    assert.equal(r.ready, true);
+    assert.equal(r.stay?.retireAge, 65);
+    assert.equal(r.switch, null);
   });
 });

@@ -390,8 +390,101 @@ export function runLifePlan(plan: RetirementLifePlan, asOf = new Date().toISOStr
   const missing = lifePlanMissing(plan);
   if (missing.length) return { ready: false, missing, stay: null, switch: null };
   const stay = plan.currentJob.enabled ? simulatePath(plan, "stay", asOf) : null;
-  const sw = plan.lowerStressJob.enabled ? simulatePath(plan, "switch", asOf) : null;
+  const sw = plan.lowerStressJob.enabled && Boolean(plan.lowerStressJob.startDate) ? simulatePath(plan, "switch", asOf) : null;
   return { ready: true, missing: [], stay, switch: sw };
+}
+
+export function dateAtAge(dob: string | null | undefined, age: number, today: string, currentAge: number): string {
+  if (dob && /^\d{4}/.test(dob)) return `${Number(dob.slice(0, 4)) + age}-12-31`;
+  const y = Number(today.slice(0, 4)) + (age - currentAge);
+  return `${y}-12-31`;
+}
+
+function impliedBirthday(today: string, currentAge: number): string {
+  const y = Number(today.slice(0, 4)) - currentAge;
+  return `${Number.isFinite(y) ? y : 1980}-01-01`;
+}
+
+export type LifePlanShared = {
+  birthday?: string;
+  currentAge: number;
+  retireAge: number;
+  deathAge: number;
+  inflation: number;
+  postReturn: number;
+  monthlyIncomeNow: number;
+  monthlySpendNow: number;
+  targetMonthly: number;
+  reverseMortgageLtv?: number;
+  investable: number;
+  property: number;
+  mortgage: {
+    outstanding: number;
+    monthlyPayment: number;
+    endDate: string;
+    rate: number;
+  } | null;
+  today: string;
+};
+
+/** Fill blank life-plan fields from the shared retirement profile. User-entered values win. */
+export function resolveLifePlan(plan: RetirementLifePlan, shared: LifePlanShared): RetirementLifePlan {
+  const retireDate = dateAtAge(shared.birthday, shared.retireAge, shared.today, shared.currentAge);
+  const stages =
+    plan.spendingStages.some((s) => s.monthlyLivingCostInTodayMoney != null)
+      ? plan.spendingStages
+      : [
+          {
+            id: "from-retire",
+            label: "",
+            startAge: shared.retireAge,
+            endAge: shared.deathAge,
+            monthlyLivingCostInTodayMoney: shared.targetMonthly || null,
+            followsInflation: true,
+            isEssential: true,
+            notes: "",
+          },
+        ];
+  const mort = plan.mortgage;
+  const sharedMort = shared.mortgage;
+  return mergeLifePlan(plan, {
+    personal: {
+      dateOfBirth: plan.personal.dateOfBirth || shared.birthday || impliedBirthday(shared.today, shared.currentAge),
+      planStartDate: plan.personal.planStartDate || shared.today,
+      planEndAge: plan.personal.planEndAge ?? shared.deathAge,
+      targetTerminalFinancialAssets: plan.personal.targetTerminalFinancialAssets,
+    },
+    currentJob: {
+      ...plan.currentJob,
+      endDate: plan.currentJob.endDate || retireDate,
+      grossMonthlyIncome: plan.currentJob.grossMonthlyIncome ?? (shared.monthlyIncomeNow || null),
+      actualMonthlySpending: plan.currentJob.actualMonthlySpending ?? (shared.monthlySpendNow || null),
+    },
+    retirement: {
+      ...plan.retirement,
+      startDate: plan.retirement.startDate || retireDate,
+      annualInvestmentReturn: plan.retirement.annualInvestmentReturn ?? shared.postReturn,
+      annualInflationRate: plan.retirement.annualInflationRate ?? shared.inflation,
+    },
+    spendingStages: stages,
+    assets: {
+      financialAssets: plan.assets.financialAssets ?? shared.investable,
+      selfOccupiedPropertyValue: plan.assets.selfOccupiedPropertyValue ?? (shared.property || null),
+      selfOccupiedPropertyGrowthRate: plan.assets.selfOccupiedPropertyGrowthRate,
+    },
+    mortgage: {
+      ...mort,
+      enabled: mort.enabled,
+      outstandingBalance: mort.outstandingBalance ?? sharedMort?.outstanding ?? null,
+      monthlyPayment: mort.monthlyPayment ?? sharedMort?.monthlyPayment ?? null,
+      endDate: mort.endDate || sharedMort?.endDate || null,
+      annualInterestRate: mort.annualInterestRate ?? sharedMort?.rate ?? null,
+    },
+    reverseMortgage: {
+      ...plan.reverseMortgage,
+      ltv: plan.reverseMortgage.ltv ?? shared.reverseMortgageLtv ?? null,
+    },
+  });
 }
 
 export function mergeLifePlan(base: RetirementLifePlan, patch: Partial<RetirementLifePlan>): RetirementLifePlan {

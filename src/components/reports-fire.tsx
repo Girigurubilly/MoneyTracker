@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
-import { Check, Minus, Plus, TriangleAlert, X } from "lucide-react";
+import { Check, ChevronDown, TriangleAlert, X } from "lucide-react";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { ScreenHeader, SectionLabel } from "@/components/shared";
+import { SharedRetirementStrip, useRetirementModel } from "@/components/reports-retire";
 import { money, pct, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { monthKey } from "@/lib/calc/ledger";
-import { ageFromBirthday, savingsLast12Months } from "@/lib/calc/retirement";
 import {
   fireBuckets,
   fireGates,
@@ -34,27 +34,24 @@ export function FirePlanPage() {
   const txs = useApp((s) => s.transactions);
   const rec = useApp((s) => s.recurring);
   const rates = useApp((s) => s.fxRates);
-  const ret = useApp((s) => s.retirement);
-  const update = useApp((s) => s.updateRetirement);
   const updateCategory = useApp((s) => s.updateCategory);
   const deposits = useApp((s) => s.deposits);
   const holdings = useApp((s) => s.holdings);
   const retirementAccounts = useApp((s) => s.retirementAccounts);
-  const mortgage = useApp((s) => s.mortgage);
-  const avg = savingsLast12Months(txs, rates, monthKey(todayISO()));
-  const derivedAge = ret?.birthday ? ageFromBirthday(ret.birthday, todayISO()) : ret?.currentAge ?? 42;
-  const currentAge = derivedAge || 42;
-  const retireAge = ret?.retireAge ?? 50;
-  const deathAge = ret?.deathAge ?? 85;
-  const preReturn = ret?.preReturn ?? 0.05;
-  const postReturn = ret?.postReturn ?? 0.03;
-  const inflation = ret?.inflation ?? 0.025;
-  const parentMonthly = ret?.parentSupportMonthly ?? 0;
-  const parentYears = ret?.parentSupportYears;
-  const parentMode = ret?.parentSupportMode === "reserve" ? "reserve" : "include";
-  const jobAfter = ret?.postRetireJobMonthly ?? 0;
-  const monthlySave = ret?.monthlySaveOverride ?? avg.monthlySave;
-  const acceptedFlexCut = Boolean(ret?.acceptedFlexCut);
+  const { base, persist, avg, mortgage } = useRetirementModel();
+  const currentAge = base.currentAge;
+  const retireAge = base.retireAge;
+  const deathAge = base.deathAge;
+  const preReturn = base.preReturn;
+  const postReturn = base.postReturn;
+  const inflation = base.inflation;
+  const parentMonthly = base.parentSupportMonthly ?? 0;
+  const parentYears = base.parentSupportYears;
+  const parentMode = base.parentSupportMode === "reserve" ? "reserve" : "include";
+  const jobAfter = base.postRetireJobMonthly ?? 0;
+  const impliedSave = base.monthlyIncomeNow - base.monthlySpendNow;
+  const monthlySave = base.monthlySaveOverride ?? (impliedSave || avg.monthlySave);
+  const acceptedFlexCut = Boolean(base.acceptedFlexCut);
 
   const rows = useMemo(
     () => monthlySpendByCategory(txs, categories, rec, rates, monthKey(todayISO())),
@@ -88,6 +85,7 @@ export function FirePlanPage() {
     postJobMonthly: jobAfter,
   };
   const [stressOn, setStressOn] = useState<FireStressId | null>(null);
+  const [showTags, setShowTags] = useState(false);
   const stressPatch =
     stressOn === "bear"
       ? { shockAtRetire: -0.3 }
@@ -113,7 +111,7 @@ export function FirePlanPage() {
     mortgage,
     currentAge,
     retireAge,
-    payOffMortgageAtRetire: Boolean(ret?.payOffMortgageAtRetire),
+    payOffMortgageAtRetire: Boolean(base.payOffMortgageAtRetire),
     investable,
     baseTarget: targets.base,
     liquidity: liq,
@@ -127,24 +125,6 @@ export function FirePlanPage() {
     stress,
   });
 
-  function persist(patch: Partial<import("@/lib/calc/retirement").RetirementInputs>) {
-    void update({
-      currentAge,
-      retireAge,
-      deathAge,
-      monthlyIncomeNow: ret?.monthlyIncomeNow || avg.monthlyIncome,
-      monthlySpendNow: ret?.monthlySpendNow || avg.monthlySpend,
-      targetMonthly: levels.base || ret?.targetMonthly || avg.monthlySpend,
-      preReturn,
-      postReturn,
-      inflation,
-      travelInRetirement: ret?.travelInRetirement ?? 0,
-      ...ret,
-      ...patch,
-      id: ret?.id ?? "base",
-    });
-  }
-
   function setKind(id: string, kind: FireSpendKind) {
     const cat = categories.find((c) => c.id === id);
     if (!cat) return;
@@ -155,6 +135,7 @@ export function FirePlanPage() {
     <div className="pb-10">
       <ScreenHeader title={t.reports.firePlan} backTo="/reports/retirement" />
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.firePlanHint}</p>
+      <SharedRetirementStrip />
 
       <SectionLabel>{t.reports.fireSpendEngine}</SectionLabel>
       <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
@@ -165,9 +146,14 @@ export function FirePlanPage() {
           <MiniStat label={t.reports.fireKindWork} value={levels.work} muted />
         </div>
         <p className="px-4 pb-2 text-[11px] leading-4 text-muted">
-          {t.reports.fireKindWorkHint} {t.reports.fireKindCoreHint} {t.reports.fireKindFlexHint}
+          {t.reports.fireKindWorkHint}
         </p>
-        {rows.map((r) => (
+        <button type="button" className="flex min-h-11 w-full items-center justify-between px-4 text-sm" onClick={() => setShowTags(!showTags)}>
+          {t.reports.fireSpendEngine}
+          <ChevronDown className={cn("size-4 text-muted transition", showTags && "rotate-180")} />
+        </button>
+        {showTags
+          ? rows.map((r) => (
           <div key={r.id} className="border-t border-line px-4 py-3">
             <div className="flex items-baseline justify-between gap-2">
               <span className="truncate text-sm">{pickName(locale, r.name, r.nameZh)}</span>
@@ -190,7 +176,8 @@ export function FirePlanPage() {
               ))}
             </div>
           </div>
-        ))}
+        ))
+          : null}
       </div>
 
       <SectionLabel>{t.reports.fireThree}</SectionLabel>
@@ -259,13 +246,7 @@ export function FirePlanPage() {
       <SectionLabel>{t.reports.fireTimeline}</SectionLabel>
       <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
         <div className="grid grid-cols-2 gap-x-3">
-          <FireNum label={t.reports.currentAge} value={currentAge} onCommit={(n) => persist({ currentAge: n })} />
-          <FireNum label={t.reports.retireAge} value={retireAge} onCommit={(n) => persist({ retireAge: n })} />
-          <FireNum label={t.reports.deathAge} value={deathAge} onCommit={(n) => persist({ deathAge: n })} />
           <FireNum label={t.reports.fireSaveNow} value={monthlySave} money onCommit={(n) => persist({ monthlySaveOverride: n })} />
-          <FireNum label={`${t.reports.preReturn} %`} value={+(preReturn * 100).toFixed(2)} onCommit={(n) => persist({ preReturn: n / 100 })} />
-          <FireNum label={`${t.reports.postReturn} %`} value={+(postReturn * 100).toFixed(2)} onCommit={(n) => persist({ postReturn: n / 100 })} />
-          <FireNum label={`${t.reports.inflation} %`} value={+(inflation * 100).toFixed(2)} onCommit={(n) => persist({ inflation: n / 100 })} />
           <FireNum label={t.reports.fireJobAfter} value={jobAfter} money onCommit={(n) => persist({ postRetireJobMonthly: n })} />
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
@@ -341,7 +322,7 @@ export function FirePlanPage() {
             </div>
           </div>
         ))}
-        <label className="flex items-start gap-3 border-t border-line px-4 py-3">
+        <label className="flex min-h-11 items-start gap-3 border-t border-line px-4 py-3">
           <input
             type="checkbox"
             className="mt-1 size-4"
@@ -433,7 +414,14 @@ function FireNum({
   const [editing, setEditing] = useState(false);
   const [raw, setRaw] = useState(String(value));
   return (
-    <div className="flex items-center justify-between gap-2 border-b border-line py-2.5">
+    <button
+      type="button"
+      className="flex min-h-11 w-full items-center justify-between gap-2 py-2 text-left"
+      onClick={() => {
+        setRaw(String(value));
+        setEditing(true);
+      }}
+    >
       <span className="min-w-0 truncate text-xs text-muted">{label}</span>
       {editing ? (
         <input
@@ -447,21 +435,11 @@ function FireNum({
             const n = Number(raw);
             if (Number.isFinite(n)) onCommit(n);
           }}
+          onClick={(e) => e.stopPropagation()}
         />
       ) : (
-        <button
-          type="button"
-          className="flex items-center gap-1 text-sm font-medium tabular-nums"
-          onClick={() => {
-            setRaw(String(value));
-            setEditing(true);
-          }}
-        >
-          <Minus className="size-3 text-muted" />
-          {asMoney ? money(value, "HKD") : value}
-          <Plus className="size-3 text-muted" />
-        </button>
+        <span className="text-sm font-medium tabular-nums">{asMoney ? money(value, "HKD") : value}</span>
       )}
-    </div>
+    </button>
   );
 }
