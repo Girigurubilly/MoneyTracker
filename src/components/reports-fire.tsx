@@ -145,9 +145,6 @@ export function FirePlanPage() {
           <MiniStat label={t.reports.fireAfterComfort} value={levels.comfort} />
           <MiniStat label={t.reports.fireKindWork} value={levels.work} muted />
         </div>
-        <p className="px-4 pb-2 text-[11px] leading-4 text-muted">
-          {t.reports.fireKindWorkHint}
-        </p>
         <button type="button" className="flex min-h-11 w-full items-center justify-between px-4 text-sm" onClick={() => setShowTags(!showTags)}>
           {t.reports.fireSpendEngine}
           <ChevronDown className={cn("size-4 text-muted transition", showTags && "rotate-180")} />

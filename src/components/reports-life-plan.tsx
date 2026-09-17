@@ -230,16 +230,11 @@ function Setup({
     <div className="space-y-2">
       <Fold title={t.reports.lpPersonal} open>
         <NullNum label={t.reports.lpDwz} value={plan.personal.targetTerminalFinancialAssets} money onCommit={(n) => patch({ personal: { ...plan.personal, targetTerminalFinancialAssets: n } })} />
-        <p className="px-4 pb-3 text-[11px] leading-4 text-muted">{t.reports.lpDwzHint}</p>
       </Fold>
       <Fold title={t.reports.lpCurrentJob}>
         <Toggle label={t.reports.lpEnabled} on={plan.currentJob.enabled} onChange={(on) => patch({ currentJob: { ...plan.currentJob, enabled: on } })} />
         <DateRow label={t.reports.lpJobEnd} value={plan.currentJob.endDate ?? resolved.currentJob.endDate} onChange={(v) => patch({ currentJob: { ...plan.currentJob, endDate: v } })} />
         <NullNum label={t.reports.lpSaveOverride} value={plan.currentJob.monthlySavingsOverride} money onCommit={(n) => patch({ currentJob: { ...plan.currentJob, monthlySavingsOverride: n } })} />
-        <p className="px-4 py-2 text-[11px] leading-4 text-muted">
-          {t.reports.lpGross} {money(resolved.currentJob.grossMonthlyIncome ?? 0, "HKD")} · {t.reports.lpSpendNow} {money(resolved.currentJob.actualMonthlySpending ?? 0, "HKD")}
-        </p>
-        <p className="px-4 pb-3 text-[11px] leading-4 text-muted">{t.reports.lpJobFromShared}</p>
       </Fold>
       <Fold title={t.reports.lpLowerJob} open>
         <Toggle label={t.reports.lpEnabled} on={plan.lowerStressJob.enabled} onChange={(on) => patch({ lowerStressJob: { ...plan.lowerStressJob, enabled: on } })} />
@@ -247,11 +242,9 @@ function Setup({
         <DateRow label={t.reports.lpLowerEnd} value={plan.lowerStressJob.endDate} onChange={(v) => patch({ lowerStressJob: { ...plan.lowerStressJob, endDate: v } })} />
         <NullNum label={t.reports.lpGross} value={plan.lowerStressJob.grossMonthlyIncome} money onCommit={(n) => patch({ lowerStressJob: { ...plan.lowerStressJob, grossMonthlyIncome: n } })} />
         <NullNum label={t.reports.lpNetOverride} value={plan.lowerStressJob.estimatedNetMonthlyIncomeOverride} money onCommit={(n) => patch({ lowerStressJob: { ...plan.lowerStressJob, estimatedNetMonthlyIncomeOverride: n } })} />
-        <p className="px-4 pb-2 text-[11px] leading-4 text-muted">{t.reports.lpNetHint}</p>
         <NullNum label={t.reports.lpLowerLive} value={plan.lowerStressJob.monthlyLivingCost} money onCommit={(n) => patch({ lowerStressJob: { ...plan.lowerStressJob, monthlyLivingCost: n } })} />
       </Fold>
       <Fold title={t.reports.lpStages}>
-        <p className="px-4 py-2 text-[11px] leading-4 text-muted">{t.reports.lpStageHint} {t.reports.lpStageEmpty}</p>
         {stages.map((s, i) => (
           <div key={s.id} className="border-t border-line">
             <div className="flex min-h-11 items-center justify-between px-4">
@@ -279,10 +272,6 @@ function Setup({
         <Toggle label={t.reports.lpEnabled} on={plan.mortgage.enabled} onChange={(on) => patch({ mortgage: { ...plan.mortgage, enabled: on } })} />
         <Toggle label={t.reports.lpPayInCurrent} on={plan.mortgage.paymentIncludedInCurrentSpending} onChange={(on) => patch({ mortgage: { ...plan.mortgage, paymentIncludedInCurrentSpending: on } })} />
         <Toggle label={t.reports.lpPayInRetire} on={plan.mortgage.paymentIncludedInRetirementLivingCost} onChange={(on) => patch({ mortgage: { ...plan.mortgage, paymentIncludedInRetirementLivingCost: on } })} />
-        <p className="px-4 py-2 text-[11px] leading-4 text-muted">
-          {t.reports.lpOutstanding} {money(resolved.mortgage.outstandingBalance ?? 0, "HKD")} · {t.reports.lpMonthlyPay} {money(resolved.mortgage.monthlyPayment ?? 0, "HKD")}
-        </p>
-        <p className="px-4 pb-3 text-[11px] leading-4 text-muted">{t.reports.sharedProfileHint}</p>
       </Fold>
       <Fold title={t.reports.lpInherit}>
         <Toggle label={t.reports.lpEnabled} on={plan.inheritedProperty.enabled} onChange={(on) => patch({ inheritedProperty: { ...plan.inheritedProperty, enabled: on } })} />
@@ -302,7 +291,6 @@ function Setup({
         <Toggle label={t.reports.lpEnabled} on={plan.reverseMortgage.enabled} onChange={(on) => patch({ reverseMortgage: { ...plan.reverseMortgage, enabled: on } })} />
         <NullNum label={t.reports.lpReverseAge} value={plan.reverseMortgage.startAge} onCommit={(n) => patch({ reverseMortgage: { ...plan.reverseMortgage, startAge: n } })} />
         <NullNum label={t.reports.lpReversePay} value={plan.reverseMortgage.monthlyPayout} money onCommit={(n) => patch({ reverseMortgage: { ...plan.reverseMortgage, monthlyPayout: n } })} />
-        <p className="px-4 pb-3 text-[11px] leading-4 text-muted">{t.reports.lpReverseHint}</p>
       </Fold>
     </div>
   );
