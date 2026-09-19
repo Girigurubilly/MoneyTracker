@@ -4,6 +4,7 @@ import {
   isMortgageInterestCategory,
   isMortgagePrincipalCategory,
   isMortgageSplitCategory,
+  missingMortgageLeaf,
   mortgageEntryKind,
   pickerGroups,
 } from "./categories.ts";
@@ -46,6 +47,17 @@ describe("mortgage category matching", () => {
     });
     assert.equal(isMortgageInterestCategory(income), false);
     assert.equal(isMortgageSplitCategory(income, [income]), false);
+  });
+
+  it("does not recreate mortgage-p when that id was renamed to 家用", () => {
+    const housing = cat({ id: "p-housing", name: "Housing", nameZh: "房屋" });
+    const family = cat({ id: "mortgage-p", name: "家用", nameZh: "家用", parentId: "p-housing" });
+    const interest = cat({ id: "mortgage-i", name: "Mortgage interest", nameZh: "按揭利息", parentId: "p-housing" });
+    const cats = [housing, family, interest];
+    assert.equal(isMortgagePrincipalCategory(family), false);
+    assert.equal(missingMortgageLeaf(cats, "principal"), false);
+    assert.equal(missingMortgageLeaf(cats, "interest"), false);
+    assert.equal(missingMortgageLeaf([housing], "principal"), true);
   });
 });
 

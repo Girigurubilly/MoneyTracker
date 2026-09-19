@@ -43,6 +43,14 @@ export function isMortgageInterestCategory(c: Category): boolean {
   return false;
 }
 
+/** True when a seed mortgage leaf should be inserted. Never if that id already exists. */
+export function missingMortgageLeaf(categories: Category[], kind: "principal" | "interest"): boolean {
+  const match = kind === "principal" ? isMortgagePrincipalCategory : isMortgageInterestCategory;
+  if (categories.some(match)) return false;
+  const id = kind === "principal" ? "mortgage-p" : "mortgage-i";
+  return !categories.some((c) => c.id === id);
+}
+
 export function isMortgageSplitCategory(c: Category | undefined, categories: Category[]): boolean {
   if (!c) return false;
   if (isHousingGroup(c)) return false;

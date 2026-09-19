@@ -52,7 +52,7 @@ import { fetchLiveFx } from "@/lib/calc/fx";
 import { applyHoldingBalances, assignHoldingBook, mergeHoldings, parseHoldingsFile } from "@/lib/holdings";
 import { fetchHoldingQuotes, quoteKey } from "@/lib/quotes";
 import { chargedDayOf, chargedIso, inferLivingRegular, isExpenseRegular } from "@/lib/calc/budget";
-import { isMortgageInterestCategory, isMortgagePrincipalCategory } from "@/lib/categories";
+import { isMortgageInterestCategory, isMortgagePrincipalCategory, missingMortgageLeaf } from "@/lib/categories";
 import { accountsInGroup, nextSortOrder } from "@/lib/accounts";
 import { applyTxRules } from "@/lib/tx-rules";
 import { applyDeltas, balanceDeltas, monthKey } from "@/lib/calc/ledger";
@@ -571,11 +571,11 @@ async function ensureMortgageCategories() {
     }
   }
   const parentId = housing?.id;
-  if (!cats.some((c) => isMortgagePrincipalCategory(c))) {
+  if (missingMortgageLeaf(cats, "principal")) {
     const row = seedCategories.find((c) => c.id === "mortgage-p");
     if (row) await idb().categories.add({ ...row, parentId: parentId ?? row.parentId });
   }
-  if (!cats.some((c) => isMortgageInterestCategory(c))) {
+  if (missingMortgageLeaf(cats, "interest")) {
     const row = seedCategories.find((c) => c.id === "mortgage-i");
     if (row) await idb().categories.add({ ...row, parentId: parentId ?? row.parentId });
   }
@@ -703,11 +703,15 @@ export const useApp = create<AppState>((set, get) => ({
       else {
         if (n === 0) await idb().accounts.add(defaultCash);
         if (catN === 0) await idb().categories.bulkAdd(seedCategories);
-        await ensureMortgageCategories();
-        await ensureRegularLiving();
-        await migrateAdhocFromPlannedTxs();
-        await postDuePlanned();
-        await syncRegularSchedules();
+        try {
+          await ensureMortgageCategories();
+          await ensureRegularLiving();
+          await migrateAdhocFromPlannedTxs();
+          await postDuePlanned();
+          await syncRegularSchedules();
+        } catch {
+          /* still load the saved ledger */
+        }
       }
       const data = await loadAll();
       if (!data.fxRates.length) {
@@ -722,8 +726,21 @@ export const useApp = create<AppState>((set, get) => ({
         data.snapshots = [...data.snapshots, row];
       }
       set({ ...data, ready: true });
-      await persistTripLinks(get, set);
+      try {
+        await persistTripLinks(get, set);
+      } catch {
+        /* ignore */
+      }
     } catch {
+      try {
+        if (getDb()) {
+          const data = await loadAll();
+          set({ ...data, ready: true });
+          return;
+        }
+      } catch {
+        /* ignore */
+      }
       set({ ready: true });
     }
   },
