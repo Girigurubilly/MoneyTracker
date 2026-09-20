@@ -23,7 +23,7 @@ import { asOfForMonth, budgetActuals, chargedDayOf, forecastTone } from "@/lib/c
 import { travelSpendYtd } from "@/lib/calc/trips";
 import { monthKey } from "@/lib/calc/ledger";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
-import type { AdhocBudget, Budget, Currency, Recurring, TxType } from "@/lib/types";
+import type { AdhocBudget, Budget, Currency, Recurring, TxType, WishItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -403,6 +403,18 @@ function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recur
   );
 }
 
+function wishFromAdhoc(a: AdhocBudget, locale: "en" | "zh-HK"): WishItem {
+  return {
+    id: newId(),
+    name: pickName(locale, a.label, a.labelZh),
+    price: a.amount,
+    currency: a.currency === "MILES" ? "HKD" : a.currency,
+    categoryId: a.categoryId,
+    priceCards: a.priceCards,
+    valueCards: a.valueCards,
+  };
+}
+
 function AdhocBlock({
   month,
   onAdd,
@@ -418,6 +430,7 @@ function AdhocBlock({
   const accounts = useApp((s) => s.accounts);
   const addTx = useApp((s) => s.addTransaction);
   const delAdhoc = useApp((s) => s.deleteAdhocBudget);
+  const addWish = useApp((s) => s.addWishItem);
   const today = todayISO();
   const rows = useApp((s) => s.adhocBudgets)
     .filter((a) => a.month === month || a.date.startsWith(month))
@@ -438,7 +451,7 @@ function AdhocBlock({
           {rows.map((a) => {
             const upcoming = a.date > today;
             return (
-            <div key={a.id} className="flex w-full items-center gap-3 border-t border-line px-4 py-3 first:border-0">
+            <div key={a.id} className="flex w-full flex-wrap items-center gap-2 border-t border-line px-4 py-3 first:border-0">
               <button type="button" className="min-w-0 flex-1 text-left" onClick={() => onEdit(a)}>
                 <div className="truncate text-sm font-medium">{pickName(locale, a.label, a.labelZh)}</div>
                 <div className="mt-0.5 text-xs text-muted">{dayPart(a.date, locale)}</div>
@@ -472,6 +485,18 @@ function AdhocBlock({
               ) : (
                 <span className="shrink-0 rounded-full bg-success-soft px-2 py-1 text-xs font-medium text-income">{t.budget.charged}</span>
               )}
+              <button
+                type="button"
+                className="h-8 shrink-0 rounded-full bg-elevated px-3 text-xs font-medium"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  await addWish(wishFromAdhoc(a, locale));
+                  await delAdhoc(a.id);
+                  toast(t.budget.toWishlistDone);
+                }}
+              >
+                {t.budget.toWishlist}
+              </button>
               <button type="button" aria-label={t.common.edit} onClick={() => onEdit(a)}>
                 <ChevronRight className="size-4 shrink-0 text-faint" />
               </button>
@@ -508,6 +533,7 @@ function AdhocEditorBody({ initial, month, onClose }: { initial: AdhocBudget | n
   const add = useApp((s) => s.addAdhocBudget);
   const update = useApp((s) => s.updateAdhocBudget);
   const del = useApp((s) => s.deleteAdhocBudget);
+  const addWish = useApp((s) => s.addWishItem);
   const categories = useApp((s) => s.categories);
   const defaultCurrency = useApp((s) => s.defaultCurrency);
   const today = todayISO();
@@ -536,6 +562,8 @@ function AdhocEditorBody({ initial, month, onClose }: { initial: AdhocBudget | n
       month,
       date: iso,
       categoryId: categoryId || undefined,
+      priceCards: initial?.priceCards,
+      valueCards: initial?.valueCards,
     };
     if (initial) await update(row);
     else await add(row);
@@ -596,9 +624,23 @@ function AdhocEditorBody({ initial, month, onClose }: { initial: AdhocBudget | n
         <input type="date" value={date} min={`${month}-01`} max={`${month}-31`} onChange={(e) => setDate(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
       </div>
       {initial ? (
-        <button type="button" className="px-4 py-3 text-sm text-expense" onClick={async () => { await del(initial.id); onClose(); }}>
-          {t.tx.delete}
-        </button>
+        <>
+          <button
+            type="button"
+            className="px-4 py-3 text-sm font-medium text-accent"
+            onClick={async () => {
+              await addWish(wishFromAdhoc(initial, locale));
+              await del(initial.id);
+              toast(t.budget.toWishlistDone);
+              onClose();
+            }}
+          >
+            {t.budget.toWishlist}
+          </button>
+          <button type="button" className="px-4 py-3 text-sm text-expense" onClick={async () => { await del(initial.id); onClose(); }}>
+            {t.tx.delete}
+          </button>
+        </>
       ) : null}
     </ComposerShell>
   );

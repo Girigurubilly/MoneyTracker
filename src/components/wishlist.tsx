@@ -128,7 +128,7 @@ export function WishlistBlock({ compact }: { compact?: boolean }) {
           setConverting(it);
         }}
       />
-      <ConvertSheet item={converting} onClose={() => setConverting(null)} />
+      {converting ? <ConvertSheet key={converting.id} item={converting} onClose={() => setConverting(null)} /> : null}
     </div>
   );
 }
@@ -282,25 +282,26 @@ function WishEditor({
   );
 }
 
-function ConvertSheet({ item, onClose }: { item: WishItem | null; onClose: () => void }) {
+function ConvertSheet({ item, onClose }: { item: WishItem; onClose: () => void }) {
   const t = useT();
   const locale = useUi((s) => s.locale);
   const accounts = useApp((s) => s.accounts);
   const categories = useApp((s) => s.categories);
   const rates = useApp((s) => s.fxRates);
   const addTransaction = useApp((s) => s.addTransaction);
+  const addAdhocBudget = useApp((s) => s.addAdhocBudget);
   const deleteWishItem = useApp((s) => s.deleteWishItem);
   const moneyAccounts = moneyAccountsForPicker(accounts);
-  const [categoryId, setCategoryId] = useState("");
+  const today = todayISO();
+  const [dest, setDest] = useState<"choose" | "expense" | "hold">("choose");
+  const [categoryId, setCategoryId] = useState(item.categoryId ?? "");
   const [accountId, setAccountId] = useState(moneyAccounts[0]?.id ?? "");
-  const [date, setDate] = useState(todayISO());
+  const [date, setDate] = useState(today);
   const [paid, setPaid] = useState(true);
-  const [pickCat, setPickCat] = useState(true);
+  const [pickCat, setPickCat] = useState(false);
   const cat = categories.find((c) => c.id === categoryId);
-  if (!item) return null;
 
-  async function save() {
-    if (!item) return;
+  async function saveExpense() {
     await addTransaction(
       applyTxRules(
         {
@@ -324,9 +325,28 @@ function ConvertSheet({ item, onClose }: { item: WishItem | null; onClose: () =>
     onClose();
   }
 
+  async function saveHold() {
+    const iso = date < today ? today : date;
+    await addAdhocBudget({
+      id: newId(),
+      label: item.name,
+      labelZh: item.name,
+      amount: item.price,
+      currency: item.currency,
+      month: iso.slice(0, 7),
+      date: iso,
+      categoryId: categoryId || undefined,
+      priceCards: item.priceCards,
+      valueCards: item.valueCards,
+    });
+    await deleteWishItem(item.id);
+    toast(t.wish.toAdhocDone);
+    onClose();
+  }
+
   if (pickCat) {
     return (
-      <Overlay open onClose={onClose} variant="page">
+      <Overlay open onClose={() => setPickCat(false)} variant="page">
         <CategoryPicker
           categories={categories}
           kind="expense"
@@ -342,10 +362,83 @@ function ConvertSheet({ item, onClose }: { item: WishItem | null; onClose: () =>
     );
   }
 
+  if (dest === "choose") {
+    return (
+      <Overlay open onClose={onClose} variant="page" title={t.wish.chooseConvert}>
+        <div className="px-5 pb-2">
+          <div className="text-base font-semibold">{item.name}</div>
+          <div className="mt-0.5 text-sm tabular-nums text-muted">{money(item.price, item.currency)}</div>
+        </div>
+        <div className="mx-4 mt-2 space-y-2 pb-10">
+          <button
+            type="button"
+            className="flex h-12 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-on-accent"
+            onClick={() => {
+              setDest("expense");
+              setPickCat(true);
+            }}
+          >
+            {t.wish.convert}
+          </button>
+          <button
+            type="button"
+            className="flex h-12 w-full items-center justify-center rounded-xl bg-elevated text-sm font-medium"
+            onClick={() => setDest("hold")}
+          >
+            {t.wish.toAdhoc}
+          </button>
+          <p className="px-1 pt-2 text-xs leading-5 text-muted">{t.wish.toAdhocHint}</p>
+        </div>
+      </Overlay>
+    );
+  }
+
+  if (dest === "hold") {
+    return (
+      <Overlay open onClose={onClose} variant="page">
+        <ComposerShell
+          header={
+            <ComposerHeader
+              onClose={() => setDest("choose")}
+              onSave={() => void saveHold()}
+              title={t.wish.toAdhoc}
+            />
+          }
+          keypad={null}
+        >
+          <LineRow label={item.name} amount={String(item.price)} />
+          <LineRow
+            leading={
+              cat ? (
+                <span className="grid size-8 place-items-center rounded-full bg-elevated">
+                  <CategoryIcon name={cat.icon} />
+                </span>
+              ) : null
+            }
+            label={cat ? categoryPath(cat, categories, locale) : ""}
+            placeholder={t.add.pickCategory}
+            onPressLabel={() => setPickCat(true)}
+          />
+          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+            <span className="text-sm text-muted">{t.wish.holdDate}</span>
+            <input
+              type="date"
+              value={date}
+              min={today}
+              onChange={(e) => setDate(e.target.value)}
+              className="h-10 bg-transparent text-sm text-accent outline-none"
+            />
+          </div>
+          <p className="px-4 py-3 text-xs leading-5 text-muted">{t.wish.holdDateHint}</p>
+        </ComposerShell>
+      </Overlay>
+    );
+  }
+
   return (
     <Overlay open onClose={onClose} variant="page">
       <ComposerShell
-        header={<ComposerHeader onClose={onClose} onSave={() => void save()} title={t.wish.convert} />}
+        header={<ComposerHeader onClose={() => setDest("choose")} onSave={() => void saveExpense()} title={t.wish.convert} />}
         keypad={
           <ActiveKeypad
             field="amount"

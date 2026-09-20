@@ -419,6 +419,11 @@ export type YearlyPlan = {
   expense: number;
 };
 
+export type WishCard = {
+  id: string;
+  text: string;
+};
+
 export type AdhocBudget = {
   id: string;
   label: string;
@@ -428,6 +433,8 @@ export type AdhocBudget = {
   month: string;
   date: string;
   categoryId?: string;
+  priceCards?: WishCard[];
+  valueCards?: WishCard[];
 };
 
 export type Budget = {
@@ -455,17 +462,13 @@ export type Trip = {
   monthlyCash: number;
 };
 
-export type WishCard = {
-  id: string;
-  text: string;
-};
-
 export type WishItem = {
   id: string;
   name: string;
   price: number;
   currency: Currency;
   note?: string;
+  categoryId?: string;
   priceCards?: WishCard[];
   valueCards?: WishCard[];
 };
