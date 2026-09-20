@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import { ChevronRight } from "lucide-react";
 import { Overlay, ScreenHeader, TxGroupedList } from "@/components/shared";
+import { SpendBriefButton } from "@/components/spend-brief";
 import { money, pct, shortDate, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { periodCategoryTotals, periodCategoryTxs, periodRange, type PeriodPreset, type PeriodTab } from "@/lib/calc/period";
@@ -36,6 +37,7 @@ export function SpendingPage() {
   const [customTo, setCustomTo] = useState(today);
   const [openId, setOpenId] = useState<string | null>(null);
   const [focusParent, setFocusParent] = useState<string | null>(null);
+  const kid = useUi((s) => s.accessMode) === "kid";
   const range = periodRange(preset, today, customFrom, customTo);
   const from = preset === "custom" ? customFrom : range.from;
   const to = preset === "custom" ? customTo : range.to;
@@ -107,7 +109,22 @@ export function SpendingPage() {
 
   return (
     <div className="pb-10">
-      <ScreenHeader title={t.reports.spending} backTo="/reports" />
+      <ScreenHeader
+        title={t.reports.spending}
+        backTo="/reports"
+        right={
+          kid ? undefined : (
+            <SpendBriefButton
+              className="px-2 text-sm font-medium text-accent"
+              from={from}
+              to={to}
+              preset={preset}
+              hideAdhoc={hideAdhoc}
+              mergeParents={merge}
+            />
+          )
+        }
+      />
       <div className="mx-4 grid grid-cols-2 overflow-hidden rounded-xl bg-elevated">
         <label className="border-r border-line px-4 py-3">
           <div className="text-xs text-muted">{t.reports.start}</div>

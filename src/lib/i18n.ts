@@ -333,6 +333,9 @@ export const messages = {
       both: "Income / spend",
       mergeParents: "Merge by group",
       hideAdhoc: "Hide ad-hoc",
+      exportPeriodAi: "Period for AI",
+      exportPeriodAiHint:
+        "Markdown of this period’s income, spend, category mix and largest item in each group. If “Hide ad-hoc” is on, those one-off amounts are left out. Copy, then paste with the asset and retirement exports.",
       transactions: "Transactions",
       noTransactions: "No transactions in this period",
       housingCost: "Monthly housing cost",
@@ -1281,6 +1284,9 @@ export const messages = {
       both: "收入 / 花費",
       mergeParents: "按主分類合併",
       hideAdhoc: "唔計臨時大額",
+      exportPeriodAi: "呢段俾 AI",
+      exportPeriodAiHint:
+        "呢段期間嘅收入、開支、分類同每類最大筆開支嘅 Markdown。如果開咗「唔計臨時大額」，匯出都會跟住唔計嗰啲一次性大額。複製之後，連同資產同退休頁嘅匯出一齊貼去大型語言模型。",
       transactions: "交易",
       noTransactions: "此期間沒有交易",
       housingCost: "每月住房成本",

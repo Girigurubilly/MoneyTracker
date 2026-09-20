@@ -121,6 +121,7 @@ export function periodCashflowPoints(
   rates: FxRate[],
   from: string,
   to: string,
+  excludeAdhoc = false,
 ): { points: CashflowPoint[]; income: number; expense: number; net: number; grain: "day" | "month" } {
   const days = (Date.parse(`${to}T00:00:00`) - Date.parse(`${from}T00:00:00`)) / 86400000;
   const grain: "day" | "month" = days <= 45 ? "day" : "month";
@@ -129,6 +130,7 @@ export function periodCashflowPoints(
   let expense = 0;
   for (const tx of txs) {
     if (tx.planned) continue;
+    if (excludeAdhoc && tx.adhoc) continue;
     if (!inPeriod(tx.date, from, to)) continue;
     const side = cashflowSide(tx);
     if (side === "none") continue;
