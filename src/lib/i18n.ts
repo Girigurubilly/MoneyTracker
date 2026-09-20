@@ -174,6 +174,11 @@ export const messages = {
       remove: "Delete account",
       removed: "Account deleted.",
       removeBlocked: "This account still has transactions.",
+      exportAi: "Status for AI",
+      exportAiHint: "Markdown snapshot of assets, liabilities, 12-month cash flow and monthly net-worth change. Copy it, then paste with the retirement export into a chat model.",
+      copyBrief: "Copy",
+      copied: "Copied",
+      downloadBrief: "Download",
     },
     budget: {
       title: "Budget",
@@ -1118,6 +1123,11 @@ export const messages = {
       remove: "刪除帳戶",
       removed: "已刪除帳戶。",
       removeBlocked: "此帳戶仍有交易，未能刪除。",
+      exportAi: "現況俾 AI 分析",
+      exportAiHint: "資產、負債、過去 12 個月現金流同每月淨資產增減嘅 Markdown 摘要。複製之後，連同退休頁嘅匯出一齊貼去大型語言模型。",
+      copyBrief: "複製",
+      copied: "已複製",
+      downloadBrief: "下載",
     },
     budget: {
       title: "預算",

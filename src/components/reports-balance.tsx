@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import { ChevronRight } from "lucide-react";
 import { Overlay, ScreenHeader } from "@/components/shared";
+import { AssetBriefButton } from "@/components/asset-brief";
 import { money, pct } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { netWorthBreakdown, netWorthNow, type WorthRow } from "@/lib/calc/networth";
@@ -52,7 +53,7 @@ export function BalancePage() {
 
   return (
     <div className="pb-10">
-      <ScreenHeader title={t.reports.balance} backTo="/reports" />
+      <ScreenHeader title={t.reports.balance} backTo="/reports" right={<AssetBriefButton className="px-2 text-sm font-medium text-accent" />} />
       <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
         <div className="text-xs text-muted">{t.assets.netWorth}</div>
         <div className="mt-1 text-2xl font-semibold tabular-nums">{money(nw.net, "HKD")}</div>

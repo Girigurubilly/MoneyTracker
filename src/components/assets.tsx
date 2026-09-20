@@ -32,6 +32,7 @@ import {
   SelectLine,
   TextLine,
 } from "@/components/txn-composer";
+import { AssetBriefButton } from "@/components/asset-brief";
 import { netWorthNow } from "@/lib/calc/networth";
 import { toHkd } from "@/lib/calc/fx";
 import { accountsInGroup, BALANCE_GROUP_ORDER, isKidVisibleAccount, nextSortOrder } from "@/lib/accounts";
@@ -157,6 +158,11 @@ export function AssetsScreen() {
           </div>
         </div>
       </Link>
+      {kid ? null : (
+        <div className="mx-4 mb-5">
+          <AssetBriefButton className="flex h-11 w-full items-center justify-center rounded-xl bg-elevated text-sm font-medium" />
+        </div>
+      )}
       {groups.map((g) => {
         const rows = accountsInGroup(visible, g.id).filter((a) => !fxIds.has(a.id));
         if (!rows.length) return null;
