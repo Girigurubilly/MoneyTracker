@@ -1,4 +1,4 @@
-import type { Category } from "./types.ts";
+import type { Category, CategorySpecial } from "./types.ts";
 
 function compactHay(s: string): string {
   return s.toLowerCase().replace(/[\s\-_/]/g, "");
@@ -8,20 +8,62 @@ function mortgageLeaf(c: Category): string {
   return compactHay(`${c.name} ${c.nameZh}`);
 }
 
+function heuristicHousingGroup(c: Category): boolean {
+  if (c.parentId) return false;
+  return c.id === "p-housing" || /房屋|housing|居住/.test(`${c.name} ${c.nameZh}`);
+}
+
+function heuristicTax(c: Category): boolean {
+  return /稅|tax/i.test(`${c.id} ${c.name} ${c.nameZh}`);
+}
+
+function heuristicSpecial(c: Category, categories: Category[]): CategorySpecial {
+  if (c.kind === "income") return "none";
+  const hay = mortgageLeaf(c);
+  const en = compactHay(c.name);
+  const zh = compactHay(c.nameZh);
+  const shortPrincipal = /^(本金|principal)$/.test(en) || /^(本金|principal)$/.test(zh);
+  const shortInterest = /^(利息|interest)$/.test(en) || /^(利息|interest)$/.test(zh);
+  if (/按揭本金|mortgageprincipal/.test(hay) || (c.parentId && shortPrincipal)) return "mortgagePrincipal";
+  const incomeLike = /收入|income/.test(hay);
+  if (!incomeLike) {
+    if (/按揭利息|mortgageinterest/.test(hay) || (c.parentId && shortInterest)) return "mortgageInterest";
+  }
+  if (heuristicHousingGroup(c)) return "housing";
+  if (!incomeLike && /按揭|mortgage/.test(hay)) return "mortgageSplit";
+  const parent = categories.find((x) => x.id === c.parentId);
+  if (parent && /按揭|mortgage/.test(mortgageLeaf(parent))) return "mortgageSplit";
+  if (parent && heuristicHousingGroup(parent) && (shortPrincipal || shortInterest)) {
+    return shortPrincipal ? "mortgagePrincipal" : "mortgageInterest";
+  }
+  return "none";
+}
+
+export function resolvedSpecial(c: Category, categories: Category[] = []): CategorySpecial {
+  if (c.special) return c.special;
+  return heuristicSpecial(c, categories);
+}
+
+export function isTaxCategory(c: Category): boolean {
+  if (c.tax === true) return true;
+  if (c.tax === false) return false;
+  return heuristicTax(c);
+}
+
 export function taxCategoryIds(categories: Category[]): Set<string> {
   const ids = new Set<string>();
   for (const c of categories) {
-    if (/稅|tax/i.test(`${c.id} ${c.name} ${c.nameZh}`)) ids.add(c.id);
+    if (isTaxCategory(c)) ids.add(c.id);
   }
   for (const c of categories) {
-    if (c.parentId && ids.has(c.parentId)) ids.add(c.id);
+    if (c.parentId && ids.has(c.parentId) && c.tax !== false) ids.add(c.id);
   }
   return ids;
 }
 
 export function isHousingGroup(c: Category): boolean {
   if (c.parentId) return false;
-  return c.id === "p-housing" || /房屋|housing|居住/.test(`${c.name} ${c.nameZh}`);
+  return resolvedSpecial(c) === "housing";
 }
 
 export function housingParentId(categories: Category[]): string | undefined {
@@ -29,18 +71,11 @@ export function housingParentId(categories: Category[]): string | undefined {
 }
 
 export function isMortgagePrincipalCategory(c: Category): boolean {
-  const hay = mortgageLeaf(c);
-  if (/按揭本金|mortgageprincipal/.test(hay)) return true;
-  if (c.parentId && /^(本金|principal)$/.test(hay)) return true;
-  return false;
+  return resolvedSpecial(c) === "mortgagePrincipal";
 }
 
 export function isMortgageInterestCategory(c: Category): boolean {
-  const hay = mortgageLeaf(c);
-  if (/收入|income/.test(hay)) return false;
-  if (/按揭利息|mortgageinterest/.test(hay)) return true;
-  if (c.parentId && /^(利息|interest)$/.test(hay)) return true;
-  return false;
+  return resolvedSpecial(c) === "mortgageInterest";
 }
 
 /** True when a seed mortgage leaf should be inserted. Never if that id already exists. */
@@ -51,16 +86,10 @@ export function missingMortgageLeaf(categories: Category[], kind: "principal" | 
   return !categories.some((c) => c.id === id);
 }
 
-export function isMortgageSplitCategory(c: Category | undefined, categories: Category[]): boolean {
+export function isMortgageSplitCategory(c: Category | undefined, categories: Category[] = []): boolean {
   if (!c) return false;
-  if (isHousingGroup(c)) return false;
-  if (isMortgagePrincipalCategory(c) || isMortgageInterestCategory(c)) return true;
-  const hay = mortgageLeaf(c);
-  if (/按揭|mortgage/.test(hay)) return true;
-  const parent = categories.find((x) => x.id === c.parentId);
-  if (parent && /按揭|mortgage/.test(mortgageLeaf(parent))) return true;
-  if (parent && isHousingGroup(parent) && /^(本金|利息|principal|interest)$/.test(hay)) return true;
-  return false;
+  const s = resolvedSpecial(c, categories);
+  return s === "mortgagePrincipal" || s === "mortgageInterest" || s === "mortgageSplit";
 }
 
 export type MortgageEntryKind = "principal" | "interest" | "split" | null;
@@ -78,11 +107,22 @@ export function resolvedDefaultAccountId(c: Category | undefined | null, categor
 
 export function mortgageEntryKind(c: Category | undefined | null, categories: Category[]): MortgageEntryKind {
   if (!c) return null;
-  if (isHousingGroup(c)) return null;
-  if (isMortgagePrincipalCategory(c)) return "principal";
-  if (isMortgageInterestCategory(c)) return "interest";
-  if (isMortgageSplitCategory(c, categories)) return "split";
+  const s = resolvedSpecial(c, categories);
+  if (s === "mortgagePrincipal") return "principal";
+  if (s === "mortgageInterest") return "interest";
+  if (s === "mortgageSplit") return "split";
   return null;
+}
+
+export function isHousingCategory(c: Category, categories: Category[]): boolean {
+  if (c.special === "none") return false;
+  const s = resolvedSpecial(c, categories);
+  if (s === "housing" || s === "mortgagePrincipal" || s === "mortgageInterest" || s === "mortgageSplit") return true;
+  if (c.parentId) {
+    const parent = categories.find((x) => x.id === c.parentId);
+    if (parent && isHousingGroup(parent)) return true;
+  }
+  return false;
 }
 
 export function parentCategoryName(c: Category, categories: Category[], locale: "en" | "zh-HK"): string {

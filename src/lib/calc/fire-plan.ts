@@ -92,6 +92,8 @@ export type FireGate = { id: FireGateId; status: FireGateStatus };
 export function inferFireSpendKind(cat: Category | undefined, categories: Category[]): FireSpendKind {
   if (!cat) return "flex";
   if (cat.fireSpendKind) return cat.fireSpendKind;
+  if (cat.special === "mortgagePrincipal" || cat.special === "mortgageInterest") return "work";
+  if (cat.tax) return "work";
   const blob = `${cat.id} ${cat.name} ${cat.nameZh} ${cat.icon}`.toLowerCase();
   if (
     cat.id.includes("mortgage") ||

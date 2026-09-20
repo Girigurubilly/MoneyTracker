@@ -328,6 +328,9 @@ export const CATEGORY_ICONS: CategoryIconName[] = CATEGORY_ICON_GROUPS.flatMap((
 
 export type FireSpendKind = "work" | "core" | "flex" | "irregular";
 
+/** Behaviour this category drives in reports / the add sheet. `none` turns heuristics off. */
+export type CategorySpecial = "none" | "housing" | "mortgagePrincipal" | "mortgageInterest" | "mortgageSplit";
+
 export type Category = {
   id: string;
   name: string;
@@ -340,6 +343,10 @@ export type Category = {
   defaultAccountId?: string;
   parentId?: string;
   fireSpendKind?: FireSpendKind;
+  /** Housing / mortgage behaviour. Unset = infer from name until the category is saved. */
+  special?: CategorySpecial;
+  /** Exclude from Trends “exclude tax”. Unset = infer from name. */
+  tax?: boolean;
 };
 
 export const MONTH_TOTAL_BUDGET_ID = "b-month-total";

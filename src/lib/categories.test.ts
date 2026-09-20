@@ -1,12 +1,15 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  isHousingCategory,
   isMortgageInterestCategory,
   isMortgagePrincipalCategory,
   isMortgageSplitCategory,
+  isTaxCategory,
   missingMortgageLeaf,
   mortgageEntryKind,
   pickerGroups,
+  taxCategoryIds,
 } from "./categories.ts";
 import type { Category } from "./types.ts";
 
@@ -58,6 +61,27 @@ describe("mortgage category matching", () => {
     assert.equal(missingMortgageLeaf(cats, "principal"), false);
     assert.equal(missingMortgageLeaf(cats, "interest"), false);
     assert.equal(missingMortgageLeaf([housing], "principal"), true);
+  });
+
+  it("honours explicit special and tax flags over name matching", () => {
+    const renamed = cat({ id: "gift", name: "家用", nameZh: "家用", special: "mortgagePrincipal" });
+    const turnedOff = cat({ id: "mp", name: "Mortgage principal", nameZh: "按揭本金", special: "none" });
+    const customTax = cat({ id: "ird", name: "IRD", nameZh: "稅局", tax: true });
+    const notTax = cat({ id: "salaries-tax", name: "Salaries tax", nameZh: "薪俸稅", tax: false });
+    assert.equal(isMortgagePrincipalCategory(renamed), true);
+    assert.equal(isMortgagePrincipalCategory(turnedOff), false);
+    assert.equal(isTaxCategory(customTax), true);
+    assert.equal(isTaxCategory(notTax), false);
+    assert.equal(taxCategoryIds([customTax, notTax]).has("ird"), true);
+    assert.equal(taxCategoryIds([customTax, notTax]).has("salaries-tax"), false);
+  });
+
+  it("lets a child under 房屋 opt out of housing with special none", () => {
+    const housing = cat({ id: "p-housing", name: "Housing", nameZh: "房屋", special: "housing" });
+    const mgmt = cat({ id: "mgmt", name: "Management", nameZh: "管理費", parentId: "p-housing" });
+    const family = cat({ id: "family", name: "家用", nameZh: "家用", parentId: "p-housing", special: "none" });
+    assert.equal(isHousingCategory(mgmt, [housing, mgmt, family]), true);
+    assert.equal(isHousingCategory(family, [housing, mgmt, family]), false);
   });
 });
 

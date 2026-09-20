@@ -1,5 +1,5 @@
 import type { Account, Category, FxRate, Locale, Mortgage, Recurring, Transaction } from "../types.ts";
-import { isMortgagePrincipalCategory, housingParentId, isMortgageInterestCategory } from "../categories.ts";
+import { isMortgagePrincipalCategory, isHousingCategory } from "../categories.ts";
 import { isSpendLike, inMonth } from "./ledger.ts";
 import { monthlyExpenseRegulars, hkdOfRegular, coverRegulars } from "./budget.ts";
 import { monthlyPayment, remainingInterest, effectiveRate, originalPrincipal, originalTermMonths, amortizeFrom, monthsBetween } from "./mortgage.ts";
@@ -197,12 +197,9 @@ export function remainingMonthsLabel(months: number, locale: Locale): string {
 }
 
 export function housingCategoryIds(categories: Category[]): Set<string> {
-  const parent = housingParentId(categories);
   const ids = new Set<string>();
-  if (parent) ids.add(parent);
   for (const c of categories) {
-    if (c.id === parent || c.parentId === parent) ids.add(c.id);
-    if (isMortgagePrincipalCategory(c) || isMortgageInterestCategory(c)) ids.add(c.id);
+    if (isHousingCategory(c, categories)) ids.add(c.id);
   }
   return ids;
 }

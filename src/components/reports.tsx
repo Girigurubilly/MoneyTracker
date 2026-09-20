@@ -7,6 +7,7 @@ import { compactHkd, money, pct, shortDate, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { monthKeysBack, monthLabel } from "@/lib/derived";
 import { chargedIso, isExpenseRegular, livingEssentials, monthFlow } from "@/lib/calc/budget";
+import { isMortgageInterestCategory, isMortgagePrincipalCategory } from "@/lib/categories";
 import { nextTrip, travelSpendYtd, tripCashSpent } from "@/lib/calc/trips";
 import { effectiveRate, monthlyPayment } from "@/lib/calc/mortgage";
 import { housingStatus, monthlyHousingCost } from "@/lib/calc/housing";
@@ -114,7 +115,13 @@ export function DashboardPage() {
     investableNow: investableNow(accounts, rates),
     mortgageMonthly: m ? monthlyPayment(m.outstanding, effectiveRate(m), m.remainingMonths) : 0,
     mortgagePayoffAge: inputs.currentAge + Math.round((m?.remainingMonths ?? 0) / 12),
-    housingAfterPayoff: livingEssentials(rec.filter((r) => r.living && r.categoryId !== "mortgage-p" && r.categoryId !== "mortgage-i")),
+    housingAfterPayoff: livingEssentials(
+      rec.filter((r) => {
+        if (!r.living) return false;
+        const c = cats.find((x) => x.id === r.categoryId);
+        return !c || (!isMortgagePrincipalCategory(c) && !isMortgageInterestCategory(c));
+      }),
+    ),
     oneOffs,
     allowances,
   };

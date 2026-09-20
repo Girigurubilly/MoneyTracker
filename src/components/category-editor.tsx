@@ -4,7 +4,8 @@ import { CategoryIcon } from "@/components/category-icon";
 import { AccountLine, ComposerHeader, SelectLine, TextLine } from "@/components/txn-composer";
 import { pickName } from "@/lib/i18n";
 import { infersAdhoc } from "@/lib/tx-rules";
-import { CATEGORY_ICON_GROUPS, type Category, type CategoryIconName, type FireSpendKind, type LifeTheme } from "@/lib/types";
+import { isHousingCategory, isTaxCategory, resolvedSpecial } from "@/lib/categories";
+import { CATEGORY_ICON_GROUPS, type Category, type CategoryIconName, type CategorySpecial, type FireSpendKind, type LifeTheme } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 import { cn } from "@/lib/utils";
@@ -69,25 +70,44 @@ function CategoryEditorBody({
     initial?.adhocDefault ?? infersAdhoc(initial?.id ?? defaultParentId, cats),
   );
   const [fireKind, setFireKind] = useState<FireSpendKind | "">(initial?.fireSpendKind ?? "");
+  const parentSeed = cats.find((c) => c.id === (initial?.parentId ?? defaultParentId));
+  const [theme, setTheme] = useState<LifeTheme>(
+    initial?.theme ?? parentSeed?.theme ?? ((initial?.kind ?? defaultKind ?? "expense") === "income" ? "other" : "living"),
+  );
+  const [special, setSpecial] = useState<CategorySpecial>(() => {
+    if (initial) {
+      const s = resolvedSpecial(initial, cats);
+      if (s !== "none") return s;
+      if (isHousingCategory(initial, cats)) return "housing";
+      return "none";
+    }
+    if (parentSeed && resolvedSpecial(parentSeed, cats) === "housing") return "housing";
+    return "none";
+  });
+  const [tax, setTax] = useState(initial ? isTaxCategory(initial) : false);
+  const [essential, setEssential] = useState(Boolean(initial?.essential));
+  const expenseKind = (parentId ? parents.find((p) => p.id === parentId)?.kind ?? kind : kind) === "expense";
 
   async function save() {
     const n = name.trim();
     if (!n) return;
     const nextParentId = parentId && parentId !== (initial?.id ?? "") ? parentId : undefined;
     const parent = parents.find((p) => p.id === nextParentId);
-    const theme: LifeTheme = parent?.theme ?? (kind === "income" ? "other" : "living");
+    const nextKind = parent?.kind ?? kind;
     const row: Category = {
       id: initial?.id ?? newId(),
       name: n,
       nameZh: n,
       theme,
-      kind: parent?.kind ?? kind,
+      kind: nextKind,
       icon,
       parentId: nextParentId,
-      essential: initial?.essential,
-      adhocDefault: (parent?.kind ?? kind) === "expense" ? adhocDefault : undefined,
+      essential: nextKind === "expense" ? essential : undefined,
+      adhocDefault: nextKind === "expense" ? adhocDefault : undefined,
       defaultAccountId: defaultAccountId || undefined,
-      fireSpendKind: (parent?.kind ?? kind) === "expense" && fireKind ? fireKind : undefined,
+      fireSpendKind: nextKind === "expense" && fireKind ? fireKind : undefined,
+      special: nextKind === "expense" ? special : "none",
+      tax: nextKind === "expense" ? tax : false,
     };
     if (initial) await update(row);
     else await add(row);
@@ -105,7 +125,16 @@ function CategoryEditorBody({
       <SelectLine
         label={t.add.parentCategory}
         value={parentId}
-        onChange={setParentId}
+        onChange={(v) => {
+          setParentId(v);
+          const parent = parents.find((p) => p.id === v);
+          if (!parent) return;
+          setKind(parent.kind);
+          setTheme(parent.theme);
+          if (resolvedSpecial(parent, cats) === "housing" && (special === "none" || special === "housing")) {
+            setSpecial("housing");
+          }
+        }}
         options={[
           { id: "", label: t.add.noParent },
           ...parents.filter((p) => p.id !== initial?.id).map((p) => ({ id: p.id, label: pickName(locale, p.name, p.nameZh) })),
@@ -122,35 +151,51 @@ function CategoryEditorBody({
           ]}
         />
       ) : null}
+      <SelectLine
+        label={t.add.catTheme}
+        value={theme}
+        onChange={(v) => setTheme(v as LifeTheme)}
+        options={[
+          { id: "living", label: t.add.themeLiving },
+          { id: "travel", label: t.add.themeTravel },
+          { id: "retirement", label: t.add.themeRetirement },
+          { id: "other", label: t.add.themeOther },
+        ]}
+      />
+      <p className="px-4 py-2 text-xs text-muted">{t.add.catThemeHint}</p>
       <AccountLine accounts={accounts} value={defaultAccountId} onChange={setDefaultAccountId} placeholder={t.add.defaultAccount} />
       <p className="px-4 py-2 text-xs text-muted">{t.add.defaultAccountHint}</p>
-      {(parentId ? parents.find((p) => p.id === parentId)?.kind ?? kind : kind) === "expense" ? (
-        <label className="flex items-start gap-3 border-b border-line px-4 py-3">
-          <input
-            type="checkbox"
-            className="mt-1 size-4"
-            checked={adhocDefault}
-            onChange={(e) => setAdhocDefault(e.target.checked)}
+      {expenseKind ? (
+        <>
+          <SelectLine
+            label={t.add.catSpecial}
+            value={special}
+            onChange={(v) => setSpecial(v as CategorySpecial)}
+            options={[
+              { id: "none", label: t.add.catSpecialNone },
+              { id: "housing", label: t.add.catSpecialHousing },
+              { id: "mortgagePrincipal", label: t.add.catSpecialPrincipal },
+              { id: "mortgageInterest", label: t.add.catSpecialInterest },
+              { id: "mortgageSplit", label: t.add.catSpecialSplit },
+            ]}
           />
-          <span>
-            <span className="block text-sm">{t.add.adhocDefault}</span>
-            <span className="mt-0.5 block text-xs text-muted">{t.add.adhocDefaultHint}</span>
-          </span>
-        </label>
-      ) : null}
-      {(parentId ? parents.find((p) => p.id === parentId)?.kind ?? kind : kind) === "expense" ? (
-        <SelectLine
-          label={t.reports.fireSpendEngine}
-          value={fireKind}
-          onChange={(v) => setFireKind(v as FireSpendKind | "")}
-          options={[
-            { id: "", label: t.add.fireSpendAuto },
-            { id: "work", label: t.reports.fireKindWork },
-            { id: "core", label: t.reports.fireKindCore },
-            { id: "flex", label: t.reports.fireKindFlex },
-            { id: "irregular", label: t.reports.fireKindIrregular },
-          ]}
-        />
+          <p className="px-4 py-2 text-xs text-muted">{t.add.catSpecialHint}</p>
+          <RuleCheck checked={tax} onChange={setTax} label={t.add.catTax} hint={t.add.catTaxHint} />
+          <RuleCheck checked={essential} onChange={setEssential} label={t.add.catEssential} hint={t.add.catEssentialHint} />
+          <RuleCheck checked={adhocDefault} onChange={setAdhocDefault} label={t.add.adhocDefault} hint={t.add.adhocDefaultHint} />
+          <SelectLine
+            label={t.reports.fireSpendEngine}
+            value={fireKind}
+            onChange={(v) => setFireKind(v as FireSpendKind | "")}
+            options={[
+              { id: "", label: t.add.fireSpendAuto },
+              { id: "work", label: t.reports.fireKindWork },
+              { id: "core", label: t.reports.fireKindCore },
+              { id: "flex", label: t.reports.fireKindFlex },
+              { id: "irregular", label: t.reports.fireKindIrregular },
+            ]}
+          />
+        </>
       ) : null}
       <div className="px-4 pb-8 pt-1">
         <div className="text-xs text-muted">{t.add.icon}</div>
@@ -191,5 +236,27 @@ function CategoryEditorBody({
         </button>
       ) : null}
     </div>
+  );
+}
+
+function RuleCheck({
+  checked,
+  onChange,
+  label,
+  hint,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+  hint: string;
+}) {
+  return (
+    <label className="flex items-start gap-3 border-b border-line px-4 py-3">
+      <input type="checkbox" className="mt-1 size-4" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span>
+        <span className="block text-sm">{label}</span>
+        <span className="mt-0.5 block text-xs text-muted">{hint}</span>
+      </span>
+    </label>
   );
 }

@@ -8,6 +8,7 @@ import { downloadBlob } from "@/lib/backup";
 import { toHkd } from "@/lib/calc/fx";
 import { pickName } from "@/lib/i18n";
 import { livingEssentials } from "@/lib/calc/budget";
+import { isMortgageInterestCategory, isMortgagePrincipalCategory } from "@/lib/categories";
 import { monthlyPayment, effectiveRate, remainingFromStart } from "@/lib/calc/mortgage";
 import {
   compareRetirementAges,
@@ -32,6 +33,7 @@ export function useRetirementModel() {
   const rates = useApp((s) => s.fxRates);
   const txs = useApp((s) => s.transactions);
   const rec = useApp((s) => s.recurring);
+  const cats = useApp((s) => s.categories);
   const ret = useApp((s) => s.retirement);
   const update = useApp((s) => s.updateRetirement);
   const allowances = useApp((s) => s.allowances);
@@ -70,7 +72,13 @@ export function useRetirementModel() {
     investableNow: pack.cash + pack.invest,
     mortgageMonthly: mortgage ? monthlyPayment(mortgage.outstanding, effectiveRate(mortgage), mortgage.remainingMonths) : 0,
     mortgagePayoffAge: base.currentAge + Math.round((mortgage?.remainingMonths ?? 0) / 12),
-    housingAfterPayoff: livingEssentials(rec.filter((r) => r.living && r.categoryId !== "mortgage-p" && r.categoryId !== "mortgage-i")),
+    housingAfterPayoff: livingEssentials(
+      rec.filter((r) => {
+        if (!r.living) return false;
+        const c = cats.find((x) => x.id === r.categoryId);
+        return !c || (!isMortgagePrincipalCategory(c) && !isMortgageInterestCategory(c));
+      }),
+    ),
     oneOffs,
     allowances,
     sleeves: pack.sleeves,

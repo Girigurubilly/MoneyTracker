@@ -33,10 +33,10 @@ export const accounts: Account[] = [
 ];
 
 export const categories: Category[] = [
-  { id: "p-housing", name: "Housing", nameZh: "房屋", theme: "living", kind: "expense", icon: "home", essential: true },
-  { id: "mortgage-p", name: "Mortgage principal", nameZh: "按揭本金", theme: "living", kind: "expense", icon: "home", essential: true, parentId: "p-housing", fireSpendKind: "work" },
-  { id: "mortgage-i", name: "Mortgage interest", nameZh: "按揭利息", theme: "living", kind: "expense", icon: "home", essential: true, parentId: "p-housing", fireSpendKind: "work" },
-  { id: "mgmt", name: "Management fee", nameZh: "管理費", theme: "living", kind: "expense", icon: "building", essential: true, parentId: "p-housing", fireSpendKind: "core" },
+  { id: "p-housing", name: "Housing", nameZh: "房屋", theme: "living", kind: "expense", icon: "home", essential: true, special: "housing" },
+  { id: "mortgage-p", name: "Mortgage principal", nameZh: "按揭本金", theme: "living", kind: "expense", icon: "home", essential: true, parentId: "p-housing", fireSpendKind: "work", special: "mortgagePrincipal" },
+  { id: "mortgage-i", name: "Mortgage interest", nameZh: "按揭利息", theme: "living", kind: "expense", icon: "home", essential: true, parentId: "p-housing", fireSpendKind: "work", special: "mortgageInterest" },
+  { id: "mgmt", name: "Management fee", nameZh: "管理費", theme: "living", kind: "expense", icon: "building", essential: true, parentId: "p-housing", fireSpendKind: "core", special: "housing" },
   { id: "p-food", name: "Food", nameZh: "飲食", theme: "living", kind: "expense", icon: "utensils" },
   { id: "dining", name: "Dining out", nameZh: "外出就餐", theme: "living", kind: "expense", icon: "utensils", parentId: "p-food" },
   { id: "groceries", name: "Groceries", nameZh: "超市", theme: "living", kind: "expense", icon: "shopping", parentId: "p-food" },

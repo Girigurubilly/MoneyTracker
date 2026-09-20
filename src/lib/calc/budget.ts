@@ -1,5 +1,6 @@
 import type { AdhocBudget, Budget, BudgetTargetMode, Category, Recurring, Transaction, FxRate } from "../types.ts";
 import { MONTH_TOTAL_BUDGET_ID } from "../types.ts";
+import { isHousingCategory } from "../categories.ts";
 import { cashflowSide, inMonth, isSpendLike } from "./ledger.ts";
 import { toHkd } from "./fx.ts";
 
@@ -258,14 +259,14 @@ export function livingEssentials(recurring: Recurring[]): number {
     .reduce((s, r) => s + r.amount, 0);
 }
 
-export function inferLivingRegular(r: Recurring, categories: { id: string; parentId?: string }[]): boolean {
+export function inferLivingRegular(r: Recurring, categories: Category[]): boolean {
   if (r.living) return true;
   const hay = `${r.label} ${r.labelZh} ${r.categoryId ?? ""}`;
   if (/按揭|mortgage|管理費|management fee|差餉|地租|rates|水電|utility|家居保險|住宅/i.test(hay)) {
     return true;
   }
   const cat = categories.find((c) => c.id === r.categoryId);
-  return Boolean(cat && (cat.parentId === "p-housing" || cat.id === "p-housing"));
+  return Boolean(cat && isHousingCategory(cat, categories));
 }
 
 export function hkdOfRegular(r: Recurring, rates: FxRate[]): number {
