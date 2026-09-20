@@ -485,18 +485,20 @@ function AdhocBlock({
               ) : (
                 <span className="shrink-0 rounded-full bg-success-soft px-2 py-1 text-xs font-medium text-income">{t.budget.charged}</span>
               )}
-              <button
-                type="button"
-                className="h-8 shrink-0 rounded-full bg-elevated px-3 text-xs font-medium"
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  await addWish(wishFromAdhoc(a, locale));
-                  await delAdhoc(a.id);
-                  toast(t.budget.toWishlistDone);
-                }}
-              >
-                {t.budget.toWishlist}
-              </button>
+              {upcoming ? (
+                <button
+                  type="button"
+                  className="h-8 shrink-0 rounded-full bg-elevated px-3 text-xs font-medium"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    await addWish(wishFromAdhoc(a, locale));
+                    await delAdhoc(a.id);
+                    toast(t.budget.toWishlistDone);
+                  }}
+                >
+                  {t.budget.toWishlist}
+                </button>
+              ) : null}
               <button type="button" aria-label={t.common.edit} onClick={() => onEdit(a)}>
                 <ChevronRight className="size-4 shrink-0 text-faint" />
               </button>
@@ -625,18 +627,20 @@ function AdhocEditorBody({ initial, month, onClose }: { initial: AdhocBudget | n
       </div>
       {initial ? (
         <>
-          <button
-            type="button"
-            className="px-4 py-3 text-sm font-medium text-accent"
-            onClick={async () => {
-              await addWish(wishFromAdhoc(initial, locale));
-              await del(initial.id);
-              toast(t.budget.toWishlistDone);
-              onClose();
-            }}
-          >
-            {t.budget.toWishlist}
-          </button>
+          {initial.date > today ? (
+            <button
+              type="button"
+              className="px-4 py-3 text-sm font-medium text-accent"
+              onClick={async () => {
+                await addWish(wishFromAdhoc(initial, locale));
+                await del(initial.id);
+                toast(t.budget.toWishlistDone);
+                onClose();
+              }}
+            >
+              {t.budget.toWishlist}
+            </button>
+          ) : null}
           <button type="button" className="px-4 py-3 text-sm text-expense" onClick={async () => { await del(initial.id); onClose(); }}>
             {t.tx.delete}
           </button>
