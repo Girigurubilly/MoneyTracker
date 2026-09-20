@@ -52,6 +52,7 @@ import { fetchLiveFx } from "@/lib/calc/fx";
 import { applyHoldingBalances, assignHoldingBook, mergeHoldings, parseHoldingsFile } from "@/lib/holdings";
 import { fetchHoldingQuotes, quoteKey } from "@/lib/quotes";
 import { chargedDayOf, chargedIso, inferLivingRegular, isExpenseRegular } from "@/lib/calc/budget";
+import { emptyYearlyPlan, linkedMonthSpendCap } from "@/lib/calc/deposits";
 import { isMortgageInterestCategory, isMortgagePrincipalCategory, missingMortgageLeaf } from "@/lib/categories";
 import { accountsInGroup, nextSortOrder } from "@/lib/accounts";
 import { applyTxRules } from "@/lib/tx-rules";
@@ -660,6 +661,64 @@ async function writeHoldings(
   set({ holdings, accounts });
 }
 
+const MONTH_CAP_BUDGET: Pick<Budget, "id" | "label" | "labelZh" | "spent"> = {
+  id: MONTH_TOTAL_BUDGET_ID,
+  label: "Monthly total",
+  labelZh: "本月總額",
+  spent: 0,
+};
+
+async function writeLinkedMonthSpendCap(
+  amount: number,
+  get: () => { budgets: Budget[]; yearlyPlans: YearlyPlan[] },
+  set: (p: { budgets: Budget[]; yearlyPlans: YearlyPlan[] }) => void,
+) {
+  const n = Number.isFinite(amount) ? Math.max(0, amount) : 0;
+  const monthId = todayISO().slice(0, 7);
+  const cap = get().budgets.find((b) => b.id === MONTH_TOTAL_BUDGET_ID);
+  const nextCap: Budget = { ...(cap ?? MONTH_CAP_BUDGET), monthly: n };
+  const prev = get().yearlyPlans.find((p) => p.id === monthId) ?? emptyYearlyPlan(monthId);
+  const nextPlan: YearlyPlan = { ...prev, expense: n };
+  await idb().transaction("rw", [idb().budgets, idb().yearlyPlans], async () => {
+    await idb().budgets.put(nextCap);
+    await idb().yearlyPlans.put(nextPlan);
+  });
+  const s = get();
+  set({
+    budgets: s.budgets.some((x) => x.id === nextCap.id)
+      ? s.budgets.map((x) => (x.id === nextCap.id ? nextCap : x))
+      : [...s.budgets, nextCap],
+    yearlyPlans: s.yearlyPlans.some((p) => p.id === monthId)
+      ? s.yearlyPlans.map((p) => (p.id === monthId ? nextPlan : p))
+      : [...s.yearlyPlans, nextPlan],
+  });
+}
+
+async function reconcileLinkedMonthSpendCap(data: {
+  budgets: Budget[];
+  yearlyPlans: YearlyPlan[];
+}): Promise<{ budgets: Budget[]; yearlyPlans: YearlyPlan[] }> {
+  const monthId = todayISO().slice(0, 7);
+  const cap = data.budgets.find((b) => b.id === MONTH_TOTAL_BUDGET_ID);
+  const plan = data.yearlyPlans.find((p) => p.id === monthId);
+  const amount = linkedMonthSpendCap(cap?.monthly ?? 0, plan?.expense ?? 0);
+  if ((cap?.monthly ?? 0) === amount && (plan?.expense ?? 0) === amount) return data;
+  const nextCap: Budget = { ...(cap ?? MONTH_CAP_BUDGET), monthly: amount };
+  const nextPlan: YearlyPlan = { ...(plan ?? emptyYearlyPlan(monthId)), expense: amount };
+  await idb().transaction("rw", [idb().budgets, idb().yearlyPlans], async () => {
+    await idb().budgets.put(nextCap);
+    await idb().yearlyPlans.put(nextPlan);
+  });
+  return {
+    budgets: data.budgets.some((x) => x.id === nextCap.id)
+      ? data.budgets.map((x) => (x.id === nextCap.id ? nextCap : x))
+      : [...data.budgets, nextCap],
+    yearlyPlans: data.yearlyPlans.some((p) => p.id === monthId)
+      ? data.yearlyPlans.map((p) => (p.id === monthId ? nextPlan : p))
+      : [...data.yearlyPlans, nextPlan],
+  };
+}
+
 export const useApp = create<AppState>((set, get) => ({
   ready: false,
   accounts: [],
@@ -718,6 +777,9 @@ export const useApp = create<AppState>((set, get) => ({
         await idb().fxRates.bulkPut(seedFx);
         data.fxRates = seedFx;
       }
+      const linked = await reconcileLinkedMonthSpendCap(data);
+      data.budgets = linked.budgets;
+      data.yearlyPlans = linked.yearlyPlans;
       const nw = netWorthNow(data.accounts, data.fxRates);
       const month = monthKey();
       if (!data.snapshots.some((s) => s.month === month)) {
@@ -942,6 +1004,10 @@ export const useApp = create<AppState>((set, get) => ({
     set({ retirement: r });
   },
   updateBudget: async (b) => {
+    if (b.id === MONTH_TOTAL_BUDGET_ID) {
+      await writeLinkedMonthSpendCap(b.monthly, get, set);
+      return;
+    }
     await idb().budgets.put(b);
     set({
       budgets: get()
@@ -1075,7 +1141,11 @@ export const useApp = create<AppState>((set, get) => ({
   },
   setYearlyCell: async (year, month0, field, value) => {
     const id = `${year}-${String(month0 + 1).padStart(2, "0")}`;
-    const prev = get().yearlyPlans.find((p) => p.id === id) ?? { id, salary: 0, other: 0, expense: 0 };
+    if (field === "expense" && id === todayISO().slice(0, 7)) {
+      await writeLinkedMonthSpendCap(value, get, set);
+      return;
+    }
+    const prev = get().yearlyPlans.find((p) => p.id === id) ?? emptyYearlyPlan(id);
     const next = { ...prev, [field]: value };
     await idb().yearlyPlans.put(next);
     set({

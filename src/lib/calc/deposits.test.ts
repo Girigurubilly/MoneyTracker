@@ -96,6 +96,19 @@ describe("deposits", () => {
     assert.equal(y.asOfExpense, 4000);
   });
 
+  it("uses the budget month cap for the current month expected expense", () => {
+    const plans = [
+      { id: "2026-08", salary: 10000, other: 0, expense: 3000 },
+      { id: "2026-09", salary: 10000, other: 0, expense: 4000 },
+      { id: "2026-10", salary: 10000, other: 0, expense: 5000 },
+    ];
+    const y = yearlyProjection(plans, [], rates, 2026, 8, [], [], 22000);
+    assert.equal(y.rows[8].expense, 22000);
+    assert.equal(y.rows[9].expense, 5000);
+    const fallback = yearlyProjection(plans, [], rates, 2026, 8, [], [], 0);
+    assert.equal(fallback.rows[8].expense, 4000);
+  });
+
   it("fills passed months from posted transactions instead of the plan", () => {
     const plans = [{ id: "2026-01", salary: 99999, other: 99999, expense: 99999 }];
     const txs = [

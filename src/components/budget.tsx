@@ -119,6 +119,7 @@ export function BudgetScreen() {
               {t.budget.expectedMonth}: <span className="font-medium text-foreground tabular-nums">{money(monthUsed, "HKD")}</span>
               <span className="text-faint"> / {monthCap > 0 ? money(monthCap, "HKD") : "—"}</span>
             </div>
+            <p className="mt-1 text-[11px] leading-4 text-faint">{t.budget.linkedYearlyExpense}</p>
           </button>
           <InfoButton k="cap" />
         </div>
@@ -274,6 +275,7 @@ export function BudgetScreen() {
       <Overlay open={editCap} onClose={() => setEditCap(false)} title={t.budget.monthlyTotal}>
         <div className="px-5 pb-8">
           <input inputMode="decimal" value={capDraft} onChange={(e) => setCapDraft(e.target.value)} className="h-11 w-full rounded-lg bg-elevated px-3" />
+          <p className="mt-2 text-xs leading-5 text-muted">{t.budget.linkedYearlyExpense}</p>
           <button
             type="button"
             className="mt-4 h-12 w-full rounded-xl bg-accent font-semibold text-on-accent"

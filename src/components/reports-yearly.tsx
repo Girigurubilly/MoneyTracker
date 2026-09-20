@@ -2,6 +2,7 @@ import { MONTHS_EN, MONTHS_ZH, yearlyProjection } from "@/lib/calc/deposits";
 import { money, todayISO } from "@/lib/format";
 import { ScreenHeader } from "@/components/shared";
 import { cn } from "@/lib/utils";
+import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
 import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 
@@ -13,11 +14,13 @@ export function YearlyPage() {
   const rates = useApp((s) => s.fxRates);
   const txs = useApp((s) => s.transactions);
   const cats = useApp((s) => s.categories);
+  const budgets = useApp((s) => s.budgets);
   const setYearlyCell = useApp((s) => s.setYearlyCell);
   const today = todayISO();
   const year = Number(today.slice(0, 4));
   const month0 = Number(today.slice(5, 7)) - 1;
-  const data = yearlyProjection(plans, deposits, rates, year, month0, txs, cats);
+  const monthCap = budgets.find((b) => b.id === MONTH_TOTAL_BUDGET_ID)?.monthly ?? 0;
+  const data = yearlyProjection(plans, deposits, rates, year, month0, txs, cats, monthCap);
   const months = locale === "zh-HK" ? MONTHS_ZH : MONTHS_EN;
 
   return (
@@ -84,7 +87,10 @@ export function YearlyPage() {
                 {row.fromLedger ? (
                   <LedgerNum value={row.expense} />
                 ) : (
-                  <NumCell value={row.expense} onChange={(n) => void setYearlyCell(year, row.month0, "expense", n)} />
+                  <>
+                    <NumCell value={row.expense} onChange={(n) => void setYearlyCell(year, row.month0, "expense", n)} />
+                    {row.isCurrent ? <p className="mt-1 text-[11px] leading-4 text-faint">{t.reports.linkedMonthCap}</p> : null}
+                  </>
                 )}
               </div>
             </div>

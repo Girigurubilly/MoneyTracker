@@ -85,6 +85,11 @@ export function getYearlyPlan(plans: YearlyPlan[], year: number, month0: number)
   return plans.find((p) => p.id === id) ?? emptyYearlyPlan(id);
 }
 
+/** Current-month yearly expected expense and Budget month cap share one number. Cap wins when set. */
+export function linkedMonthSpendCap(budgetMonthly: number, planExpense: number): number {
+  return budgetMonthly > 0 ? budgetMonthly : planExpense || 0;
+}
+
 export function isSalaryCategory(cat: Category | undefined): boolean {
   if (!cat) return false;
   if (cat.id === "salary") return true;
@@ -167,6 +172,7 @@ export function yearlyProjection(
   month0Now: number,
   txs: Transaction[] = [],
   categories: Category[] = [],
+  currentMonthCap = 0,
 ): {
   rows: YearlyMonthRow[];
   yearIncome: number;
@@ -189,7 +195,9 @@ export function yearlyProjection(
     const actual = actuals.get(plan.id);
     const salary = fromLedger ? (actual?.salary ?? 0) : plan.salary || 0;
     const other = fromLedger ? (actual?.other ?? 0) : plan.other || 0;
-    const expense = fromLedger ? (actual?.expense ?? 0) : plan.expense || 0;
+    const plannedExpense =
+      month0 === month0Now ? linkedMonthSpendCap(currentMonthCap, plan.expense || 0) : plan.expense || 0;
+    const expense = fromLedger ? (actual?.expense ?? 0) : plannedExpense;
     const depInt = fromLedger
       ? (actual?.interest ?? 0)
       : getMonthlyDepositInterest(deposits, year, month0, rates);
