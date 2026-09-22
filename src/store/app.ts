@@ -50,7 +50,7 @@ import { applyAutoTrip, patchAutoTrips } from "@/lib/calc/trips";
 import { netWorthNow } from "@/lib/calc/networth";
 import { fetchLiveFx } from "@/lib/calc/fx";
 import { applyHoldingBalances, assignHoldingBook, mergeHoldings, parseHoldingsFile } from "@/lib/holdings";
-import { fetchHoldingQuotes, quoteKey } from "@/lib/quotes";
+import { fetchHoldingQuotes, inferredQuoteCurrency, quoteKey, quoteToCurrency } from "@/lib/quotes";
 import { chargedDayOf, chargedIso, inferLivingRegular, isExpenseRegular } from "@/lib/calc/budget";
 import { emptyYearlyPlan, linkedMonthSpendCap } from "@/lib/calc/deposits";
 import { isMortgageInterestCategory, isMortgagePrincipalCategory, missingMortgageLeaf } from "@/lib/categories";
@@ -1200,13 +1200,15 @@ export const useApp = create<AppState>((set, get) => ({
     if (!rows.length) return 0;
     const quotes = await fetchHoldingQuotes(rows);
     const now = new Date().toISOString();
+    const rates = get().fxRates;
     let n = 0;
     const holdings = rows.map((h) => {
       const hit = quotes.get(quoteKey(h.market, h.symbol));
       if (!hit) return h;
       n += 1;
       const named = hit.name && hit.name !== h.symbol ? hit.name : h.name;
-      return { ...h, lastPrice: hit.price, name: named || h.name, lastPriceAt: now };
+      const px = quoteToCurrency(hit, h.currency, rates, inferredQuoteCurrency(h.market, h.symbol));
+      return { ...h, lastPrice: px.price, name: named || h.name, lastPriceAt: now };
     });
     await writeHoldings(holdings, get, set);
     return n;

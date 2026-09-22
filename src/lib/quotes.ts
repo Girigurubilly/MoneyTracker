@@ -1,10 +1,59 @@
 import { isLondonEtf, normalizeSymbol, yahooSymbol } from "./holdings.ts";
-import type { HoldingMarket } from "./types.ts";
+import { convertAmount } from "./calc/fx.ts";
+import type { Currency, FxRate, HoldingMarket } from "./types.ts";
 
-export type QuoteHit = { price: number; name?: string; prevClose?: number };
+export type QuoteHit = { price: number; name?: string; prevClose?: number; currency?: Currency; pence?: boolean };
 
 export function quoteKey(market: HoldingMarket, symbol: string): string {
   return `${market}:${normalizeSymbol(market, symbol)}`;
+}
+
+export function parseQuoteUnit(raw?: string): { currency?: Currency; pence: boolean } {
+  const u = (raw ?? "").trim();
+  if (!u) return { pence: false };
+  if (u === "GBp" || u.toUpperCase() === "GBX") return { currency: "GBP", pence: true };
+  const up = u.toUpperCase();
+  if (
+    up === "HKD" ||
+    up === "USD" ||
+    up === "JPY" ||
+    up === "CNY" ||
+    up === "TWD" ||
+    up === "THB" ||
+    up === "GBP" ||
+    up === "EUR" ||
+    up === "AUD" ||
+    up === "SGD" ||
+    up === "CHF" ||
+    up === "MOP" ||
+    up === "KRW" ||
+    up === "CAD" ||
+    up === "NZD" ||
+    up === "INR"
+  ) {
+    return { currency: up, pence: false };
+  }
+  return { pence: false };
+}
+
+export function inferredQuoteCurrency(market: HoldingMarket, symbol: string): Currency {
+  if (market === "hk") return "HKD";
+  if (isLondonEtf(symbol)) return "GBP";
+  return "USD";
+}
+
+export function quoteToCurrency(
+  hit: { price: number; prevClose?: number; currency?: Currency; pence?: boolean },
+  to: Currency,
+  rates: FxRate[],
+  fallback: Currency,
+): { price: number; prevClose?: number } {
+  const from = hit.currency ?? fallback;
+  const div = hit.pence ? 100 : 1;
+  const price = convertAmount(hit.price / div, from, to, rates);
+  const prevClose =
+    hit.prevClose && hit.prevClose > 0 ? convertAmount(hit.prevClose / div, from, to, rates) : undefined;
+  return { price, prevClose };
 }
 
 async function pull(url: string, ms = 4000): Promise<string> {
@@ -90,7 +139,7 @@ function parseYahooChart(text: string): { hit?: QuoteHit; closes: ClosePt[] } {
         result?: {
           timestamp?: number[];
           indicators?: { quote?: { close?: (number | null)[] }[] };
-          meta?: { symbol?: string; shortName?: string; regularMarketPrice?: number; previousClose?: number; chartPreviousClose?: number };
+          meta?: { symbol?: string; shortName?: string; regularMarketPrice?: number; previousClose?: number; chartPreviousClose?: number; currency?: string };
         }[];
       };
     };
@@ -104,9 +153,10 @@ function parseYahooChart(text: string): { hit?: QuoteHit; closes: ClosePt[] } {
     }
     const price = r?.meta?.regularMarketPrice ?? closes[closes.length - 1]?.close;
     const prev = r?.meta?.previousClose ?? r?.meta?.chartPreviousClose ?? closes[closes.length - 2]?.close;
+    const unit = parseQuoteUnit(r?.meta?.currency);
     const hit =
       typeof price === "number" && price > 0
-        ? { price, name: r?.meta?.shortName, prevClose: typeof prev === "number" && prev > 0 ? prev : undefined }
+        ? { price, name: r?.meta?.shortName, prevClose: typeof prev === "number" && prev > 0 ? prev : undefined, currency: unit.currency, pence: unit.pence || undefined }
         : undefined;
     return { hit, closes };
   } catch {
@@ -186,7 +236,7 @@ export async function fetchHoldingQuotes(
   const list = [...uniq.values()];
   const out = new Map<string, QuoteHit>();
 
-  const codes = list.map((r) => tencentCode(r.market, r.symbol)).filter(Boolean);
+  const codes = list.filter((r) => !isLondonEtf(r.symbol)).map((r) => tencentCode(r.market, r.symbol)).filter(Boolean);
   const tencent = await loadTencentScript(codes);
   for (const r of list) {
     const code = tencentCode(r.market, r.symbol);
@@ -224,7 +274,7 @@ export async function fetchHoldingPrices(rows: { market: HoldingMarket; symbol: 
 
 export type PriceRange = "1d" | "1w" | "1m" | "3m" | "6m" | "1y" | "ytd";
 
-export type PriceMove = { last: number; start: number; change: number; pct: number; name?: string };
+export type PriceMove = { last: number; start: number; change: number; pct: number; name?: string; currency?: Currency; pence?: boolean };
 
 export function rangeStartIso(range: PriceRange, today = new Date()): string {
   const d = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -312,6 +362,8 @@ export async function fetchHoldingMoves(
       change: hit.price - start,
       pct: start ? (hit.price - start) / start : 0,
       name: hit.name,
+      currency: hit.currency,
+      pence: hit.pence,
     });
   }
 
@@ -331,12 +383,16 @@ export async function fetchHoldingMoves(
       );
       for (const { r, last, start } of got) {
         if (!last || !start) continue;
-        const live = out.get(quoteKey(r.market, r.symbol))?.last ?? last;
+        const prev = out.get(quoteKey(r.market, r.symbol));
+        const live = prev?.last ?? last;
         out.set(quoteKey(r.market, r.symbol), {
           last: live,
           start,
           change: live - start,
           pct: start ? (live - start) / start : 0,
+          name: prev?.name,
+          currency: prev?.currency,
+          pence: prev?.pence,
         });
       }
     }

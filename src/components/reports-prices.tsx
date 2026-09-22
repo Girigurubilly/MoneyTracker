@@ -3,7 +3,7 @@ import { ScreenHeader, Group, Hairline } from "@/components/shared";
 import { money, todayISO } from "@/lib/format";
 import { toHkd } from "@/lib/calc/fx";
 import { holdingTitle, sortHoldingsBySymbol } from "@/lib/holdings";
-import { fetchHoldingMoves, quoteKey, type PriceMove, type PriceRange } from "@/lib/quotes";
+import { fetchHoldingMoves, inferredQuoteCurrency, quoteKey, quoteToCurrency, type PriceRange } from "@/lib/quotes";
 import type { HoldingMarket } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
@@ -79,8 +79,16 @@ export function StockPricesPage() {
     let start = 0;
     for (const h of rows) {
       const mv = moves.get(quoteKey(h.market, h.symbol));
-      const last = mv?.last ?? h.lastPrice;
-      const open = mv?.start ?? last;
+      const converted = mv
+        ? quoteToCurrency(
+            { price: mv.last, prevClose: mv.start, currency: mv.currency, pence: mv.pence },
+            h.currency,
+            rates,
+            inferredQuoteCurrency(h.market, h.symbol),
+          )
+        : undefined;
+      const last = converted?.price ?? h.lastPrice;
+      const open = converted?.prevClose ?? last;
       now += toHkd(h.quantity * (last || 0), h.currency, rates);
       start += toHkd(h.quantity * (open || 0), h.currency, rates);
     }
@@ -157,7 +165,14 @@ export function StockPricesPage() {
         <Group>
           {rows.map((h, i) => {
             const mv = moves.get(quoteKey(h.market, h.symbol));
-            const last = mv?.last ?? h.lastPrice;
+            const last = mv
+              ? quoteToCurrency(
+                  { price: mv.last, prevClose: mv.start, currency: mv.currency, pence: mv.pence },
+                  h.currency,
+                  rates,
+                  inferredQuoteCurrency(h.market, h.symbol),
+                ).price
+              : h.lastPrice;
             const pct = mv?.pct;
             const up = (pct ?? 0) > 0;
             const down = (pct ?? 0) < 0;

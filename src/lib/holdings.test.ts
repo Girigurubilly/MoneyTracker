@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { assignHoldingBook, bookAccountId, detectMarket, holdingsForAccount, isLondonEtf, mergeHoldings, normalizeSymbol, parseHoldingsFile, yahooSymbol } from "./holdings.ts";
+import { applyListing, assignHoldingBook, bookAccountId, detectMarket, holdingsForAccount, isLondonEtf, londonSymbol, mergeHoldings, normalizeSymbol, parseHoldingsFile, yahooSymbol } from "./holdings.ts";
 import type { Account } from "./types.ts";
 
 const IBKR = `Statement,Header,Field Name,Field Value
@@ -45,6 +45,31 @@ describe("holdings import", () => {
     assert.equal(normalizeSymbol("hk", "00700.HK"), "0700");
     assert.equal(detectMarket("00700"), "hk");
     assert.equal(detectMarket("AAPL"), "us");
+  });
+
+  it("keeps LSE VXUS off the US ticker and allows USD plus GBP lots", () => {
+    assert.equal(londonSymbol("VXUS"), "VXUS.L");
+    assert.equal(londonSymbol("LSEETF:VXUS"), "VXUS.L");
+    assert.equal(applyListing("lse", "vxus").symbol, "VXUS.L");
+    assert.equal(applyListing("us", "VXUS").symbol, "VXUS");
+    assert.equal(yahooSymbol("us", "VXUS"), "VXUS");
+    assert.equal(yahooSymbol("us", "VXUS.L"), "VXUS.L");
+    assert.equal(isLondonEtf("VXUS.L"), true);
+    assert.equal(isLondonEtf("VXUS"), false);
+    const gbp = mergeHoldings([], [{ symbol: "VXUS.L", name: "VXUS", market: "us", source: "manual", quantity: 100, currency: "GBP", lastPrice: 3.76 }]);
+    const both = mergeHoldings(gbp, [{ symbol: "VXUS.L", name: "VXUS", market: "us", source: "manual", quantity: 80, currency: "USD", lastPrice: 4.97 }]);
+    assert.equal(both.length, 2);
+    assert.equal(both.find((h) => h.currency === "GBP")?.quantity, 100);
+    assert.equal(both.find((h) => h.currency === "USD")?.quantity, 80);
+  });
+
+  it("imports a GBP LSE line as VXUS.L", () => {
+    const csv = `Open Positions,Header,DataDiscriminator,Asset Category,Currency,Symbol,Quantity,Mark Price,Position Value
+Open Positions,Data,Summary,Stocks,GBP,VXUS,200,3.76,752
+`;
+    const { rows } = parseHoldingsFile(csv);
+    assert.equal(rows[0]?.symbol, "VXUS.L");
+    assert.equal(rows[0]?.currency, "GBP");
   });
 
   it("merges on symbol", () => {

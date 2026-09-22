@@ -79,15 +79,45 @@ export function detectMarket(symbol: string, currency?: string): HoldingMarket {
   return "us";
 }
 
+export function londonSymbol(raw: string): string {
+  let s = raw.trim().toUpperCase();
+  s = s.replace(/^(LSE|LON|XLON|LSEETF)[:/]/i, "");
+  s = s.replace(/[^A-Z0-9.-]/g, "");
+  const base = s.replace(/\.[A-Z]+$/, "");
+  if (!base) return s;
+  return `${base}.L`;
+}
+
 export function normalizeSymbol(market: HoldingMarket, raw: string): string {
   let s = raw.trim().toUpperCase();
-  s = s.replace(/^(SEHK|HKEX|NYSE|NASDAQ|AMEX)[:/]/, "");
+  s = s.replace(/^(SEHK|HKEX|NYSE|NASDAQ|AMEX|LSE|LON|XLON|LSEETF)[:/]/, "");
   s = s.replace(/\.HK$|\.HKG$|:HK$|\.US$/, "");
   if (market === "hk") {
     const digits = s.replace(/\D/g, "").replace(/^0+/, "") || "0";
     return digits.padStart(4, "0");
   }
+  if (s.endsWith(".L")) return londonSymbol(s);
   return s.replace(/[^A-Z0-9.-]/g, "");
+}
+
+export type HoldingListing = "hk" | "us" | "lse";
+
+export function listingOf(h: { market: HoldingMarket; symbol: string }): HoldingListing {
+  if (h.market === "hk") return "hk";
+  if (isLondonEtf(h.symbol)) return "lse";
+  return "us";
+}
+
+export function applyListing(listing: HoldingListing, rawSymbol: string): { market: HoldingMarket; symbol: string } {
+  if (listing === "hk") return { market: "hk", symbol: normalizeSymbol("hk", rawSymbol) };
+  if (listing === "lse") return { market: "us", symbol: londonSymbol(rawSymbol) };
+  return { market: "us", symbol: normalizeSymbol("us", rawSymbol) };
+}
+
+export function defaultListingCurrency(listing: HoldingListing): Currency {
+  if (listing === "hk") return "HKD";
+  if (listing === "lse") return "GBP";
+  return "USD";
 }
 
 /** London-listed UCITS ETFs common on IBHK (Yahoo uses .L, not a US ticker). */
@@ -132,8 +162,8 @@ export function yahooCandidates(market: HoldingMarket, symbol: string): string[]
   const s = normalizeSymbol(market, symbol);
   const primary = yahooSymbol(market, symbol);
   if (market === "hk") return [primary];
-  const extra = s.includes(".") ? [s, s.replace(/\.[A-Z]+$/, "")] : [s, `${s}.L`, `${s}.US`];
-  return [...new Set([primary, ...extra])];
+  if (s.endsWith(".L") || isLondonEtf(s)) return [...new Set([primary, s.endsWith(".L") ? s : `${s.replace(/\.[A-Z]+$/, "")}.L`])];
+  return [...new Set([primary, s])];
 }
 
 function parseNum(raw: string | undefined): number {
@@ -144,6 +174,7 @@ function parseNum(raw: string | undefined): number {
 
 function asCurrency(raw: string | undefined, market: HoldingMarket): Currency {
   const u = (raw ?? "").trim().toUpperCase();
+  if (u === "GBX") return "GBP";
   if (u === "USD" || u === "HKD" || u === "CNY" || u === "EUR" || u === "GBP" || u === "JPY" || u === "AUD" || u === "CAD" || u === "SGD" || u === "TWD") return u as Currency;
   return market === "hk" ? "HKD" : "USD";
 }
@@ -170,7 +201,10 @@ export function parseHoldingsFile(text: string): { source: HoldingSource; rows: 
     if (/^(open positions|asset category|financial)/i.test(rawSym)) continue;
     const ccyHint = iCcy >= 0 ? r[iCcy] : "";
     const market = detectMarket(rawSym, ccyHint);
-    const symbol = normalizeSymbol(market, rawSym);
+    const currency = asCurrency(ccyHint, market);
+    const symbol = market === "us" && (currency === "GBP" || /\.L$/i.test(rawSym) || /^(LSE|LON|XLON|LSEETF)[:/]/i.test(rawSym))
+      ? londonSymbol(rawSym)
+      : normalizeSymbol(market, rawSym);
     if (!symbol) continue;
     const quantity = parseNum(iQty >= 0 ? r[iQty] : "0");
     if (!quantity) continue;
@@ -183,13 +217,13 @@ export function parseHoldingsFile(text: string): { source: HoldingSource; rows: 
       market,
       source,
       quantity,
-      currency: asCurrency(ccyHint, market),
+      currency,
       lastPrice,
     });
   }
   const byKey = new Map<string, ParsedHolding>();
   for (const row of rows) {
-    const k = `${row.market}:${row.symbol}`;
+    const k = `${row.market}:${row.symbol}:${row.currency}`;
     const prev = byKey.get(k);
     if (!prev) byKey.set(k, row);
     else byKey.set(k, { ...prev, quantity: prev.quantity + row.quantity, lastPrice: row.lastPrice || prev.lastPrice });
@@ -200,7 +234,7 @@ export function parseHoldingsFile(text: string): { source: HoldingSource; rows: 
 export function mergeHoldings(existing: Holding[], incoming: ParsedHolding[], accountId?: string): Holding[] {
   const next = [...existing];
   for (const row of incoming) {
-    const i = next.findIndex((h) => h.market === row.market && h.symbol === row.symbol);
+    const i = next.findIndex((h) => h.market === row.market && h.symbol === row.symbol && h.currency === row.currency);
     if (i >= 0) {
       const prev = next[i]!;
       next[i] = {

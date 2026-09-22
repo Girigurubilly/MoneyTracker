@@ -4,8 +4,8 @@ import { toast } from "sonner";
 import { Group, Hairline, Overlay, ScreenHeader } from "@/components/shared";
 import { money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
-import { bookAccountId, holdingMarketValue, holdingTitle, normalizeSymbol, sortHoldingsBySymbol } from "@/lib/holdings";
-import type { Currency, Holding, HoldingMarket } from "@/lib/types";
+import { bookAccountId, holdingMarketValue, holdingTitle, applyListing, defaultListingCurrency, listingOf, sortHoldingsBySymbol, type HoldingListing } from "@/lib/holdings";
+import type { Currency, Holding } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 import { cn } from "@/lib/utils";
@@ -26,7 +26,8 @@ export function HoldingsPage() {
   const [busy, setBusy] = useState(false);
   const [symbol, setSymbol] = useState("");
   const [qty, setQty] = useState("");
-  const [addMarket, setAddMarket] = useState<HoldingMarket>("hk");
+  const [addMarket, setAddMarket] = useState<HoldingListing>("hk");
+  const [addCcy, setAddCcy] = useState<Currency>("HKD");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [filter, setFilter] = useState<BookFilter>("both");
   const [editing, setEditing] = useState<Holding | null>(null);
@@ -187,20 +188,37 @@ export function HoldingsPage() {
       {showAdd ? (
         <div className="mx-4 mt-2 space-y-2">
           <div className="flex gap-2">
-            {(["hk", "us"] as HoldingMarket[]).map((id) => (
+            {(["hk", "us", "lse"] as HoldingListing[]).map((id) => (
               <button
                 key={id}
                 type="button"
-                onClick={() => setAddMarket(id)}
+                onClick={() => {
+                  setAddMarket(id);
+                  setAddCcy(defaultListingCurrency(id));
+                }}
                 className={cn("h-10 flex-1 rounded-xl text-sm font-medium", addMarket === id ? "bg-accent text-on-accent" : "bg-elevated")}
               >
-                {id === "hk" ? t.holdings.hk : t.holdings.us}
+                {id === "hk" ? t.holdings.hk : id === "lse" ? t.holdings.lse : t.holdings.us}
               </button>
             ))}
           </div>
           <div className="flex gap-2">
-            <input value={symbol} onChange={(e) => setSymbol(e.target.value)} placeholder={t.holdings.symbol} className="h-11 min-w-0 flex-1 rounded-xl bg-elevated px-3 text-sm" />
+            <input value={symbol} onChange={(e) => setSymbol(e.target.value)} placeholder={addMarket === "lse" ? "VXUS" : t.holdings.symbol} className="h-11 min-w-0 flex-1 rounded-xl bg-elevated px-3 text-sm" />
             <input value={qty} onChange={(e) => setQty(e.target.value)} placeholder={t.holdings.qty} inputMode="decimal" className="h-11 w-20 shrink-0 rounded-xl bg-elevated px-2 text-sm" />
+          </div>
+          <div className="flex gap-2">
+            <select
+              value={addCcy}
+              onChange={(e) => setAddCcy(e.target.value as Currency)}
+              className="h-11 min-w-0 flex-1 rounded-xl bg-elevated px-3 text-sm"
+              aria-label={t.holdings.currency}
+            >
+              {holdingCurrencies(addCcy).map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
             <button
               type="button"
               className="h-11 shrink-0 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent"
@@ -211,14 +229,15 @@ export function HoldingsPage() {
                   toast(t.holdings.needFields);
                   return;
                 }
+                const listed = applyListing(addMarket, s);
                 void upsert({
                   id: newId(),
-                  symbol: normalizeSymbol(addMarket, s),
-                  name: s,
-                  market: addMarket,
+                  symbol: listed.symbol,
+                  name: listed.symbol,
+                  market: listed.market,
                   source: "manual",
                   quantity: q,
-                  currency: addMarket === "hk" ? "HKD" : "USD",
+                  currency: addCcy,
                   lastPrice: 0,
                 });
                 setSymbol("");
@@ -241,9 +260,10 @@ export function HoldingsPage() {
                 {i > 0 ? <Hairline /> : null}
                 <div className="flex items-center gap-1 px-3 py-2.5">
                   <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setEditing(h)}>
-                    <div className="truncate text-sm font-medium">{h.market === "us" ? h.symbol : holdingTitle(h)}</div>
+                    <div className="truncate text-sm font-medium">{listingOf(h) === "us" ? h.symbol : holdingTitle(h)}</div>
                     <div className="mt-0.5 text-[11px] tabular-nums text-muted">
-                      {h.market === "us" ? t.holdings.us : h.symbol}
+                      {listingOf(h) === "lse" ? t.holdings.lse : h.market === "us" ? t.holdings.us : h.symbol}
+                      {` · ${h.currency}`}
                       {" · "}
                       {h.quantity} × {h.lastPrice ? money(h.lastPrice, h.currency) : "—"}
                     </div>
@@ -293,15 +313,21 @@ function BookAccountRow({
   );
 }
 
+function holdingCurrencies(current: Currency): Currency[] {
+  const base: Currency[] = ["HKD", "USD", "GBP", "EUR"];
+  return base.includes(current) ? base : [current, ...base];
+}
+
 function HoldingEditor({ holding, onClose }: { holding: Holding; onClose: () => void }) {
   const t = useT();
   const upsert = useApp((s) => s.upsertHolding);
   const remove = useApp((s) => s.deleteHolding);
-  const [market, setMarket] = useState<HoldingMarket>(holding.market);
+  const [listing, setListing] = useState<HoldingListing>(listingOf(holding));
   const [symbol, setSymbol] = useState(holding.symbol);
   const [name, setName] = useState(holding.name);
   const [qty, setQty] = useState(String(holding.quantity));
   const [price, setPrice] = useState(holding.lastPrice ? String(holding.lastPrice) : "");
+  const [currency, setCurrency] = useState<Currency>(holding.currency);
 
   function save() {
     const quantity = Number(qty.replace(/,/g, ""));
@@ -310,14 +336,15 @@ function HoldingEditor({ holding, onClose }: { holding: Holding; onClose: () => 
       toast(t.holdings.needFields);
       return;
     }
+    const listed = applyListing(listing, symbol);
     void upsert({
       ...holding,
-      market,
-      symbol: normalizeSymbol(market, symbol),
-      name: market === "us" ? normalizeSymbol(market, symbol) : name.trim() || symbol.trim(),
+      market: listed.market,
+      symbol: listed.symbol,
+      name: listing === "hk" ? name.trim() || listed.symbol : listed.symbol,
       quantity,
       lastPrice,
-      currency: (market === "hk" ? "HKD" : "USD") as Currency,
+      currency,
       accountId: undefined,
       lastPriceAt: lastPrice ? new Date().toISOString() : holding.lastPriceAt,
     });
@@ -328,21 +355,36 @@ function HoldingEditor({ holding, onClose }: { holding: Holding; onClose: () => 
     <Overlay open onClose={onClose} variant="page" title={t.holdings.edit}>
       <div className="space-y-3 px-5 pt-4">
         <div className="flex gap-2">
-          {(["hk", "us"] as HoldingMarket[]).map((id) => (
+          {(["hk", "us", "lse"] as HoldingListing[]).map((id) => (
             <button
               key={id}
               type="button"
-              onClick={() => setMarket(id)}
-              className={cn("h-10 flex-1 rounded-xl text-sm font-medium", market === id ? "bg-accent text-on-accent" : "bg-elevated")}
+              onClick={() => {
+                setListing(id);
+                setCurrency(defaultListingCurrency(id));
+              }}
+              className={cn("h-10 flex-1 rounded-xl text-sm font-medium", listing === id ? "bg-accent text-on-accent" : "bg-elevated")}
             >
-              {id === "hk" ? t.holdings.hk : t.holdings.us}
+              {id === "hk" ? t.holdings.hk : id === "lse" ? t.holdings.lse : t.holdings.us}
             </button>
           ))}
         </div>
-        <input value={symbol} onChange={(e) => setSymbol(e.target.value)} placeholder={t.holdings.symbol} className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
-        {market === "hk" ? (
+        <input value={symbol} onChange={(e) => setSymbol(e.target.value)} placeholder={listing === "lse" ? "VXUS" : t.holdings.symbol} className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
+        {listing === "hk" ? (
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.holdings.stockName} className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
         ) : null}
+        <select
+          value={currency}
+          onChange={(e) => setCurrency(e.target.value as Currency)}
+          className="h-11 w-full rounded-xl bg-elevated px-3 text-sm"
+          aria-label={t.holdings.currency}
+        >
+          {holdingCurrencies(currency).map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
         <input value={qty} onChange={(e) => setQty(e.target.value)} placeholder={t.holdings.qty} inputMode="decimal" className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
         <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder={t.holdings.price} inputMode="decimal" className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
         <button type="button" className="h-12 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={save}>
