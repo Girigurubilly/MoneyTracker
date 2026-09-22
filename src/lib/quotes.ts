@@ -56,13 +56,69 @@ export function quoteToCurrency(
   return { price, prevClose };
 }
 
+export function unwrapProxiedBody(text: string): string {
+  const t = text.trim();
+  if (!t.startsWith("{")) return t;
+  try {
+    const j = JSON.parse(t) as { contents?: unknown; chart?: unknown };
+    if (j.chart) return t;
+    if (typeof j.contents === "string") return j.contents;
+    if (j.contents && typeof j.contents === "object") return JSON.stringify(j.contents);
+  } catch {
+    /* not a wrapper */
+  }
+  return t;
+}
+
+export function parseLseInstrument(text: string): QuoteHit | undefined {
+  try {
+    const d = JSON.parse(unwrapProxiedBody(text)) as {
+      name?: string;
+      currency?: string;
+      lastprice?: number;
+      lastclose?: number;
+      midPrice?: number;
+      offer?: number;
+      bid?: number;
+    };
+    const price = Number(d.lastprice ?? d.midPrice ?? d.offer ?? d.bid);
+    if (!(price > 0)) return undefined;
+    const prev = Number(d.lastclose);
+    const unit = parseQuoteUnit(d.currency);
+    return {
+      price,
+      name: d.name,
+      prevClose: prev > 0 ? prev : undefined,
+      currency: unit.currency ?? "GBP",
+      pence: unit.pence || undefined,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function viaAllOrigins(url: string): string {
+  return `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+}
+
+async function lseQuote(symbol: string): Promise<QuoteHit | undefined> {
+  const tidm = normalizeSymbol("us", symbol).replace(/\.L$/i, "");
+  if (!tidm) return undefined;
+  const u = `https://api.londonstockexchange.com/api/gw/lse/instruments/alldata/${encodeURIComponent(tidm)}`;
+  try {
+    return parseLseInstrument(await pullFirst([u, viaAllOrigins(u)], 12000));
+  } catch {
+    return undefined;
+  }
+}
+
 async function pull(url: string, ms = 4000): Promise<string> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ms);
   try {
     const res = await fetch(url, { signal: ctrl.signal });
     if (!res.ok) throw new Error(String(res.status));
-    return await res.text();
+    return unwrapProxiedBody(await res.text());
   } finally {
     clearTimeout(timer);
   }
@@ -166,12 +222,13 @@ function parseYahooChart(text: string): { hit?: QuoteHit; closes: ClosePt[] } {
 
 function yahooChartUrls(symbol: string, range: string): string[] {
   const u = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}`;
-  return [u, `https://corsproxy.io/?${encodeURIComponent(u)}`];
+  const u2 = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}`;
+  return [u, u2, viaAllOrigins(u), `https://corsproxy.io/?url=${encodeURIComponent(u)}`];
 }
 
 async function yahooChart(symbol: string, range: string): Promise<{ hit?: QuoteHit; closes: ClosePt[] }> {
   try {
-    return parseYahooChart(await pullFirst(yahooChartUrls(symbol, range), 4000));
+    return parseYahooChart(await pullFirst(yahooChartUrls(symbol, range), 12000));
   } catch {
     return { closes: [] };
   }
@@ -259,6 +316,18 @@ export async function fetchHoldingQuotes(
     for (const r of still) {
       const hit = ymap.get(yahooSymbol(r.market, r.symbol).toUpperCase());
       if (hit) out.set(quoteKey(r.market, r.symbol), hit);
+    }
+  }
+
+  const london = list.filter((r) => isLondonEtf(r.symbol) && !out.has(quoteKey(r.market, r.symbol)));
+  if (london.length) {
+    const conc = 3;
+    for (let i = 0; i < london.length; i += conc) {
+      const slice = london.slice(i, i + conc);
+      const got = await Promise.all(slice.map(async (r) => ({ r, hit: await lseQuote(r.symbol) })));
+      for (const { r, hit } of got) {
+        if (hit) out.set(quoteKey(r.market, r.symbol), hit);
+      }
     }
   }
 
