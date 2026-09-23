@@ -48,6 +48,7 @@ export function quoteToCurrency(
   rates: FxRate[],
   fallback: Currency,
 ): { price: number; prevClose?: number } {
+  if (!hit.currency && !hit.pence) return { price: hit.price, prevClose: hit.prevClose };
   const from = hit.currency ?? fallback;
   const div = hit.pence ? 100 : 1;
   const price = convertAmount(hit.price / div, from, to, rates);
@@ -106,7 +107,7 @@ async function lseQuote(symbol: string): Promise<QuoteHit | undefined> {
   if (!tidm) return undefined;
   const u = `https://api.londonstockexchange.com/api/gw/lse/instruments/alldata/${encodeURIComponent(tidm)}`;
   try {
-    return parseLseInstrument(await pullFirst([u, viaAllOrigins(u)], 12000));
+    return parseLseInstrument(await pull(viaAllOrigins(u), 5000));
   } catch {
     return undefined;
   }
@@ -222,13 +223,14 @@ function parseYahooChart(text: string): { hit?: QuoteHit; closes: ClosePt[] } {
 
 function yahooChartUrls(symbol: string, range: string): string[] {
   const u = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}`;
-  const u2 = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}`;
-  return [u, u2, viaAllOrigins(u), `https://corsproxy.io/?url=${encodeURIComponent(u)}`];
+  if (symbol.toUpperCase().endsWith(".L")) return [viaAllOrigins(u)];
+  return [u, u.replace("query1.", "query2.")];
 }
 
 async function yahooChart(symbol: string, range: string): Promise<{ hit?: QuoteHit; closes: ClosePt[] }> {
+  const slow = symbol.toUpperCase().endsWith(".L");
   try {
-    return parseYahooChart(await pullFirst(yahooChartUrls(symbol, range), 12000));
+    return parseYahooChart(await pullFirst(yahooChartUrls(symbol, range), slow ? 5000 : 4000));
   } catch {
     return { closes: [] };
   }
@@ -292,8 +294,10 @@ export async function fetchHoldingQuotes(
   for (const r of rows) uniq.set(quoteKey(r.market, r.symbol), { market: r.market, symbol: normalizeSymbol(r.market, r.symbol) });
   const list = [...uniq.values()];
   const out = new Map<string, QuoteHit>();
+  const london = list.filter((r) => isLondonEtf(r.symbol));
+  const londonQuotes = Promise.all(london.map(async (r) => ({ r, hit: await lseQuote(r.symbol) })));
 
-  const codes = list.filter((r) => !isLondonEtf(r.symbol)).map((r) => tencentCode(r.market, r.symbol)).filter(Boolean);
+  const codes = list.map((r) => tencentCode(r.market, r.symbol)).filter(Boolean);
   const tencent = await loadTencentScript(codes);
   for (const r of list) {
     const code = tencentCode(r.market, r.symbol);
@@ -307,7 +311,7 @@ export async function fetchHoldingQuotes(
     for (const [k, v] of em) if (!out.has(k)) out.set(k, v);
   }
 
-  const still = list.filter((r) => !out.has(quoteKey(r.market, r.symbol)));
+  const still = list.filter((r) => !out.has(quoteKey(r.market, r.symbol)) && !isLondonEtf(r.symbol));
   if (still.length) {
     const ymap = await yahooCharts(
       still.map((r) => yahooSymbol(r.market, r.symbol)),
@@ -319,15 +323,10 @@ export async function fetchHoldingQuotes(
     }
   }
 
-  const london = list.filter((r) => isLondonEtf(r.symbol) && !out.has(quoteKey(r.market, r.symbol)));
-  if (london.length) {
-    const conc = 3;
-    for (let i = 0; i < london.length; i += conc) {
-      const slice = london.slice(i, i + conc);
-      const got = await Promise.all(slice.map(async (r) => ({ r, hit: await lseQuote(r.symbol) })));
-      for (const { r, hit } of got) {
-        if (hit) out.set(quoteKey(r.market, r.symbol), hit);
-      }
+  const needLondon = london.filter((r) => !out.has(quoteKey(r.market, r.symbol)));
+  if (needLondon.length) {
+    for (const { r, hit } of await londonQuotes) {
+      if (hit && !out.has(quoteKey(r.market, r.symbol))) out.set(quoteKey(r.market, r.symbol), hit);
     }
   }
 

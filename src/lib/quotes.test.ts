@@ -17,6 +17,8 @@ describe("holding quotes", () => {
     assert.equal(Math.round(usd.price * 100) / 100, 4.82);
     const pence = quoteToCurrency({ price: 376, currency: "GBP", pence: true }, "GBP", rates, "GBP");
     assert.equal(pence.price, 3.76);
+    const raw = quoteToCurrency({ price: 837.7 }, "USD", rates, "GBP");
+    assert.equal(raw.price, 837.7);
   });
 
   it("unwraps allorigins and parses an LSE instrument payload", () => {
