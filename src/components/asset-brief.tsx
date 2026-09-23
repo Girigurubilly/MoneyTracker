@@ -1,3 +1,4 @@
+import { copyPlainText, sharePlainText } from "@/lib/copy-text";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Overlay } from "@/components/shared";
@@ -51,17 +52,13 @@ function AssetBriefSheet({ onClose }: { onClose: () => void }) {
   );
 
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(markdown);
-    } catch {
-      const el = document.createElement("textarea");
-      el.value = markdown;
-      document.body.appendChild(el);
-      el.select();
-      document.execCommand("copy");
-      el.remove();
+    if (await copyPlainText(markdown)) {
+      toast(t.assets.copied);
+      return;
     }
-    toast(t.assets.copied);
+    const shared = await sharePlainText(markdown, t.assets.exportAi);
+    if (shared === "shared" || shared === "aborted") return;
+    toast(t.assets.copyFailed);
   }
 
   return (
@@ -79,7 +76,7 @@ function AssetBriefSheet({ onClose }: { onClose: () => void }) {
           {t.assets.downloadBrief}
         </button>
       </div>
-      <pre className="mx-4 mb-8 max-h-[70dvh] overflow-auto whitespace-pre-wrap rounded-2xl bg-elevated p-4 text-[11px] leading-4 text-muted">
+      <pre className="mx-4 mb-8 max-h-[70dvh] select-text overflow-auto whitespace-pre-wrap rounded-2xl bg-elevated p-4 text-[11px] leading-4 text-muted">
         {markdown}
       </pre>
     </Overlay>

@@ -196,6 +196,7 @@ export const messages = {
       exportAiHint: "Markdown snapshot of assets, liabilities, 12-month cash flow and monthly net-worth change. Copy it, then paste with the retirement export into a chat model.",
       copyBrief: "Copy",
       copied: "Copied",
+      copyFailed: "Could not copy. Use Download, or long-press the text.",
       downloadBrief: "Download",
     },
     budget: {
@@ -1178,6 +1179,7 @@ export const messages = {
       exportAiHint: "資產、負債、過去 12 個月現金流同每月淨資產增減嘅 Markdown 摘要。複製之後，連同退休頁嘅匯出一齊貼去大型語言模型。",
       copyBrief: "複製",
       copied: "已複製",
+      copyFailed: "複製唔到。用下載，或者長按上面文字。",
       downloadBrief: "下載",
     },
     budget: {
