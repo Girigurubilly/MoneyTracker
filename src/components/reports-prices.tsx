@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
+import { RefreshCw } from "lucide-react";
 import { ScreenHeader, Group, Hairline } from "@/components/shared";
 import { money, todayISO } from "@/lib/format";
 import { toHkd } from "@/lib/calc/fx";
 import { holdingTitle, sortHoldingsBySymbol } from "@/lib/holdings";
-import { fetchHoldingMoves, inferredQuoteCurrency, quoteKey, quoteToCurrency, type PriceRange } from "@/lib/quotes";
+import { fetchHoldingMoves, inferredQuoteCurrency, quoteKey, quoteToCurrency, type PriceMove, type PriceRange } from "@/lib/quotes";
 import type { HoldingMarket } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
@@ -20,8 +21,21 @@ export function StockPricesPage() {
   const [range, setRange] = useState<PriceRange>("1d");
   const [dir, setDir] = useState<"asc" | "desc">("asc");
   const [busy, setBusy] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [moves, setMoves] = useState<Map<string, PriceMove>>(new Map());
   const refresh = useApp((s) => s.refreshHoldingPrices);
+
+  async function syncPrices() {
+    setSyncing(true);
+    try {
+      const n = await refresh();
+      toast(n ? t.holdings.priced.replace("{n}", String(n)) : t.holdings.priceFail);
+    } catch {
+      toast(t.holdings.priceFail);
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   useEffect(() => {
     if (!holdings.length) return;
@@ -87,10 +101,10 @@ export function StockPricesPage() {
             inferredQuoteCurrency(h.market, h.symbol),
           )
         : undefined;
-      const last = converted?.price ?? h.lastPrice;
-      const open = converted?.prevClose ?? last;
-      now += toHkd(h.quantity * (last || 0), h.currency, rates);
-      start += toHkd(h.quantity * (open || 0), h.currency, rates);
+      const last = h.lastPrice || 0;
+      const open = converted?.prevClose && converted.prevClose > 0 ? converted.prevClose : last;
+      now += toHkd(h.quantity * last, h.currency, rates);
+      start += toHkd(h.quantity * open, h.currency, rates);
     }
     const change = now - start;
     return { now, start, change, pct: start ? change / start : 0 };
@@ -108,7 +122,21 @@ export function StockPricesPage() {
 
   return (
     <div className="pb-10">
-      <ScreenHeader title={t.prices.title} backTo="/reports" />
+      <ScreenHeader
+        title={t.prices.title}
+        backTo="/reports"
+        right={
+          <button
+            type="button"
+            disabled={syncing || !holdings.length}
+            className="flex items-center gap-1 px-2 text-xs font-medium text-accent disabled:opacity-50"
+            onClick={() => void syncPrices()}
+          >
+            <RefreshCw className={cn("size-4", syncing && "animate-spin")} />
+            {t.holdings.refreshShort}
+          </button>
+        }
+      />
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.prices.hint}</p>
       <div className="flex gap-2 overflow-x-auto px-5 pb-2">
         {(["both", "hk", "us"] as BookFilter[]).map((id) => (
@@ -165,15 +193,17 @@ export function StockPricesPage() {
         <Group>
           {rows.map((h, i) => {
             const mv = moves.get(quoteKey(h.market, h.symbol));
-            const last = mv
+            const converted = mv
               ? quoteToCurrency(
                   { price: mv.last, prevClose: mv.start, currency: mv.currency, pence: mv.pence },
                   h.currency,
                   rates,
                   inferredQuoteCurrency(h.market, h.symbol),
-                ).price
-              : h.lastPrice;
-            const pct = mv?.pct;
+                )
+              : undefined;
+            const last = h.lastPrice;
+            const open = converted?.prevClose;
+            const pct = open && open > 0 && last ? (last - open) / open : undefined;
             const up = (pct ?? 0) > 0;
             const down = (pct ?? 0) < 0;
             const title = h.market === "us" ? h.symbol : holdingTitle(h);

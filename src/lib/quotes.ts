@@ -406,6 +406,12 @@ async function historyFor(market: HoldingMarket, symbol: string, range: PriceRan
 }
 
 const moveCache = new Map<string, { at: number; data: Map<string, PriceMove> }>();
+let moveGen = 0;
+
+export function clearHoldingMoveCache() {
+  moveGen += 1;
+  moveCache.clear();
+}
 
 export async function fetchHoldingMoves(
   rows: { market: HoldingMarket; symbol: string }[],
@@ -418,6 +424,7 @@ export async function fetchHoldingMoves(
   const cached = moveCache.get(cacheKey);
   if (cached && Date.now() - cached.at < 5 * 60 * 1000) return cached.data;
 
+  const gen = moveGen;
   const out = new Map<string, PriceMove>();
   const quotes = await fetchHoldingQuotes(list);
   for (const r of list) {
@@ -466,6 +473,6 @@ export async function fetchHoldingMoves(
     }
   }
 
-  moveCache.set(cacheKey, { at: Date.now(), data: out });
+  if (gen === moveGen) moveCache.set(cacheKey, { at: Date.now(), data: out });
   return out;
 }

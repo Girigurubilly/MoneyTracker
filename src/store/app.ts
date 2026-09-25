@@ -50,7 +50,7 @@ import { applyAutoTrip, patchAutoTrips } from "@/lib/calc/trips";
 import { netWorthNow } from "@/lib/calc/networth";
 import { fetchLiveFx } from "@/lib/calc/fx";
 import { applyHoldingBalances, assignHoldingBook, mergeHoldings, parseHoldingsFile } from "@/lib/holdings";
-import { fetchHoldingQuotes, inferredQuoteCurrency, quoteKey, quoteToCurrency } from "@/lib/quotes";
+import { clearHoldingMoveCache, fetchHoldingQuotes, inferredQuoteCurrency, quoteKey, quoteToCurrency } from "@/lib/quotes";
 import { chargedDayOf, chargedIso, inferLivingRegular, isExpenseRegular } from "@/lib/calc/budget";
 import { emptyYearlyPlan, linkedMonthSpendCap } from "@/lib/calc/deposits";
 import { isMortgageInterestCategory, isMortgagePrincipalCategory, missingMortgageLeaf } from "@/lib/categories";
@@ -1210,6 +1210,7 @@ export const useApp = create<AppState>((set, get) => ({
       const px = quoteToCurrency(hit, h.currency, rates, inferredQuoteCurrency(h.market, h.symbol));
       return { ...h, lastPrice: px.price, name: named || h.name, lastPriceAt: now };
     });
+    clearHoldingMoveCache();
     await writeHoldings(holdings, get, set);
     return n;
   },
