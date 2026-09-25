@@ -102,12 +102,22 @@ function viaAllOrigins(url: string): string {
   return `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
 }
 
-async function lseQuote(symbol: string): Promise<QuoteHit | undefined> {
-  const tidm = normalizeSymbol("us", symbol).replace(/\.L$/i, "");
-  if (!tidm) return undefined;
-  const u = `https://api.londonstockexchange.com/api/gw/lse/instruments/alldata/${encodeURIComponent(tidm)}`;
+async function londonQuote(symbol: string): Promise<QuoteHit | undefined> {
+  const ySym = yahooSymbol("us", symbol);
+  const yahoo = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ySym)}?interval=1d&range=5d`;
+  const yahoo2 = yahoo.replace("query1.", "query2.");
+  const tidm = ySym.replace(/\.L$/i, "");
+  const lse = `https://api.londonstockexchange.com/api/gw/lse/instruments/alldata/${encodeURIComponent(tidm)}`;
+  const urls = [yahoo, yahoo2, viaAllOrigins(yahoo), viaAllOrigins(lse)];
   try {
-    return parseLseInstrument(await pull(viaAllOrigins(u), 5000));
+    return await Promise.any(
+      urls.map(async (u) => {
+        const text = await pull(u, 12000);
+        const hit = parseYahooChart(text).hit ?? parseLseInstrument(text);
+        if (!hit) throw new Error("empty");
+        return hit;
+      }),
+    );
   } catch {
     return undefined;
   }
@@ -295,7 +305,7 @@ export async function fetchHoldingQuotes(
   const list = [...uniq.values()];
   const out = new Map<string, QuoteHit>();
   const london = list.filter((r) => isLondonEtf(r.symbol));
-  const londonQuotes = Promise.all(london.map(async (r) => ({ r, hit: await lseQuote(r.symbol) })));
+  const londonQuotes = Promise.all(london.map(async (r) => ({ r, hit: await londonQuote(r.symbol) })));
 
   const codes = list.map((r) => tencentCode(r.market, r.symbol)).filter(Boolean);
   const tencent = await loadTencentScript(codes);
