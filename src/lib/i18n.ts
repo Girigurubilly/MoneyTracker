@@ -218,6 +218,8 @@ export const messages = {
       adhocHint:
         "A this-month budget hold only. It does not create an expense, transfer, or income, and does not change any account. Counts toward remaining budget, still-to-spend, and daily spendable.",
       addAdhoc: "Add this-month item",
+      addAdhocAny: "Add ad-hoc item",
+      addShort: "Add",
       manageAdhoc: "All months",
       adhocPlanHint: "Same list as Budget → this month only. Items dated in a later month stay off the budget page until that month.",
       adhocFuture: "Later months",
@@ -1206,6 +1208,8 @@ export const messages = {
       adhoc: "本月臨時",
       adhocHint: "只計入本月預算，不會建立費用、轉帳或收入，也不會改動任何帳戶。會反映在剩餘預算、本月尚餘開支和每日可花費。",
       addAdhoc: "新增本月臨時項目",
+      addAdhocAny: "新增臨時項目",
+      addShort: "新增",
       manageAdhoc: "所有月份",
       adhocPlanHint: "同預算頁「本月臨時」同一份清單。之後月份嘅項目唔會出現喺預算頁，直到去到嗰個月。",
       adhocFuture: "之後月份",

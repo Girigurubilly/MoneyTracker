@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { AdhocEditor } from "@/components/budget";
 import { AmountWithHkd } from "@/components/currency-field";
 import { ScreenHeader } from "@/components/shared";
+import { categoryPath } from "@/lib/categories";
 import { todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import type { AdhocBudget, FxRate, WishItem } from "@/lib/types";
@@ -39,6 +40,7 @@ export function AdhocPlanPage() {
   const t = useT();
   const locale = useUi((s) => s.locale);
   const rows = useApp((s) => s.adhocBudgets);
+  const categories = useApp((s) => s.categories);
   const rates = useApp((s) => s.fxRates);
   const accounts = useApp((s) => s.accounts);
   const addTx = useApp((s) => s.addTransaction);
@@ -104,6 +106,7 @@ export function AdhocPlanPage() {
             today={today}
             rates={rates}
             locale={locale}
+            categories={categories}
             onAdd={() => openAdd(month)}
             onEdit={setEditing}
             onPost={(a) => void post(a)}
@@ -122,20 +125,21 @@ export function AdhocPlanPage() {
     <div className="pb-10">
       <ScreenHeader
         title={t.more.adhocPlan}
+        backTo="/more"
         right={
-          <button type="button" className="px-2 text-sm font-medium text-accent" onClick={() => openAdd(thisMonth)}>
-            {t.budget.addAdhoc}
+          <button type="button" className="shrink-0 px-2 text-sm font-medium text-accent" onClick={() => openAdd(thisMonth)}>
+            {t.budget.addShort}
           </button>
         }
       />
       <p className="px-5 pb-2 text-xs leading-5 text-muted">{t.budget.adhocPlanHint}</p>
       <section className="pt-2">
-        <div className="flex items-center justify-between px-5 pb-2">
-          <h2 className="text-sm font-medium text-muted">
+        <div className="flex items-center justify-between gap-3 px-5 pb-2">
+          <h2 className="min-w-0 text-sm font-medium text-muted">
             {t.budget.adhoc} · {monthLabel(thisMonth, locale)}
           </h2>
-          <button type="button" className="text-sm font-medium text-accent" onClick={() => openAdd(thisMonth)}>
-            {t.budget.addAdhoc}
+          <button type="button" className="shrink-0 text-sm font-medium text-accent" onClick={() => openAdd(thisMonth)}>
+            {t.budget.addShort}
           </button>
         </div>
         <MonthRows
@@ -143,6 +147,7 @@ export function AdhocPlanPage() {
           today={today}
           rates={rates}
           locale={locale}
+          categories={categories}
           empty={t.budget.adhocNone}
           onEdit={setEditing}
           onPost={(a) => void post(a)}
@@ -156,7 +161,7 @@ export function AdhocPlanPage() {
       {section(t.budget.adhocFuture, groups.future, t.budget.adhocNone)}
       <div className="px-5 pt-2">
         <button type="button" className="text-sm font-medium text-accent" onClick={() => openAdd(nextMonth(groups.future.at(-1) ?? thisMonth))}>
-          {t.budget.addAdhoc}
+          {t.budget.addAdhocAny}
         </button>
       </div>
       {groups.past.length ? section(t.budget.adhocPast, groups.past, "") : null}
@@ -180,6 +185,7 @@ function MonthBlock({
   today,
   rates,
   locale,
+  categories,
   onAdd,
   onEdit,
   onPost,
@@ -191,6 +197,7 @@ function MonthBlock({
   today: string;
   rates: FxRate[];
   locale: "en" | "zh-HK";
+  categories: ReturnType<typeof useApp.getState>["categories"];
   onAdd: () => void;
   onEdit: (a: AdhocBudget) => void;
   onPost: (a: AdhocBudget) => void;
@@ -199,13 +206,13 @@ function MonthBlock({
   const t = useT();
   return (
     <div className="pb-3">
-      <div className="flex items-center justify-between px-5 pb-1">
-        <h3 className="text-sm font-medium">{label}</h3>
-        <button type="button" className="text-xs font-medium text-accent" onClick={onAdd}>
-          {t.budget.addAdhoc}
+      <div className="flex items-center justify-between gap-3 px-5 pb-1">
+        <h3 className="min-w-0 text-sm font-medium">{label}</h3>
+        <button type="button" className="shrink-0 text-sm font-medium text-accent" onClick={onAdd}>
+          {t.budget.addShort}
         </button>
       </div>
-      <MonthRows rows={rows} today={today} rates={rates} locale={locale} empty={t.budget.adhocNone} onEdit={onEdit} onPost={onPost} onWish={onWish} />
+      <MonthRows rows={rows} today={today} rates={rates} locale={locale} categories={categories} empty={t.budget.adhocNone} onEdit={onEdit} onPost={onPost} onWish={onWish} />
     </div>
   );
 }
@@ -215,6 +222,7 @@ function MonthRows({
   today,
   rates,
   locale,
+  categories,
   empty,
   onEdit,
   onPost,
@@ -224,6 +232,7 @@ function MonthRows({
   today: string;
   rates: FxRate[];
   locale: "en" | "zh-HK";
+  categories: ReturnType<typeof useApp.getState>["categories"];
   empty: string;
   onEdit: (a: AdhocBudget) => void;
   onPost: (a: AdhocBudget) => void;
@@ -236,12 +245,21 @@ function MonthRows({
       {rows.map((a) => {
         const upcoming = a.date > today;
         return (
-          <div key={a.id} className="flex w-full flex-wrap items-center gap-2 border-t border-line px-4 py-3 first:border-0">
-            <button type="button" className="min-w-0 flex-1 text-left" onClick={() => onEdit(a)}>
-              <div className="truncate text-sm font-medium">{pickName(locale, a.label, a.labelZh)}</div>
-              <div className="mt-0.5 text-xs text-muted">{a.date}</div>
-            </button>
-            <AmountWithHkd amount={-a.amount} currency={a.currency} rates={rates} sign className="text-sm font-semibold" />
+          <div key={a.id} className="border-t border-line px-4 py-3 first:border-0">
+            <div className="flex items-start gap-2">
+              <button type="button" className="min-w-0 flex-1 text-left" onClick={() => onEdit(a)}>
+                <div className="break-words text-sm font-medium">{pickName(locale, a.label, a.labelZh)}</div>
+                <div className="mt-0.5 break-words text-xs text-muted">
+                  {a.date}
+                  {(() => {
+                    const cat = categories.find((c) => c.id === a.categoryId);
+                    return cat ? ` · ${categoryPath(cat, categories, locale)}` : "";
+                  })()}
+                </div>
+              </button>
+              <AmountWithHkd amount={-a.amount} currency={a.currency} rates={rates} sign className="shrink-0 text-sm font-semibold" />
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
             {upcoming ? (
               <button type="button" className="h-8 shrink-0 rounded-full bg-accent-soft px-3 text-xs font-medium text-accent" onClick={() => onPost(a)}>
                 {t.budget.postAdhoc}
@@ -250,13 +268,14 @@ function MonthRows({
               <span className="shrink-0 rounded-full bg-success-soft px-2 py-1 text-xs font-medium text-income">{t.budget.charged}</span>
             )}
             {upcoming ? (
-              <button type="button" className="h-8 shrink-0 rounded-full px-3 text-xs font-medium" onClick={() => onWish(a)}>
+              <button type="button" className="h-8 shrink-0 rounded-full bg-elevated px-3 text-xs font-medium" onClick={() => onWish(a)}>
                 {t.budget.toWishlist}
               </button>
             ) : null}
-            <button type="button" aria-label={t.common.edit} onClick={() => onEdit(a)}>
+            <button type="button" aria-label={t.common.edit} className="ml-auto" onClick={() => onEdit(a)}>
               <ChevronRight className="size-4 shrink-0 text-faint" />
             </button>
+            </div>
           </div>
         );
       })}

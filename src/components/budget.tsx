@@ -611,7 +611,7 @@ function AdhocEditorBody({
 
   return (
     <ComposerShell
-      header={<ComposerHeader onClose={onClose} onSave={() => void save()} title={initial ? t.common.edit : t.budget.addAdhoc} />}
+      header={<ComposerHeader onClose={onClose} onSave={() => void save()} title={initial ? t.common.edit : lockToMonth ? t.budget.addAdhoc : t.budget.addAdhocAny} />}
       keypad={
         <ActiveKeypad
           field="amount"
@@ -629,29 +629,31 @@ function AdhocEditorBody({
       }
     >
       <TextLine value={name} onChange={setName} placeholder={t.budget.regularName} />
+      <button type="button" className="flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left" onClick={() => setPickCat(true)}>
+        {cat ? (
+          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-elevated">
+            <CategoryIcon name={cat.icon} />
+          </span>
+        ) : null}
+        <span className={cn("min-w-0 flex-1 text-sm", cat ? "text-foreground" : "text-muted")}>
+          {cat ? categoryPath(cat, categories, locale) : t.add.pickCategory}
+        </span>
+      </button>
       <LineRow
-        leading={
-          cat ? (
-            <span className="grid size-8 place-items-center rounded-full bg-elevated">
-              <CategoryIcon name={cat.icon} />
-            </span>
-          ) : null
-        }
-        label={cat ? categoryPath(cat, categories, locale) : ""}
-        placeholder={t.add.pickCategory}
+        label=""
+        placeholder={t.add.amount}
         amount={amount}
         active
         onFocusAmount={() => undefined}
-        onPressLabel={() => setPickCat(true)}
       />
-      <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+      <div className="min-w-0 border-b border-line px-4 py-2.5">
         <input
           type="date"
           value={date}
           min={lockToMonth ? `${month}-01` : `${today.slice(0, 7)}-01`}
           max={lockToMonth ? `${month}-31` : undefined}
           onChange={(e) => setDate(e.target.value)}
-          className="h-10 bg-transparent text-sm text-accent outline-none"
+          className="h-10 w-full min-w-0 max-w-full bg-transparent text-sm text-accent outline-none"
         />
       </div>
       {initial ? (

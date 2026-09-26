@@ -6,7 +6,7 @@ import { pickName } from "@/lib/i18n";
 import { Link } from "@tanstack/react-router";
 import { activityDates, plannedIso, monthStats } from "@/lib/derived";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
-import { asOfForMonth, chargedDayOf, forecastTone, upcomingExpenseRegulars } from "@/lib/calc/budget";
+import { asOfForMonth, adhocForMonth, chargedDayOf, forecastTone, upcomingExpenseRegulars } from "@/lib/calc/budget";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { useT, useUi, readSavedLocale } from "@/store/ui";
@@ -103,6 +103,9 @@ function TodayBody() {
     .sort((a, b) => a.date.localeCompare(b.date) || b.id.localeCompare(a.id));
   const plannedRegularIds = new Set(monthPlanned.map((tx) => tx.recurringId).filter(Boolean));
   const upcomingOnly = upcomingExpenseRegulars(recurring, asOf).filter((r) => !plannedRegularIds.has(r.id));
+  const unpaidAdhoc = adhocForMonth(adhoc, monthKey)
+    .filter((a) => a.date > today)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label));
   const cells = monthGrid(selected, firstDay);
   const active = activityDates(transactions);
   const plannedDays = plannedIso(transactions);
@@ -216,7 +219,7 @@ function TodayBody() {
         </>
       )}
 
-      {monthPlanned.length || upcomingOnly.length ? (
+      {monthPlanned.length || upcomingOnly.length || unpaidAdhoc.length ? (
         <>
           <SectionLabel>{t.today.monthPlanned}</SectionLabel>
           <Hairline />
@@ -243,6 +246,20 @@ function TodayBody() {
                   sign
                   className="text-sm font-semibold"
                 />
+              </Link>
+            </div>
+          ))}
+          {unpaidAdhoc.map((a, i) => (
+            <div key={a.id}>
+              {monthPlanned.length || upcomingOnly.length || i > 0 ? <Hairline /> : null}
+              <Link to="/more/adhoc" className="flex items-center justify-between gap-3 px-5 py-3">
+                <div className="min-w-0">
+                  <div className="break-words text-sm">{pickName(locale, a.label, a.labelZh)}</div>
+                  <div className="text-xs text-muted">
+                    {a.date.slice(8)} · {t.budget.adhoc}
+                  </div>
+                </div>
+                <AmountWithHkd amount={-a.amount} currency={a.currency} rates={rates} sign className="shrink-0 text-sm font-semibold" />
               </Link>
             </div>
           ))}
