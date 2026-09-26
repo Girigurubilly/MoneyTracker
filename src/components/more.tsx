@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Archive, BookOpen, FolderTree, Globe, Palette, PiggyBank, Settings2, ShoppingBag, SlidersHorizontal, TrendingUp, Undo2, Upload, Wallet } from "lucide-react";
+import { Archive, BookOpen, CalendarClock, FolderTree, Globe, Palette, PiggyBank, Settings2, ShoppingBag, SlidersHorizontal, TrendingUp, Undo2, Upload, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
 import { Disclaimer, Group, Hairline, Overlay, Row, ScreenHeader } from "@/components/shared";
@@ -45,6 +45,8 @@ export function MoreScreen() {
           <h2 className="px-5 pb-1 text-sm font-medium text-muted">{t.more.money}</h2>
           <Group>
             <Row icon={<Wallet className="size-4" />} title={t.more.budgets} to="/budget" chevron />
+            <Hairline />
+            <Row icon={<CalendarClock className="size-4" />} title={t.more.adhocPlan} to="/more/adhoc" chevron />
             <Hairline />
             <Row icon={<ShoppingBag className="size-4" />} title={t.more.wishlist} to="/more/wishlist" chevron />
             <Hairline />

@@ -441,9 +441,14 @@ function AdhocBlock({
     <div className="pt-4">
       <div className="flex items-center justify-between px-5 pb-1">
         <h2 className="text-sm font-medium text-muted">{t.budget.adhoc}</h2>
-        <button type="button" onClick={onAdd} className="text-sm font-medium text-accent">
-          {t.budget.addAdhoc}
-        </button>
+        <div className="flex items-center gap-3">
+          <Link to="/more/adhoc" className="text-xs font-medium text-accent">
+            {t.budget.manageAdhoc}
+          </Link>
+          <button type="button" onClick={onAdd} className="text-sm font-medium text-accent">
+            {t.budget.addAdhoc}
+          </button>
+        </div>
       </div>
       <p className="px-5 pb-2 text-xs text-faint">{t.budget.adhocHint}</p>
       {rows.length === 0 ? (
@@ -513,25 +518,39 @@ function AdhocBlock({
   );
 }
 
-function AdhocEditor({
+export function AdhocEditor({
   open,
   initial,
   month,
+  lockToMonth = true,
   onClose,
 }: {
   open: boolean;
   initial: AdhocBudget | null;
   month: string;
+  lockToMonth?: boolean;
   onClose: () => void;
 }) {
   return (
     <Overlay open={open} onClose={onClose} variant="page">
-      {open ? <AdhocEditorBody key={initial?.id ?? "new"} initial={initial} month={month} onClose={onClose} /> : null}
+      {open ? (
+        <AdhocEditorBody key={initial?.id ?? `new-${month}`} initial={initial} month={month} lockToMonth={lockToMonth} onClose={onClose} />
+      ) : null}
     </Overlay>
   );
 }
 
-function AdhocEditorBody({ initial, month, onClose }: { initial: AdhocBudget | null; month: string; onClose: () => void }) {
+function AdhocEditorBody({
+  initial,
+  month,
+  lockToMonth,
+  onClose,
+}: {
+  initial: AdhocBudget | null;
+  month: string;
+  lockToMonth: boolean;
+  onClose: () => void;
+}) {
   const t = useT();
   const locale = useUi((s) => s.locale);
   const add = useApp((s) => s.addAdhocBudget);
@@ -556,14 +575,15 @@ function AdhocEditorBody({ initial, month, onClose }: { initial: AdhocBudget | n
       toast(t.add.needAmount);
       return;
     }
-    const iso = date.startsWith(month) ? date : `${month}-28`;
+    const iso = lockToMonth ? (date.startsWith(month) ? date : `${month}-28`) : date.slice(0, 7) < today.slice(0, 7) ? today : date;
+    const rowMonth = lockToMonth ? month : iso.slice(0, 7);
     const row: AdhocBudget = {
       id: initial?.id ?? newId(),
       label: n,
       labelZh: n,
       amount: amt,
       currency,
-      month,
+      month: rowMonth,
       date: iso,
       categoryId: categoryId || undefined,
       priceCards: initial?.priceCards,
@@ -625,7 +645,14 @@ function AdhocEditorBody({ initial, month, onClose }: { initial: AdhocBudget | n
         onPressLabel={() => setPickCat(true)}
       />
       <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-        <input type="date" value={date} min={`${month}-01`} max={`${month}-31`} onChange={(e) => setDate(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
+        <input
+          type="date"
+          value={date}
+          min={lockToMonth ? `${month}-01` : `${today.slice(0, 7)}-01`}
+          max={lockToMonth ? `${month}-31` : undefined}
+          onChange={(e) => setDate(e.target.value)}
+          className="h-10 bg-transparent text-sm text-accent outline-none"
+        />
       </div>
       {initial ? (
         <>

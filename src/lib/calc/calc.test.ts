@@ -185,10 +185,10 @@ describe("monthCashflowForecast", () => {
     assert.equal(cur.expense, 8_050 + 200 + 3_000);
   });
 
-  it("future month uses monthly regulars only, not adhoc", () => {
-    const fut = monthCashflowForecast(txs, recurring, adhoc, "2026-09", [], today);
-    assert.equal(fut.income, 25_000);
-    assert.equal(fut.expense, 8_200);
+  it("future month adds ad-hoc holds dated in that month", () => {
+    const later = [...adhoc, hold({ id: "oct-trip", amount: 4_000, date: "2026-09-20" })];
+    const fut = monthCashflowForecast(txs, recurring, later, "2026-09", [], today);
+    assert.equal(fut.expense, 8_200 + 4_000);
   });
 
   it("past month is posted only", () => {

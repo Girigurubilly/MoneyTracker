@@ -277,7 +277,8 @@ export function hkdOfRegular(r: Recurring, rates: FxRate[]): number {
  * Cash-flow forecast for one month.
  * Income = realized + still-scheduled income in that month.
  * Expense (current month) = realized + uncharged monthly regulars + uncharged 本月臨時.
- * Expense (future) = monthly expense regulars. Past = realized only.
+ * Expense (future) = monthly expense regulars + ad-hoc holds dated in that month.
+ * Past = realized only.
  */
 export function monthCashflowForecast(
   txs: Transaction[],
@@ -304,6 +305,7 @@ export function monthCashflowForecast(
     schedExpense = reservedRegulars(recurring, rates, asOf) + reservedAdhoc(adhoc, month, rates, asOf);
   } else if (future) {
     for (const r of monthlyExpenseRegulars(recurring)) schedExpense += hkdOfRegular(r, rates);
+    schedExpense += adhocTotal(adhoc, month, rates);
   }
 
   const income = posted.income + schedIncome;
