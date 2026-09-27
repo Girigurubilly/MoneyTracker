@@ -1,5 +1,6 @@
-import type { RetirementLifePlan, LifePlanSpendingStage } from "../types.ts";
+import type { Allowance, RetirementAccount, RetirementLifePlan, LifePlanSpendingStage } from "../types.ts";
 import { ageFromBirthday } from "./retirement.ts";
+import { projectRetirementAccountYear } from "./mpf.ts";
 
 export type LifePathId = "stay" | "switch";
 export type LifePhase = "current" | "lower" | "retired";
@@ -11,14 +12,19 @@ export type LifeYearRow = {
   openingFinancial: number;
   income: number;
   living: number;
+  /** Monthly living cost in today's money. `living / 12` is that year's inflated amount. */
+  livingMonthlyToday: number;
   mortgage: number;
   inheritProceeds: number;
   annuityBuy: number;
   annuityIncome: number;
+  pensionIncome: number;
+  allowanceIncome: number;
   reverseMortgage: number;
   investmentReturn: number;
   closingFinancial: number;
   propertyHeld: number;
+  lockedBalance: number;
   notes: string[];
 };
 
@@ -169,6 +175,25 @@ export function lifePlanMissing(plan: RetirementLifePlan): string[] {
   return missing;
 }
 
+export type LifePlanInflows = {
+  accounts?: RetirementAccount[];
+  allowances?: Allowance[];
+  retireAge?: number;
+  birthday?: string;
+};
+
+function allowanceForAge(rows: Allowance[] | undefined, age: number, yearsFromStart: number, inflation: number, mode: "nominal" | "real"): number {
+  let sum = 0;
+  for (const a of rows ?? []) {
+    if (age < a.startAge) continue;
+    if (a.payoutYears != null && a.payoutYears > 0 && age >= a.startAge + a.payoutYears) continue;
+    if (a.endAge != null && age >= a.endAge) continue;
+    const grown = a.inflationAdjusted && mode !== "real" ? (1 + inflation) ** yearsFromStart : 1;
+    sum += a.monthly * 12 * grown;
+  }
+  return sum;
+}
+
 function n(v: number | null | undefined): number {
   return typeof v === "number" && Number.isFinite(v) ? v : 0;
 }
@@ -222,7 +247,15 @@ function netLower(plan: RetirementLifePlan, yearsFromStart: number): number {
   return estimateHkNetMonthly(gross);
 }
 
-function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string): LifePathResult {
+function pathRetireAge(plan: RetirementLifePlan, path: LifePathId, startYear: number, startAge: number, endAge: number): number {
+  for (let age = startAge; age <= endAge; age++) {
+    const calendarYear = startYear + (age - startAge);
+    if (phaseFor(path, plan, `${calendarYear}-12-31`) === "retired") return age;
+  }
+  return endAge + 1;
+}
+
+function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, inflows?: LifePlanInflows): LifePathResult {
   const dob = plan.personal.dateOfBirth!;
   const startIso = plan.personal.planStartDate || asOf;
   const startYear = isoYear(startIso, Number(asOf.slice(0, 4)));
@@ -243,6 +276,11 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string):
   let assetsAtRetire = financial;
   let retireAge: number | null = null;
   const target = plan.personal.targetTerminalFinancialAssets;
+  const accounts = (inflows?.accounts ?? []).filter((a) => a.includeInRetirementProjection && a.status !== "closed");
+  const balances = new Map(accounts.map((a) => [a.id, n(a.currentBalance)]));
+  const lumpDone = new Set<string>();
+  const birthday = plan.personal.dateOfBirth || inflows?.birthday;
+  const jobRetireAge = pathRetireAge(plan, path, startYear, startAge, endAge);
 
   for (let age = startAge; age <= endAge; age++) {
     const calendarYear = startYear + (age - startAge);
@@ -253,22 +291,27 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string):
     const notes: string[] = [];
     let income = 0;
     let living = 0;
+    let livingMonthlyToday = 0;
     if (phase === "current") {
       const net = netCurrent(plan, i);
       const netAnnual = net * 12;
       if (plan.currentJob.monthlySavingsOverride != null) {
         income = netAnnual;
         living = netAnnual - plan.currentJob.monthlySavingsOverride * 12;
+        livingMonthlyToday = living / 12;
       } else {
         income = netAnnual;
-        living = n(plan.currentJob.actualMonthlySpending) * 12;
+        livingMonthlyToday = n(plan.currentJob.actualMonthlySpending);
+        living = livingMonthlyToday * 12;
       }
     } else if (phase === "lower") {
       income = netLower(plan, i) * 12;
-      living = inflate(n(plan.lowerStressJob.monthlyLivingCost) * 12, inf, i, plan.lowerStressJob.livingCostFollowsInflation, mode);
+      livingMonthlyToday = n(plan.lowerStressJob.monthlyLivingCost);
+      living = inflate(livingMonthlyToday * 12, inf, i, plan.lowerStressJob.livingCostFollowsInflation, mode);
     } else {
       const st = stageSpend(plan.spendingStages, age);
-      living = st ? inflate(st.monthly * 12, inf, i, st.follows, mode) : 0;
+      livingMonthlyToday = st?.monthly ?? 0;
+      living = st ? inflate(livingMonthlyToday * 12, inf, i, st.follows, mode) : 0;
       if (!st) notes.push("No retirement spending stage for this age.");
     }
 
@@ -327,6 +370,25 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string):
       if (within) annuityIncome = n(plan.publicAnnuity.monthlyPayout) * 12;
     }
 
+    let pensionIncome = 0;
+    for (const acc of accounts) {
+      const row = projectRetirementAccountYear({
+        account: acc,
+        openingBalance: balances.get(acc.id) ?? 0,
+        age,
+        calendarYear,
+        yearsSinceStart: i,
+        retireAge: jobRetireAge,
+        birthday: birthday ?? undefined,
+        alreadyLumpSum: lumpDone.has(acc.id),
+      });
+      if (row.notes.includes("lump sum at access")) lumpDone.add(acc.id);
+      balances.set(acc.id, row.closingBalance);
+      pensionIncome += row.cashFlowAvailableToRetirementPlan;
+    }
+    const allowanceIncome = allowanceForAge(inflows?.allowances, age, i, inf, mode);
+    const lockedBalance = [...balances.values()].reduce((s, v) => s + v, 0);
+
     home *= 1 + n(plan.assets.selfOccupiedPropertyGrowthRate);
     let reverseMortgage = 0;
     if (plan.reverseMortgage.enabled && plan.reverseMortgage.startAge != null && age >= plan.reverseMortgage.startAge) {
@@ -338,7 +400,7 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string):
     }
 
     const investmentReturn = financial * ret;
-    financial = financial + investmentReturn + income + inheritProceeds + annuityIncome + reverseMortgage - living - mortgagePay - annuityBuy;
+    financial = financial + investmentReturn + income + inheritProceeds + annuityIncome + pensionIncome + allowanceIncome + reverseMortgage - living - mortgagePay - annuityBuy;
     if (financial < minFinancial) minFinancial = financial;
     if (financial < 0 && !depletes) {
       depletes = true;
@@ -359,14 +421,18 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string):
       openingFinancial: opening,
       income,
       living,
+      livingMonthlyToday,
       mortgage: mortgagePay,
       inheritProceeds,
       annuityBuy,
       annuityIncome,
+      pensionIncome,
+      allowanceIncome,
       reverseMortgage,
       investmentReturn,
       closingFinancial: financial,
       propertyHeld: home + inheritedHeld,
+      lockedBalance,
       notes,
     });
   }
@@ -386,11 +452,11 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string):
   };
 }
 
-export function runLifePlan(plan: RetirementLifePlan, asOf = new Date().toISOString().slice(0, 10)): LifePlanResult {
+export function runLifePlan(plan: RetirementLifePlan, asOf = new Date().toISOString().slice(0, 10), inflows?: LifePlanInflows): LifePlanResult {
   const missing = lifePlanMissing(plan);
   if (missing.length) return { ready: false, missing, stay: null, switch: null };
-  const stay = plan.currentJob.enabled ? simulatePath(plan, "stay", asOf) : null;
-  const sw = plan.lowerStressJob.enabled && Boolean(plan.lowerStressJob.startDate) ? simulatePath(plan, "switch", asOf) : null;
+  const stay = plan.currentJob.enabled ? simulatePath(plan, "stay", asOf, inflows) : null;
+  const sw = plan.lowerStressJob.enabled && Boolean(plan.lowerStressJob.startDate) ? simulatePath(plan, "switch", asOf, inflows) : null;
   return { ready: true, missing: [], stay, switch: sw };
 }
 
@@ -430,21 +496,25 @@ export type LifePlanShared = {
 /** Fill blank life-plan fields from the shared retirement profile. User-entered values win. */
 export function resolveLifePlan(plan: RetirementLifePlan, shared: LifePlanShared): RetirementLifePlan {
   const retireDate = dateAtAge(shared.birthday, shared.retireAge, shared.today, shared.currentAge);
-  const stages =
-    plan.spendingStages.some((s) => s.monthlyLivingCostInTodayMoney != null)
-      ? plan.spendingStages
-      : [
-          {
-            id: "from-retire",
-            label: "",
-            startAge: shared.retireAge,
-            endAge: shared.deathAge,
-            monthlyLivingCostInTodayMoney: shared.targetMonthly || null,
-            followsInflation: true,
-            isEssential: true,
-            notes: "",
-          },
-        ];
+  const autoStage = !plan.spendingStages.some((s) => s.monthlyLivingCostInTodayMoney != null);
+  let stageMonthly = shared.targetMonthly || null;
+  if (autoStage && stageMonthly && shared.mortgage && !plan.mortgage.paymentIncludedInRetirementLivingCost) {
+    stageMonthly = Math.max(0, stageMonthly - shared.mortgage.monthlyPayment);
+  }
+  const stages = autoStage
+    ? [
+        {
+          id: "from-retire",
+          label: "",
+          startAge: shared.retireAge,
+          endAge: shared.deathAge,
+          monthlyLivingCostInTodayMoney: stageMonthly,
+          followsInflation: true,
+          isEssential: true,
+          notes: "",
+        },
+      ]
+    : plan.spendingStages;
   const mort = plan.mortgage;
   const sharedMort = shared.mortgage;
   return mergeLifePlan(plan, {

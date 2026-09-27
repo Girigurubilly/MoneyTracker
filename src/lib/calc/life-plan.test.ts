@@ -1,7 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { emptyLifePlan, estimateHkNetMonthly, lifePlanMissing, resolveLifePlan, runLifePlan } from "./life-plan.ts";
-import type { RetirementLifePlan } from "../types.ts";
+import { applyAnnuityTerms, blankRetirementAccount } from "./mpf.ts";
+import type { Allowance, RetirementLifePlan } from "../types.ts";
 
 function filled(): RetirementLifePlan {
   const p = emptyLifePlan();
@@ -191,5 +192,57 @@ describe("two-path simulation", () => {
     assert.equal(r.ready, true);
     assert.equal(r.stay?.retireAge, 65);
     assert.equal(r.switch, null);
+  });
+
+  it("keeps retirement living in today's money and does not stack the mortgage on top of it", () => {
+    const resolved = resolveLifePlan(emptyLifePlan(), {
+      currentAge: 40,
+      retireAge: 65,
+      deathAge: 90,
+      inflation: 0.025,
+      postReturn: 0.035,
+      monthlyIncomeNow: 72_000,
+      monthlySpendNow: 28_000,
+      targetMonthly: 25_000,
+      investable: 2_000_000,
+      property: 6_000_000,
+      mortgage: { outstanding: 1_000_000, monthlyPayment: 10_000, endDate: "2040-01-01", rate: 0.03 },
+      today: "2026-09-16",
+    });
+    assert.equal(resolved.spendingStages[0]?.monthlyLivingCostInTodayMoney, 15_000);
+    const r = runLifePlan(resolved, "2026-09-16");
+    const retired = r.stay!.years.find((y) => y.phase === "retired");
+    assert.ok(retired);
+    assert.equal(retired.livingMonthlyToday, 15_000);
+    assert.ok(retired.living > retired.livingMonthlyToday * 12);
+  });
+
+  it("includes ORSO, annuity and old age allowance cashflow", () => {
+    const p = filled();
+    const orso = blankRetirementAccount("ORSO");
+    orso.currentBalance = 400_000;
+    orso.accessibleAge = 65;
+    orso.withdrawalStrategy = "lump_sum";
+    orso.expectedAnnualReturnRate = 0;
+    orso.employeeContributionAmount = 0;
+    orso.employerContributionAmount = 0;
+    const annuity = applyAnnuityTerms(blankRetirementAccount("ANNUITY"), 5_000, 0, 65);
+    const oaa: Allowance = {
+      id: "oaa",
+      label: "Old Age Allowance",
+      labelZh: "生果金",
+      monthly: 1_620,
+      startAge: 70,
+      kind: "oaa",
+      inflationAdjusted: false,
+    };
+    const plain = runLifePlan(p, "2026-01-01");
+    const withIn = runLifePlan(p, "2026-01-01", { accounts: [orso, annuity], allowances: [oaa] });
+    const y70 = withIn.stay!.years.find((y) => y.age === 70);
+    const y70plain = plain.stay!.years.find((y) => y.age === 70);
+    assert.ok(y70 && y70plain);
+    assert.equal(y70.allowanceIncome, 1_620 * 12);
+    assert.ok(y70.pensionIncome >= 5_000 * 12);
+    assert.ok(y70.closingFinancial > y70plain.closingFinancial);
   });
 });

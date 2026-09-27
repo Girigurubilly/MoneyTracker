@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Area, AreaChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { Hairline, InfoButton, ProgressRing, ScreenHeader, SectionLabel, StatusChip } from "@/components/shared";
+import { LifeYearList } from "@/components/life-year-list";
 import { money, todayISO } from "@/lib/format";
 import { downloadBlob } from "@/lib/backup";
 import { toHkd } from "@/lib/calc/fx";
@@ -24,6 +25,7 @@ import {
   type RetirementReadinessStatus,
 } from "@/lib/calc/retirement";
 import { monthKey } from "@/lib/calc/ledger";
+import { emptyLifePlan, resolveLifePlan, runLifePlan } from "@/lib/calc/life-plan";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -155,6 +157,54 @@ export function useRetirementModel() {
     void update({ ...base, ...patch, id: ret?.id ?? "base" });
   }
   return { accounts, holdings, rates, avg, base, ctx, pack, result, sustain, fire, persist, rmMonthly, mortgage, updateAccount: useApp.getState().updateAccount };
+}
+
+export function useLifePlanResult() {
+  const stored = useApp((s) => s.lifePlan);
+  const plan = stored ?? emptyLifePlan();
+  const retirementAccounts = useApp((s) => s.retirementAccounts);
+  const allowances = useApp((s) => s.allowances);
+  const { base, pack, ctx, mortgage } = useRetirementModel();
+  const resolved = useMemo(() => {
+    const pay = mortgage ? monthlyPayment(mortgage.outstanding, effectiveRate(mortgage), mortgage.remainingMonths) : 0;
+    const months = mortgage ? remainingFromStart(mortgage, todayISO())?.remainingMonths ?? mortgage.remainingMonths : 0;
+    const end = mortgage ? addMonths(todayISO(), months) : "";
+    return resolveLifePlan(plan, {
+      birthday: base.birthday,
+      currentAge: base.currentAge,
+      retireAge: base.retireAge,
+      deathAge: base.deathAge,
+      inflation: base.inflation,
+      postReturn: base.postReturn,
+      monthlyIncomeNow: base.monthlyIncomeNow,
+      monthlySpendNow: base.monthlySpendNow,
+      targetMonthly: base.targetMonthly,
+      reverseMortgageLtv: base.reverseMortgageLtv,
+      investable: ctx.investableNow,
+      property: pack.property,
+      mortgage: mortgage
+        ? { outstanding: mortgage.outstanding, monthlyPayment: mortgage.paymentOverride ?? pay, endDate: end, rate: effectiveRate(mortgage) }
+        : null,
+      today: todayISO(),
+    });
+  }, [plan, base, pack.property, ctx.investableNow, mortgage]);
+  const result = useMemo(
+    () =>
+      runLifePlan(resolved, todayISO(), {
+        accounts: retirementAccounts,
+        allowances,
+        retireAge: base.retireAge,
+        birthday: base.birthday,
+      }),
+    [resolved, retirementAccounts, allowances, base.retireAge, base.birthday],
+  );
+  return { plan, resolved, result };
+}
+
+function addMonths(iso: string, months: number): string {
+  const d = new Date(`${iso}T12:00:00`);
+  d.setMonth(d.getMonth() + Math.max(0, Math.round(months)));
+  return d.toISOString().slice(0, 10);
 }
 
 export function SharedRetirementStrip() {
@@ -509,11 +559,13 @@ export function RetirementPage() {
 
 export function RetirementProjectionPage() {
   const t = useT();
-  const { result } = useRetirementModel();
+  const { result } = useLifePlanResult();
+  const years = result.stay?.years ?? [];
   return (
     <div className="pb-10">
       <ScreenHeader title={t.reports.annualProjection} backTo="/reports/retirement" />
-      <YearTable years={result.plan.years} />
+      <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.lpProjectionHint}</p>
+      {result.ready && years.length ? <LifeYearList years={years} /> : <p className="mx-4 rounded-2xl bg-elevated px-4 py-3 text-sm text-muted">{t.reports.lpNeedData}</p>}
     </div>
   );
 }
@@ -679,47 +731,6 @@ function HousingCard({
         </div>
         {mortgage ? <p className="mt-2 text-[11px] text-muted">{mortgage.nameZh || mortgage.name}</p> : null}
         {atRetire ? null : null}
-      </div>
-    </div>
-  );
-}
-
-function YearTable({ years }: { years: NonNullable<ReturnType<typeof runRetirement>["plan"]>["years"] }) {
-  const t = useT();
-  const [open, setOpen] = useState<number | null>(null);
-  return (
-    <div id="retire-years" className="mb-3">
-      <SectionLabel>{t.reports.annualProjection}</SectionLabel>
-      <div className="mx-4 overflow-hidden rounded-2xl bg-elevated">
-        {years.map((y, i) => (
-          <div key={y.age}>
-            {i > 0 ? <Hairline /> : null}
-            <button type="button" className="flex w-full items-start justify-between gap-2 px-4 py-2.5 text-left" onClick={() => setOpen(open === y.age ? null : y.age)}>
-              <div>
-                <div className="text-sm font-medium">{y.calendarYear} · {t.reports.atAge} {y.age}</div>
-                <div className="text-[11px] text-muted">{y.phaseLabel}</div>
-              </div>
-              <div className="text-right text-xs tabular-nums">
-                <div>{money(y.closingAccessible, "HKD")}</div>
-                <div className="text-muted">{money(y.closingLocked, "HKD")}</div>
-              </div>
-            </button>
-            {open === y.age ? (
-              <div className="space-y-1 px-4 pb-3 text-[11px] text-muted">
-                <RowAmt label={t.reports.openingAcc} value={y.openingAccessible} />
-                <RowAmt label={t.reports.openingLock} value={y.openingLocked} />
-                <RowAmt label={t.reports.salary} value={y.salary} />
-                <RowAmt label="MPF/ORSO" value={y.mpfWithdrawal} />
-                <RowAmt label={t.reports.housingAfter} value={y.housingSpend + y.mortgagePayment} />
-                <RowAmt label={t.reports.closingAcc} value={y.closingAccessible} />
-                <RowAmt label={t.reports.closingLock} value={y.closingLocked} />
-                {y.milestones.map((m) => (
-                  <p key={m}>{m}</p>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        ))}
       </div>
     </div>
   );

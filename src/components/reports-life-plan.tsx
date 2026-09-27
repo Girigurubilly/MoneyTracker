@@ -1,11 +1,11 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { ChevronDown, Plus, Trash2 } from "lucide-react";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
-import { Disclaimer, Hairline, ScreenHeader, SectionLabel } from "@/components/shared";
-import { SharedRetirementStrip, useRetirementModel } from "@/components/reports-retire";
-import { money, todayISO } from "@/lib/format";
-import { monthlyPayment, effectiveRate, remainingFromStart } from "@/lib/calc/mortgage";
-import { emptyLifePlan, mergeLifePlan, resolveLifePlan, runLifePlan, type LifePathId, type LifePathResult } from "@/lib/calc/life-plan";
+import { Disclaimer, ScreenHeader, SectionLabel } from "@/components/shared";
+import { LifeYearList } from "@/components/life-year-list";
+import { SharedRetirementStrip, useLifePlanResult } from "@/components/reports-retire";
+import { money } from "@/lib/format";
+import { emptyLifePlan, mergeLifePlan, type LifePathId, type LifePathResult } from "@/lib/calc/life-plan";
 import type { LifePlanSpendingStage, RetirementLifePlan } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { newId, useApp } from "@/store/app";
@@ -16,31 +16,7 @@ export function EarlyRetirementPlanPage() {
   const stored = useApp((s) => s.lifePlan);
   const update = useApp((s) => s.updateLifePlan);
   const plan = stored ?? emptyLifePlan();
-  const { base, pack, ctx, mortgage } = useRetirementModel();
-  const resolved = useMemo(() => {
-    const pay = mortgage ? monthlyPayment(mortgage.outstanding, effectiveRate(mortgage), mortgage.remainingMonths) : 0;
-    const months = mortgage ? remainingFromStart(mortgage, todayISO())?.remainingMonths ?? mortgage.remainingMonths : 0;
-    const end = mortgage ? addMonths(todayISO(), months) : "";
-    return resolveLifePlan(plan, {
-      birthday: base.birthday,
-      currentAge: base.currentAge,
-      retireAge: base.retireAge,
-      deathAge: base.deathAge,
-      inflation: base.inflation,
-      postReturn: base.postReturn,
-      monthlyIncomeNow: base.monthlyIncomeNow,
-      monthlySpendNow: base.monthlySpendNow,
-      targetMonthly: base.targetMonthly,
-      reverseMortgageLtv: base.reverseMortgageLtv,
-      investable: ctx.investableNow,
-      property: pack.property,
-      mortgage: mortgage
-        ? { outstanding: mortgage.outstanding, monthlyPayment: mortgage.paymentOverride ?? pay, endDate: end, rate: effectiveRate(mortgage) }
-        : null,
-      today: todayISO(),
-    });
-  }, [plan, base, pack.property, ctx.investableNow, mortgage]);
-  const result = useMemo(() => runLifePlan(resolved, todayISO()), [resolved]);
+  const { resolved, result } = useLifePlanResult();
   const [path, setPath] = useState<LifePathId>("stay");
   const active = path === "switch" ? result.switch : result.stay;
   const chart = mergeSeries(result.stay, result.switch);
@@ -91,7 +67,7 @@ export function EarlyRetirementPlanPage() {
               </button>
             </div>
           ) : null}
-          {active ? <YearList years={active.years} t={t} /> : null}
+          {active ? <LifeYearList years={active.years} /> : null}
         </>
       ) : (
         <p className="mx-4 mb-3 rounded-2xl bg-elevated px-4 py-3 text-sm text-muted">{t.reports.lpNeedData}</p>
@@ -137,69 +113,6 @@ function Mini({ k, v, danger }: { k: string; v: string; danger?: boolean }) {
       <div className={cn("mt-0.5 text-sm font-semibold tabular-nums", danger && "text-expense")}>{v}</div>
     </div>
   );
-}
-
-function YearList({ years, t }: { years: LifePathResult["years"]; t: ReturnType<typeof useT> }) {
-  const [open, setOpen] = useState<number | null>(null);
-  const [all, setAll] = useState(false);
-  const visible = all ? years : years.slice(0, 5);
-  return (
-    <div className="mb-3">
-      <SectionLabel>{t.reports.lpYears}</SectionLabel>
-      <div className="mx-4 overflow-hidden rounded-2xl bg-elevated">
-        {visible.map((y, i) => (
-          <div key={y.age}>
-            {i > 0 ? <Hairline /> : null}
-            <button type="button" className="flex min-h-11 w-full items-start justify-between gap-2 px-4 py-2.5 text-left" onClick={() => setOpen(open === y.age ? null : y.age)}>
-              <div>
-                <div className="text-sm font-medium">
-                  {y.calendarYear} · {t.reports.atAge} {y.age}
-                </div>
-                <div className="text-[11px] text-muted">{phaseLabel(y.phase, t)}</div>
-              </div>
-              <div className="text-right text-xs tabular-nums">{money(y.closingFinancial, "HKD")}</div>
-            </button>
-            {open === y.age ? (
-              <div className="space-y-1 px-4 pb-3 text-[11px] text-muted">
-                <Amt k={t.reports.openingAcc} n={y.openingFinancial} />
-                <Amt k={t.reports.salary} n={y.income} />
-                <Amt k={t.reports.lpStageCost} n={y.living} />
-                <Amt k={t.reports.lpMonthlyPay} n={y.mortgage} />
-                <Amt k={t.reports.lpInherit} n={y.inheritProceeds} />
-                <Amt k={t.reports.lpAnnuity} n={y.annuityIncome} />
-                <Amt k={t.reports.lpReverse} n={y.reverseMortgage} />
-                <Amt k={t.reports.closingAcc} n={y.closingFinancial} />
-                {y.notes.map((n) => (
-                  <p key={n}>{n}</p>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        ))}
-        {years.length > 5 ? (
-          <button type="button" className="flex min-h-11 w-full items-center justify-center border-t border-line text-sm font-medium text-accent" onClick={() => setAll(!all)}>
-            {all ? t.reports.hideAssumptions : `${t.reports.lpYears} (${years.length})`}
-          </button>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function Amt({ k, n }: { k: string; n: number }) {
-  if (!n) return null;
-  return (
-    <div className="flex justify-between gap-2">
-      <span>{k}</span>
-      <span className="tabular-nums">{money(n, "HKD")}</span>
-    </div>
-  );
-}
-
-function phaseLabel(phase: string, t: ReturnType<typeof useT>) {
-  if (phase === "lower") return t.reports.lpPhaseLower;
-  if (phase === "retired") return t.reports.lpPhaseRetired;
-  return t.reports.lpPhaseCurrent;
 }
 
 function mergeSeries(stay: LifePathResult | null, sw: LifePathResult | null) {
@@ -302,12 +215,6 @@ function isPlaceholderStage(s: LifePlanSpendingStage) {
 
 function blankStage(): LifePlanSpendingStage {
   return { id: newId(), label: "", startAge: null, endAge: null, monthlyLivingCostInTodayMoney: null, followsInflation: true, isEssential: true, notes: "" };
-}
-
-function addMonths(iso: string, months: number): string {
-  const d = new Date(`${iso}T12:00:00`);
-  d.setMonth(d.getMonth() + Math.max(0, Math.round(months)));
-  return d.toISOString().slice(0, 10);
 }
 
 function Fold({ title, children, open = false }: { title: string; children: ReactNode; open?: boolean }) {
