@@ -91,7 +91,3 @@ function phaseLabel(phase: string, t: ReturnType<typeof useT>) {
   if (phase === "retired") return t.reports.lpPhaseRetired;
   return t.reports.lpPhaseCurrent;
 }
-  if (phase === "lower") return t.reports.lpPhaseLower;
-  if (phase === "retired") return t.reports.lpPhaseRetired;
-  return t.reports.lpPhaseCurrent;
-}
