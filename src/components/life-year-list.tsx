@@ -33,6 +33,7 @@ export function LifeYearList({ years }: { years: LifeYearRow[] }) {
             {open === y.age ? (
               <div className="space-y-1 px-4 pb-3 text-[11px] text-muted">
                 <Amt k={t.reports.openingAcc} n={y.openingFinancial} />
+                <Amt k={t.reports.lpInvestGain} n={y.investmentReturn} />
                 <Amt k={t.reports.lpIncomeYear} n={y.income} />
                 <Amt k={t.reports.lpLivingMonth} n={y.livingMonthlyToday} />
                 {Math.abs(y.living / 12 - y.livingMonthlyToday) > 1 ? <Amt k={t.reports.lpLivingInflated} n={y.living / 12} /> : null}

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { emptyLifePlan, estimateHkNetMonthly, lifePlanMissing, resolveLifePlan, runLifePlan } from "./life-plan.ts";
+import { emptyLifePlan, estimateHkNetMonthly, inheritanceAnnuityAccount, lifePlanMissing, resolveLifePlan, runLifePlan } from "./life-plan.ts";
 import { applyAnnuityTerms, blankRetirementAccount } from "./mpf.ts";
 import type { Allowance, RetirementLifePlan } from "../types.ts";
 
@@ -179,6 +179,25 @@ describe("two-path simulation", () => {
     assert.equal(y.annuityIncome, 180_000);
     assert.equal(Math.round(y.closingFinancial - y0.closingFinancial), 3_000_000 + 180_000);
     assert.equal(r.stay!.series.find((row) => row.age === 66)?.financial, y.closingFinancial);
+  });
+
+  it("does not count the future inheritance annuity as money already held", () => {
+    const p = filled();
+    p.publicAnnuity.enabled = true;
+    p.publicAnnuity.purchaseAmount = 3_000_000;
+    p.publicAnnuity.useInheritedSaleProceeds = true;
+    p.publicAnnuity.monthlyPayout = 15_000;
+    p.publicAnnuity.payoutStartAge = 66;
+    p.inheritedProperty.enabled = true;
+    p.inheritedProperty.sell = true;
+    const acc = inheritanceAnnuityAccount(p);
+    assert.ok(acc);
+    assert.equal(acc.currentBalance, 0);
+    acc.currentBalance = 3_000_000;
+    const y = runLifePlan(p, "2026-01-01", { accounts: [acc] }).stay!.years.find((row) => row.calendarYear === 2037);
+    assert.ok(y);
+    assert.equal(y.lockedBalance, 0);
+    assert.equal(Math.round(y.closingFinancial), Math.round(y.openingFinancial + y.investmentReturn + y.income + y.pensionIncome + y.allowanceIncome + y.annuityIncome + y.inheritKept + y.reverseMortgage - y.living - y.mortgage));
   });
 
   it("keeps unsold future inheritance visible without treating it as cash", () => {

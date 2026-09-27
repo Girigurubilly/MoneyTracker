@@ -217,7 +217,7 @@ export function inheritanceAnnuityAccount(plan: RetirementLifePlan, now = new Da
     ...applyAnnuityTerms(blankRetirementAccount("ANNUITY", now), monthly, 0, start),
     id: INHERIT_ANNUITY_ID,
     name: "遺產年金",
-    currentBalance: premium,
+    currentBalance: 0,
   };
 }
 
@@ -431,7 +431,7 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
       pensionIncome += row.cashFlowAvailableToRetirementPlan;
     }
     const allowanceIncome = allowanceForAge(inflows?.allowances, age, i, inf, mode);
-    const lockedBalance = [...balances.values()].reduce((s, v) => s + v, 0);
+    const lockedBalance = [...balances.entries()].reduce((s, [id, v]) => (id === INHERIT_ANNUITY_ID ? s : s + v), 0);
 
     home *= 1 + n(plan.assets.selfOccupiedPropertyGrowthRate);
     let reverseMortgage = 0;
