@@ -192,6 +192,33 @@ function Setup({
         <DateRow label={t.reports.lpInheritDate} value={plan.inheritedProperty.expectedDate} onChange={(v) => patch({ inheritedProperty: { ...plan.inheritedProperty, expectedDate: v } })} />
         <Toggle label={t.reports.lpSell} on={plan.inheritedProperty.sell} onChange={(on) => patch({ inheritedProperty: { ...plan.inheritedProperty, sell: on } })} />
         <DateRow label={t.reports.lpSellDate} value={plan.inheritedProperty.sellDate} onChange={(v) => patch({ inheritedProperty: { ...plan.inheritedProperty, sellDate: v } })} />
+        <Toggle
+          label={t.reports.lpBuyAnnuity}
+          on={Boolean(plan.inheritedProperty.buyAnnuity)}
+          onChange={(on) => patch({ inheritedProperty: { ...plan.inheritedProperty, buyAnnuity: on, sell: on ? true : plan.inheritedProperty.sell } })}
+        />
+        {plan.inheritedProperty.buyAnnuity ? (
+          <>
+            <p className="px-4 pb-2 text-[11px] leading-4 text-muted">{t.reports.lpNoteAnnuity}</p>
+            <NullNum
+              label={t.reports.lpAnnuityCap}
+              value={plan.inheritedProperty.annuityPremium ?? null}
+              money
+              onCommit={(n) => patch({ inheritedProperty: { ...plan.inheritedProperty, annuityPremium: n == null ? null : Math.min(3_000_000, Math.max(0, n)) } })}
+            />
+            <NullNum
+              label={t.reports.lpAnnuityPay}
+              value={plan.inheritedProperty.annuityMonthly ?? null}
+              money
+              onCommit={(n) => patch({ inheritedProperty: { ...plan.inheritedProperty, annuityMonthly: n } })}
+            />
+            <NullNum
+              label={t.reports.lpAnnuityStart}
+              value={plan.inheritedProperty.annuityStartAge ?? null}
+              onCommit={(n) => patch({ inheritedProperty: { ...plan.inheritedProperty, annuityStartAge: n } })}
+            />
+          </>
+        ) : null}
       </Fold>
       <Fold title={t.reports.lpAnnuity}>
         <Toggle label={t.reports.lpEnabled} on={plan.publicAnnuity.enabled} onChange={(on) => patch({ publicAnnuity: { ...plan.publicAnnuity, enabled: on } })} />

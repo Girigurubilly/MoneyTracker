@@ -709,6 +709,10 @@ export type RetirementLifePlan = {
     sell: boolean;
     sellDate: string | null;
     sellCostsRate: number | null;
+    buyAnnuity?: boolean;
+    annuityPremium?: number | null;
+    annuityMonthly?: number | null;
+    annuityStartAge?: number | null;
   };
   publicAnnuity: {
     enabled: boolean;

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Area, AreaChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis } from "recharts";
@@ -25,7 +25,7 @@ import {
   type RetirementReadinessStatus,
 } from "@/lib/calc/retirement";
 import { monthKey } from "@/lib/calc/ledger";
-import { emptyLifePlan, resolveLifePlan, runLifePlan } from "@/lib/calc/life-plan";
+import { emptyLifePlan, inheritanceAnnuityAccount, INHERIT_ANNUITY_ID, resolveLifePlan, runLifePlan } from "@/lib/calc/life-plan";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -198,6 +198,24 @@ export function useLifePlanResult() {
       }),
     [resolved, retirementAccounts, allowances, base.retireAge, base.birthday],
   );
+  const upsertAccount = useApp((s) => s.upsertRetirementAccount);
+  const deleteAccount = useApp((s) => s.deleteRetirementAccount);
+  useEffect(() => {
+    const want = inheritanceAnnuityAccount(resolved);
+    const existing = retirementAccounts.find((a) => a.id === INHERIT_ANNUITY_ID);
+    if (!want) {
+      if (existing) void deleteAccount(existing.id);
+      return;
+    }
+    if (
+      !existing ||
+      existing.scheduledMonthlyIncome !== want.scheduledMonthlyIncome ||
+      existing.scheduledIncomeStartAge !== want.scheduledIncomeStartAge ||
+      existing.currentBalance !== want.currentBalance
+    ) {
+      void upsertAccount(want);
+    }
+  }, [resolved, retirementAccounts, upsertAccount, deleteAccount]);
   return { plan, resolved, result };
 }
 
@@ -233,6 +251,11 @@ export function RetirementPage() {
   const t = useT();
   const locale = useUi((s) => s.locale);
   const { accounts, holdings, rates, avg, base, ctx, pack, result, sustain, fire, persist, rmMonthly, mortgage } = useRetirementModel();
+  const life = useLifePlanResult();
+  const chartData = (life.result.stay?.series ?? result.series.map((s) => ({ age: s.age, financial: s.corpus }))).map((s) => ({
+    age: s.age,
+    corpus: s.financial,
+  }));
   const updateAccount = useApp((s) => s.updateAccount);
   const surplus = sustain - base.targetMonthly;
   const status = retirementStatus(result.depletes, sustain, base.targetMonthly, result.series);
@@ -396,7 +419,7 @@ export function RetirementPage() {
         <div className="h-52">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
-              data={result.series.map((s) => ({ ...s, fire: fire.fireNumber }))}
+              data={chartData}
               margin={{ top: 8, right: 12, left: 8, bottom: 0 }}
               onMouseMove={(state) => {
                 const p = state?.activePayload?.[0]?.payload as { age?: number; corpus?: number } | undefined;
@@ -404,15 +427,16 @@ export function RetirementPage() {
               }}
               onMouseLeave={() => setChartPoint(null)}
             >
-              <XAxis dataKey="age" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} interval={1} />
-              <ReferenceLine y={fire.fireNumber} stroke="var(--color-accent)" strokeDasharray="4 4" />
-              {fire.reachable ? <ReferenceLine x={fire.fireAge} stroke="var(--color-income)" strokeDasharray="3 3" /> : null}
+              <XAxis dataKey="age" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+              <ReferenceLine y={fire.fireNumber} stroke="var(--color-accent)" strokeDasharray="4 4" ifOverflow="discard" />
+              {fire.reachable ? <ReferenceLine x={fire.fireAge} stroke="var(--color-income)" strokeDasharray="3 3" ifOverflow="discard" /> : null}
               <Tooltip
                 cursor={{ stroke: "var(--color-accent)", strokeWidth: 1 }}
-                formatter={(value, name) => [
-                  money(Number(value) || 0, "HKD"),
-                  name === "fire" ? t.reports.fireNumber : t.reports.corpusAtRetire,
-                ]}
+                formatter={(value, _name, item) => {
+                  const key = String((item as { dataKey?: unknown } | undefined)?.dataKey ?? "");
+                  const label = key === "fire" ? t.reports.fireNumber : t.reports.lpAssetsLine;
+                  return [money(Number(value) || 0, "HKD"), label];
+                }}
                 labelFormatter={(age) => `${t.reports.atAge} ${age}`}
                 contentStyle={{
                   borderRadius: 12,
@@ -421,8 +445,7 @@ export function RetirementPage() {
                   fontSize: 12,
                 }}
               />
-              <Area type="monotone" dataKey="fire" stroke="transparent" fill="transparent" />
-              <Area type="monotone" dataKey="corpus" stroke="var(--color-accent)" fill="var(--color-accent-soft)" strokeWidth={2} />
+              <Area type="monotone" dataKey="corpus" name={t.reports.lpAssetsLine} stroke="var(--color-accent)" fill="var(--color-accent-soft)" strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>
         </div>

@@ -39,7 +39,9 @@ export function LifeYearList({ years }: { years: LifeYearRow[] }) {
                 <Amt k={t.reports.lpLivingYear} n={y.living} />
                 <Amt k={t.reports.lpMonthlyPay} n={y.mortgage / 12} />
                 <Amt k={t.reports.lpInheritHeld} n={y.inheritedHeld} />
+                {y.inheritStated > 0 && Math.abs(y.inheritStated - y.inheritProceeds) > 1 ? <Amt k={t.reports.lpInheritStated} n={y.inheritStated} /> : null}
                 <Amt k={t.reports.lpInheritSold} n={y.inheritProceeds} />
+                <Amt k={t.reports.lpInheritPremium} n={y.annuityBuy} />
                 <Amt k={t.reports.lpAnnuity} n={y.annuityIncome} />
                 <Amt k={t.reports.lpPension} n={y.pensionIncome} />
                 <Amt k={t.reports.lpAllowance} n={y.allowanceIncome} />
@@ -47,7 +49,7 @@ export function LifeYearList({ years }: { years: LifeYearRow[] }) {
                 <Amt k={t.reports.lpLocked} n={y.lockedBalance} />
                 <Amt k={t.reports.closingAcc} n={y.closingFinancial} />
                 {y.notes.map((n) => (
-                  <p key={n}>{n}</p>
+                  <p key={n}>{noteLabel(n, t)}</p>
                 ))}
               </div>
             ) : null}
@@ -73,7 +75,21 @@ function Amt({ k, n }: { k: string; n: number }) {
   );
 }
 
+function noteLabel(note: string, t: ReturnType<typeof useT>): string {
+  if (note === "inherit-received") return t.reports.lpNoteReceived;
+  if (note === "inherit-already") return t.reports.lpNoteAlready;
+  if (note === "inherit-sold") return t.reports.lpNoteSold;
+  if (note === "inherit-annuity") return t.reports.lpNoteAnnuity;
+  if (note === "annuity-bought") return t.reports.lpNoteAnnuityBought;
+  if (note === "No retirement spending stage for this age.") return t.reports.lpNoteNoStage;
+  return note;
+}
+
 function phaseLabel(phase: string, t: ReturnType<typeof useT>) {
+  if (phase === "lower") return t.reports.lpPhaseLower;
+  if (phase === "retired") return t.reports.lpPhaseRetired;
+  return t.reports.lpPhaseCurrent;
+}
   if (phase === "lower") return t.reports.lpPhaseLower;
   if (phase === "retired") return t.reports.lpPhaseRetired;
   return t.reports.lpPhaseCurrent;

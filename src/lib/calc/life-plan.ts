@@ -1,7 +1,9 @@
 import type { Allowance, RetirementAccount, RetirementLifePlan, LifePlanSpendingStage } from "../types.ts";
 import { ageFromBirthday } from "./retirement.ts";
-import { projectRetirementAccountYear } from "./mpf.ts";
+import { applyAnnuityTerms, blankRetirementAccount, projectRetirementAccountYear } from "./mpf.ts";
 
+export const INHERIT_ANNUITY_ID = "ra-inherit-annuity";
+export const INHERIT_ANNUITY_CAP = 3_000_000;
 export type LifePathId = "stay" | "switch";
 export type LifePhase = "current" | "lower" | "retired";
 
@@ -17,6 +19,7 @@ export type LifeYearRow = {
   mortgage: number;
   inheritProceeds: number;
   inheritedHeld: number;
+  inheritStated: number;
   annuityBuy: number;
   annuityIncome: number;
   pensionIncome: number;
@@ -199,6 +202,23 @@ function n(v: number | null | undefined): number {
   return typeof v === "number" && Number.isFinite(v) ? v : 0;
 }
 
+export function inheritanceAnnuityAccount(plan: RetirementLifePlan, now = new Date().toISOString()): import("../types.ts").RetirementAccount | null {
+  const p = plan.inheritedProperty;
+  const fromNew = Boolean(p.enabled && p.sell && p.buyAnnuity);
+  const fromOld = Boolean(plan.publicAnnuity.enabled && plan.publicAnnuity.useInheritedSaleProceeds);
+  if (!fromNew && !fromOld) return null;
+  const premium = Math.min(INHERIT_ANNUITY_CAP, Math.max(0, n(fromNew ? p.annuityPremium : plan.publicAnnuity.purchaseAmount)));
+  const monthly = n(fromNew ? p.annuityMonthly : plan.publicAnnuity.monthlyPayout);
+  if (premium <= 0 || monthly <= 0) return null;
+  const start = (fromNew ? p.annuityStartAge : plan.publicAnnuity.payoutStartAge) ?? 65;
+  return {
+    ...applyAnnuityTerms(blankRetirementAccount("ANNUITY", now), monthly, 0, start),
+    id: INHERIT_ANNUITY_ID,
+    name: "遺產年金",
+    currentBalance: premium,
+  };
+}
+
 function isoYear(iso: string | null | undefined, fallback: number): number {
   if (!iso) return fallback;
   const y = Number(iso.slice(0, 4));
@@ -328,44 +348,57 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
     }
 
     let inheritProceeds = 0;
+    let inheritStated = 0;
     let annuityBuy = 0;
+    const fromInherit = Boolean(plan.inheritedProperty.buyAnnuity);
     if (plan.inheritedProperty.enabled && plan.inheritedProperty.expectedDate && inheritedHeld === 0 && !inheritedSold) {
       const y = isoYear(plan.inheritedProperty.expectedDate, 0);
       if (calendarYear === y || (i === 0 && y < startYear)) {
         const yearsLate = Math.max(0, calendarYear - y);
         inheritedHeld = n(plan.inheritedProperty.expectedValue) * (1 + n(plan.inheritedProperty.annualGrowthRate)) ** yearsLate;
-        notes.push(yearsLate > 0 ? "Inherited property already received." : "Inherited property received.");
+        notes.push(yearsLate > 0 ? "inherit-already" : "inherit-received");
       }
     }
     if (inheritedHeld > 0) inheritedHeld *= 1 + n(plan.inheritedProperty.annualGrowthRate);
     if (plan.inheritedProperty.enabled && plan.inheritedProperty.sell && plan.inheritedProperty.sellDate) {
       const sy = isoYear(plan.inheritedProperty.sellDate, 0);
       if (calendarYear === sy && !inheritedSold) {
+        inheritStated = n(plan.inheritedProperty.expectedValue);
         inheritProceeds = inheritedHeld * (1 - n(plan.inheritedProperty.sellCostsRate));
         inheritedHeld = 0;
         inheritedSold = true;
-        notes.push("Inherited property sold.");
-        if (plan.publicAnnuity.enabled && plan.publicAnnuity.useInheritedSaleProceeds) {
+        notes.push("inherit-sold");
+        if (fromInherit) {
+          const asked = Math.min(INHERIT_ANNUITY_CAP, Math.max(0, n(plan.inheritedProperty.annuityPremium)));
+          annuityBuy = Math.min(asked, inheritProceeds);
+          if (annuityBuy > 0) {
+            annuityBought = true;
+            notes.push("inherit-annuity");
+          }
+        } else if (plan.publicAnnuity.enabled && plan.publicAnnuity.useInheritedSaleProceeds) {
           const buy = plan.publicAnnuity.purchaseAmount != null ? Math.min(n(plan.publicAnnuity.purchaseAmount), inheritProceeds) : inheritProceeds;
           annuityBuy = buy;
-          inheritProceeds -= buy;
+          if (annuityBuy > 0) notes.push("inherit-annuity");
           annuityBought = true;
-          notes.push("Public annuity purchased from sale proceeds.");
         }
       }
     }
 
-    if (plan.publicAnnuity.enabled && !plan.publicAnnuity.useInheritedSaleProceeds && plan.publicAnnuity.purchaseDate) {
+    if (!fromInherit && plan.publicAnnuity.enabled && !plan.publicAnnuity.useInheritedSaleProceeds && plan.publicAnnuity.purchaseDate) {
       const py = isoYear(plan.publicAnnuity.purchaseDate, 0);
       if (calendarYear === py && !annuityBought) {
         annuityBuy = n(plan.publicAnnuity.purchaseAmount);
         annuityBought = true;
-        notes.push("Public annuity purchased.");
+        notes.push("annuity-bought");
       }
     }
 
     let annuityIncome = 0;
-    if (plan.publicAnnuity.enabled && annuityBought && plan.publicAnnuity.monthlyPayout) {
+    if (fromInherit) {
+      const startA = plan.inheritedProperty.annuityStartAge ?? age;
+      const monthly = n(plan.inheritedProperty.annuityMonthly);
+      if (annuityBought && age >= startA && monthly > 0) annuityIncome = monthly * 12;
+    } else if (plan.publicAnnuity.enabled && annuityBought && plan.publicAnnuity.monthlyPayout) {
       const startA = plan.publicAnnuity.payoutStartAge ?? age;
       const years = plan.publicAnnuity.payoutYears;
       const within = age >= startA && (years == null || years === 0 || age < startA + years);
@@ -374,6 +407,7 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
 
     let pensionIncome = 0;
     for (const acc of accounts) {
+      if (acc.id === INHERIT_ANNUITY_ID) continue;
       const row = projectRetirementAccountYear({
         account: acc,
         openingBalance: balances.get(acc.id) ?? 0,
@@ -427,6 +461,7 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
       mortgage: mortgagePay,
       inheritProceeds,
       inheritedHeld,
+      inheritStated,
       annuityBuy,
       annuityIncome,
       pensionIncome,
