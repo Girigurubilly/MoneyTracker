@@ -443,7 +443,7 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
       }
     }
 
-    const investmentReturn = financial * ret;
+    const investmentReturn = Math.max(0, financial) * ret;
     const inheritKept = Math.max(0, inheritProceeds - annuityBuy);
     financial = financial + investmentReturn + income + inheritKept + annuityIncome + pensionIncome + allowanceIncome + reverseMortgage - living - mortgagePay;
     if (financial < minFinancial) minFinancial = financial;

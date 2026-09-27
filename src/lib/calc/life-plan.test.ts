@@ -200,6 +200,21 @@ describe("two-path simulation", () => {
     assert.equal(Math.round(y.closingFinancial), Math.round(y.openingFinancial + y.investmentReturn + y.income + y.pensionIncome + y.allowanceIncome + y.annuityIncome + y.inheritKept + y.reverseMortgage - y.living - y.mortgage));
   });
 
+  it("does not charge investment return after the lump sum is gone", () => {
+    const p = filled();
+    p.assets.financialAssets = 0;
+    p.currentJob.endDate = "2025-12-31";
+    p.retirement.annualInvestmentReturn = 0.03;
+    p.retirement.annualInflationRate = 0;
+    p.spendingStages[0].monthlyLivingCostInTodayMoney = 10_000;
+    p.spendingStages[0].followsInflation = false;
+    const years = runLifePlan(p, "2026-01-01").stay!.years;
+    assert.equal(years[0].investmentReturn, 0);
+    assert.ok(years[0].closingFinancial < 0);
+    assert.ok(years[1].openingFinancial < 0);
+    assert.equal(years[1].investmentReturn, 0);
+  });
+
   it("measures the monthly surplus against the same stay path", () => {
     const rich = filled();
     rich.spendingStages[0].monthlyLivingCostInTodayMoney = 5_000;
