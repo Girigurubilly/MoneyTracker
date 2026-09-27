@@ -22,7 +22,11 @@ export function LifeYearList({ years }: { years: LifeYearRow[] }) {
                 <div className="text-sm font-medium">
                   {y.calendarYear} · {t.reports.atAge} {y.age}
                 </div>
-                <div className="text-[11px] text-muted">{phaseLabel(y.phase, t)}</div>
+                <div className="text-[11px] text-muted">
+                  {phaseLabel(y.phase, t)}
+                  {y.inheritedHeld > 0 ? ` · ${t.reports.lpInheritHeld}` : ""}
+                  {y.inheritProceeds > 0 ? ` · ${t.reports.lpInheritSold}` : ""}
+                </div>
               </div>
               <div className="text-right text-xs tabular-nums">{money(y.closingFinancial, "HKD")}</div>
             </button>
@@ -34,7 +38,8 @@ export function LifeYearList({ years }: { years: LifeYearRow[] }) {
                 {Math.abs(y.living / 12 - y.livingMonthlyToday) > 1 ? <Amt k={t.reports.lpLivingInflated} n={y.living / 12} /> : null}
                 <Amt k={t.reports.lpLivingYear} n={y.living} />
                 <Amt k={t.reports.lpMonthlyPay} n={y.mortgage / 12} />
-                <Amt k={t.reports.lpInherit} n={y.inheritProceeds} />
+                <Amt k={t.reports.lpInheritHeld} n={y.inheritedHeld} />
+                <Amt k={t.reports.lpInheritSold} n={y.inheritProceeds} />
                 <Amt k={t.reports.lpAnnuity} n={y.annuityIncome} />
                 <Amt k={t.reports.lpPension} n={y.pensionIncome} />
                 <Amt k={t.reports.lpAllowance} n={y.allowanceIncome} />

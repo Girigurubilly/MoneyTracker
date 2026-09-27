@@ -16,6 +16,7 @@ export type LifeYearRow = {
   livingMonthlyToday: number;
   mortgage: number;
   inheritProceeds: number;
+  inheritedHeld: number;
   annuityBuy: number;
   annuityIncome: number;
   pensionIncome: number;
@@ -328,11 +329,12 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
 
     let inheritProceeds = 0;
     let annuityBuy = 0;
-    if (plan.inheritedProperty.enabled && plan.inheritedProperty.expectedDate) {
+    if (plan.inheritedProperty.enabled && plan.inheritedProperty.expectedDate && inheritedHeld === 0 && !inheritedSold) {
       const y = isoYear(plan.inheritedProperty.expectedDate, 0);
-      if (calendarYear === y && inheritedHeld === 0 && !inheritedSold) {
-        inheritedHeld = n(plan.inheritedProperty.expectedValue);
-        notes.push("Inherited property received.");
+      if (calendarYear === y || (i === 0 && y < startYear)) {
+        const yearsLate = Math.max(0, calendarYear - y);
+        inheritedHeld = n(plan.inheritedProperty.expectedValue) * (1 + n(plan.inheritedProperty.annualGrowthRate)) ** yearsLate;
+        notes.push(yearsLate > 0 ? "Inherited property already received." : "Inherited property received.");
       }
     }
     if (inheritedHeld > 0) inheritedHeld *= 1 + n(plan.inheritedProperty.annualGrowthRate);
@@ -424,6 +426,7 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
       livingMonthlyToday,
       mortgage: mortgagePay,
       inheritProceeds,
+      inheritedHeld,
       annuityBuy,
       annuityIncome,
       pensionIncome,

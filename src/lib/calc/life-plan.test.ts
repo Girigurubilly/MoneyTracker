@@ -128,6 +128,24 @@ describe("two-path simulation", () => {
     assert.ok((pay?.annuityIncome ?? 0) > 0);
   });
 
+  it("keeps unsold future inheritance visible without treating it as cash", () => {
+    const plain = filled();
+    const held = filled();
+    held.inheritedProperty.enabled = true;
+    held.inheritedProperty.expectedValue = 2_000_000;
+    held.inheritedProperty.expectedDate = "2032-01-01";
+    held.inheritedProperty.annualGrowthRate = 0;
+    held.inheritedProperty.sell = false;
+    const base = runLifePlan(plain, "2026-01-01");
+    const r = runLifePlan(held, "2026-01-01");
+    const y = r.stay!.years.find((row) => row.calendarYear === 2032);
+    const y0 = base.stay!.years.find((row) => row.calendarYear === 2032);
+    assert.ok(y && y0);
+    assert.equal(y.inheritedHeld, 2_000_000);
+    assert.equal(y.inheritProceeds, 0);
+    assert.equal(Math.round(y.closingFinancial), Math.round(y0.closingFinancial));
+  });
+
   it("adds reverse-mortgage income from the start age", () => {
     const p = filled();
     p.assets.selfOccupiedPropertyValue = 6_000_000;
