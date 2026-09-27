@@ -275,6 +275,10 @@ describe("two-path simulation", () => {
     assert.equal(resolved.personal.dateOfBirth, "1984-06-01");
     assert.equal(resolved.personal.planEndAge, 85);
     assert.equal(resolved.currentJob.grossMonthlyIncome, 70_000);
+    assert.equal(resolved.currentJob.actualMonthlySpending, 35_000);
+    assert.equal(resolved.spendingStages[0]?.monthlyLivingCostInTodayMoney, 28_000);
+    assert.equal(resolved.mortgage.paymentIncludedInCurrentSpending, true);
+    assert.equal(resolved.mortgage.paymentIncludedInRetirementLivingCost, false);
     assert.equal(resolved.assets.financialAssets, 3_000_000);
     assert.equal(resolved.mortgage.monthlyPayment, 12_000);
     assert.equal(resolved.retirement.annualInflationRate, 0.025);
@@ -302,10 +306,16 @@ describe("two-path simulation", () => {
     assert.equal(r.switch, null);
   });
 
-  it("keeps retirement living in today's money and does not stack the mortgage on top of it", () => {
-    const resolved = resolveLifePlan(emptyLifePlan(), {
+  it("uses current spending before retirement and retirement spending plus the mortgage after", () => {
+    const stored = filled();
+    stored.currentJob.actualMonthlySpending = 90_000;
+    stored.spendingStages[0].monthlyLivingCostInTodayMoney = 80_000;
+    stored.mortgage.enabled = true;
+    stored.mortgage.paymentIncludedInCurrentSpending = false;
+    stored.mortgage.paymentIncludedInRetirementLivingCost = true;
+    const resolved = resolveLifePlan(stored, {
       currentAge: 40,
-      retireAge: 65,
+      retireAge: 45,
       deathAge: 90,
       inflation: 0.025,
       postReturn: 0.035,
@@ -317,12 +327,14 @@ describe("two-path simulation", () => {
       mortgage: { outstanding: 1_000_000, monthlyPayment: 10_000, endDate: "2040-01-01", rate: 0.03 },
       today: "2026-09-16",
     });
-    assert.equal(resolved.spendingStages[0]?.monthlyLivingCostInTodayMoney, 15_000);
     const r = runLifePlan(resolved, "2026-09-16");
+    const working = r.stay!.years.find((y) => y.phase === "current");
     const retired = r.stay!.years.find((y) => y.phase === "retired");
-    assert.ok(retired);
-    assert.equal(retired.livingMonthlyToday, 15_000);
-    assert.ok(retired.living > retired.livingMonthlyToday * 12);
+    assert.ok(working && retired);
+    assert.equal(working.livingMonthlyToday, 28_000);
+    assert.equal(working.mortgage, 0);
+    assert.equal(retired.livingMonthlyToday, 25_000);
+    assert.equal(retired.mortgage, 120_000);
   });
 
   it("includes ORSO, annuity and old age allowance cashflow", () => {

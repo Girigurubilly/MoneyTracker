@@ -623,22 +623,19 @@ export type LifePlanShared = {
   today: string;
 };
 
-/** Fill blank life-plan fields from the shared retirement profile. User-entered values win. */
+/** Fill blank life-plan fields from the shared retirement profile. Spending follows that profile. */
 export function resolveLifePlan(plan: RetirementLifePlan, shared: LifePlanShared): RetirementLifePlan {
   const retireDate = dateAtAge(shared.birthday, shared.retireAge, shared.today, shared.currentAge);
-  const autoStage = !plan.spendingStages.some((s) => s.monthlyLivingCostInTodayMoney != null);
-  let stageMonthly = shared.targetMonthly || null;
-  if (autoStage && stageMonthly && shared.mortgage && !plan.mortgage.paymentIncludedInRetirementLivingCost) {
-    stageMonthly = Math.max(0, stageMonthly - shared.mortgage.monthlyPayment);
-  }
-  const stages = autoStage
+  const spendNow = shared.monthlySpendNow || plan.currentJob.actualMonthlySpending;
+  const retireSpend = shared.targetMonthly || null;
+  const stages = retireSpend
     ? [
         {
-          id: "from-retire",
+          id: "from-profile",
           label: "",
           startAge: shared.retireAge,
           endAge: shared.deathAge,
-          monthlyLivingCostInTodayMoney: stageMonthly,
+          monthlyLivingCostInTodayMoney: retireSpend,
           followsInflation: true,
           isEssential: true,
           notes: "",
@@ -658,7 +655,8 @@ export function resolveLifePlan(plan: RetirementLifePlan, shared: LifePlanShared
       ...plan.currentJob,
       endDate: plan.currentJob.endDate || retireDate,
       grossMonthlyIncome: plan.currentJob.grossMonthlyIncome ?? (shared.monthlyIncomeNow || null),
-      actualMonthlySpending: plan.currentJob.actualMonthlySpending ?? (shared.monthlySpendNow || null),
+      actualMonthlySpending: spendNow,
+      monthlySavingsOverride: null,
     },
     retirement: {
       ...plan.retirement,
@@ -679,6 +677,8 @@ export function resolveLifePlan(plan: RetirementLifePlan, shared: LifePlanShared
       monthlyPayment: mort.monthlyPayment ?? sharedMort?.monthlyPayment ?? null,
       endDate: mort.endDate || sharedMort?.endDate || null,
       annualInterestRate: mort.annualInterestRate ?? sharedMort?.rate ?? null,
+      paymentIncludedInCurrentSpending: true,
+      paymentIncludedInRetirementLivingCost: false,
     },
     reverseMortgage: {
       ...plan.reverseMortgage,
