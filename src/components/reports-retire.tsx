@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-import { Area, AreaChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis } from "recharts";
+import { Area, AreaChart, ReferenceDot, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { Hairline, InfoButton, ProgressRing, ScreenHeader, SectionLabel, StatusChip } from "@/components/shared";
 import { LifeYearList } from "@/components/life-year-list";
 import { money, todayISO } from "@/lib/format";
@@ -216,7 +216,17 @@ export function useLifePlanResult() {
       void upsertAccount(want);
     }
   }, [resolved, retirementAccounts, upsertAccount, deleteAccount]);
-  return { plan, resolved, result };
+  const inflows = useMemo(
+    () => ({
+      accounts: retirementAccounts,
+      allowances,
+      retireAge: base.retireAge,
+      birthday: base.birthday,
+      postJobMonthly: base.postRetireJobMonthly ?? 0,
+    }),
+    [retirementAccounts, allowances, base.retireAge, base.birthday, base.postRetireJobMonthly],
+  );
+  return { plan, resolved, result, inflows };
 }
 
 function addMonths(iso: string, months: number): string {
@@ -252,10 +262,9 @@ export function RetirementPage() {
   const locale = useUi((s) => s.locale);
   const { accounts, holdings, rates, avg, base, ctx, pack, result, sustain, fire, persist, rmMonthly, mortgage } = useRetirementModel();
   const life = useLifePlanResult();
-  const chartData = (life.result.stay?.series ?? result.series.map((s) => ({ age: s.age, financial: s.corpus }))).map((s) => ({
-    age: s.age,
-    corpus: s.financial,
-  }));
+  const years = life.result.stay?.years ?? [];
+  const chartData = years.map((y) => ({ age: y.age, corpus: y.closingFinancial, kept: y.inheritKept }));
+  const saleYear = years.find((y) => y.inheritKept > 0);
   const updateAccount = useApp((s) => s.updateAccount);
   const surplus = sustain - base.targetMonthly;
   const status = retirementStatus(result.depletes, sustain, base.targetMonthly, result.series);
@@ -428,14 +437,12 @@ export function RetirementPage() {
               onMouseLeave={() => setChartPoint(null)}
             >
               <XAxis dataKey="age" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-              <ReferenceLine y={fire.fireNumber} stroke="var(--color-accent)" strokeDasharray="4 4" ifOverflow="discard" />
-              {fire.reachable ? <ReferenceLine x={fire.fireAge} stroke="var(--color-income)" strokeDasharray="3 3" ifOverflow="discard" /> : null}
+              {saleYear ? <ReferenceDot x={saleYear.age} y={saleYear.closingFinancial} r={4} fill="var(--color-accent)" stroke="none" /> : null}
               <Tooltip
                 cursor={{ stroke: "var(--color-accent)", strokeWidth: 1 }}
                 formatter={(value, _name, item) => {
                   const key = String((item as { dataKey?: unknown } | undefined)?.dataKey ?? "");
-                  const label = key === "fire" ? t.reports.fireNumber : t.reports.lpAssetsLine;
-                  return [money(Number(value) || 0, "HKD"), label];
+                  return [money(Number(value) || 0, "HKD"), key === "corpus" ? t.reports.lpAssetsLine : String(_name ?? "")];
                 }}
                 labelFormatter={(age) => `${t.reports.atAge} ${age}`}
                 contentStyle={{
@@ -445,14 +452,16 @@ export function RetirementPage() {
                   fontSize: 12,
                 }}
               />
-              <Area type="monotone" dataKey="corpus" name={t.reports.lpAssetsLine} stroke="var(--color-accent)" fill="var(--color-accent-soft)" strokeWidth={2} />
+              <Area type="monotone" dataKey="corpus" name={t.reports.lpAssetsLine} stroke="var(--color-accent)" fill="var(--color-accent-soft)" strokeWidth={2} dot={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
         <p className="px-4 pb-3 text-center text-xs text-muted">
           {chartPoint
-            ? `${t.reports.atAge} ${chartPoint.age} · ${money(chartPoint.corpus, "HKD")}${fire.fireNumber ? ` · FIRE ${money(fire.fireNumber, "HKD")}` : ""}`
-            : t.reports.chartTapHint}
+            ? `${t.reports.atAge} ${chartPoint.age} · ${money(chartPoint.corpus, "HKD")}`
+            : saleYear
+              ? `${saleYear.calendarYear} · ${t.reports.lpInheritKept} ${money(saleYear.inheritKept, "HKD")}`
+              : t.reports.chartTapHint}
         </p>
       </div>
 
@@ -584,11 +593,38 @@ export function RetirementProjectionPage() {
   const t = useT();
   const { result } = useLifePlanResult();
   const years = result.stay?.years ?? [];
+  const sale = years.find((y) => y.inheritProceeds > 0);
   return (
     <div className="pb-10">
       <ScreenHeader title={t.reports.annualProjection} backTo="/reports/retirement" />
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.lpProjectionHint}</p>
+      {sale ? (
+        <div className="mx-4 mb-3 rounded-2xl bg-elevated p-4 text-sm">
+          <div className="font-medium">
+            {sale.calendarYear} · {t.reports.atAge} {sale.age}
+          </div>
+          <div className="mt-2 space-y-1 text-[12px]">
+            <Row k={t.reports.openingAcc} n={sale.openingFinancial} />
+            <Row k={t.reports.lpInheritSold} n={sale.inheritProceeds} />
+            <Row k={t.reports.lpInheritPremium} n={sale.annuityBuy} />
+            <Row k={t.reports.lpInheritKept} n={sale.inheritKept} />
+            <Row k={t.reports.closingAcc} n={sale.closingFinancial} />
+          </div>
+          <p className="mt-2 text-[11px] leading-4 text-muted">
+            {t.reports.lpWithoutInherit} {money(sale.closingFinancial - sale.inheritKept, "HKD")}
+          </p>
+        </div>
+      ) : null}
       {result.ready && years.length ? <LifeYearList years={years} /> : <p className="mx-4 rounded-2xl bg-elevated px-4 py-3 text-sm text-muted">{t.reports.lpNeedData}</p>}
+    </div>
+  );
+}
+
+function Row({ k, n }: { k: string; n: number }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <span className="text-muted">{k}</span>
+      <span className="tabular-nums">{money(n, "HKD")}</span>
     </div>
   );
 }

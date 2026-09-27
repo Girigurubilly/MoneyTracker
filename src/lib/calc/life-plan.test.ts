@@ -178,6 +178,7 @@ describe("two-path simulation", () => {
     assert.equal(y.inheritKept, 3_000_000);
     assert.equal(y.annuityIncome, 180_000);
     assert.equal(Math.round(y.closingFinancial - y0.closingFinancial), 3_000_000 + 180_000);
+    assert.equal(r.stay!.series.find((row) => row.age === 66)?.financial, y.closingFinancial);
   });
 
   it("keeps unsold future inheritance visible without treating it as cash", () => {

@@ -2,10 +2,11 @@ import { useMemo, useState } from "react";
 import { Check, ChevronDown, TriangleAlert, X } from "lucide-react";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { ScreenHeader, SectionLabel } from "@/components/shared";
-import { SharedRetirementStrip, useRetirementModel } from "@/components/reports-retire";
+import { SharedRetirementStrip, useLifePlanResult, useRetirementModel } from "@/components/reports-retire";
 import { money, pct, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { monthKey } from "@/lib/calc/ledger";
+import { runLifePlan, type LifePlanShock } from "@/lib/calc/life-plan";
 import {
   fireBuckets,
   fireGates,
@@ -15,8 +16,6 @@ import {
   largestHoldingShare,
   monthlySpendByCategory,
   parentLiability,
-  runFireStress,
-  simulateFirePath,
   type FireStressId,
 } from "@/lib/calc/fire-plan";
 import { cn } from "@/lib/utils";
@@ -42,9 +41,6 @@ export function FirePlanPage() {
   const currentAge = base.currentAge;
   const retireAge = base.retireAge;
   const deathAge = base.deathAge;
-  const preReturn = base.preReturn;
-  const postReturn = base.postReturn;
-  const inflation = base.inflation;
   const parentMonthly = base.parentSupportMonthly ?? 0;
   const parentYears = base.parentSupportYears;
   const parentMode = base.parentSupportMode === "reserve" ? "reserve" : "include";
@@ -72,40 +68,42 @@ export function FirePlanPage() {
   });
   const familyTotal = parentLiability(parentMonthly, parentYears ?? 0);
   const liq = buckets.find((b) => b.id === "liquidity")?.amount ?? 0;
-
-  const pathOpts = {
-    currentAge,
-    retireAge,
-    deathAge,
-    investable,
-    monthlySave,
-    preReturn,
-    postReturn,
-    inflation,
-    postJobMonthly: jobAfter,
-  };
+  const { resolved, result, inflows } = useLifePlanResult();
   const [stressOn, setStressOn] = useState<FireStressId | null>(null);
   const [showTags, setShowTags] = useState(false);
-  const stressPatch =
+  const shock: LifePlanShock | undefined =
     stressOn === "bear"
       ? { shockAtRetire: -0.3 }
       : stressOn === "lowReturn"
-        ? { postReturn: Math.max(0, postReturn - 0.01) }
+        ? { returnDelta: -0.01 }
         : stressOn === "highInflation"
           ? { inflation: 0.035 }
           : stressOn === "longevity"
-            ? { deathAge: Math.max(deathAge, 95) }
-            : {};
-  const floorPath = simulateFirePath({ ...pathOpts, ...stressPatch, monthlySpend: levels.floor });
-  const basePath = simulateFirePath({ ...pathOpts, ...stressPatch, monthlySpend: levels.base });
-  const comfortPath = simulateFirePath({ ...pathOpts, ...stressPatch, monthlySpend: levels.comfort });
-  const chart = basePath.series.map((s, i) => ({
-    age: s.age,
-    floor: floorPath.series[i]?.corpus ?? 0,
-    base: s.corpus,
-    comfort: comfortPath.series[i]?.corpus ?? 0,
-  }));
-  const stress = runFireStress({ ...pathOpts, monthlySpend: levels.base });
+            ? { endAge: Math.max(deathAge, 95) }
+            : undefined;
+  const shown = useMemo(
+    () => (shock ? runLifePlan(resolved, todayISO(), inflows, shock) : result),
+    [shock, resolved, inflows, result],
+  );
+  const years = shown.stay?.years ?? [];
+  const chart = years.map((y) => ({ age: y.age, base: y.closingFinancial }));
+  const retireRow = years.find((y) => y.phase === "retired");
+  const corpusAtRetire = retireRow?.openingFinancial ?? years[years.length - 1]?.closingFinancial ?? 0;
+  const firstYearSwr = corpusAtRetire > 0 ? (retireRow?.living ?? 0) / corpusAtRetire : 0;
+  const at80 = years.find((y) => y.age >= 80)?.closingFinancial ?? years[years.length - 1]?.closingFinancial ?? 0;
+  const stress = useMemo(() => {
+    const specs: { id: FireStressId; shock: LifePlanShock }[] = [
+      { id: "bear", shock: { shockAtRetire: -0.3 } },
+      { id: "lowReturn", shock: { returnDelta: -0.01 } },
+      { id: "highInflation", shock: { inflation: 0.035 } },
+      { id: "longevity", shock: { endAge: Math.max(deathAge, 95) } },
+    ];
+    return specs.map((s) => {
+      const path = runLifePlan(resolved, todayISO(), inflows, s.shock).stay;
+      const at = path?.years.find((y) => y.age >= 80)?.closingFinancial ?? path?.terminalAssets ?? 0;
+      return { id: s.id, depletes: Boolean(path?.depletes), depletionAge: path?.depletionAge, corpusAt80: at };
+    });
+  }, [resolved, inflows, deathAge]);
   const conc = largestHoldingShare(holdings, rates, investable);
   const gates = fireGates({
     mortgage,
@@ -247,16 +245,16 @@ export function FirePlanPage() {
           <FireNum label={t.reports.fireJobAfter} value={jobAfter} money onCommit={(n) => persist({ postRetireJobMonthly: n })} />
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <MiniStat label={t.reports.fireCorpusRetire} value={basePath.corpusAtRetire} />
+          <MiniStat label={t.reports.fireCorpusRetire} value={corpusAtRetire} />
           <div className="rounded-xl bg-background px-3 py-2">
             <div className="text-[11px] text-muted">{t.reports.fireFirstSwr}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{pct(basePath.firstYearSwr)}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{pct(firstYearSwr)}</div>
           </div>
-          <MiniStat label={t.reports.fireAt80} value={basePath.corpusAt80} />
+          <MiniStat label={t.reports.fireAt80} value={at80} />
           <div className="rounded-xl bg-background px-3 py-2">
             <div className="text-[11px] text-muted">{t.reports.fireDepleteYear}</div>
-            <div className={cn("mt-0.5 text-sm font-semibold", basePath.depletes ? "text-expense" : "text-income")}>
-              {basePath.depletes ? basePath.depletionAge : t.reports.fireNeverDeplete}
+            <div className={cn("mt-0.5 text-sm font-semibold", shown.stay?.depletes ? "text-expense" : "text-income")}>
+              {shown.stay?.depletes ? shown.stay.depletionAge : t.reports.fireNeverDeplete}
             </div>
           </div>
         </div>
@@ -270,16 +268,14 @@ export function FirePlanPage() {
             <LineChart data={chart} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <XAxis dataKey="age" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} />
               <Tooltip
-                formatter={(value, name) => [
-                  money(Number(value) || 0, "HKD"),
-                  name === "floor" ? t.reports.fireTargetFloor : name === "comfort" ? t.reports.fireTargetComfort : t.reports.fireTargetBase,
-                ]}
+                formatter={(value, _name, item) => {
+                  const key = String((item as { dataKey?: unknown } | undefined)?.dataKey ?? "");
+                  return [money(Number(value) || 0, "HKD"), key === "base" ? t.reports.lpAssetsLine : String(_name ?? "")];
+                }}
                 labelFormatter={(age) => `${t.reports.atAge} ${age}`}
                 contentStyle={{ borderRadius: 12, border: "1px solid var(--color-line)", background: "var(--color-elevated)", fontSize: 12 }}
               />
-              <Line type="monotone" dataKey="floor" stroke="var(--color-income)" strokeWidth={2} dot={false} />
               <Line type="monotone" dataKey="base" stroke="var(--color-accent)" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="comfort" stroke="var(--color-expense)" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>

@@ -185,6 +185,7 @@ export type LifePlanInflows = {
   allowances?: Allowance[];
   retireAge?: number;
   birthday?: string;
+  postJobMonthly?: number;
 };
 
 function allowanceForAge(rows: Allowance[] | undefined, age: number, yearsFromStart: number, inflation: number, mode: "nominal" | "real"): number {
@@ -277,7 +278,7 @@ function pathRetireAge(plan: RetirementLifePlan, path: LifePathId, startYear: nu
   return endAge + 1;
 }
 
-function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, inflows?: LifePlanInflows): LifePathResult {
+function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, inflows?: LifePlanInflows, shock?: LifePlanShock): LifePathResult {
   const dob = plan.personal.dateOfBirth!;
   const startIso = plan.personal.planStartDate || asOf;
   const startYear = isoYear(startIso, Number(asOf.slice(0, 4)));
@@ -297,6 +298,7 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
   let minFinancial = financial;
   let assetsAtRetire = financial;
   let retireAge: number | null = null;
+  let shocked = false;
   const target = plan.personal.targetTerminalFinancialAssets;
   const accounts = (inflows?.accounts ?? []).filter((a) => a.includeInRetirementProjection && a.status !== "closed");
   const balances = new Map(accounts.map((a) => [a.id, n(a.currentBalance)]));
@@ -309,6 +311,10 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
     const yearEnd = `${calendarYear}-12-31`;
     const i = age - startAge;
     const phase = phaseFor(path, plan, yearEnd);
+    if (shock?.shockAtRetire && !shocked && phase === "retired") {
+      financial *= 1 + shock.shockAtRetire;
+      shocked = true;
+    }
     const opening = financial;
     const notes: string[] = [];
     let income = 0;
@@ -335,6 +341,7 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
       livingMonthlyToday = st?.monthly ?? 0;
       living = st ? inflate(livingMonthlyToday * 12, inf, i, st.follows, mode) : 0;
       if (!st) notes.push("No retirement spending stage for this age.");
+      income += Math.max(0, n(inflows?.postJobMonthly)) * 12;
     }
 
     let mortgagePay = 0;
@@ -365,8 +372,7 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
       const sy = isoYear(plan.inheritedProperty.sellDate, 0);
       if (calendarYear === sy && !inheritedSold) {
         inheritStated = n(plan.inheritedProperty.expectedValue);
-        const grown = inheritedHeld * (1 - n(plan.inheritedProperty.sellCostsRate));
-        inheritProceeds = plan.inheritedProperty.annualGrowthRate == null && plan.inheritedProperty.sellCostsRate == null ? inheritStated : grown;
+        inheritProceeds = inheritStated;
         inheritedHeld = 0;
         inheritedSold = true;
         notes.push("inherit-sold");
@@ -494,12 +500,38 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
   };
 }
 
-export function runLifePlan(plan: RetirementLifePlan, asOf = new Date().toISOString().slice(0, 10), inflows?: LifePlanInflows): LifePlanResult {
-  const missing = lifePlanMissing(plan);
+export type LifePlanShock = {
+  returnDelta?: number;
+  inflation?: number;
+  endAge?: number;
+  shockAtRetire?: number;
+};
+
+export function runLifePlan(
+  plan: RetirementLifePlan,
+  asOf = new Date().toISOString().slice(0, 10),
+  inflows?: LifePlanInflows,
+  shock?: LifePlanShock,
+): LifePlanResult {
+  const shockedPlan = shock ? applyLifeShock(plan, shock) : plan;
+  const missing = lifePlanMissing(shockedPlan);
   if (missing.length) return { ready: false, missing, stay: null, switch: null };
-  const stay = plan.currentJob.enabled ? simulatePath(plan, "stay", asOf, inflows) : null;
-  const sw = plan.lowerStressJob.enabled && Boolean(plan.lowerStressJob.startDate) ? simulatePath(plan, "switch", asOf, inflows) : null;
+  const stay = shockedPlan.currentJob.enabled ? simulatePath(shockedPlan, "stay", asOf, inflows, shock) : null;
+  const sw = shockedPlan.lowerStressJob.enabled && Boolean(shockedPlan.lowerStressJob.startDate) ? simulatePath(shockedPlan, "switch", asOf, inflows, shock) : null;
   return { ready: true, missing: [], stay, switch: sw };
+}
+
+function applyLifeShock(plan: RetirementLifePlan, shock: LifePlanShock): RetirementLifePlan {
+  return {
+    ...plan,
+    personal: { ...plan.personal, planEndAge: shock.endAge ?? plan.personal.planEndAge },
+    retirement: {
+      ...plan.retirement,
+      annualInvestmentReturn:
+        shock.returnDelta != null ? Math.max(0, n(plan.retirement.annualInvestmentReturn) + shock.returnDelta) : plan.retirement.annualInvestmentReturn,
+      annualInflationRate: shock.inflation ?? plan.retirement.annualInflationRate,
+    },
+  };
 }
 
 export function dateAtAge(dob: string | null | undefined, age: number, today: string, currentAge: number): string {
