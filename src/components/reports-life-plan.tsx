@@ -158,6 +158,7 @@ function Setup({
         <NullNum label={t.reports.lpLowerLive} value={plan.lowerStressJob.monthlyLivingCost} money onCommit={(n) => patch({ lowerStressJob: { ...plan.lowerStressJob, monthlyLivingCost: n } })} />
       </Fold>
       <Fold title={t.reports.lpStages}>
+        <p className="px-4 pb-2 text-[11px] leading-4 text-muted">{t.reports.lpStageHint}</p>
         {stages.map((s, i) => (
           <div key={s.id} className="border-t border-line">
             <div className="flex min-h-11 items-center justify-between px-4">
@@ -297,15 +298,17 @@ function NullNum({
 }) {
   const [editing, setEditing] = useState(false);
   const [raw, setRaw] = useState(value == null ? "" : String(value));
+  function commit(text: string) {
+    setEditing(false);
+    const t = text.trim();
+    if (!t) onCommit(null);
+    else {
+      const n = Number(t);
+      if (Number.isFinite(n)) onCommit(n);
+    }
+  }
   return (
-    <button
-      type="button"
-      className="flex min-h-11 w-full items-center justify-between gap-3 px-4 text-left"
-      onClick={() => {
-        setRaw(value == null ? "" : String(value));
-        setEditing(true);
-      }}
-    >
+    <div className="flex min-h-11 w-full items-center justify-between gap-3 px-4">
       <span className="text-sm">{label}</span>
       {editing ? (
         <input
@@ -314,19 +317,23 @@ function NullNum({
           value={raw}
           className="h-8 w-32 rounded-md bg-background px-2 text-right text-sm tabular-nums outline-none"
           onChange={(e) => setRaw(e.target.value)}
-          onBlur={() => {
-            setEditing(false);
-            const t = raw.trim();
-            if (!t) onCommit(null);
-            else {
-              const n = Number(t);
-              if (Number.isFinite(n)) onCommit(n);
-            }
+          onBlur={() => commit(raw)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
           }}
         />
       ) : (
-        <span className="text-sm tabular-nums text-muted">{value == null ? "—" : asMoney ? money(value, "HKD") : value}</span>
+        <button
+          type="button"
+          className="h-8 min-w-16 rounded-md px-2 text-right text-sm tabular-nums text-muted"
+          onClick={() => {
+            setRaw(value == null ? "" : String(value));
+            setEditing(true);
+          }}
+        >
+          {value == null ? "—" : asMoney ? money(value, "HKD") : value}
+        </button>
       )}
-    </button>
+    </div>
   );
 }

@@ -234,9 +234,9 @@ function inflate(today: number, rate: number, years: number, follows: boolean, m
 
 function stageSpend(stages: LifePlanSpendingStage[], age: number): { monthly: number; follows: boolean } | null {
   const hit = stages.find((s) => {
-    if (s.monthlyLivingCostInTodayMoney == null) return false;
-    const a0 = s.startAge ?? 0;
-    const a1 = s.endAge ?? 200;
+    if (s.monthlyLivingCostInTodayMoney == null || s.startAge == null || s.endAge == null) return false;
+    const a0 = Math.min(s.startAge, s.endAge);
+    const a1 = Math.max(s.startAge, s.endAge);
     return age >= a0 && age <= a1;
   });
   if (!hit || hit.monthlyLivingCostInTodayMoney == null) return null;
@@ -628,20 +628,26 @@ export function resolveLifePlan(plan: RetirementLifePlan, shared: LifePlanShared
   const retireDate = dateAtAge(shared.birthday, shared.retireAge, shared.today, shared.currentAge);
   const spendNow = shared.monthlySpendNow || plan.currentJob.actualMonthlySpending;
   const retireSpend = shared.targetMonthly || null;
-  const stages = retireSpend
-    ? [
-        {
-          id: "from-profile",
-          label: "",
-          startAge: shared.retireAge,
-          endAge: shared.deathAge,
-          monthlyLivingCostInTodayMoney: retireSpend,
-          followsInflation: true,
-          isEssential: true,
-          notes: "",
-        },
-      ]
-    : plan.spendingStages;
+  const specific = plan.spendingStages.filter(
+    (s) => s.id !== "from-profile" && s.monthlyLivingCostInTodayMoney != null && s.startAge != null && s.endAge != null,
+  );
+  const stages = [
+    ...specific,
+    ...(retireSpend
+      ? [
+          {
+            id: "from-profile",
+            label: "",
+            startAge: shared.retireAge,
+            endAge: shared.deathAge,
+            monthlyLivingCostInTodayMoney: retireSpend,
+            followsInflation: true,
+            isEssential: true,
+            notes: "",
+          },
+        ]
+      : []),
+  ];
   const mort = plan.mortgage;
   const sharedMort = shared.mortgage;
   return mergeLifePlan(plan, {

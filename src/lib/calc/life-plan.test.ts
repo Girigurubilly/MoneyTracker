@@ -324,7 +324,7 @@ describe("two-path simulation", () => {
   it("uses current spending before retirement and retirement spending plus the mortgage after", () => {
     const stored = filled();
     stored.currentJob.actualMonthlySpending = 90_000;
-    stored.spendingStages[0].monthlyLivingCostInTodayMoney = 80_000;
+    stored.spendingStages = [];
     stored.mortgage.enabled = true;
     stored.mortgage.paymentIncludedInCurrentSpending = false;
     stored.mortgage.paymentIncludedInRetirementLivingCost = true;
@@ -350,6 +350,54 @@ describe("two-path simulation", () => {
     assert.equal(working.mortgage, 0);
     assert.equal(retired.livingMonthlyToday, 25_000);
     assert.equal(retired.mortgage, 120_000);
+  });
+
+  it("uses a spending stage for the ages it names and the retirement default outside them", () => {
+    const stored = filled();
+    stored.currentJob.endDate = "2030-12-31";
+    stored.personal.planEndAge = 90;
+    stored.spendingStages = [
+      {
+        id: "late",
+        label: "",
+        startAge: 71,
+        endAge: 85,
+        monthlyLivingCostInTodayMoney: 18_000,
+        followsInflation: true,
+        isEssential: true,
+        notes: "",
+      },
+      {
+        id: "blank-ages",
+        label: "",
+        startAge: null,
+        endAge: null,
+        monthlyLivingCostInTodayMoney: 99_000,
+        followsInflation: true,
+        isEssential: true,
+        notes: "",
+      },
+    ];
+    const resolved = resolveLifePlan(stored, {
+      currentAge: 42,
+      retireAge: 47,
+      deathAge: 90,
+      inflation: 0,
+      postReturn: 0.03,
+      monthlyIncomeNow: 80_000,
+      monthlySpendNow: 40_000,
+      targetMonthly: 25_000,
+      investable: 2_000_000,
+      property: 0,
+      mortgage: null,
+      today: "2026-01-01",
+    });
+    const years = runLifePlan(resolved, "2026-01-01").stay!.years;
+    const at = (age: number) => years.find((y) => y.age === age);
+    assert.equal(at(70)?.livingMonthlyToday, 25_000);
+    assert.equal(at(71)?.livingMonthlyToday, 18_000);
+    assert.equal(at(85)?.livingMonthlyToday, 18_000);
+    assert.equal(at(86)?.livingMonthlyToday, 25_000);
   });
 
   it("includes ORSO, annuity and old age allowance cashflow", () => {
