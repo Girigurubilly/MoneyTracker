@@ -104,7 +104,7 @@ function TodayBody() {
   const plannedRegularIds = new Set(monthPlanned.map((tx) => tx.recurringId).filter(Boolean));
   const upcomingOnly = upcomingExpenseRegulars(recurring, asOf).filter((r) => !plannedRegularIds.has(r.id));
   const unpaidAdhoc = adhocForMonth(adhoc, monthKey)
-    .filter((a) => a.date > today)
+    .filter((a) => !a.paidOn && a.date > today)
     .sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label));
   const cells = monthGrid(selected, firstDay);
   const active = activityDates(transactions);

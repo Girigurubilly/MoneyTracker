@@ -131,6 +131,7 @@ export function adhocForMonth(rows: AdhocBudget[], month: string): AdhocBudget[]
 }
 
 export function adhocChargedBy(a: AdhocBudget, asOfIso: string): boolean {
+  if (a.paidOn) return a.paidOn <= asOfIso;
   return a.date <= asOfIso;
 }
 
@@ -154,6 +155,7 @@ export function reservedAdhoc(rows: AdhocBudget[], month: string, rates: FxRate[
 export function realizedAdhoc(rows: AdhocBudget[], month: string, rates: FxRate[], asOfIso: string): number {
   let sum = 0;
   for (const a of adhocForMonth(rows, month)) {
+    if (a.paidOn) continue;
     if (!adhocChargedBy(a, asOfIso)) continue;
     sum += Math.abs(toHkd(a.amount, a.currency, rates));
   }

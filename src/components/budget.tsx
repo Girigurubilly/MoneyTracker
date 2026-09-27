@@ -429,11 +429,10 @@ function AdhocBlock({
   const t = useT();
   const locale = useUi((s) => s.locale);
   const rates = useApp((s) => s.fxRates);
-  const accounts = useApp((s) => s.accounts);
-  const addTx = useApp((s) => s.addTransaction);
   const delAdhoc = useApp((s) => s.deleteAdhocBudget);
   const addWish = useApp((s) => s.addWishItem);
   const today = todayISO();
+  const [posting, setPosting] = useState<AdhocBudget | null>(null);
   const rows = useApp((s) => s.adhocBudgets)
     .filter((a) => a.month === month || a.date.startsWith(month))
     .sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label));
@@ -456,41 +455,28 @@ function AdhocBlock({
       ) : (
         <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
           {rows.map((a) => {
-            const upcoming = a.date > today;
+            const paid = Boolean(a.paidOn);
+            const upcoming = !paid && a.date > today;
             return (
             <div key={a.id} className="flex w-full flex-wrap items-center gap-2 border-t border-line px-4 py-3 first:border-0">
               <button type="button" className="min-w-0 flex-1 text-left" onClick={() => onEdit(a)}>
                 <div className="truncate text-sm font-medium">{pickName(locale, a.label, a.labelZh)}</div>
-                <div className="mt-0.5 text-xs text-muted">{dayPart(a.date, locale)}</div>
+                <div className="mt-0.5 text-xs text-muted">{paid ? `${dayPart(a.paidOn ?? today, locale)} · ${t.budget.paidToday}` : dayPart(a.date, locale)}</div>
               </button>
               <AmountWithHkd amount={-a.amount} currency={a.currency} rates={rates} sign className="text-sm font-semibold" />
               {upcoming ? (
                 <button
                   type="button"
                   className="h-8 shrink-0 rounded-full bg-accent-soft px-3 text-xs font-medium text-accent"
-                  onClick={async (e) => {
+                  onClick={(e) => {
                     e.stopPropagation();
-                    const acc = accounts.find((x) => x.type === "cash" || x.type === "current" || x.type === "savings") ?? accounts[0];
-                    if (!acc) return;
-                    await addTx({
-                      type: "expense",
-                      date: today,
-                      amount: a.amount,
-                      currency: a.currency,
-                      accountId: acc.id,
-                      categoryId: a.categoryId,
-                      payee: a.label,
-                      payeeZh: a.labelZh,
-                      note: a.label,
-                      adhoc: true,
-                    });
-                    await delAdhoc(a.id);
+                    setPosting(a);
                   }}
                 >
                   {t.budget.postAdhoc}
                 </button>
               ) : (
-                <span className="shrink-0 rounded-full bg-success-soft px-2 py-1 text-xs font-medium text-income">{t.budget.charged}</span>
+                <span className="shrink-0 rounded-full bg-success-soft px-2 py-1 text-xs font-medium text-income">{paid ? t.budget.paidToday : t.budget.charged}</span>
               )}
               {upcoming ? (
                 <button
@@ -514,7 +500,72 @@ function AdhocBlock({
           })}
         </div>
       )}
+      <PostAdhocSheet item={posting} onClose={() => setPosting(null)} />
     </div>
+  );
+}
+
+export function PostAdhocSheet({ item, onClose }: { item: AdhocBudget | null; onClose: () => void }) {
+  return (
+    <Overlay open={item != null} onClose={onClose} variant="page">
+      {item ? <PostAdhocBody key={item.id} item={item} onClose={onClose} /> : null}
+    </Overlay>
+  );
+}
+
+function PostAdhocBody({ item, onClose }: { item: AdhocBudget; onClose: () => void }) {
+  const t = useT();
+  const locale = useUi((s) => s.locale);
+  const accounts = useApp((s) => s.accounts);
+  const categories = useApp((s) => s.categories);
+  const addTx = useApp((s) => s.addTransaction);
+  const update = useApp((s) => s.updateAdhocBudget);
+  const moneyAccounts = moneyAccountsForPicker(accounts);
+  const today = todayISO();
+  const [accountId, setAccountId] = useState(
+    () => moneyAccounts.find((x) => x.type === "cash" || x.type === "current" || x.type === "savings")?.id ?? moneyAccounts[0]?.id ?? "",
+  );
+  const cat = categories.find((c) => c.id === item.categoryId);
+
+  async function save() {
+    if (!accountId) {
+      toast(t.add.account);
+      return;
+    }
+    await addTx({
+      type: "expense",
+      date: today,
+      amount: item.amount,
+      currency: item.currency,
+      accountId,
+      categoryId: item.categoryId,
+      payee: item.label,
+      payeeZh: item.labelZh,
+      note: item.label,
+      adhoc: true,
+    });
+    await update({ ...item, paidOn: today });
+    onClose();
+  }
+
+  return (
+    <ComposerShell
+      header={<ComposerHeader onClose={onClose} onSave={() => void save()} title={t.budget.postAdhoc} />}
+      keypad={null}
+    >
+      <LineRow label={pickName(locale, item.label, item.labelZh)} amount={String(item.amount)} />
+      <div className="px-4 pt-3 text-xs text-muted">{t.budget.postAdhocFrom}</div>
+      <AccountLine accounts={moneyAccounts} value={accountId} onChange={setAccountId} placeholder={t.add.account} />
+      {cat ? (
+        <div className="flex items-center gap-3 border-b border-line px-4 py-3 text-sm">
+          <span className="grid size-8 place-items-center rounded-full bg-elevated">
+            <CategoryIcon name={cat.icon} />
+          </span>
+          {categoryPath(cat, categories, locale)}
+        </div>
+      ) : null}
+      <p className="px-4 py-3 text-xs leading-5 text-muted">{t.budget.paidToday}</p>
+    </ComposerShell>
   );
 }
 
@@ -586,6 +637,7 @@ function AdhocEditorBody({
       month: rowMonth,
       date: iso,
       categoryId: categoryId || undefined,
+      paidOn: initial?.paidOn,
       priceCards: initial?.priceCards,
       valueCards: initial?.valueCards,
     };
@@ -658,7 +710,7 @@ function AdhocEditorBody({
       </div>
       {initial ? (
         <>
-          {initial.date > today ? (
+          {initial.paidOn || !(initial.date > today) ? null : (
             <button
               type="button"
               className="px-4 py-3 text-sm font-medium text-accent"
@@ -671,7 +723,7 @@ function AdhocEditorBody({
             >
               {t.budget.toWishlist}
             </button>
-          ) : null}
+          )}
           <button type="button" className="px-4 py-3 text-sm text-expense" onClick={async () => { await del(initial.id); onClose(); }}>
             {t.tx.delete}
           </button>

@@ -432,6 +432,7 @@ export type AdhocBudget = {
   currency: MoneyUnit;
   month: string;
   date: string;
+  paidOn?: string;
   categoryId?: string;
   priceCards?: WishCard[];
   valueCards?: WishCard[];

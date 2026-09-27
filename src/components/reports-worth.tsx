@@ -86,7 +86,12 @@ export function WorthTrendPage() {
             <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
             <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => compactHkd(Number(v))} width={52} />
             <Tooltip
-              formatter={(v, name) => [money(Number(v), "HKD"), name === "net" ? t.assets.netWorth : name === "assets" ? t.assets.totalAssets : t.assets.totalLiab]}
+              formatter={(v, name, item) => {
+                const key = String((item as { dataKey?: unknown } | undefined)?.dataKey ?? name ?? "");
+                const label =
+                  key === "net" ? t.assets.netWorth : key === "assets" ? t.assets.totalAssets : key === "liab" ? t.assets.totalLiab : String(name ?? "");
+                return [money(Number(v), "HKD"), label];
+              }}
               labelFormatter={(_, payload) => (payload?.[0]?.payload?.date as string) ?? ""}
             />
             <Area type="monotone" dataKey="net" name={t.assets.netWorth} fill="var(--color-accent)" fillOpacity={0.16} stroke="var(--color-accent)" strokeWidth={2} />

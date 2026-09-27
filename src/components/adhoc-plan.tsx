@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { toast } from "sonner";
-import { AdhocEditor } from "@/components/budget";
+import { AdhocEditor, PostAdhocSheet } from "@/components/budget";
 import { AmountWithHkd } from "@/components/currency-field";
 import { ScreenHeader } from "@/components/shared";
 import { categoryPath } from "@/lib/categories";
@@ -42,14 +42,13 @@ export function AdhocPlanPage() {
   const rows = useApp((s) => s.adhocBudgets);
   const categories = useApp((s) => s.categories);
   const rates = useApp((s) => s.fxRates);
-  const accounts = useApp((s) => s.accounts);
-  const addTx = useApp((s) => s.addTransaction);
   const delAdhoc = useApp((s) => s.deleteAdhocBudget);
   const addWish = useApp((s) => s.addWishItem);
   const today = todayISO();
   const thisMonth = today.slice(0, 7);
   const [editing, setEditing] = useState<AdhocBudget | null>(null);
   const [addingMonth, setAddingMonth] = useState<string | null>(null);
+  const [posting, setPosting] = useState<AdhocBudget | null>(null);
 
   const groups = useMemo(() => {
     const by = new Map<string, AdhocBudget[]>();
@@ -74,24 +73,6 @@ export function AdhocPlanPage() {
     setAddingMonth(month);
   }
 
-  async function post(a: AdhocBudget) {
-    const acc = accounts.find((x) => x.type === "cash" || x.type === "current" || x.type === "savings") ?? accounts[0];
-    if (!acc) return;
-    await addTx({
-      type: "expense",
-      date: today,
-      amount: a.amount,
-      currency: a.currency,
-      accountId: acc.id,
-      categoryId: a.categoryId,
-      payee: a.label,
-      payeeZh: a.labelZh,
-      note: a.label,
-      adhoc: true,
-    });
-    await delAdhoc(a.id);
-  }
-
   function section(title: string, months: string[], empty: string) {
     return (
       <section className="pt-4">
@@ -109,7 +90,7 @@ export function AdhocPlanPage() {
             categories={categories}
             onAdd={() => openAdd(month)}
             onEdit={setEditing}
-            onPost={(a) => void post(a)}
+            onPost={setPosting}
             onWish={async (a) => {
               await addWish(wishFromAdhoc(a, locale));
               await delAdhoc(a.id);
@@ -150,7 +131,7 @@ export function AdhocPlanPage() {
           categories={categories}
           empty={t.budget.adhocNone}
           onEdit={setEditing}
-          onPost={(a) => void post(a)}
+          onPost={setPosting}
           onWish={async (a) => {
             await addWish(wishFromAdhoc(a, locale));
             await delAdhoc(a.id);
@@ -175,6 +156,7 @@ export function AdhocPlanPage() {
           setAddingMonth(null);
         }}
       />
+      <PostAdhocSheet item={posting} onClose={() => setPosting(null)} />
     </div>
   );
 }
@@ -243,14 +225,15 @@ function MonthRows({
   return (
     <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
       {rows.map((a) => {
-        const upcoming = a.date > today;
+        const paid = Boolean(a.paidOn);
+        const upcoming = !paid && a.date > today;
         return (
           <div key={a.id} className="border-t border-line px-4 py-3 first:border-0">
             <div className="flex items-start gap-2">
               <button type="button" className="min-w-0 flex-1 text-left" onClick={() => onEdit(a)}>
                 <div className="break-words text-sm font-medium">{pickName(locale, a.label, a.labelZh)}</div>
                 <div className="mt-0.5 break-words text-xs text-muted">
-                  {a.date}
+                  {paid ? `${a.paidOn} · ${t.budget.paidToday}` : a.date}
                   {(() => {
                     const cat = categories.find((c) => c.id === a.categoryId);
                     return cat ? ` · ${categoryPath(cat, categories, locale)}` : "";
@@ -265,7 +248,7 @@ function MonthRows({
                 {t.budget.postAdhoc}
               </button>
             ) : (
-              <span className="shrink-0 rounded-full bg-success-soft px-2 py-1 text-xs font-medium text-income">{t.budget.charged}</span>
+              <span className="shrink-0 rounded-full bg-success-soft px-2 py-1 text-xs font-medium text-income">{paid ? t.budget.paidToday : t.budget.charged}</span>
             )}
             {upcoming ? (
               <button type="button" className="h-8 shrink-0 rounded-full bg-elevated px-3 text-xs font-medium" onClick={() => onWish(a)}>
