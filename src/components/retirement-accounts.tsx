@@ -24,7 +24,7 @@ export function RetirementAccountsPage() {
   const t = useT();
   const rows = useApp((s) => s.retirementAccounts);
   const retire = useApp((s) => s.retirement);
-  const [editing, setEditing] = useState<RetirementAccount | "new" | "annuity" | null>(null);
+  const [editing, setEditing] = useState<RetirementAccount | "new" | null>(null);
   const retireAge = retire?.retireAge ?? 65;
   const currentAge = retire?.currentAge ?? 40;
   const yearsToRetire = Math.max(0, retireAge - currentAge);
@@ -64,6 +64,7 @@ export function RetirementAccountsPage() {
     <div className="pb-10">
       <ScreenHeader title={t.more.retireAccounts} backTo="/more" />
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.more.retireAccountsHint}</p>
+      <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.raOnce}</p>
       <div className="mx-4 mb-3 grid grid-cols-2 gap-2">
         <Stat label={t.reports.raBalance} value={totals.balance} />
         <Stat label={t.reports.raMonthly} value={totals.monthly} />
@@ -103,12 +104,12 @@ export function RetirementAccountsPage() {
       )}
       {editing ? (
         <AccountEditor
-          initial={editing === "new" ? blankRetirementAccount("MPF") : editing === "annuity" ? blankRetirementAccount("ANNUITY") : editing}
-          isNew={editing === "new" || editing === "annuity"}
+          initial={editing === "new" ? blankRetirementAccount("MPF") : editing}
+          isNew={editing === "new"}
           onClose={() => setEditing(null)}
         />
       ) : null}
-      <HkIncomeSection onAddAnnuity={() => setEditing("annuity")} />
+      <HkIncomeSection />
     </div>
   );
 }
@@ -406,14 +407,13 @@ function NumLine({ label, value, onChange }: { label: string; value: number; onC
 
 function kindLabel(kind: Allowance["kind"], t: ReturnType<typeof useT>): string {
   if (kind === "oaa") return t.reports.oaa;
-  if (kind === "annuity") return t.reports.annuity;
   return t.reports.addAllowance;
 }
 
-function HkIncomeSection({ onAddAnnuity }: { onAddAnnuity: () => void }) {
+function HkIncomeSection() {
   const t = useT();
   const locale = useUi((s) => s.locale);
-  const rows = useApp((s) => s.allowances);
+  const rows = useApp((s) => s.allowances).filter((a) => a.kind !== "annuity");
   const add = useApp((s) => s.addAllowance);
   const update = useApp((s) => s.updateAllowance);
   const del = useApp((s) => s.deleteAllowance);
@@ -471,9 +471,6 @@ function HkIncomeSection({ onAddAnnuity }: { onAddAnnuity: () => void }) {
             {t.reports.addOaa}
           </button>
         ) : null}
-        <button type="button" className="h-11 rounded-xl bg-elevated text-sm font-medium" onClick={onAddAnnuity}>
-          {t.reports.addAnnuity}
-        </button>
         <button type="button" className="h-11 rounded-xl bg-elevated text-sm" onClick={() => setEditing("other")}>
           {t.reports.addAllowance}
         </button>
@@ -504,13 +501,6 @@ function HkIncomeSection({ onAddAnnuity }: { onAddAnnuity: () => void }) {
 
 function allowanceLine(a: Allowance, t: ReturnType<typeof useT>, locale: "en" | "zh-HK"): string {
   const name = pickName(locale, a.label, a.labelZh);
-  const years = a.payoutYears ?? (a.endAge ? Math.max(0, a.endAge - a.startAge) : 0);
-  if (a.kind === "annuity" && years > 0) {
-    return t.reports.raPayoutSummary
-      .replace("{amount}", money(a.monthly, "HKD"))
-      .replace("{years}", String(years))
-      .replace("{age}", String(a.startAge));
-  }
   return `${name} · ${money(a.monthly, "HKD")} · ${t.reports.startAge} ${a.startAge}`;
 }
 
@@ -529,19 +519,15 @@ function IncomeEditor({
 }) {
   const t = useT();
   const [row, setRow] = useState(initial);
-  const yearsDefault = row.payoutYears ?? (row.endAge ? Math.max(0, row.endAge - row.startAge) : row.kind === "annuity" ? 10 : 0);
-  const [years, setYears] = useState(yearsDefault);
   const [amount, setAmount] = useState(String(row.monthly || ""));
-  const annuity = row.kind === "annuity";
 
   function save() {
     const monthly = resolveAmountInput(amount);
-    const lifetime = years <= 0 || row.kind === "oaa";
     onSave({
       ...row,
       monthly,
-      payoutYears: annuity ? years : undefined,
-      endAge: annuity && !lifetime ? row.startAge + years : row.kind === "oaa" ? undefined : row.endAge,
+      payoutYears: undefined,
+      endAge: row.kind === "oaa" ? undefined : row.endAge,
     });
   }
 
@@ -574,7 +560,6 @@ function IncomeEditor({
         ) : null}
         <LineRow label={t.reports.allowanceMonthly} amount={amount || "0"} active onFocusAmount={() => undefined} />
         <StepperRow label={t.reports.startAge} value={row.startAge} min={60} max={90} onChange={(n) => setRow((r) => ({ ...r, startAge: n }))} />
-        {annuity ? <YearChips years={years} onChange={setYears} lifetimeLabel={t.reports.raLifetime} yearsLabel={t.reports.raPayoutYears} /> : null}
         <label className="flex items-center gap-2 px-4 py-3 text-sm">
           <input
             type="checkbox"

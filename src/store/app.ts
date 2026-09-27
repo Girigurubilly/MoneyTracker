@@ -25,6 +25,7 @@ import type {
   RetirementLifePlan,
 } from "@/lib/types";
 import { defaultTypeForGroup, groupForType } from "@/lib/types";
+import { applyAnnuityTerms, blankRetirementAccount } from "@/lib/calc/mpf";
 import type { RetirementInputs } from "@/lib/calc/retirement";
 import type { MetaRow, SnapshotRow } from "@/lib/idb";
 import {
@@ -323,16 +324,6 @@ const defaultOaa: Allowance = {
   inflationAdjusted: true,
 };
 
-const defaultAnnuity: Allowance = {
-  id: "annuity",
-  label: "Annuity",
-  labelZh: "年金",
-  monthly: 0,
-  startAge: 65,
-  kind: "annuity",
-  inflationAdjusted: false,
-};
-
 const defaultCash: Account = {
   id: "cash-hkd",
   name: "Cash",
@@ -382,7 +373,7 @@ async function seedSkeleton() {
     await idb().accounts.bulkAdd([defaultCash]);
     await idb().categories.bulkAdd(seedCategories);
     await idb().fxRates.bulkAdd(seedFx);
-    await idb().allowances.bulkAdd([defaultOaa, defaultAnnuity]);
+    await idb().allowances.bulkAdd([defaultOaa]);
     await idb().retirement.add(emptyRetirement);
     await idb().budgets.add({
       id: MONTH_TOTAL_BUDGET_ID,
@@ -500,6 +491,32 @@ async function postDuePlanned() {
     const m = (await idb().mortgage.toArray())[0] ?? null;
     const next = syncMortgageOutstanding(m, accounts);
     if (next) await idb().mortgage.put(next);
+  });
+}
+
+async function migrateAnnuityAllowances() {
+  const rows = (await idb().allowances.toArray()).filter((a) => a.kind === "annuity");
+  if (!rows.length) return;
+  const accounts = await idb().retirementAccounts.toArray();
+  const ids = new Set(accounts.map((a) => a.id));
+  let hasPayout = accounts.some((a) => a.type === "ANNUITY" || a.type === "PENSION" || a.type === "QDAP");
+  await idb().transaction("rw", [idb().allowances, idb().retirementAccounts], async () => {
+    for (const a of rows) {
+      const id = `ra-from-${a.id}`;
+      if (a.monthly > 0 && !hasPayout && !ids.has(id)) {
+        const years = a.payoutYears ?? (a.endAge != null ? Math.max(0, a.endAge - a.startAge) : 0);
+        await idb().retirementAccounts.put(
+          applyAnnuityTerms(
+            { ...blankRetirementAccount("ANNUITY"), id, name: a.labelZh || a.label || "Annuity" },
+            a.monthly,
+            years,
+            a.startAge,
+          ),
+        );
+        hasPayout = true;
+      }
+      await idb().allowances.delete(a.id);
+    }
   });
 }
 
@@ -766,6 +783,7 @@ export const useApp = create<AppState>((set, get) => ({
           await ensureMortgageCategories();
           await ensureRegularLiving();
           await migrateAdhocFromPlannedTxs();
+          await migrateAnnuityAllowances();
           await postDuePlanned();
           await syncRegularSchedules();
         } catch {
@@ -1279,6 +1297,7 @@ export const useApp = create<AppState>((set, get) => ({
       });
     });
     await migrateAdhocFromPlannedTxs();
+    await migrateAnnuityAllowances();
     const data = await loadAll();
     set({ ...data, ready: true });
   },
