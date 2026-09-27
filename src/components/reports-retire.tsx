@@ -25,7 +25,7 @@ import {
   type RetirementReadinessStatus,
 } from "@/lib/calc/retirement";
 import { monthKey } from "@/lib/calc/ledger";
-import { emptyLifePlan, inheritanceAnnuityAccount, INHERIT_ANNUITY_ID, resolveLifePlan, runLifePlan } from "@/lib/calc/life-plan";
+import { emptyLifePlan, inheritanceAnnuityAccount, INHERIT_ANNUITY_ID, lifePlanMonthlyRoom, resolveLifePlan, runLifePlan } from "@/lib/calc/life-plan";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -260,14 +260,21 @@ export function SharedRetirementStrip() {
 export function RetirementPage() {
   const t = useT();
   const locale = useUi((s) => s.locale);
-  const { accounts, holdings, rates, avg, base, ctx, pack, result, sustain, fire, persist, rmMonthly, mortgage } = useRetirementModel();
+  const { accounts, holdings, rates, avg, base, ctx, pack, result, fire, persist, rmMonthly, mortgage } = useRetirementModel();
   const life = useLifePlanResult();
   const years = life.result.stay?.years ?? [];
   const chartData = years.map((y) => ({ age: y.age, corpus: y.closingFinancial, kept: y.inheritKept }));
   const saleYear = years.find((y) => y.inheritKept > 0);
+  const room = useMemo(() => lifePlanMonthlyRoom(life.resolved, todayISO(), life.inflows), [life.resolved, life.inflows]);
   const updateAccount = useApp((s) => s.updateAccount);
-  const surplus = sustain - base.targetMonthly;
-  const status = retirementStatus(result.depletes, sustain, base.targetMonthly, result.series);
+  const surplus = room.surplus;
+  const corpusAtRetire = life.result.stay?.assetsAtRetire ?? result.corpusAtRetire;
+  const status = retirementStatus(
+    life.result.stay?.depletes ?? result.depletes,
+    room.sustainable,
+    room.planned,
+    years.map((y) => ({ corpus: y.closingFinancial })),
+  );
   const [chartPoint, setChartPoint] = useState<{ age: number; corpus: number } | null>(null);
   const [showSetup, setShowSetup] = useState(false);
 
@@ -300,10 +307,12 @@ export function RetirementPage() {
       `- Gap (HKD): ${Math.round(Math.max(0, fire.fireNumber - fire.current))}`,
       `- Progress: ${(fire.progress * 100).toFixed(1)}%`,
       `- Earliest FIRE age: ${fire.reachable ? fire.fireAge : "not within horizon"}`,
-      `- Corpus at retire age (HKD): ${Math.round(result.corpusAtRetire)}`,
-      `- Sustainable monthly (HKD): ${Math.round(sustain)}`,
+      `- Corpus at retire age (HKD): ${Math.round(corpusAtRetire)}`,
+      `- Planned retirement living, today’s HKD / month: ${Math.round(room.planned)}`,
+      `- Sustainable monthly (HKD): ${Math.round(room.sustainable)}`,
+      `- Monthly gap / surplus (HKD): ${Math.round(surplus)}`,
       `- Status: ${status}`,
-      `- Depletes: ${result.depletes ? `yes${result.depletionAge ? ` at ${result.depletionAge}` : ""}` : "no"}`,
+      `- Depletes: ${life.result.stay?.depletes ? `yes${life.result.stay.depletionAge ? ` at ${life.result.stay.depletionAge}` : ""}` : "no"}`,
       "",
       "## Holdings (marked to market)",
       "market,symbol,name,quantity,price,currency,value_hkd,account",
@@ -329,7 +338,7 @@ export function RetirementPage() {
       "",
       "## Corpus by age (HKD)",
       "age,corpus",
-      ...result.series.map((s) => `${s.age},${Math.round(s.corpus)}`),
+      ...years.map((s) => `${s.age},${Math.round(s.closingFinancial)}`),
       "",
       "Use this brief to comment on FIRE feasibility, concentration risk in holdings, return assumptions, and whether the monthly target is sustainable.",
     ];
@@ -378,7 +387,7 @@ export function RetirementPage() {
           </div>
           <div className="rounded-xl bg-background px-3 py-2">
             <div className="text-[11px] text-muted">{t.reports.corpusAtRetire}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(result.corpusAtRetire, "HKD")}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(corpusAtRetire, "HKD")}</div>
           </div>
           <div className="rounded-xl bg-background px-3 py-2">
             <div className="text-[11px] text-muted">{t.reports.surplus}</div>

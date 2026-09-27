@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { emptyLifePlan, estimateHkNetMonthly, inheritanceAnnuityAccount, lifePlanMissing, resolveLifePlan, runLifePlan } from "./life-plan.ts";
+import { emptyLifePlan, estimateHkNetMonthly, inheritanceAnnuityAccount, lifePlanMissing, lifePlanMonthlyRoom, resolveLifePlan, runLifePlan } from "./life-plan.ts";
 import { applyAnnuityTerms, blankRetirementAccount } from "./mpf.ts";
 import type { Allowance, RetirementLifePlan } from "../types.ts";
 
@@ -198,6 +198,24 @@ describe("two-path simulation", () => {
     assert.ok(y);
     assert.equal(y.lockedBalance, 0);
     assert.equal(Math.round(y.closingFinancial), Math.round(y.openingFinancial + y.investmentReturn + y.income + y.pensionIncome + y.allowanceIncome + y.annuityIncome + y.inheritKept + y.reverseMortgage - y.living - y.mortgage));
+  });
+
+  it("measures the monthly surplus against the same stay path", () => {
+    const rich = filled();
+    rich.spendingStages[0].monthlyLivingCostInTodayMoney = 5_000;
+    const room = lifePlanMonthlyRoom(rich, "2026-01-01");
+    assert.equal(room.planned, 5_000);
+    assert.ok(room.sustainable > 5_000, String(room.sustainable));
+    assert.ok(room.surplus > 0);
+
+    const poor = filled();
+    poor.assets.financialAssets = 0;
+    poor.currentJob.grossMonthlyIncome = 0;
+    poor.currentJob.actualMonthlySpending = 0;
+    poor.spendingStages[0].monthlyLivingCostInTodayMoney = 80_000;
+    const gap = lifePlanMonthlyRoom(poor, "2026-01-01");
+    assert.equal(gap.planned, 80_000);
+    assert.ok(gap.surplus < 0, String(gap.surplus));
   });
 
   it("keeps unsold future inheritance visible without treating it as cash", () => {
