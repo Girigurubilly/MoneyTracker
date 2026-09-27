@@ -20,6 +20,7 @@ export type LifeYearRow = {
   inheritProceeds: number;
   inheritedHeld: number;
   inheritStated: number;
+  inheritKept: number;
   annuityBuy: number;
   annuityIncome: number;
   pensionIncome: number;
@@ -364,7 +365,8 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
       const sy = isoYear(plan.inheritedProperty.sellDate, 0);
       if (calendarYear === sy && !inheritedSold) {
         inheritStated = n(plan.inheritedProperty.expectedValue);
-        inheritProceeds = inheritedHeld * (1 - n(plan.inheritedProperty.sellCostsRate));
+        const grown = inheritedHeld * (1 - n(plan.inheritedProperty.sellCostsRate));
+        inheritProceeds = plan.inheritedProperty.annualGrowthRate == null && plan.inheritedProperty.sellCostsRate == null ? inheritStated : grown;
         inheritedHeld = 0;
         inheritedSold = true;
         notes.push("inherit-sold");
@@ -436,7 +438,8 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
     }
 
     const investmentReturn = financial * ret;
-    financial = financial + investmentReturn + income + inheritProceeds + annuityIncome + pensionIncome + allowanceIncome + reverseMortgage - living - mortgagePay - annuityBuy;
+    const inheritKept = Math.max(0, inheritProceeds - annuityBuy);
+    financial = financial + investmentReturn + income + inheritKept + annuityIncome + pensionIncome + allowanceIncome + reverseMortgage - living - mortgagePay;
     if (financial < minFinancial) minFinancial = financial;
     if (financial < 0 && !depletes) {
       depletes = true;
@@ -462,6 +465,7 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
       inheritProceeds,
       inheritedHeld,
       inheritStated,
+      inheritKept,
       annuityBuy,
       annuityIncome,
       pensionIncome,

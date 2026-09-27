@@ -154,6 +154,32 @@ describe("two-path simulation", () => {
     assert.equal(Math.round(y.closingFinancial - y0.closingFinancial), 2_000_000 + 120_000);
   });
 
+  it("sells a 6 million inheritance, keeps 3 million after the annuity, and adds that to the lump sum", () => {
+    const plain = filled();
+    const sold = filled();
+    sold.inheritedProperty.enabled = true;
+    sold.inheritedProperty.expectedValue = 6_000_000;
+    sold.inheritedProperty.expectedDate = "2050-09-17";
+    sold.inheritedProperty.sell = true;
+    sold.inheritedProperty.sellDate = "2050-10-16";
+    sold.publicAnnuity.enabled = true;
+    sold.publicAnnuity.purchaseAmount = 3_000_000;
+    sold.publicAnnuity.useInheritedSaleProceeds = true;
+    sold.publicAnnuity.monthlyPayout = 15_000;
+    sold.publicAnnuity.payoutStartAge = 66;
+    const base = runLifePlan(plain, "2026-01-01");
+    const r = runLifePlan(sold, "2026-01-01");
+    const y = r.stay!.years.find((row) => row.calendarYear === 2050);
+    const y0 = base.stay!.years.find((row) => row.calendarYear === 2050);
+    assert.ok(y && y0);
+    assert.equal(y.age, 66);
+    assert.equal(y.inheritProceeds, 6_000_000);
+    assert.equal(y.annuityBuy, 3_000_000);
+    assert.equal(y.inheritKept, 3_000_000);
+    assert.equal(y.annuityIncome, 180_000);
+    assert.equal(Math.round(y.closingFinancial - y0.closingFinancial), 3_000_000 + 180_000);
+  });
+
   it("keeps unsold future inheritance visible without treating it as cash", () => {
     const plain = filled();
     const held = filled();

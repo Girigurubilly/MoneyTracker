@@ -25,7 +25,7 @@ export function LifeYearList({ years }: { years: LifeYearRow[] }) {
                 <div className="text-[11px] text-muted">
                   {phaseLabel(y.phase, t)}
                   {y.inheritedHeld > 0 ? ` · ${t.reports.lpInheritHeld}` : ""}
-                  {y.inheritProceeds > 0 ? ` · ${t.reports.lpInheritSold}` : ""}
+                  {y.inheritKept > 0 ? ` · ${t.reports.lpInheritKept} ${money(y.inheritKept, "HKD")}` : ""}
                 </div>
               </div>
               <div className="text-right text-xs tabular-nums">{money(y.closingFinancial, "HKD")}</div>
@@ -42,6 +42,7 @@ export function LifeYearList({ years }: { years: LifeYearRow[] }) {
                 {y.inheritStated > 0 && Math.abs(y.inheritStated - y.inheritProceeds) > 1 ? <Amt k={t.reports.lpInheritStated} n={y.inheritStated} /> : null}
                 <Amt k={t.reports.lpInheritSold} n={y.inheritProceeds} />
                 <Amt k={t.reports.lpInheritPremium} n={y.annuityBuy} />
+                <Amt k={t.reports.lpInheritKept} n={y.inheritKept} />
                 <Amt k={t.reports.lpAnnuity} n={y.annuityIncome} />
                 <Amt k={t.reports.lpPension} n={y.pensionIncome} />
                 <Amt k={t.reports.lpAllowance} n={y.allowanceIncome} />
