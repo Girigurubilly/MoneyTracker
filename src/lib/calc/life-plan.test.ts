@@ -215,6 +215,20 @@ describe("two-path simulation", () => {
     assert.equal(years[1].investmentReturn, 0);
   });
 
+  it("counts the current age only until the next birthday", () => {
+    const p = filled();
+    p.personal.dateOfBirth = "1984-06-15";
+    p.assets.financialAssets = 1_000_000;
+    p.retirement.annualInvestmentReturn = 0.12;
+    const first = runLifePlan(p, "2026-09-28").stay!.years[0];
+    const second = runLifePlan(p, "2026-09-28").stay!.years[1];
+    assert.equal(first.months, 8);
+    assert.equal(first.living, 40_000 * 8);
+    assert.equal(first.investmentReturn, 80_000);
+    assert.equal(second.months, 12);
+    assert.equal(second.livingMonthlyToday, 40_000);
+  });
+
   it("measures the monthly surplus against the same stay path", () => {
     const rich = filled();
     rich.spendingStages[0].monthlyLivingCostInTodayMoney = 5_000;

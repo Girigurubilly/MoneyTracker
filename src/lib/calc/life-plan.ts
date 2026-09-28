@@ -30,6 +30,8 @@ export type LifeYearRow = {
   closingFinancial: number;
   propertyHeld: number;
   lockedBalance: number;
+  /** Months counted in this row. The current age uses the months left until the next birthday. */
+  months: number;
   notes: string[];
 };
 
@@ -198,6 +200,18 @@ function allowanceForAge(rows: Allowance[] | undefined, age: number, yearsFromSt
     sum += a.monthly * 12 * grown;
   }
   return sum;
+}
+
+function monthsUntilNextBirthday(birthday: string, today: string): number {
+  const [, bm, bd] = birthday.split("-").map(Number);
+  const [ty, tm, td] = today.slice(0, 10).split("-").map(Number);
+  if (!bm || !bd || !ty || !tm || !td) return 12;
+  let year = ty;
+  if (tm > bm || (tm === bm && td >= bd)) year += 1;
+  let months = (year - ty) * 12 + (bm - tm);
+  if (td > bd) months -= 1;
+  if (months < 1) return 1;
+  return Math.min(12, months);
 }
 
 function n(v: number | null | undefined): number {
@@ -430,7 +444,7 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
       balances.set(acc.id, row.closingBalance);
       pensionIncome += row.cashFlowAvailableToRetirementPlan;
     }
-    const allowanceIncome = allowanceForAge(inflows?.allowances, age, i, inf, mode);
+    let allowanceIncome = allowanceForAge(inflows?.allowances, age, i, inf, mode);
     const lockedBalance = [...balances.entries()].reduce((s, [id, v]) => (id === INHERIT_ANNUITY_ID ? s : s + v), 0);
 
     home *= 1 + n(plan.assets.selfOccupiedPropertyGrowthRate);
@@ -443,7 +457,19 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
       }
     }
 
-    const investmentReturn = Math.max(0, financial) * ret;
+    const months = i === 0 ? monthsUntilNextBirthday(dob, asOf) : 12;
+    const part = months / 12;
+    if (part !== 1) {
+      income *= part;
+      living *= part;
+      mortgagePay *= part;
+      annuityIncome *= part;
+      pensionIncome *= part;
+      allowanceIncome *= part;
+      reverseMortgage *= part;
+    }
+
+    const investmentReturn = Math.max(0, financial) * ret * part;
     const inheritKept = Math.max(0, inheritProceeds - annuityBuy);
     financial = financial + investmentReturn + income + inheritKept + annuityIncome + pensionIncome + allowanceIncome + reverseMortgage - living - mortgagePay;
     if (financial < minFinancial) minFinancial = financial;
@@ -481,6 +507,7 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
       closingFinancial: financial,
       propertyHeld: home + inheritedHeld,
       lockedBalance,
+      months,
       notes,
     });
   }

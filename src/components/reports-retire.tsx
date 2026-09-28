@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-import { Area, AreaChart, ReferenceDot, ResponsiveContainer, Tooltip, XAxis } from "recharts";
+import { Area, AreaChart, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { Hairline, InfoButton, ProgressRing, ScreenHeader, SectionLabel, StatusChip } from "@/components/shared";
 import { LifeYearList } from "@/components/life-year-list";
 import { money, todayISO } from "@/lib/format";
@@ -446,6 +446,9 @@ export function RetirementPage() {
               onMouseLeave={() => setChartPoint(null)}
             >
               <XAxis dataKey="age" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+              {fire.fireNumber > 0 ? (
+                <ReferenceLine y={fire.fireNumber} stroke="var(--color-muted)" strokeDasharray="4 4" ifOverflow="extendDomain" />
+              ) : null}
               {saleYear ? <ReferenceDot x={saleYear.age} y={saleYear.closingFinancial} r={4} fill="var(--color-accent)" stroke="none" /> : null}
               <Tooltip
                 cursor={{ stroke: "var(--color-accent)", strokeWidth: 1 }}
@@ -466,6 +469,7 @@ export function RetirementPage() {
           </ResponsiveContainer>
         </div>
         <p className="px-4 pb-3 text-center text-xs text-muted">
+          {fire.fireNumber > 0 ? <span className="mb-1 block">{t.reports.fireChartLine} {money(fire.fireNumber, "HKD")}</span> : null}
           {chartPoint
             ? `${t.reports.atAge} ${chartPoint.age} · ${money(chartPoint.corpus, "HKD")}`
             : saleYear
