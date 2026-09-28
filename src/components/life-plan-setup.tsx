@@ -20,6 +20,24 @@ export function LifePlanSetup() {
   return <Setup plan={plan} patch={patch} persist={persist} />;
 }
 
+export function LifePlanJobs() {
+  const stored = useApp((s) => s.lifePlan);
+  const update = useApp((s) => s.updateLifePlan);
+  const plan = stored ?? emptyLifePlan();
+  function persist(next: RetirementLifePlan) {
+    void update({ ...next, id: "base", version: 1 });
+  }
+  function patch(p: Partial<RetirementLifePlan>) {
+    persist(mergeLifePlan(plan, p));
+  }
+  const t = useT();
+  return (
+    <div className="mb-3 space-y-2">
+      <JobFolds plan={plan} patch={patch} t={t} />
+    </div>
+  );
+}
+
 function Setup({
   plan,
   patch,
@@ -35,19 +53,6 @@ function Setup({
     <div className="mt-3 space-y-2">
       <Fold title={t.reports.lpPersonal} open>
         <NullNum label={t.reports.lpDwz} value={plan.personal.targetTerminalFinancialAssets} money onCommit={(n) => patch({ personal: { ...plan.personal, targetTerminalFinancialAssets: n } })} />
-      </Fold>
-      <Fold title={t.reports.lpCurrentJob}>
-        <p className="px-4 pb-2 text-[11px] leading-4 text-muted">{t.reports.lpJobEndBlank}</p>
-        <Toggle label={t.reports.lpEnabled} on={plan.currentJob.enabled} onChange={(on) => patch({ currentJob: { ...plan.currentJob, enabled: on } })} />
-        <DateRow label={t.reports.lpJobEnd} value={plan.currentJob.endDate} onChange={(v) => patch({ currentJob: { ...plan.currentJob, endDate: v } })} />
-      </Fold>
-      <Fold title={t.reports.lpLowerJob}>
-        <Toggle label={t.reports.lpEnabled} on={plan.lowerStressJob.enabled} onChange={(on) => patch({ lowerStressJob: { ...plan.lowerStressJob, enabled: on } })} />
-        <DateRow label={t.reports.lpLowerStart} value={plan.lowerStressJob.startDate} onChange={(v) => patch({ lowerStressJob: { ...plan.lowerStressJob, startDate: v } })} />
-        <DateRow label={t.reports.lpLowerEnd} value={plan.lowerStressJob.endDate} onChange={(v) => patch({ lowerStressJob: { ...plan.lowerStressJob, endDate: v } })} />
-        <NullNum label={t.reports.lpGross} value={plan.lowerStressJob.grossMonthlyIncome} money onCommit={(n) => patch({ lowerStressJob: { ...plan.lowerStressJob, grossMonthlyIncome: n } })} />
-        <NullNum label={t.reports.lpNetOverride} value={plan.lowerStressJob.estimatedNetMonthlyIncomeOverride} money onCommit={(n) => patch({ lowerStressJob: { ...plan.lowerStressJob, estimatedNetMonthlyIncomeOverride: n } })} />
-        <NullNum label={t.reports.lpLowerLive} value={plan.lowerStressJob.monthlyLivingCost} money onCommit={(n) => patch({ lowerStressJob: { ...plan.lowerStressJob, monthlyLivingCost: n } })} />
       </Fold>
       <Fold title={t.reports.lpStages}>
         <p className="px-4 pb-2 text-[11px] leading-4 text-muted">{t.reports.lpStageHint}</p>
@@ -125,6 +130,34 @@ function Setup({
         <NullNum label={t.reports.lpReversePay} value={plan.reverseMortgage.monthlyPayout} money onCommit={(n) => patch({ reverseMortgage: { ...plan.reverseMortgage, monthlyPayout: n } })} />
       </Fold>
     </div>
+  );
+}
+
+function JobFolds({
+  plan,
+  patch,
+  t,
+}: {
+  plan: RetirementLifePlan;
+  patch: (p: Partial<RetirementLifePlan>) => void;
+  t: ReturnType<typeof useT>;
+}) {
+  return (
+    <>
+      <Fold title={t.reports.lpCurrentJob} open>
+        <p className="px-4 pb-2 text-[11px] leading-4 text-muted">{t.reports.lpJobEndBlank}</p>
+        <Toggle label={t.reports.lpEnabled} on={plan.currentJob.enabled} onChange={(on) => patch({ currentJob: { ...plan.currentJob, enabled: on } })} />
+        <DateRow label={t.reports.lpJobEnd} value={plan.currentJob.endDate} onChange={(v) => patch({ currentJob: { ...plan.currentJob, endDate: v } })} />
+      </Fold>
+      <Fold title={t.reports.lpLowerJob} open>
+        <Toggle label={t.reports.lpEnabled} on={plan.lowerStressJob.enabled} onChange={(on) => patch({ lowerStressJob: { ...plan.lowerStressJob, enabled: on } })} />
+        <DateRow label={t.reports.lpLowerStart} value={plan.lowerStressJob.startDate} onChange={(v) => patch({ lowerStressJob: { ...plan.lowerStressJob, startDate: v } })} />
+        <DateRow label={t.reports.lpLowerEnd} value={plan.lowerStressJob.endDate} onChange={(v) => patch({ lowerStressJob: { ...plan.lowerStressJob, endDate: v } })} />
+        <NullNum label={t.reports.lpGross} value={plan.lowerStressJob.grossMonthlyIncome} money onCommit={(n) => patch({ lowerStressJob: { ...plan.lowerStressJob, grossMonthlyIncome: n } })} />
+        <NullNum label={t.reports.lpNetOverride} value={plan.lowerStressJob.estimatedNetMonthlyIncomeOverride} money onCommit={(n) => patch({ lowerStressJob: { ...plan.lowerStressJob, estimatedNetMonthlyIncomeOverride: n } })} />
+        <NullNum label={t.reports.lpLowerLive} value={plan.lowerStressJob.monthlyLivingCost} money onCommit={(n) => patch({ lowerStressJob: { ...plan.lowerStressJob, monthlyLivingCost: n } })} />
+      </Fold>
+    </>
   );
 }
 

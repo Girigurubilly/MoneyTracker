@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { Disclaimer, ScreenHeader, SectionLabel } from "@/components/shared";
 import { LifeYearList } from "@/components/life-year-list";
+import { LifePlanJobs } from "@/components/life-plan-setup";
 import { SharedRetirementStrip, useLifePlanResult } from "@/components/reports-retire";
 import { money } from "@/lib/format";
 import { emptyLifePlan, type LifePathId, type LifePathResult } from "@/lib/calc/life-plan";
@@ -24,6 +25,7 @@ export function EarlyRetirementPlanPage() {
       <ScreenHeader title={t.reports.lpTitle} backTo="/reports/retirement" />
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.lpHint}</p>
       <SharedRetirementStrip />
+      <LifePlanJobs />
       <Link to="/reports/retirement" className="mx-4 mb-3 flex min-h-11 items-center rounded-2xl bg-elevated px-4 text-sm">
         {t.reports.assumptionsOne}
       </Link>
