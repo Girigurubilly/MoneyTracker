@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { Area, AreaChart, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { Hairline, InfoButton, ProgressRing, ScreenHeader, SectionLabel, StatusChip } from "@/components/shared";
 import { LifeYearList } from "@/components/life-year-list";
+import { LifePlanSetup } from "@/components/life-plan-setup";
 import { money, todayISO } from "@/lib/format";
 import { downloadBlob } from "@/lib/backup";
 import { toHkd } from "@/lib/calc/fx";
@@ -394,6 +395,9 @@ export function RetirementPage() {
             <div className={cn("mt-0.5 text-sm font-semibold tabular-nums", surplus >= 0 ? "text-income" : "text-expense")}>{money(surplus, "HKD", { sign: true })}</div>
           </div>
         </div>
+        <p className="mt-2 text-[11px] leading-4 text-muted">
+          {t.reports.surplusHint.replace("{plan}", money(room.planned, "HKD")).replace("{ok}", money(room.sustainable, "HKD"))}
+        </p>
         <div className="mt-2 flex items-center justify-between text-xs text-muted">
           <span>{t.reports.avgSave12}: {money(avg.monthlySave, "HKD")}</span>
           <StatusChip status={status} />
@@ -548,6 +552,8 @@ export function RetirementPage() {
             <Hairline />
             <NumRow label={t.reports.laterLifeAge} value={base.laterLifeAge ?? 75} onCommit={(n) => persist({ laterLifeAge: n })} />
           </FoldBlock>
+
+          <LifePlanSetup />
 
       <SectionLabel>{t.reports.propertiesOwned}</SectionLabel>
       <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">

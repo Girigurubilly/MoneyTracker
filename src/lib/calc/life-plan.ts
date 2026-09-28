@@ -548,59 +548,60 @@ export function runLifePlan(
   return { ready: true, missing: [], stay, switch: sw };
 }
 
-/** Flat retirement living cost, in today's HKD, that the stay path can still carry. */
+/** How much retirement spending can rise, or must fall, and still last. Stages keep their own ages. */
 export function lifePlanMonthlyRoom(
   plan: RetirementLifePlan,
   asOf = new Date().toISOString().slice(0, 10),
   inflows?: LifePlanInflows,
 ): { planned: number; sustainable: number; surplus: number } {
   const stay = runLifePlan(plan, asOf, inflows).stay;
-  if (!stay) return { planned: 0, sustainable: 0, surplus: 0 };
+  if (!stay || stay.retireAge == null) return { planned: 0, sustainable: 0, surplus: 0 };
   const retireAge = stay.retireAge;
   const planned = stay.years.find((y) => y.age >= retireAge)?.livingMonthlyToday ?? 0;
   const target = n(plan.personal.targetTerminalFinancialAssets);
-  const ok = (monthly: number) => {
-    const trial = runLifePlan(withRetirementSpend(plan, retireAge, monthly), asOf, inflows).stay;
+  const meets = (delta: number) => {
+    const trial = runLifePlan(shiftRetirementSpend(plan, retireAge, delta), asOf, inflows).stay;
     if (!trial || trial.depletes) return false;
     return trial.terminalAssets + 1 >= target;
   };
-  if (!ok(0)) return { planned, sustainable: 0, surplus: -planned };
-  let lo = 0;
-  let hi = Math.max(planned * 2, 10_000);
-  for (let i = 0; i < 14 && ok(hi) && hi < 2_000_000; i++) hi *= 2;
-  for (let i = 0; i < 24; i++) {
+  if (meets(0)) {
+    let lo = 0;
+    let hi = Math.max(planned, 5_000);
+    for (let i = 0; i < 12 && meets(hi) && hi < 1_000_000; i++) hi *= 2;
+    for (let i = 0; i < 22; i++) {
+      const mid = (lo + hi) / 2;
+      if (meets(mid)) lo = mid;
+      else hi = mid;
+    }
+    const surplus = Math.round(lo);
+    return { planned, sustainable: Math.round(planned + surplus), surplus };
+  }
+  const floor = -Math.max(planned, 1);
+  if (!meets(floor)) return { planned, sustainable: 0, surplus: -Math.round(planned) };
+  let lo = floor;
+  let hi = 0;
+  for (let i = 0; i < 22; i++) {
     const mid = (lo + hi) / 2;
-    if (ok(mid)) lo = mid;
+    if (meets(mid)) lo = mid;
     else hi = mid;
   }
-  const sustainable = Math.round(lo);
-  return { planned, sustainable, surplus: sustainable - Math.round(planned) };
+  const surplus = Math.round(lo);
+  return { planned, sustainable: Math.max(0, Math.round(planned + surplus)), surplus };
 }
 
-function withRetirementSpend(plan: RetirementLifePlan, retireAge: number, monthly: number): RetirementLifePlan {
-  const end = plan.personal.planEndAge ?? 120;
+function shiftRetirementSpend(plan: RetirementLifePlan, retireAge: number, delta: number): RetirementLifePlan {
   const stages = plan.spendingStages.flatMap((s) => {
-    const start = s.startAge ?? 0;
-    const stop = s.endAge ?? 200;
+    if (s.monthlyLivingCostInTodayMoney == null || s.startAge == null || s.endAge == null) return [s];
+    const start = Math.min(s.startAge, s.endAge);
+    const stop = Math.max(s.startAge, s.endAge);
+    const bumped = { ...s, monthlyLivingCostInTodayMoney: Math.max(0, s.monthlyLivingCostInTodayMoney + delta) };
     if (stop < retireAge) return [s];
-    if (start >= retireAge) return [{ ...s, monthlyLivingCostInTodayMoney: monthly }];
+    if (start >= retireAge) return [bumped];
     return [
       { ...s, endAge: retireAge - 1 },
-      { ...s, id: `${s.id}-room`, startAge: retireAge, monthlyLivingCostInTodayMoney: monthly },
+      { ...bumped, id: `${s.id}-shift`, startAge: retireAge },
     ];
   });
-  if (!stages.some((s) => (s.startAge ?? 0) >= retireAge && s.monthlyLivingCostInTodayMoney != null)) {
-    stages.push({
-      id: "room",
-      label: "",
-      startAge: retireAge,
-      endAge: end,
-      monthlyLivingCostInTodayMoney: monthly,
-      followsInflation: true,
-      isEssential: true,
-      notes: "",
-    });
-  }
   return { ...plan, spendingStages: stages };
 }
 
