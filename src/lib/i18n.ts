@@ -306,6 +306,7 @@ export const messages = {
       bookUs: "US stocks",
       bookAll: "All holdings",
       bookValue: "Market value",
+      exportAiHint: "A markdown snapshot of every holding: market value in HKD, currency mix, concentration, cost and whether the price is from today. Copy it into an LLM.",
     },
     reports: {
       title: "Reports",
@@ -1331,6 +1332,7 @@ export const messages = {
       bookUs: "美股持股",
       bookAll: "全部持股",
       bookValue: "市值",
+      exportAiHint: "全部持股嘅 Markdown：港元市值、貨幣分佈、集中度、成本，同市價係咪今日。複製去 LLM 分析。",
     },
     reports: {
       title: "報表",

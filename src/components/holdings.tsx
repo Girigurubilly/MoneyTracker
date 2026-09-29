@@ -1,10 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownAZ, ArrowUpAZ, Pencil, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Group, Hairline, Overlay, ScreenHeader } from "@/components/shared";
 import { money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { bookAccountId, holdingMarketValue, holdingTitle, applyListing, defaultListingCurrency, listingOf, sortHoldingsBySymbol, type HoldingListing } from "@/lib/holdings";
+import { buildHoldingsBrief, renderHoldingsBriefMarkdown } from "@/lib/calc/holdings-brief";
+import { copyPlainText, sharePlainText } from "@/lib/copy-text";
+import { downloadBlob } from "@/lib/backup";
 import type { Currency, Holding } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -32,6 +35,7 @@ export function HoldingsPage() {
   const [filter, setFilter] = useState<BookFilter>("both");
   const [editing, setEditing] = useState<Holding | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [ai, setAi] = useState(false);
   const invest = accounts.filter((a) => a.type === "investment" && !a.hidden);
 
   useEffect(() => {
@@ -179,6 +183,15 @@ export function HoldingsPage() {
 
       <button
         type="button"
+        className="mx-4 mt-2 flex h-11 w-[calc(100%-2rem)] items-center justify-center rounded-xl bg-elevated text-sm font-medium"
+        onClick={() => setAi(true)}
+      >
+        {t.reports.exportBrief}
+      </button>
+      {ai ? <HoldingsBriefSheet onClose={() => setAi(false)} /> : null}
+
+      <button
+        type="button"
         className="mx-4 mt-3 flex h-11 w-[calc(100%-2rem)] items-center justify-center gap-1.5 rounded-xl bg-elevated text-sm"
         onClick={() => setShowAdd((v) => !v)}
       >
@@ -282,6 +295,44 @@ export function HoldingsPage() {
       </div>
       {editing ? <HoldingEditor holding={editing} onClose={() => setEditing(null)} /> : null}
     </div>
+  );
+}
+
+function HoldingsBriefSheet({ onClose }: { onClose: () => void }) {
+  const t = useT();
+  const holdings = useApp((s) => s.holdings);
+  const accounts = useApp((s) => s.accounts);
+  const rates = useApp((s) => s.fxRates);
+  const markdown = useMemo(
+    () => renderHoldingsBriefMarkdown(buildHoldingsBrief({ today: todayISO(), holdings, accounts, rates })),
+    [holdings, accounts, rates],
+  );
+  async function copy() {
+    if (await copyPlainText(markdown)) {
+      toast(t.assets.copied);
+      return;
+    }
+    const shared = await sharePlainText(markdown, t.reports.exportBrief);
+    if (shared === "shared" || shared === "aborted") return;
+    toast(t.assets.copyFailed);
+  }
+  return (
+    <Overlay open onClose={onClose} title={t.reports.exportBrief} variant="page">
+      <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.holdings.exportAiHint}</p>
+      <div className="mx-4 mb-3 grid grid-cols-2 gap-2">
+        <button type="button" className="h-11 rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={() => void copy()}>
+          {t.assets.copyBrief}
+        </button>
+        <button
+          type="button"
+          className="h-11 rounded-xl bg-elevated text-sm font-medium"
+          onClick={() => downloadBlob(`hk-life-holdings-${todayISO()}.md`, markdown, "text/markdown")}
+        >
+          {t.assets.downloadBrief}
+        </button>
+      </div>
+      <pre className="mx-4 mb-8 max-h-[70dvh] select-text overflow-auto whitespace-pre-wrap rounded-2xl bg-elevated p-4 text-[11px] leading-4 text-muted">{markdown}</pre>
+    </Overlay>
   );
 }
 
