@@ -1,8 +1,8 @@
 const FILE_NAME = "hk-life-money.backup.json";
 const FOLDER_NAME = "HK Life Money";
+export const MAX_DRIVE_BACKUPS = 3;
 const SCOPE = "https://www.googleapis.com/auth/drive.file";
 const CLIENT_KEY = "hk-life-money-google-client-id";
-const FILE_ID_KEY = "hk-life-money-drive-file-id";
 const FOLDER_ID_KEY = "hk-life-money-drive-folder-id";
 const ACTION_KEY = "hk-life-money-drive-action";
 const TOKEN_KEY = "hk-life-money-drive-token";
@@ -10,6 +10,35 @@ const TOKEN_EXP_KEY = "hk-life-money-drive-token-exp";
 const GRANTED_KEY = "hk-life-money-drive-granted";
 
 export type DriveAction = "save" | "restore" | "sync";
+
+export type DriveBackupRef = { id: string; name: string; modifiedTime: string };
+
+export function isDriveBackupName(name: string): boolean {
+  return name === FILE_NAME || /^hk-life-money-\d{8}-\d{6}\.backup\.json$/.test(name);
+}
+
+export function driveBackupName(at = new Date()): string {
+  const iso = at.toISOString();
+  const day = iso.slice(0, 10).replace(/-/g, "");
+  const time = iso.slice(11, 19).replace(/:/g, "");
+  return `hk-life-money-${day}-${time}.backup.json`;
+}
+
+/** Fewer than 3: create another copy. Otherwise overwrite the oldest, and drop any extras. */
+export function planDriveBackups(files: DriveBackupRef[], max = MAX_DRIVE_BACKUPS): { replaceId?: string; trashIds: string[] } {
+  const sorted = [...files].sort((a, b) => a.modifiedTime.localeCompare(b.modifiedTime) || a.id.localeCompare(b.id));
+  if (sorted.length < max) return { trashIds: [] };
+  const keep = new Set(sorted.slice(-(max - 1)).map((f) => f.id));
+  const oldest = sorted[0];
+  return {
+    replaceId: oldest.id,
+    trashIds: sorted.filter((f) => f.id !== oldest.id && !keep.has(f.id)).map((f) => f.id),
+  };
+}
+
+export function newestDriveBackup(files: DriveBackupRef[]): DriveBackupRef | undefined {
+  return [...files].sort((a, b) => b.modifiedTime.localeCompare(a.modifiedTime) || b.id.localeCompare(a.id))[0];
+}
 
 export function readGoogleClientId(): string {
   try {
@@ -262,38 +291,40 @@ async function ensureFolder(token: string): Promise<string> {
   return folder.id;
 }
 
-export async function findBackupFileId(token: string): Promise<string> {
-  const known = readStored(FILE_ID_KEY);
-  if (known) return known;
+export async function listDriveBackups(token: string): Promise<DriveBackupRef[]> {
   const folder = await ensureFolder(token);
-  const q = encodeURIComponent(`name='${FILE_NAME}' and '${folder}' in parents and trashed=false`);
-  const res = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&pageSize=1`, token);
-  const data = (await res.json()) as { files?: { id: string }[] };
-  const id = data.files?.[0]?.id ?? "";
-  if (id) writeStored(FILE_ID_KEY, id);
-  return id;
+  const q = encodeURIComponent(`'${folder}' in parents and trashed=false and name contains 'hk-life-money' and name contains '.backup.json'`);
+  const res = await driveFetch(
+    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&pageSize=20`,
+    token,
+  );
+  const data = (await res.json()) as { files?: { id: string; name: string; modifiedTime?: string }[] };
+  return (data.files ?? [])
+    .filter((f) => f.id && isDriveBackupName(f.name))
+    .map((f) => ({ id: f.id, name: f.name, modifiedTime: f.modifiedTime ?? "" }));
+}
+
+async function deleteDriveFile(token: string, id: string) {
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (res.status === 401) {
+    clearAccessToken();
+    throw new Error("auth");
+  }
+  if (!res.ok && res.status !== 404) throw new Error(`drive ${res.status}`);
 }
 
 export async function backupModifiedAt(token: string): Promise<string | undefined> {
-  const id = await findBackupFileId(token);
-  if (!id) return undefined;
-  try {
-    const res = await driveFetch(`https://www.googleapis.com/drive/v3/files/${id}?fields=modifiedTime`, token);
-    const data = (await res.json()) as { modifiedTime?: string };
-    return data.modifiedTime;
-  } catch (err) {
-    if ((err as Error).message === "missing") {
-      writeStored(FILE_ID_KEY, "");
-      return undefined;
-    }
-    throw err;
-  }
+  const newest = newestDriveBackup(await listDriveBackups(token));
+  return newest?.modifiedTime || undefined;
 }
 
-async function uploadTo(token: string, body: string, existing: string, folder: string | undefined) {
+async function uploadTo(token: string, body: string, existing: string, folder: string | undefined, name: string) {
   const meta = existing
-    ? { name: FILE_NAME, mimeType: "application/json" }
-    : { name: FILE_NAME, mimeType: "application/json", parents: folder ? [folder] : undefined };
+    ? { name, mimeType: "application/json" }
+    : { name, mimeType: "application/json", parents: folder ? [folder] : undefined };
   const form = new FormData();
   form.append("metadata", new Blob([JSON.stringify(meta)], { type: "application/json" }));
   form.append("file", new Blob([body], { type: "application/json" }));
@@ -311,36 +342,28 @@ async function uploadTo(token: string, body: string, existing: string, folder: s
   }
   if (res.status === 404) throw new Error("missing");
   if (!res.ok) throw new Error(`drive ${res.status}`);
-  if (!existing) {
-    const created = (await res.json()) as { id?: string };
-    if (created.id) writeStored(FILE_ID_KEY, created.id);
-  }
 }
 
 export async function uploadBackup(token: string, body: string): Promise<void> {
-  const existing = readStored(FILE_ID_KEY);
-  if (existing) {
+  const folder = await ensureFolder(token);
+  const files = await listDriveBackups(token);
+  const plan = planDriveBackups(files);
+  for (const id of plan.trashIds) await deleteDriveFile(token, id);
+  const name = driveBackupName();
+  if (plan.replaceId) {
     try {
-      await uploadTo(token, body, existing, undefined);
+      await uploadTo(token, body, plan.replaceId, undefined, name);
       return;
     } catch (err) {
       if ((err as Error).message !== "missing") throw err;
-      writeStored(FILE_ID_KEY, "");
     }
   }
-  const folder = await ensureFolder(token);
-  const found = await findBackupFileId(token);
-  await uploadTo(token, body, found, found ? undefined : folder);
+  await uploadTo(token, body, "", folder, name);
 }
 
 export async function downloadBackup(token: string): Promise<string> {
-  const id = await findBackupFileId(token);
-  if (!id) throw new Error("missing");
-  try {
-    const res = await driveFetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`, token);
-    return res.text();
-  } catch (err) {
-    if ((err as Error).message === "missing") writeStored(FILE_ID_KEY, "");
-    throw err;
-  }
+  const newest = newestDriveBackup(await listDriveBackups(token));
+  if (!newest) throw new Error("missing");
+  const res = await driveFetch(`https://www.googleapis.com/drive/v3/files/${newest.id}?alt=media`, token);
+  return res.text();
 }
