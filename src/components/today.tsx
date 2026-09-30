@@ -251,6 +251,7 @@ type ScheduleRowModel = {
   meta: string;
   amount: number;
   currency: MoneyUnit;
+  tone: "income" | "expense" | "plain";
   to?: "/budget" | "/more/adhoc";
   txId?: string;
 };
@@ -288,6 +289,7 @@ function monthSchedule(opts: {
       meta: `${dayLabel(day, opts.locale)} · ${opts.regularLabel}`,
       amount,
       currency: r.currency,
+      tone: r.type === "income" ? "income" : spend ? "expense" : "plain",
       to: "/budget",
     });
   }
@@ -305,6 +307,7 @@ function monthSchedule(opts: {
       meta: `${dayLabel(day, opts.locale)} · ${opts.adhocLabel}`,
       amount: -Math.abs(a.amount),
       currency: a.currency,
+      tone: "expense",
       to: "/more/adhoc",
     });
   }
@@ -322,6 +325,7 @@ function monthSchedule(opts: {
       meta: `${dayLabel(day, opts.locale)} · ${opts.plannedLabel}`,
       amount,
       currency: tx.currency,
+      tone: tx.type === "income" ? "income" : spend ? "expense" : "plain",
       txId: tx.id,
     });
   }
@@ -337,7 +341,13 @@ function ScheduleRow({ row, onTx }: { row: ScheduleRowModel; onTx: (id: string) 
         <div className="break-words text-sm font-medium">{row.title}</div>
         <div className="truncate text-xs text-muted">{row.meta}</div>
       </div>
-      <AmountWithHkd amount={row.amount} currency={row.currency} rates={rates} sign className="text-sm font-semibold" />
+      <AmountWithHkd
+        amount={row.amount}
+        currency={row.currency}
+        rates={rates}
+        sign
+        className={cn("text-sm font-semibold", row.tone === "expense" ? "text-expense" : row.tone === "income" ? "text-income" : undefined)}
+      />
     </>
   );
   const className = "flex w-full items-center gap-3 px-5 py-3 text-left";

@@ -463,7 +463,7 @@ function AdhocBlock({
                 <div className="truncate text-sm font-medium">{pickName(locale, a.label, a.labelZh)}</div>
                 <div className="mt-0.5 text-xs text-muted">{paid ? `${dayPart(a.paidOn ?? today, locale)} · ${t.budget.paidToday}` : dayPart(a.date, locale)}</div>
               </button>
-              <AmountWithHkd amount={-a.amount} currency={a.currency} rates={rates} sign className="text-sm font-semibold" />
+              <AmountWithHkd amount={-a.amount} currency={a.currency} rates={rates} sign className="text-sm font-semibold text-expense" />
               {upcoming ? (
                 <button
                   type="button"

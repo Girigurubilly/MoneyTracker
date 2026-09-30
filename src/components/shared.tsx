@@ -310,7 +310,7 @@ export function TransactionRow({ tx, onClick, showDate }: { tx: Transaction; onC
       <span
         className={cn(
           "shrink-0",
-          transfer ? "text-muted" : spend ? "text-foreground" : "text-income",
+          transfer ? "text-muted" : spend ? "text-expense" : "text-income",
         )}
       >
         <AmountWithHkd

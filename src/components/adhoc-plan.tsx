@@ -240,7 +240,7 @@ function MonthRows({
                   })()}
                 </div>
               </button>
-              <AmountWithHkd amount={-a.amount} currency={a.currency} rates={rates} sign className="shrink-0 text-sm font-semibold" />
+              <AmountWithHkd amount={-a.amount} currency={a.currency} rates={rates} sign className="shrink-0 text-sm font-semibold text-expense" />
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
             {upcoming ? (
