@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Archive, BookOpen, CalendarClock, FolderTree, Globe, Palette, PiggyBank, Settings2, ShoppingBag, SlidersHorizontal, TrendingUp, Undo2, Upload, Wallet } from "lucide-react";
+import { Archive, BookOpen, CalendarClock, FolderTree, Globe, Palette, PiggyBank, Settings2, ShoppingBag, SlidersHorizontal, TrendingUp, Undo2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
 import { Disclaimer, Group, Hairline, Overlay, Row, ScreenHeader } from "@/components/shared";
@@ -107,9 +107,7 @@ export function MoreScreen() {
         <>
           <h2 className="px-5 pb-1 pt-6 text-sm font-medium text-muted">{t.more.data}</h2>
           <Group>
-            <Row icon={<Upload className="size-4" />} title={t.more.import} to="/more/import" chevron />
-            <Hairline />
-            <Row icon={<Archive className="size-4" />} title={t.more.backup} to="/more/backup" chevron />
+            <Row icon={<Archive className="size-4" />} title={t.more.importBackup} to="/more/backup" chevron />
             <Hairline />
             <Row icon={<Settings2 className="size-4" />} title={t.more.other} to="/more/other" chevron />
           </Group>
@@ -271,42 +269,7 @@ function formatFxSync(iso: string, locale: "en" | "zh-HK"): string {
 }
 
 export function ImportPage() {
-  const t = useT();
-  const replaceAll = useApp((s) => s.replaceAll);
-  const jsonRef = useRef<HTMLInputElement>(null);
-  return (
-    <div className="pb-10">
-      <ScreenHeader title={t.import.title} />
-      <div className="px-5">
-        <button type="button" className="h-12 w-full rounded-xl bg-elevated text-sm" onClick={() => jsonRef.current?.click()}>
-          {t.import.btp}
-        </button>
-        <input
-          ref={jsonRef}
-          type="file"
-          accept="application/json,.json"
-          className="hidden"
-          onChange={async (e) => {
-            const file = e.target.files?.[0];
-            e.target.value = "";
-            if (!file) return;
-            const toastId = toast.loading(t.import.replacing);
-            try {
-              const data: unknown = JSON.parse(await file.text());
-              let snap: AppSnapshot;
-              if (isBtpFile(data)) snap = convertBtp(data);
-              else if (isAppSnapshot(data)) snap = data;
-              else throw new Error("format");
-              await replaceAll(snap);
-              toast.success(`${t.import.btpDone} ${snap.transactions.length}`, { id: toastId });
-            } catch {
-              toast.error(t.import.btpFail, { id: toastId });
-            }
-          }}
-        />
-      </div>
-    </div>
-  );
+  return <BackupPage />;
 }
 
 export function BackupPage() {
@@ -319,6 +282,7 @@ export function BackupPage() {
   const [busy, setBusy] = useState(false);
   const [copies, setCopies] = useState<DriveBackupRef[] | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const importRef = useRef<HTMLInputElement>(null);
 
   function setPass(next: string) {
     setPassword(next);
@@ -488,7 +452,7 @@ export function BackupPage() {
 
   return (
     <div className="pb-10">
-      <ScreenHeader title={t.backup.title} />
+      <ScreenHeader title={t.more.importBackup} />
       <h2 className="px-5 pb-2 text-sm font-medium text-muted">{t.backup.drive}</h2>
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.backup.driveHint}</p>
       <div className="px-5 space-y-3">
@@ -611,6 +575,35 @@ export function BackupPage() {
               toast(t.backup.restored);
             } catch {
               toast(t.backup.badPassword);
+            }
+          }}
+        />
+      </div>
+      <h2 className="px-5 pb-2 pt-6 text-sm font-medium text-muted">{t.import.title}</h2>
+      <div className="px-5">
+        <button type="button" className="h-11 w-full rounded-xl bg-elevated text-sm" onClick={() => importRef.current?.click()}>
+          {t.import.btp}
+        </button>
+        <input
+          ref={importRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (!file) return;
+            const toastId = toast.loading(t.import.replacing);
+            try {
+              const data: unknown = JSON.parse(await file.text());
+              let snap: AppSnapshot;
+              if (isBtpFile(data)) snap = convertBtp(data);
+              else if (isAppSnapshot(data)) snap = data;
+              else throw new Error("format");
+              await replaceAll(snap);
+              toast.success(`${t.import.btpDone} ${snap.transactions.length}`, { id: toastId });
+            } catch {
+              toast.error(t.import.btpFail, { id: toastId });
             }
           }}
         />
