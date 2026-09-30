@@ -115,28 +115,30 @@ export function BudgetScreen() {
           >
             <span className="text-sm text-muted">{t.budget.spent}</span>
             <div className="mt-1 text-3xl font-semibold tabular-nums tracking-tight">{money(monthSpent, "HKD")}</div>
-            <div className="mt-1 text-sm text-muted">
-              {t.budget.expectedMonth}: <span className="font-medium text-foreground tabular-nums">{money(monthUsed, "HKD")}</span>
-              <span className="text-faint"> / {monthCap > 0 ? money(monthCap, "HKD") : "—"}</span>
+            <div className="mt-1 flex flex-wrap items-baseline gap-x-1 text-sm text-muted">
+              <span>{t.budget.expectedMonth}:</span>
+              <span className="font-medium text-foreground tabular-nums">{money(monthUsed, "HKD")}</span>
+              <span className="text-faint">/ {monthCap > 0 ? money(monthCap, "HKD") : "—"}</span>
             </div>
             <p className="mt-1 text-[11px] leading-4 text-faint">{t.budget.linkedYearlyExpense}</p>
           </button>
           <InfoButton k="cap" />
         </div>
-        <div className="mt-3 text-sm font-medium">
-          {t.budget.remaining}: {money(monthRemain, "HKD")}
-          <span className="ml-1 text-xs font-normal text-muted">
-            {daysRemaining > 0 ? ` · ${daysRemaining} ${t.budget.daysLeft}` : ` · ${t.budget.lastDay}`}
+        <div className="mt-3 flex flex-wrap items-baseline gap-x-1 text-sm font-medium">
+          <span>{t.budget.remaining}:</span>
+          <span className="tabular-nums">{money(monthRemain, "HKD")}</span>
+          <span className="text-xs font-normal text-muted">
+            {daysRemaining > 0 ? `· ${daysRemaining} ${t.budget.daysLeft}` : `· ${t.budget.lastDay}`}
           </span>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <div className="rounded-xl bg-accent-soft px-3 py-3">
             <div className="text-[11px] font-medium leading-4 text-accent">{t.budget.dailyAllowed}</div>
-            <div className="mt-1 text-xl font-semibold tabular-nums text-accent">{money(dailyAllowed, "HKD")}</div>
+            <div className="mt-1 text-lg font-semibold leading-tight tabular-nums text-accent">{money(dailyAllowed, "HKD")}</div>
           </div>
           <div className="rounded-xl px-3 py-3 ring-1 ring-line">
             <div className="text-[11px] font-medium leading-4 text-muted">{t.budget.avgDaily}</div>
-            <div className="mt-1 text-xl font-semibold tabular-nums">{money(avgDaily, "HKD")}</div>
+            <div className="mt-1 text-lg font-semibold leading-tight tabular-nums">{money(avgDaily, "HKD")}</div>
           </div>
         </div>
         {monthCap > 0 ? (
@@ -161,20 +163,26 @@ export function BudgetScreen() {
           <ChevronDown className={cn("size-3.5 transition", showBreakdown && "rotate-180")} />
         </button>
         {showBreakdown ? (
-          <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted">
-            <span>
-              {t.budget.spent}: {money(monthSpent, "HKD")}
-            </span>
-            <span>
-              {t.today.reservedRegulars}: {money(reserved + reservedA, "HKD")}
-            </span>
-            <span className="col-span-2">
-              {t.budget.postedRegulars}: {money(realized, "HKD")}
-            </span>
-            <span className="col-span-2">
-              {t.budget.projected}: {money(projected, "HKD")}
-              <span className="text-faint"> · {t.budget.atPace}</span>
-            </span>
+          <div className="mt-2 space-y-1.5 text-xs text-muted">
+            <div className="flex items-baseline justify-between gap-3">
+              <span>{t.budget.spent}</span>
+              <span className="shrink-0 tabular-nums">{money(monthSpent, "HKD")}</span>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <span>{t.today.reservedRegulars}</span>
+              <span className="shrink-0 tabular-nums">{money(reserved + reservedA, "HKD")}</span>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <span>{t.budget.postedRegulars}</span>
+              <span className="shrink-0 tabular-nums">{money(realized, "HKD")}</span>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <span>
+                {t.budget.projected}
+                <span className="text-faint"> · {t.budget.atPace}</span>
+              </span>
+              <span className="shrink-0 tabular-nums">{money(projected, "HKD")}</span>
+            </div>
           </div>
         ) : null}
       </div>
@@ -209,9 +217,9 @@ export function BudgetScreen() {
           <span className="text-sm text-muted">{t.budget.annualTravel}</span>
           <ChevronRight className="size-4 shrink-0 text-faint" />
         </div>
-        <div className="mt-1 text-xl font-semibold tabular-nums">
-          {money(spent, "HKD")}
-          <span className="ml-2 text-sm font-normal text-muted">/ {money(annual, "HKD")}</span>
+        <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
+          <span className="text-xl font-semibold tabular-nums">{money(spent, "HKD")}</span>
+          <span className="text-sm text-muted">/ {money(annual, "HKD")}</span>
         </div>
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ring-track">
           <div
@@ -243,14 +251,14 @@ export function BudgetScreen() {
               setAddOpen(true);
             }}
           >
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-sm">{pickName(locale, b.label, b.labelZh)}</div>
-                <div className="text-xs text-muted">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="break-words text-sm">{pickName(locale, b.label, b.labelZh)}</div>
+                <div className="mt-0.5 break-words text-xs text-muted">
                   {money(b.spent, "HKD")} / {money(b.monthly, "HKD")} · {pct(ratio)} {t.budget.used}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-1.5">
                 <StatusChip status={status} />
                 <ChevronRight className="size-4 text-faint" />
               </div>
@@ -367,7 +375,7 @@ function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recur
     .sort((a, b) => chargedDayOf(a) - chargedDayOf(b) || a.label.localeCompare(b.label));
   return (
     <div className="pt-4">
-      <div className="flex items-center justify-between px-5 pb-1">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-5 pb-1">
         <h2 className="text-sm font-medium text-muted">{t.budget.monthlyRegulars}</h2>
         <button type="button" onClick={onAdd} className="text-sm font-medium text-accent">
           {t.budget.addRegular}
@@ -383,19 +391,32 @@ function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recur
             const charged = day <= today;
             const signed = r.type === "income" ? r.amount : r.type === "expense" || r.countsAsExpense ? -r.amount : r.amount;
             return (
-              <button key={r.id} type="button" className="flex w-full items-center gap-3 border-t border-line px-4 py-3 text-left first:border-0" onClick={() => onEdit(r)}>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{pickName(locale, r.label, r.labelZh)}</div>
-                  <div className="mt-0.5 text-xs text-muted">
-                    {dayPart(day, locale)}
-                    {` · ${r.type === "income" ? t.add.income : r.type === "transfer" ? (r.countsAsExpense ? `${t.add.transfer} · ${t.add.principal}` : t.add.transfer) : t.add.expense}`}
+              <button key={r.id} type="button" className="w-full border-t border-line px-4 py-3 text-left first:border-0" onClick={() => onEdit(r)}>
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="break-words text-sm font-medium">{pickName(locale, r.label, r.labelZh)}</div>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <span className="text-xs text-muted">
+                        {dayPart(day, locale)}
+                        {` · ${r.type === "income" ? t.add.income : r.type === "transfer" ? (r.countsAsExpense ? `${t.add.transfer} · ${t.add.principal}` : t.add.transfer) : t.add.expense}`}
+                      </span>
+                      <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", charged ? "bg-success-soft text-income" : "bg-accent-soft text-accent")}>
+                        {charged ? t.budget.charged : t.budget.upcomingStatus}
+                      </span>
+                    </div>
                   </div>
+                  <AmountWithHkd
+                    amount={signed}
+                    currency={r.currency}
+                    rates={rates}
+                    sign
+                    className={cn(
+                      "shrink-0 text-sm font-semibold",
+                      r.type === "income" ? "text-income" : r.type === "expense" || r.countsAsExpense ? "text-expense" : undefined,
+                    )}
+                  />
+                  <ChevronRight className="mt-0.5 size-4 shrink-0 text-faint" />
                 </div>
-                <AmountWithHkd amount={signed} currency={r.currency} rates={rates} sign className="text-sm font-semibold" />
-                <span className={cn("shrink-0 rounded-full px-2 py-1 text-xs font-medium", charged ? "bg-success-soft text-income" : "bg-accent-soft text-accent")}>
-                  {charged ? t.budget.charged : t.budget.upcomingStatus}
-                </span>
-                <ChevronRight className="size-4 shrink-0 text-faint" />
               </button>
             );
           })}
@@ -438,7 +459,7 @@ function AdhocBlock({
     .sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label));
   return (
     <div className="pt-4">
-      <div className="flex items-center justify-between px-5 pb-1">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-5 pb-1">
         <h2 className="text-sm font-medium text-muted">{t.budget.adhoc}</h2>
         <div className="flex items-center gap-3">
           <Link to="/more/adhoc" className="text-xs font-medium text-accent">
@@ -458,43 +479,39 @@ function AdhocBlock({
             const paid = Boolean(a.paidOn);
             const upcoming = !paid && a.date > today;
             return (
-            <div key={a.id} className="flex w-full flex-wrap items-center gap-2 border-t border-line px-4 py-3 first:border-0">
-              <button type="button" className="min-w-0 flex-1 text-left" onClick={() => onEdit(a)}>
-                <div className="truncate text-sm font-medium">{pickName(locale, a.label, a.labelZh)}</div>
-                <div className="mt-0.5 text-xs text-muted">{paid ? `${dayPart(a.paidOn ?? today, locale)} · ${t.budget.paidToday}` : dayPart(a.date, locale)}</div>
+            <div key={a.id} className="border-t border-line px-4 py-3 first:border-0">
+              <button type="button" className="flex w-full items-start gap-2 text-left" onClick={() => onEdit(a)}>
+                <div className="min-w-0 flex-1">
+                  <div className="break-words text-sm font-medium">{pickName(locale, a.label, a.labelZh)}</div>
+                  <div className="mt-0.5 text-xs text-muted">{paid ? `${dayPart(a.paidOn ?? today, locale)} · ${t.budget.paidToday}` : dayPart(a.date, locale)}</div>
+                </div>
+                <AmountWithHkd amount={-a.amount} currency={a.currency} rates={rates} sign className="shrink-0 text-sm font-semibold text-expense" />
+                <ChevronRight className="mt-0.5 size-4 shrink-0 text-faint" />
               </button>
-              <AmountWithHkd amount={-a.amount} currency={a.currency} rates={rates} sign className="text-sm font-semibold text-expense" />
               {upcoming ? (
-                <button
-                  type="button"
-                  className="h-8 shrink-0 rounded-full bg-accent-soft px-3 text-xs font-medium text-accent"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setPosting(a);
-                  }}
-                >
-                  {t.budget.postAdhoc}
-                </button>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    className="min-h-11 flex-1 rounded-full bg-accent-soft px-3 text-xs font-medium text-accent"
+                    onClick={() => setPosting(a)}
+                  >
+                    {t.budget.postAdhoc}
+                  </button>
+                  <button
+                    type="button"
+                    className="min-h-11 flex-1 rounded-full bg-background px-3 text-xs font-medium"
+                    onClick={async () => {
+                      await addWish(wishFromAdhoc(a, locale));
+                      await delAdhoc(a.id);
+                      toast(t.budget.toWishlistDone);
+                    }}
+                  >
+                    {t.budget.toWishlist}
+                  </button>
+                </div>
               ) : (
-                <span className="shrink-0 rounded-full bg-success-soft px-2 py-1 text-xs font-medium text-income">{paid ? t.budget.paidToday : t.budget.charged}</span>
+                <span className="mt-2 inline-flex rounded-full bg-success-soft px-2 py-1 text-xs font-medium text-income">{paid ? t.budget.paidToday : t.budget.charged}</span>
               )}
-              {upcoming ? (
-                <button
-                  type="button"
-                  className="h-8 shrink-0 rounded-full bg-elevated px-3 text-xs font-medium"
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    await addWish(wishFromAdhoc(a, locale));
-                    await delAdhoc(a.id);
-                    toast(t.budget.toWishlistDone);
-                  }}
-                >
-                  {t.budget.toWishlist}
-                </button>
-              ) : null}
-              <button type="button" aria-label={t.common.edit} onClick={() => onEdit(a)}>
-                <ChevronRight className="size-4 shrink-0 text-faint" />
-              </button>
             </div>
             );
           })}
