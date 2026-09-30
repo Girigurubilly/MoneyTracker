@@ -46,8 +46,9 @@ export function BudgetScreen() {
   const annual = useApp((s) => s.annualTravelBudget);
   const updateBudget = useApp((s) => s.updateBudget);
   const deleteBudget = useApp((s) => s.deleteBudget);
-  const month = monthKey();
-  const asOf = asOfForMonth(month, todayISO());
+  const today = todayISO();
+  const month = monthKey(today);
+  const asOf = asOfForMonth(month, today);
   const actuals = budgetActuals(budgets, txs, month, rates, categories, recurring, asOf, adhocRows, targetMode);
   const storedTotal = actuals.find((b) => b.id === MONTH_TOTAL_BUDGET_ID);
   const monthSpent = storedTotal?.spent ?? 0;

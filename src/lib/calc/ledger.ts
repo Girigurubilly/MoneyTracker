@@ -102,6 +102,8 @@ export function inMonth(iso: string, month: string): boolean {
   return iso.startsWith(month);
 }
 
-export function monthKey(iso = new Date().toISOString()): string {
-  return iso.slice(0, 7);
+export function monthKey(iso?: string): string {
+  if (iso) return iso.slice(0, 7);
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }

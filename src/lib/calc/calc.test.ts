@@ -17,6 +17,7 @@ import { MONTH_TOTAL_BUDGET_ID } from "../types.ts";
 import type { AdhocBudget, Budget, Category, Recurring, Transaction } from "../types.ts";
 import { monthlyLivingEssentials, monthlyHousingCost, isPrincipalRegular, housingRegularRows, housingMonthLines, projection12 } from "./housing.ts";
 import { todayISO } from "../format.ts";
+import { monthKey } from "./ledger.ts";
 import { periodCategoryTotals, periodCategoryTxs, periodRange, yearCategoryCompare, yearCompareRanges } from "./period.ts";
 import { periodNetWorthPoints } from "./networth.ts";
 import { runRetirement, sustainableMonthly } from "./retirement.ts";
@@ -537,5 +538,15 @@ describe("sustainable monthly", () => {
     assert.equal(trial.depletes, false);
     const last = trial.series[trial.series.length - 1]?.corpus ?? 0;
     assert.ok(last >= 0);
+  });
+});
+
+describe("monthKey", () => {
+  it("uses the local calendar month, not the UTC date", () => {
+    const d = new Date();
+    const local = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    assert.equal(monthKey(), local);
+    assert.equal(monthKey(todayISO()), local);
+    assert.equal(monthKey("2026-10-01"), "2026-10");
   });
 });
