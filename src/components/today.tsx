@@ -100,6 +100,7 @@ function TodayBody() {
   const monthKey = selected.slice(0, 7);
   const schedule = monthSchedule({
     monthKey,
+    today,
     recurring,
     adhoc,
     planned: transactions.filter((x) => x.planned && x.type !== "miles" && x.date.startsWith(monthKey) && !x.recurringId),
@@ -256,6 +257,7 @@ type ScheduleRowModel = {
 
 function monthSchedule(opts: {
   monthKey: string;
+  today: string;
   recurring: Recurring[];
   adhoc: AdhocBudget[];
   planned: Transaction[];
@@ -264,16 +266,24 @@ function monthSchedule(opts: {
   adhocLabel: string;
   plannedLabel: string;
 }): ScheduleRowModel[] {
+  const thisMonth = opts.today.slice(0, 7);
+  if (opts.monthKey < thisMonth) return [];
+  const future = opts.monthKey > thisMonth;
+  const open = (iso: string) => future || iso >= opts.today;
   const rows: ScheduleRowModel[] = [];
   for (const r of opts.recurring) {
-    if (r.frequency !== "monthly" || r.type === "miles") continue;
-    const day = chargedDayOf(r);
+    if (r.type === "miles") continue;
+    const monthly = r.frequency === "monthly";
+    const day = monthly ? chargedDayOf(r) : Number(r.nextDate.slice(8, 10)) || 1;
+    const iso = monthly ? chargedIso(opts.monthKey, day) : r.nextDate;
+    if (!monthly && !iso.startsWith(opts.monthKey)) continue;
+    if (!open(iso)) continue;
     const spend = r.type === "expense" || Boolean(r.countsAsExpense);
     const amount = r.type === "income" ? r.amount : spend ? -r.amount : r.amount;
     rows.push({
       id: `r-${r.id}`,
       day,
-      iso: chargedIso(opts.monthKey, day),
+      iso,
       title: pickName(opts.locale, r.label, r.labelZh),
       meta: `${dayLabel(day, opts.locale)} · ${opts.regularLabel}`,
       amount,
@@ -285,10 +295,12 @@ function monthSchedule(opts: {
     if (a.paidOn) continue;
     if (a.month !== opts.monthKey && !a.date.startsWith(opts.monthKey)) continue;
     const day = Number(a.date.slice(8, 10)) || 1;
+    const iso = a.date.startsWith(opts.monthKey) ? a.date : chargedIso(opts.monthKey, day);
+    if (!open(iso)) continue;
     rows.push({
       id: `a-${a.id}`,
       day,
-      iso: a.date.startsWith(opts.monthKey) ? a.date : chargedIso(opts.monthKey, day),
+      iso,
       title: pickName(opts.locale, a.label, a.labelZh),
       meta: `${dayLabel(day, opts.locale)} · ${opts.adhocLabel}`,
       amount: -Math.abs(a.amount),
@@ -297,6 +309,7 @@ function monthSchedule(opts: {
     });
   }
   for (const tx of opts.planned) {
+    if (!open(tx.date)) continue;
     const day = Number(tx.date.slice(8, 10)) || 1;
     const spend = tx.type === "expense" || Boolean(tx.countsAsExpense);
     const transfer = tx.type === "transfer" && !tx.countsAsExpense;
