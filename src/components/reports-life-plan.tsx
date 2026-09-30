@@ -23,6 +23,7 @@ export function EarlyRetirementPlanPage() {
   return (
     <div className="pb-10">
       <ScreenHeader title={t.reports.lpTitle} backTo="/reports/retirement" />
+      <p className="px-5 pb-1 text-xs leading-5 text-muted">{t.reports.lpStartNote}</p>
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.lpHint}</p>
       <SharedRetirementStrip />
       <LifePlanJobs />

@@ -51,7 +51,7 @@ function Setup({
   const stages = plan.spendingStages.filter((s) => !isPlaceholderStage(s));
   return (
     <div className="mt-3 space-y-2">
-      <Fold title={t.reports.lpPersonal} open>
+      <Fold title={t.reports.lpPersonal} hint={t.reports.lpHintPersonal}>
         <NullNum label={t.reports.lpDwz} value={plan.personal.targetTerminalFinancialAssets} money onCommit={(n) => patch({ personal: { ...plan.personal, targetTerminalFinancialAssets: n } })} />
       </Fold>
       <Fold title={t.reports.lpStages}>
@@ -79,11 +79,11 @@ function Setup({
           {t.reports.lpAddStage}
         </button>
       </Fold>
-      <Fold title={t.reports.lpMortgage}>
+      <Fold title={t.reports.lpMortgage} hint={t.reports.lpHintMortgage}>
         <Toggle label={t.reports.lpEnabled} on={plan.mortgage.enabled} onChange={(on) => patch({ mortgage: { ...plan.mortgage, enabled: on } })} />
         <p className="px-4 pb-3 text-[11px] leading-4 text-muted">{t.reports.lpMortgageRule}</p>
       </Fold>
-      <Fold title={t.reports.lpInherit}>
+      <Fold title={t.reports.lpInherit} hint={t.reports.lpHintInherit}>
         <Toggle label={t.reports.lpEnabled} on={plan.inheritedProperty.enabled} onChange={(on) => patch({ inheritedProperty: { ...plan.inheritedProperty, enabled: on } })} />
         <NullNum label={t.reports.lpInheritValue} value={plan.inheritedProperty.expectedValue} money onCommit={(n) => patch({ inheritedProperty: { ...plan.inheritedProperty, expectedValue: n } })} />
         <DateRow label={t.reports.lpInheritDate} value={plan.inheritedProperty.expectedDate} onChange={(v) => patch({ inheritedProperty: { ...plan.inheritedProperty, expectedDate: v } })} />
@@ -117,14 +117,14 @@ function Setup({
           </>
         ) : null}
       </Fold>
-      <Fold title={t.reports.lpAnnuity}>
+      <Fold title={t.reports.lpAnnuity} hint={t.reports.lpHintAnnuity}>
         <Toggle label={t.reports.lpEnabled} on={plan.publicAnnuity.enabled} onChange={(on) => patch({ publicAnnuity: { ...plan.publicAnnuity, enabled: on } })} />
         <NullNum label={t.reports.lpAnnuityAmt} value={plan.publicAnnuity.purchaseAmount} money onCommit={(n) => patch({ publicAnnuity: { ...plan.publicAnnuity, purchaseAmount: n } })} />
         <Toggle label={t.reports.lpAnnuityFromSale} on={plan.publicAnnuity.useInheritedSaleProceeds} onChange={(on) => patch({ publicAnnuity: { ...plan.publicAnnuity, useInheritedSaleProceeds: on } })} />
         <NullNum label={t.reports.lpAnnuityPay} value={plan.publicAnnuity.monthlyPayout} money onCommit={(n) => patch({ publicAnnuity: { ...plan.publicAnnuity, monthlyPayout: n } })} />
         <NullNum label={t.reports.lpAnnuityStart} value={plan.publicAnnuity.payoutStartAge} onCommit={(n) => patch({ publicAnnuity: { ...plan.publicAnnuity, payoutStartAge: n } })} />
       </Fold>
-      <Fold title={t.reports.lpReverse}>
+      <Fold title={t.reports.lpReverse} hint={t.reports.lpHintReverse}>
         <Toggle label={t.reports.lpEnabled} on={plan.reverseMortgage.enabled} onChange={(on) => patch({ reverseMortgage: { ...plan.reverseMortgage, enabled: on } })} />
         <NullNum label={t.reports.lpReverseAge} value={plan.reverseMortgage.startAge} onCommit={(n) => patch({ reverseMortgage: { ...plan.reverseMortgage, startAge: n } })} />
         <NullNum label={t.reports.lpReversePay} value={plan.reverseMortgage.monthlyPayout} money onCommit={(n) => patch({ reverseMortgage: { ...plan.reverseMortgage, monthlyPayout: n } })} />
@@ -169,13 +169,16 @@ function blankStage(): LifePlanSpendingStage {
   return { id: newId(), label: "", startAge: null, endAge: null, monthlyLivingCostInTodayMoney: null, followsInflation: true, isEssential: true, notes: "" };
 }
 
-function Fold({ title, children, open = false }: { title: string; children: ReactNode; open?: boolean }) {
+function Fold({ title, hint, children, open = false }: { title: string; hint?: string; children: ReactNode; open?: boolean }) {
   const [on, setOn] = useState(open);
   return (
     <div className="mx-4 overflow-hidden rounded-2xl bg-elevated">
-      <button type="button" className="flex min-h-11 w-full items-center justify-between px-4 text-left" onClick={() => setOn(!on)}>
-        <span className="text-sm font-medium">{title}</span>
-        <ChevronDown className={cn("size-4 text-muted transition", on && "rotate-180")} />
+      <button type="button" className="flex min-h-11 w-full items-center justify-between gap-3 px-4 py-2 text-left" onClick={() => setOn(!on)}>
+        <span className="min-w-0">
+          <span className="block text-sm font-medium">{title}</span>
+          {hint ? <span className="mt-0.5 block text-[11px] font-normal leading-4 text-muted">{hint}</span> : null}
+        </span>
+        <ChevronDown className={cn("size-4 shrink-0 text-muted transition", on && "rotate-180")} />
       </button>
       {on ? <div className="border-t border-line">{children}</div> : null}
     </div>

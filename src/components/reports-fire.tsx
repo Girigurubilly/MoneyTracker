@@ -138,6 +138,7 @@ export function FirePlanPage() {
   return (
     <div className="pb-10">
       <ScreenHeader title={t.reports.firePlan} backTo="/reports/retirement" />
+      <p className="px-5 pb-1 text-xs leading-5 text-muted">{t.reports.fireStartNote}</p>
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.firePlanHint}</p>
       <SharedRetirementStrip />
 

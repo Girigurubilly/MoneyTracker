@@ -489,6 +489,15 @@ export function RetirementPage() {
         {showSetup ? t.reports.hideAssumptions : t.reports.showAssumptions}
         <ChevronDown className={cn("size-4 transition", showSetup && "rotate-180")} />
       </button>
+      <div className="mx-4 mb-3 rounded-2xl bg-elevated px-4 py-3">
+        <div className="text-sm font-medium">{t.reports.setupStart}</div>
+        <ol className="mt-2 list-decimal space-y-1.5 pl-4 text-xs leading-5 text-muted">
+          <li>{t.reports.setupStepAge}</li>
+          <li>{t.reports.setupStepMoney}</li>
+          <li>{t.reports.setupStepSpend}</li>
+          <li>{t.reports.setupStepLater}</li>
+        </ol>
+      </div>
 
       {showSetup ? (
         <>
@@ -527,6 +536,7 @@ export function RetirementPage() {
             <Hairline />
             <NumRow label={t.reports.spendRetired} value={base.targetMonthly} money onCommit={(n) => persist({ targetMonthly: n })} />
           </div>
+          <p className="px-5 py-2 text-[11px] leading-4 text-muted">{t.reports.setupEnough}</p>
 
           <FoldBlock title={t.reports.assumptions}>
             <NumRow label={`${t.reports.inflation} (%)`} value={+(base.inflation * 100).toFixed(2)} onCommit={(n) => persist({ inflation: n / 100 })} />
@@ -554,7 +564,8 @@ export function RetirementPage() {
 
           <LifePlanSetup />
 
-      <SectionLabel>{t.reports.propertiesOwned}</SectionLabel>
+      <SectionLabel>{t.reports.setupAccounts}</SectionLabel>
+      <p className="px-5 pb-2 text-[11px] leading-4 text-muted">{t.reports.setupAccountsHint}</p>
       <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-xl bg-success-soft px-3 py-2">

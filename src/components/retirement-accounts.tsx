@@ -63,6 +63,7 @@ export function RetirementAccountsPage() {
   return (
     <div className="pb-10">
       <ScreenHeader title={t.more.retireAccounts} backTo="/more" />
+      <p className="px-5 pb-1 text-xs leading-5 text-muted">{t.more.raStartNote}</p>
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.more.retireAccountsHint}</p>
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.raOnce}</p>
       <div className="mx-4 mb-3 grid grid-cols-2 gap-2">
