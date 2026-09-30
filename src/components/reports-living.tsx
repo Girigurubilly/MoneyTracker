@@ -180,8 +180,8 @@ export function LivingPage() {
               <SectionLabel>{t.reports.projection12}</SectionLabel>
               <div className="mx-4 space-y-2">
                 {proj.rows.map((r, i) => {
-                  const d = new Date(`${today.slice(0, 7)}-01T00:00:00`);
-                  d.setMonth(d.getMonth() + i);
+                  const [fy, fm] = proj.firstMonth.split("-").map(Number);
+                  const d = new Date(fy, (fm || 1) - 1 + i, 1);
                   const label = locale === "zh-HK" ? `${d.getMonth() + 1}月` : d.toLocaleString("en", { month: "short" });
                   return (
                     <div key={r.n} className="rounded-2xl bg-elevated px-3 py-3">

@@ -15,7 +15,8 @@ import {
 import { convertAmount, parseErApi, parseFrankfurter } from "./fx.ts";
 import { MONTH_TOTAL_BUDGET_ID } from "../types.ts";
 import type { AdhocBudget, Budget, Category, Recurring, Transaction } from "../types.ts";
-import { monthlyLivingEssentials, monthlyHousingCost, isPrincipalRegular, housingRegularRows, housingMonthLines } from "./housing.ts";
+import { monthlyLivingEssentials, monthlyHousingCost, isPrincipalRegular, housingRegularRows, housingMonthLines, projection12 } from "./housing.ts";
+import { todayISO } from "../format.ts";
 import { periodCategoryTotals, periodCategoryTxs, periodRange, yearCategoryCompare, yearCompareRanges } from "./period.ts";
 import { periodNetWorthPoints } from "./networth.ts";
 import { runRetirement, sustainableMonthly } from "./retirement.ts";
@@ -360,6 +361,37 @@ describe("housing monthly cost", () => {
       lines.reduce((s, r) => s + r.amount, 0),
       1590 + 8800 + 5319,
     );
+  });
+});
+
+describe("projection12 payment day", () => {
+  const mortgage = {
+    id: "m",
+    name: "Home",
+    nameZh: "住宅",
+    accountId: "loan",
+    original: 2_000_000,
+    startDate: "2020-01-01",
+    termYears: 25,
+    outstanding: 1_500_000,
+    rate: 0.03,
+    remainingMonths: 200,
+    paymentDay: 1,
+    type: "fixed" as const,
+  };
+  it("keeps this month only when the payment day has not passed", () => {
+    const today = todayISO();
+    const day = Number(today.slice(8, 10));
+    const [y, m] = today.split("-").map(Number);
+    const monthOf = (extra: number) => {
+      const d = new Date(y, (m || 1) - 1 + extra, 1);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    };
+    const onDay = projection12({ ...mortgage, paymentDay: Math.min(28, day) });
+    assert.equal(onDay.firstMonth, monthOf(day <= 28 ? 0 : 1));
+    assert.equal(onDay.rows.length, 12);
+    const early = projection12({ ...mortgage, paymentDay: 1 });
+    assert.equal(early.firstMonth, monthOf(day > 1 ? 1 : 0));
   });
 });
 

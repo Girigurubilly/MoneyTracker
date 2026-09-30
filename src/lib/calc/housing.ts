@@ -243,8 +243,19 @@ export function projection12(m: Mortgage) {
   const today = todayISO();
   const orig = originalPrincipal(m);
   const term = originalTermMonths(m, today);
-  const skip = m.startDate ? monthsBetween(m.startDate, today) : Math.max(0, term - m.remainingMonths);
-  return amortizeFrom(orig, effectiveRate(m), term, skip, 12);
+  let skip = m.startDate ? monthsBetween(m.startDate, today) : Math.max(0, term - m.remainingMonths);
+  const payDay = Math.min(28, Math.max(1, m.paymentDay || 1));
+  const thisMonth = today.slice(0, 7);
+  const started = !m.startDate || m.startDate.slice(0, 7) <= thisMonth;
+  const includeCurrent = !started || Number(today.slice(8, 10)) <= payDay;
+  if (started && !includeCurrent) skip += 1;
+  const shown = amortizeFrom(orig, effectiveRate(m), term, skip, 12);
+  const [y, mo] = thisMonth.split("-").map(Number);
+  const start = new Date(y, (mo || 1) - 1 + (includeCurrent ? 0 : 1), 1);
+  return {
+    ...shown,
+    firstMonth: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`,
+  };
 }
 
 export function linkedProperty(accounts: Account[], m: Mortgage | null): Account | undefined {
