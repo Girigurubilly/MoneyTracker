@@ -257,6 +257,124 @@ export function SharedRetirementStrip() {
   );
 }
 
+function SetupGuide({
+  base,
+  persist,
+  onClose,
+}: {
+  base: RetirementInputs;
+  persist: (p: Partial<RetirementInputs>) => void;
+  onClose: () => void;
+}) {
+  const t = useT();
+  const [step, setStep] = useState(0);
+  const total = 4;
+  const titles = [t.reports.guideWhen, t.reports.guideNow, t.reports.guideAfter, t.reports.guideRates];
+  const bodies = [t.reports.guideWhenBody, t.reports.guideNowBody, t.reports.guideAfterBody, t.reports.guideRatesBody];
+  const last = step >= total;
+  return (
+    <div className="mx-4 mb-3 rounded-2xl bg-elevated p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="text-sm font-medium">{last ? t.reports.guideDone : titles[step]}</div>
+        <button type="button" className="shrink-0 text-xs font-medium text-accent" onClick={onClose}>
+          {t.reports.guideHide}
+        </button>
+      </div>
+      <div className="mt-1 text-[11px] text-muted">
+        {last ? t.reports.guideDoneBody : t.reports.guideOf.replace("{n}", String(step + 1)).replace("{total}", String(total))}
+      </div>
+      {last ? null : <p className="mt-2 text-xs leading-5 text-muted">{bodies[step]}</p>}
+      {last ? (
+        <div className="mt-3 space-y-2">
+          <Link to="/reports/retirement/projection" className="block rounded-xl bg-background px-3 py-3 text-sm">
+            <div className="font-medium">{t.reports.annualProjection}</div>
+            <div className="mt-0.5 text-xs text-muted">{t.reports.guideYearly}</div>
+          </Link>
+          <Link to="/more/retirement-accounts" className="block rounded-xl bg-background px-3 py-3 text-sm">
+            <div className="font-medium">{t.reports.manageRa}</div>
+            <div className="mt-0.5 text-xs text-muted">{t.reports.guideAccounts}</div>
+          </Link>
+          <Link to="/reports/retirement/plan" className="block rounded-xl bg-background px-3 py-3 text-sm">
+            <div className="font-medium">{t.reports.firePlan}</div>
+            <div className="mt-0.5 text-xs text-muted">{t.reports.guideFire}</div>
+          </Link>
+          <Link to="/reports/retirement/early-retirement" className="block rounded-xl bg-background px-3 py-3 text-sm">
+            <div className="font-medium">{t.reports.lpTitle}</div>
+            <div className="mt-0.5 text-xs text-muted">{t.reports.guideEarly}</div>
+          </Link>
+        </div>
+      ) : (
+        <div className="mt-3 overflow-hidden rounded-xl bg-background">
+          {step === 0 ? (
+            <>
+              <label className="flex min-h-11 items-center justify-between gap-3 px-3">
+                <span className="text-sm">{t.reports.birthday}</span>
+                <input
+                  type="date"
+                  value={base.birthday ?? ""}
+                  onChange={(e) => {
+                    const birthday = e.target.value || undefined;
+                    persist({ birthday, currentAge: birthday ? ageFromBirthday(birthday, todayISO()) : base.currentAge });
+                  }}
+                  className="h-11 max-w-[11rem] bg-transparent text-right text-sm outline-none"
+                />
+              </label>
+              <Hairline />
+              {base.birthday ? (
+                <div className="flex min-h-11 items-center justify-between px-3">
+                  <span className="text-sm">{t.reports.currentAge}</span>
+                  <span className="text-sm tabular-nums text-muted">{base.currentAge}</span>
+                </div>
+              ) : (
+                <NumRow label={t.reports.currentAge} value={base.currentAge} onCommit={(n) => persist({ currentAge: n })} />
+              )}
+              <Hairline />
+              <NumRow label={t.reports.retireAge} value={base.retireAge} onCommit={(n) => persist({ retireAge: n })} />
+              <Hairline />
+              <NumRow label={t.reports.deathAge} value={base.deathAge} onCommit={(n) => persist({ deathAge: n })} />
+            </>
+          ) : null}
+          {step === 1 ? (
+            <>
+              <NumRow label={t.reports.salaryNow} value={base.monthlyIncomeNow} money onCommit={(n) => persist({ monthlyIncomeNow: n })} />
+              <Hairline />
+              <NumRow label={t.reports.spendNow} value={base.monthlySpendNow} money onCommit={(n) => persist({ monthlySpendNow: n })} />
+            </>
+          ) : null}
+          {step === 2 ? <NumRow label={t.reports.spendRetired} value={base.targetMonthly} money onCommit={(n) => persist({ targetMonthly: n })} /> : null}
+          {step === 3 ? (
+            <>
+              <NumRow label={`${t.reports.inflation} (%)`} value={+(base.inflation * 100).toFixed(2)} onCommit={(n) => persist({ inflation: n / 100 })} />
+              <Hairline />
+              <NumRow label={`${t.reports.preReturn} (%)`} value={+(base.preReturn * 100).toFixed(2)} onCommit={(n) => persist({ preReturn: n / 100 })} />
+              <Hairline />
+              <NumRow label={`${t.reports.postReturn} (%)`} value={+(base.postReturn * 100).toFixed(2)} onCommit={(n) => persist({ postReturn: n / 100 })} />
+            </>
+          ) : null}
+        </div>
+      )}
+      <div className="mt-3 flex gap-2">
+        {step > 0 ? (
+          <button type="button" className="h-11 flex-1 rounded-xl bg-background text-sm font-medium" onClick={() => setStep((n) => Math.max(0, n - 1))}>
+            {t.reports.guideBack}
+          </button>
+        ) : (
+          <span className="flex-1" />
+        )}
+        {last ? (
+          <button type="button" className="h-11 flex-1 rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={onClose}>
+            {t.reports.guideFinish}
+          </button>
+        ) : (
+          <button type="button" className="h-11 flex-1 rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={() => setStep((n) => n + 1)}>
+            {t.reports.guideNext}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function RetirementPage() {
   const t = useT();
   const locale = useUi((s) => s.locale);
@@ -277,6 +395,7 @@ export function RetirementPage() {
   );
   const [chartPoint, setChartPoint] = useState<{ age: number; corpus: number } | null>(null);
   const [showSetup, setShowSetup] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(!base.birthday);
 
   function exportBrief() {
     const acctName = (id?: string) => {
@@ -359,6 +478,13 @@ export function RetirementPage() {
           </div>
         }
       />
+      {guideOpen ? (
+        <SetupGuide base={base} persist={persist} onClose={() => setGuideOpen(false)} />
+      ) : (
+        <button type="button" className="mx-4 mb-3 flex h-11 w-[calc(100%-2rem)] items-center justify-center rounded-xl bg-elevated text-sm font-medium text-accent" onClick={() => setGuideOpen(true)}>
+          {t.reports.guideOpen}
+        </button>
+      )}
       <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -489,15 +615,6 @@ export function RetirementPage() {
         {showSetup ? t.reports.hideAssumptions : t.reports.showAssumptions}
         <ChevronDown className={cn("size-4 transition", showSetup && "rotate-180")} />
       </button>
-      <div className="mx-4 mb-3 rounded-2xl bg-elevated px-4 py-3">
-        <div className="text-sm font-medium">{t.reports.setupStart}</div>
-        <ol className="mt-2 list-decimal space-y-1.5 pl-4 text-xs leading-5 text-muted">
-          <li>{t.reports.setupStepAge}</li>
-          <li>{t.reports.setupStepMoney}</li>
-          <li>{t.reports.setupStepSpend}</li>
-          <li>{t.reports.setupStepLater}</li>
-        </ol>
-      </div>
 
       {showSetup ? (
         <>
