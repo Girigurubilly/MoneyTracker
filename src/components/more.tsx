@@ -10,12 +10,18 @@ import { downloadBlob, encryptSnapshot } from "@/lib/backup";
 import {
   backupModifiedAt,
   downloadBackup,
+  downloadBackupById,
   getAccessToken,
+  listDriveBackups,
   readGoogleClientId,
+  rememberDrivePick,
   startGoogleSignIn,
+  storedAccessToken,
+  takeDrivePick,
   takePendingDriveAction,
   takeRedirectToken,
   uploadBackup,
+  type DriveBackupRef,
 } from "@/lib/google-drive";
 import { lastDriveSyncAt, localEditedAt, markDailyDriveSync, markLocalEdit, readDrivePass, writeDrivePass, encodeDriveBody, decodeDriveBody } from "@/lib/drive-sync";
 import { pickSyncSide } from "@/lib/sync-side";
@@ -30,6 +36,19 @@ import { ACCESS_MODES, THEME_IDS, THEME_PRESETS, FONT_IDS, FONT_SIZE_IDS, normal
 import { persistPwaIcon, readSavedPwaIcon, resizeImageFile, resizeWallpaperFile } from "@/lib/pwa-icon";
 import { assetUrl } from "@/lib/base";
 import { cn } from "@/lib/utils";
+
+function driveWhen(iso: string, locale: string): string {
+  const d = new Date(iso);
+  if (!iso || Number.isNaN(d.getTime())) return iso || "—";
+  return d.toLocaleString(locale === "zh-HK" ? "zh-HK" : "en-GB", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
 
 export function MoreScreen() {
   const t = useT();
@@ -298,6 +317,7 @@ export function BackupPage() {
   const txs = useApp((s) => s.transactions);
   const [password, setPassword] = useState(readDrivePass());
   const [busy, setBusy] = useState(false);
+  const [copies, setCopies] = useState<DriveBackupRef[] | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function setPass(next: string) {
@@ -326,7 +346,21 @@ export function BackupPage() {
     if (!quiet) toast(t.backup.restored);
   }
 
-  async function runDrive(action: "save" | "restore" | "sync", token: string) {
+  async function refreshCopies(token: string) {
+    const files = await listDriveBackups(token);
+    files.sort((a, b) => b.modifiedTime.localeCompare(a.modifiedTime) || b.id.localeCompare(a.id));
+    setCopies(files);
+  }
+
+  async function restoreFile(token: string, id: string) {
+    const text = await downloadBackupById(token, id);
+    await importPayload(text);
+    markLocalEdit();
+    markDailyDriveSync();
+    await refreshCopies(token);
+  }
+
+  async function runDrive(action: "save" | "restore" | "sync" | "list", token: string) {
     const pass = password.trim() || readDrivePass();
     if (!pass) {
       toast(t.backup.driveNeedPass);
@@ -338,13 +372,23 @@ export function BackupPage() {
       markLocalEdit();
       markDailyDriveSync();
       toast(t.backup.driveSaved);
+      await refreshCopies(token);
+      return;
+    }
+    if (action === "list") {
+      await refreshCopies(token);
       return;
     }
     if (action === "restore") {
-      const text = await downloadBackup(token);
-      await importPayload(text);
-      markLocalEdit();
-      markDailyDriveSync();
+      const picked = takeDrivePick();
+      if (picked) await restoreFile(token, picked);
+      else {
+        const text = await downloadBackup(token);
+        await importPayload(text);
+        markLocalEdit();
+        markDailyDriveSync();
+        await refreshCopies(token);
+      }
       return;
     }
     const remoteIso = await backupModifiedAt(token);
@@ -355,6 +399,7 @@ export function BackupPage() {
       markLocalEdit();
       markDailyDriveSync();
       toast(t.backup.synced);
+      await refreshCopies(token);
       return;
     }
     if (side === "push" || !remoteIso) {
@@ -362,6 +407,7 @@ export function BackupPage() {
       markLocalEdit();
     }
     markDailyDriveSync();
+    await refreshCopies(token);
     toast(t.backup.synced);
   }
 
@@ -375,7 +421,10 @@ export function BackupPage() {
     }
     if (!token) return;
     const action = takePendingDriveAction();
-    if (!action) return;
+    if (!action) {
+      void refreshCopies(token).catch(() => undefined);
+      return;
+    }
     setBusy(true);
     void runDrive(action, token)
       .catch((err) => {
@@ -394,7 +443,15 @@ export function BackupPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function beginDrive(action: "save" | "restore" | "sync") {
+  useEffect(() => {
+    const token = storedAccessToken();
+    if (!token) return;
+    void refreshCopies(token).catch(() => undefined);
+    // load the Drive list when this page already has a session token
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function beginDrive(action: "save" | "restore" | "sync" | "list") {
     if (!readGoogleClientId()) {
       toast(t.backup.driveNeedClient);
       return;
@@ -464,10 +521,54 @@ export function BackupPage() {
           type="button"
           disabled={busy}
           className="h-11 w-full rounded-xl bg-elevated text-sm disabled:opacity-60"
-          onClick={() => beginDrive("restore")}
+          onClick={() => {
+            rememberDrivePick("");
+            void beginDrive("restore");
+          }}
         >
           {t.backup.driveRestore}
         </button>
+        <button
+          type="button"
+          disabled={busy}
+          className="h-11 w-full rounded-xl bg-elevated text-sm disabled:opacity-60"
+          onClick={() => beginDrive("list")}
+        >
+          {t.backup.driveList}
+        </button>
+        {copies ? (
+          <div className="overflow-hidden rounded-2xl bg-elevated">
+            {copies.length ? (
+              copies.map((file, i) => {
+                const when = driveWhen(file.modifiedTime, locale);
+                return (
+                  <div key={file.id} className={i > 0 ? "border-t border-line" : ""}>
+                    <div className="flex items-center justify-between gap-3 px-4 py-3">
+                      <div className="min-w-0">
+                        <div className="text-sm tabular-nums">{when}</div>
+                        {i === 0 ? <div className="text-[11px] text-accent">{t.backup.driveNewest}</div> : null}
+                      </div>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        className="h-9 shrink-0 rounded-lg bg-background px-3 text-xs font-medium disabled:opacity-60"
+                        onClick={() => {
+                          if (!window.confirm(t.backup.driveConfirm.replace("{time}", when))) return;
+                          rememberDrivePick(file.id);
+                          void beginDrive("restore");
+                        }}
+                      >
+                        {t.backup.driveRestoreThis}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="px-4 py-3 text-sm text-muted">{t.backup.driveMissing}</p>
+            )}
+          </div>
+        ) : null}
       </div>
       <h2 className="px-5 pb-2 pt-6 text-sm font-medium text-muted">{locale === "zh-HK" ? "本機檔案" : "This device"}</h2>
       <div className="px-5 space-y-3">

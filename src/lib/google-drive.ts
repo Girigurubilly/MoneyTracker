@@ -5,11 +5,12 @@ const SCOPE = "https://www.googleapis.com/auth/drive.file";
 const CLIENT_KEY = "hk-life-money-google-client-id";
 const FOLDER_ID_KEY = "hk-life-money-drive-folder-id";
 const ACTION_KEY = "hk-life-money-drive-action";
+const PICK_KEY = "hk-life-money-drive-pick";
 const TOKEN_KEY = "hk-life-money-drive-token";
 const TOKEN_EXP_KEY = "hk-life-money-drive-token-exp";
 const GRANTED_KEY = "hk-life-money-drive-granted";
 
-export type DriveAction = "save" | "restore" | "sync";
+export type DriveAction = "save" | "restore" | "sync" | "list";
 
 export type DriveBackupRef = { id: string; name: string; modifiedTime: string };
 
@@ -95,7 +96,7 @@ export function startGoogleSignIn(action: DriveAction): void {
 
 export function takePendingDriveAction(): DriveAction | null {
   const action = sessionStorage.getItem(ACTION_KEY);
-  if (action === "save" || action === "restore" || action === "sync") {
+  if (action === "save" || action === "restore" || action === "sync" || action === "list") {
     sessionStorage.removeItem(ACTION_KEY);
     return action;
   }
@@ -361,9 +362,31 @@ export async function uploadBackup(token: string, body: string): Promise<void> {
   await uploadTo(token, body, "", folder, name);
 }
 
+export function rememberDrivePick(id: string) {
+  try {
+    sessionStorage.setItem(PICK_KEY, id);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function takeDrivePick(): string {
+  try {
+    const id = sessionStorage.getItem(PICK_KEY) ?? "";
+    sessionStorage.removeItem(PICK_KEY);
+    return id;
+  } catch {
+    return "";
+  }
+}
+
+export async function downloadBackupById(token: string, id: string): Promise<string> {
+  const res = await driveFetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`, token);
+  return res.text();
+}
+
 export async function downloadBackup(token: string): Promise<string> {
   const newest = newestDriveBackup(await listDriveBackups(token));
   if (!newest) throw new Error("missing");
-  const res = await driveFetch(`https://www.googleapis.com/drive/v3/files/${newest.id}?alt=media`, token);
-  return res.text();
+  return downloadBackupById(token, newest.id);
 }
