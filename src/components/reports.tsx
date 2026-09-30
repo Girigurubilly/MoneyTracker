@@ -1,22 +1,22 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ChevronRight } from "lucide-react";
 import { Disclaimer, Group, Hairline, ScreenHeader, StatusChip, BudgetChip } from "@/components/shared";
-import { compactHkd, money, pct, shortDate, todayISO } from "@/lib/format";
+import { money, pct, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { monthKeysBack, monthLabel } from "@/lib/derived";
-import { chargedIso, isExpenseRegular, livingEssentials, monthFlow } from "@/lib/calc/budget";
-import { isMortgageInterestCategory, isMortgagePrincipalCategory } from "@/lib/categories";
+import { chargedIso, isExpenseRegular, monthFlow } from "@/lib/calc/budget";
 import { nextTrip, travelSpendYtd, tripCashSpent } from "@/lib/calc/trips";
-import { effectiveRate, monthlyPayment } from "@/lib/calc/mortgage";
+import { effectiveRate } from "@/lib/calc/mortgage";
 import { housingStatus, monthlyHousingCost } from "@/lib/calc/housing";
-import { investableNow, netWorthNow } from "@/lib/calc/networth";
-import { ageFromBirthday, retirementStatus, runRetirement, savingsLast12Months, sustainableMonthly } from "@/lib/calc/retirement";
+import { netWorthNow } from "@/lib/calc/networth";
+import { retirementStatus } from "@/lib/calc/retirement";
+import { lifePlanMonthlyRoom } from "@/lib/calc/life-plan";
+import { useLifePlanResult, useRetirementModel } from "@/components/reports-retire";
 import { periodCashflowPoints, periodRange, type PeriodPreset } from "@/lib/calc/period";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
 import { monthKey } from "@/lib/calc/ledger";
-import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 
@@ -87,45 +87,24 @@ export function DashboardPage() {
   const m = useApp((s) => s.mortgage);
   const trips = useApp((s) => s.trips);
   const annual = useApp((s) => s.annualTravelBudget);
-  const ret = useApp((s) => s.retirement);
-  const allowances = useApp((s) => s.allowances);
-  const oneOffs = useApp((s) => s.oneOffs);
+  const { fire, result } = useRetirementModel();
+  const life = useLifePlanResult();
   const today = todayISO();
   const cost = monthlyHousingCost(txs, rec, cats, rates, today);
   const houseStatus = housingStatus(m);
   const travelIds = new Set(cats.filter((c) => c.theme === "travel").map((c) => c.id));
   const ytd = travelSpendYtd(txs, Number(today.slice(0, 4)), travelIds, rates);
   const nxt = nextTrip(trips, today);
-  const avg = savingsLast12Months(txs, rates, monthKey(today));
-  const inputs = {
-    currentAge: ret?.birthday ? ageFromBirthday(ret.birthday, today) : ret?.currentAge ?? 40,
-    retireAge: ret?.retireAge ?? 65,
-    deathAge: ret?.deathAge ?? 90,
-    monthlyIncomeNow: ret?.monthlyIncomeNow || avg.monthlyIncome,
-    monthlySpendNow: ret?.monthlySpendNow || avg.monthlySpend,
-    targetMonthly: ret?.targetMonthly ?? avg.monthlySpend,
-    preReturn: ret?.preReturn ?? 0.05,
-    postReturn: ret?.postReturn ?? 0.035,
-    inflation: ret?.inflation ?? 0.025,
-    travelInRetirement: ret?.travelInRetirement ?? 0,
-  };
-  const ctx = {
-    investableNow: investableNow(accounts, rates),
-    mortgageMonthly: m ? monthlyPayment(m.outstanding, effectiveRate(m), m.remainingMonths) : 0,
-    mortgagePayoffAge: inputs.currentAge + Math.round((m?.remainingMonths ?? 0) / 12),
-    housingAfterPayoff: livingEssentials(
-      rec.filter((r) => {
-        if (!r.living) return false;
-        const c = cats.find((x) => x.id === r.categoryId);
-        return !c || (!isMortgagePrincipalCategory(c) && !isMortgageInterestCategory(c));
-      }),
-    ),
-    oneOffs,
-    allowances,
-  };
-  const result = runRetirement(inputs, ctx);
-  const sustain = sustainableMonthly(inputs, ctx);
-  const retStatus = retirementStatus(result.depletes, sustain, inputs.targetMonthly, result.series);
+  const room = useMemo(() => lifePlanMonthlyRoom(life.resolved, today, life.inflows), [life.resolved, life.inflows, today]);
+  const years = life.result.stay?.years ?? [];
+  const corpusAtRetire = life.result.stay?.assetsAtRetire ?? result.corpusAtRetire;
+  const surplus = room.surplus;
+  const retStatus = retirementStatus(
+    life.result.stay?.depletes ?? result.depletes,
+    room.sustainable,
+    room.planned,
+    years.map((y) => ({ corpus: y.closingFinancial })),
+  );
   const nxtSpent = nxt ? tripCashSpent(txs, nxt.id, rates) : 0;
   const month = monthKey(today);
   const flow = monthFlow(txs, month, rates);
@@ -221,10 +200,15 @@ export function DashboardPage() {
           <h2 className="text-base font-semibold">{t.reports.retirement}</h2>
           <StatusChip status={retStatus} />
         </div>
+        <div className="mt-4">
+          <div className="text-xs text-muted">{t.reports.fireTitle}</div>
+          <div className="mt-1 text-lg font-semibold tabular-nums">{money(fire.fireNumber, "HKD")}</div>
+        </div>
         <div className="mt-4 grid grid-cols-2 gap-4">
-          <Metric label={t.reports.corpusAtRetire} value={compactHkd(result.corpusAtRetire)} />
-          <Metric label={t.reports.sustainable} value={money(sustain, "HKD")} />
-          <Metric label={t.reports.targetMonthly} value={money(inputs.targetMonthly, "HKD")} />
+          <Metric label={t.reports.corpusAtRetire} value={money(corpusAtRetire, "HKD")} />
+          <Metric label={t.reports.surplus} value={money(surplus, "HKD", { sign: true })} />
+          <Metric label={t.reports.sustainable} value={money(room.sustainable, "HKD")} />
+          <Metric label={t.reports.targetMonthly} value={money(room.planned, "HKD")} />
         </div>
         <div className="mt-2 flex justify-end">
           <ChevronRight className="size-4 text-faint" />
