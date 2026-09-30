@@ -46,6 +46,27 @@ function filled(): RetirementLifePlan {
   return p;
 }
 
+describe("FIRE inputs on the same path", () => {
+  it("includes parent support while it lasts, and sets a reserve aside", () => {
+    const base = runLifePlan(filled(), "2026-01-01");
+    const withParents = runLifePlan(filled(), "2026-01-01", { parentSupport: { monthly: 5_000, years: 2, mode: "include" } });
+    assert.ok(withParents.stay && base.stay);
+    assert.ok(withParents.stay.years[0].living > base.stay.years[0].living);
+    assert.equal(withParents.stay.years[3].living, base.stay.years[3].living);
+    const reserved = runLifePlan(filled(), "2026-01-01", { parentSupport: { monthly: 5_000, years: 10, mode: "reserve" } });
+    assert.equal(reserved.stay?.years[0].openingFinancial, 2_000_000 - 5_000 * 12 * 10);
+  });
+
+  it("adds part-time income only after retirement", () => {
+    const plain = runLifePlan(filled(), "2026-01-01");
+    const job = runLifePlan(filled(), "2026-01-01", { postJobMonthly: 8_000 });
+    const retired = job.stay?.years.find((y) => y.phase === "retired");
+    const same = plain.stay?.years.find((y) => y.age === retired?.age);
+    assert.ok(retired && same);
+    assert.ok(retired.income >= same.income + 8_000 * 12 * (retired.months / 12) - 1);
+  });
+});
+
 describe("empty life plan", () => {
   it("has no hardcoded money values", () => {
     const p = emptyLifePlan();

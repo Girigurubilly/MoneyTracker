@@ -189,16 +189,25 @@ export function useLifePlanResult() {
       today: todayISO(),
     });
   }, [plan, base, pack.property, ctx.investableNow, mortgage]);
-  const result = useMemo(
-    () =>
-      runLifePlan(resolved, todayISO(), {
-        accounts: retirementAccounts,
-        allowances,
-        retireAge: base.retireAge,
-        birthday: base.birthday,
-      }),
-    [resolved, retirementAccounts, allowances, base.retireAge, base.birthday],
+  const inflows = useMemo(
+    () => ({
+      accounts: retirementAccounts,
+      allowances,
+      retireAge: base.retireAge,
+      birthday: base.birthday,
+      postJobMonthly: base.postRetireJobMonthly ?? 0,
+      parentSupport:
+        (base.parentSupportMonthly ?? 0) > 0
+          ? {
+              monthly: base.parentSupportMonthly ?? 0,
+              years: base.parentSupportYears ?? 0,
+              mode: (base.parentSupportMode === "reserve" ? "reserve" : "include") as "include" | "reserve",
+            }
+          : undefined,
+    }),
+    [retirementAccounts, allowances, base.retireAge, base.birthday, base.postRetireJobMonthly, base.parentSupportMonthly, base.parentSupportYears, base.parentSupportMode],
   );
+  const result = useMemo(() => runLifePlan(resolved, todayISO(), inflows), [resolved, inflows]);
   const upsertAccount = useApp((s) => s.upsertRetirementAccount);
   const deleteAccount = useApp((s) => s.deleteRetirementAccount);
   useEffect(() => {
@@ -217,16 +226,6 @@ export function useLifePlanResult() {
       void upsertAccount(want);
     }
   }, [resolved, retirementAccounts, upsertAccount, deleteAccount]);
-  const inflows = useMemo(
-    () => ({
-      accounts: retirementAccounts,
-      allowances,
-      retireAge: base.retireAge,
-      birthday: base.birthday,
-      postJobMonthly: base.postRetireJobMonthly ?? 0,
-    }),
-    [retirementAccounts, allowances, base.retireAge, base.birthday, base.postRetireJobMonthly],
-  );
   return { plan, resolved, result, inflows };
 }
 

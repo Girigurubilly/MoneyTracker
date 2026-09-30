@@ -37,7 +37,7 @@ export function FirePlanPage() {
   const deposits = useApp((s) => s.deposits);
   const holdings = useApp((s) => s.holdings);
   const retirementAccounts = useApp((s) => s.retirementAccounts);
-  const { base, persist, avg, mortgage } = useRetirementModel();
+  const { base, persist, mortgage } = useRetirementModel();
   const currentAge = base.currentAge;
   const retireAge = base.retireAge;
   const deathAge = base.deathAge;
@@ -45,15 +45,19 @@ export function FirePlanPage() {
   const parentYears = base.parentSupportYears;
   const parentMode = base.parentSupportMode === "reserve" ? "reserve" : "include";
   const jobAfter = base.postRetireJobMonthly ?? 0;
-  const impliedSave = base.monthlyIncomeNow - base.monthlySpendNow;
-  const monthlySave = base.monthlySaveOverride ?? (impliedSave || avg.monthlySave);
+  const monthlySave = base.monthlyIncomeNow - base.monthlySpendNow;
   const acceptedFlexCut = Boolean(base.acceptedFlexCut);
 
   const rows = useMemo(
     () => monthlySpendByCategory(txs, categories, rec, rates, monthKey(todayISO())),
     [txs, categories, rec, rates],
   );
-  const levels = fireSpendLevels(rows, parentMonthly, parentMode);
+  const levels = fireSpendLevels(
+    rows,
+    parentMonthly,
+    parentMode,
+    parentMode === "include" && (parentYears ?? 0) > 0 && currentAge + (parentYears ?? 0) > retireAge ? parentYears : 0,
+  );
   const targets = fireTargets(levels);
   const investable = fireInvestable(accounts, rates, retirementAccounts);
   const buckets = fireBuckets({
@@ -86,10 +90,12 @@ export function FirePlanPage() {
     [shock, resolved, inflows, result],
   );
   const years = shown.stay?.years ?? [];
-  const chart = years.map((y) => ({ age: y.age, base: y.closingFinancial }));
+  const chart = years.map((y) => ({ age: y.age, base: y.closingFinancial, inherit: y.inheritKept > 0 ? y.closingFinancial : null }));
   const retireRow = years.find((y) => y.phase === "retired");
   const corpusAtRetire = retireRow?.openingFinancial ?? years[years.length - 1]?.closingFinancial ?? 0;
-  const firstYearSwr = corpusAtRetire > 0 ? (retireRow?.living ?? 0) / corpusAtRetire : 0;
+  const drawMonths = retireRow?.months || 12;
+  const annualDraw = retireRow ? ((retireRow.living + retireRow.mortgage) * 12) / drawMonths : 0;
+  const firstYearSwr = corpusAtRetire > 0 ? annualDraw / corpusAtRetire : 0;
   const at80 = years.find((y) => y.age >= 80)?.closingFinancial ?? years[years.length - 1]?.closingFinancial ?? 0;
   const stress = useMemo(() => {
     const specs: { id: FireStressId; shock: LifePlanShock }[] = [
@@ -142,7 +148,9 @@ export function FirePlanPage() {
           <MiniStat label={t.reports.fireAfterBase} value={levels.base} accent />
           <MiniStat label={t.reports.fireAfterComfort} value={levels.comfort} />
           <MiniStat label={t.reports.fireKindWork} value={levels.work} muted />
+          <MiniStat label={t.reports.fireKindIrregular} value={levels.irregular} muted />
         </div>
+        <p className="px-3 pb-2 text-[11px] leading-4 text-muted">{t.reports.fireKindIrregularHint}</p>
         <button type="button" className="flex min-h-11 w-full items-center justify-between px-4 text-sm" onClick={() => setShowTags(!showTags)}>
           {t.reports.fireSpendEngine}
           <ChevronDown className={cn("size-4 text-muted transition", showTags && "rotate-180")} />
@@ -241,9 +249,13 @@ export function FirePlanPage() {
       <SectionLabel>{t.reports.fireTimeline}</SectionLabel>
       <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
         <div className="grid grid-cols-2 gap-x-3">
-          <FireNum label={t.reports.fireSaveNow} value={monthlySave} money onCommit={(n) => persist({ monthlySaveOverride: n })} />
+          <div className="flex min-h-11 items-center justify-between gap-2 py-2">
+            <span className="min-w-0 truncate text-xs text-muted">{t.reports.fireSaveNow}</span>
+            <span className="text-sm font-medium tabular-nums">{money(monthlySave, "HKD")}</span>
+          </div>
           <FireNum label={t.reports.fireJobAfter} value={jobAfter} money onCommit={(n) => persist({ postRetireJobMonthly: n })} />
         </div>
+        <p className="text-[11px] leading-4 text-muted">{t.reports.fireSaveHint}</p>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <MiniStat label={t.reports.fireCorpusRetire} value={corpusAtRetire} />
           <div className="rounded-xl bg-background px-3 py-2">
@@ -270,12 +282,13 @@ export function FirePlanPage() {
               <Tooltip
                 formatter={(value, _name, item) => {
                   const key = String((item as { dataKey?: unknown } | undefined)?.dataKey ?? "");
-                  return [money(Number(value) || 0, "HKD"), key === "base" ? t.reports.lpAssetsLine : String(_name ?? "")];
+                  return [money(Number(value) || 0, "HKD"), key === "inherit" ? t.reports.fireInheritMark : key === "base" ? t.reports.lpAssetsLine : String(_name ?? "")];
                 }}
                 labelFormatter={(age) => `${t.reports.atAge} ${age}`}
                 contentStyle={{ borderRadius: 12, border: "1px solid var(--color-line)", background: "var(--color-elevated)", fontSize: 12 }}
               />
               <Line type="monotone" dataKey="base" stroke="var(--color-accent)" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="inherit" stroke="none" dot={{ r: 4, fill: "var(--color-watch)" }} activeDot={{ r: 5 }} connectNulls={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>

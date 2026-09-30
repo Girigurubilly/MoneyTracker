@@ -43,9 +43,11 @@ describe("FIRE spend levels and targets", () => {
     assert.equal(t.comfort, (levels.comfort * 12) / FIRE_SWR_COMFORT);
   });
 
-  it("adds parent support into core when included", () => {
-    const levels = fireSpendLevels([row({ kind: "core", monthly: 5000 })], 3000, "include");
-    assert.equal(levels.core, 8000);
+  it("does not add parent support that has already ended", () => {
+    const levels = fireSpendLevels([row({ kind: "core", monthly: 5000 })], 3000, "include", 0);
+    assert.equal(levels.core, 5000);
+    const included = fireSpendLevels([row({ kind: "core", monthly: 5000 })], 3000, "include");
+    assert.equal(included.core, 8000);
     const reserved = fireSpendLevels([row({ kind: "core", monthly: 5000 })], 3000, "reserve");
     assert.equal(reserved.core, 5000);
   });
@@ -168,6 +170,25 @@ describe("buckets, parents, gates", () => {
     assert.equal(liq.target, 10_000 * 30);
     assert.equal(st.amount, 400_000);
     assert.equal(gr.amount, 1_000_000);
+  });
+
+  it("does not count a time deposit twice when its account is already in liquidity", () => {
+    const buckets = fireBuckets({
+      accounts: [
+        { id: "cash", name: "Cash", nameZh: "現金", type: "cash", currency: "HKD", balance: 240_000, includeInNetWorth: true, group: "cash" },
+      ],
+      rates: [],
+      deposits: [
+        { id: "td", bank: "Bank", startDate: "2026-01-01", endDate: "2027-01-01", rate: 0.03, currency: "HKD", amount: 100_000, interest: 3_000, accountId: "cash" },
+        { id: "loose", bank: "Bank", startDate: "2026-01-01", endDate: "2027-01-01", rate: 0.03, currency: "HKD", amount: 50_000, interest: 0, accountId: "" },
+      ],
+      holdings: [],
+      retirementAccounts: [],
+      coreMonthly: 10_000,
+      baseMonthly: 15_000,
+      today: "2026-09-01",
+    });
+    assert.equal(buckets.find((b) => b.id === "liquidity")?.amount, 290_000);
   });
 
   it("parent liability is monthly × 12 × years", () => {

@@ -171,7 +171,12 @@ export function monthlySpendByCategory(
   return rows;
 }
 
-export function fireSpendLevels(rows: FireSpendRow[], parentMonthly = 0, parentMode: "include" | "reserve" = "include"): FireSpendLevels {
+export function fireSpendLevels(
+  rows: FireSpendRow[],
+  parentMonthly = 0,
+  parentMode: "include" | "reserve" = "include",
+  parentYears?: number,
+): FireSpendLevels {
   let work = 0;
   let core = 0;
   let flex = 0;
@@ -182,7 +187,8 @@ export function fireSpendLevels(rows: FireSpendRow[], parentMonthly = 0, parentM
     else if (r.kind === "irregular") irregular += r.monthly;
     else flex += r.monthly;
   }
-  if (parentMode === "include" && parentMonthly > 0) core += parentMonthly;
+  const parentStillApplies = parentYears == null ? parentMonthly > 0 : parentYears > 0;
+  if (parentMode === "include" && parentMonthly > 0 && parentStillApplies) core += parentMonthly;
   const base = core + flex;
   return {
     work,
@@ -223,15 +229,20 @@ export function fireBuckets(opts: {
   let liquidity = 0;
   let stable = 0;
   let growth = 0;
+  const cashAccountIds = new Set<string>();
   for (const a of opts.accounts) {
     const bucket = classifyAccountBucket(a);
     if (bucket === "skip") continue;
     const amt = Math.max(0, toHkd(a.balance, a.currency, opts.rates));
     if (bucket === "growth") growth += amt;
-    else liquidity += amt;
+    else {
+      liquidity += amt;
+      cashAccountIds.add(a.id);
+    }
   }
   for (const d of opts.deposits) {
     if (d.endDate && d.endDate < opts.today) continue;
+    if (d.accountId && cashAccountIds.has(d.accountId)) continue;
     liquidity += Math.max(0, toHkd(d.amount, d.currency, opts.rates));
   }
   for (const ra of opts.retirementAccounts) {
@@ -375,7 +386,7 @@ export function fireGates(opts: {
     { id: "fireNumber", status: opts.investable >= opts.baseTarget && opts.baseTarget > 0 ? "pass" : opts.baseTarget <= 0 ? "need" : "fail" },
     {
       id: "liquidity",
-      status: opts.coreMonthly <= 0 ? "need" : opts.liquidity >= opts.coreMonthly * 24 ? "pass" : "fail",
+      status: opts.coreMonthly <= 0 ? "need" : opts.liquidity >= opts.coreMonthly * LIQUIDITY_MONTHS ? "pass" : "fail",
     },
     { id: "parents", status: parentsOk },
     { id: "concentration", status: conc == null ? "need" : conc < 0.05 ? "pass" : "fail" },

@@ -188,6 +188,8 @@ export type LifePlanInflows = {
   retireAge?: number;
   birthday?: string;
   postJobMonthly?: number;
+  /** Family support. Include adds it to spending for `years`. Reserve sets that lump aside up front. */
+  parentSupport?: { monthly: number; years: number; mode: "include" | "reserve" };
 };
 
 function allowanceForAge(rows: Allowance[] | undefined, age: number, yearsFromStart: number, inflation: number, mode: "nominal" | "real"): number {
@@ -302,6 +304,10 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
   const ret = n(plan.retirement.annualInvestmentReturn);
   const mode = plan.retirement.returnMode;
   let financial = n(plan.assets.financialAssets);
+  const support = inflows?.parentSupport;
+  if (support && support.mode === "reserve" && support.monthly > 0 && support.years > 0) {
+    financial -= support.monthly * 12 * support.years;
+  }
   let home = n(plan.assets.selfOccupiedPropertyValue);
   let inheritedHeld = 0;
   let inheritedSold = false;
@@ -356,6 +362,10 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
       living = st ? inflate(livingMonthlyToday * 12, inf, i, st.follows, mode) : 0;
       if (!st) notes.push("No retirement spending stage for this age.");
       income += Math.max(0, n(inflows?.postJobMonthly)) * 12;
+    }
+    if (support && support.mode === "include" && support.monthly > 0 && support.years > 0 && i < support.years) {
+      living += support.monthly * 12;
+      livingMonthlyToday += support.monthly;
     }
 
     let mortgagePay = 0;
