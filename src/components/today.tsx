@@ -6,7 +6,8 @@ import { pickName } from "@/lib/i18n";
 import { Link } from "@tanstack/react-router";
 import { activityDates, plannedIso, monthStats } from "@/lib/derived";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
-import { asOfForMonth, adhocForMonth, chargedDayOf, forecastTone, upcomingExpenseRegulars } from "@/lib/calc/budget";
+import { chargedDayOf, chargedIso, forecastTone } from "@/lib/calc/budget";
+import type { AdhocBudget, Locale, MoneyUnit, Recurring, Transaction } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { useT, useUi, readSavedLocale } from "@/store/ui";
@@ -93,22 +94,24 @@ function TodayBody() {
   const expected = cap?.expected ?? spentNow;
   const target = cap?.monthly ?? 0;
   const today = todayISO();
-  const asOf = asOfForMonth(selected.slice(0, 7), today);
   const onThisMonth = selected.slice(0, 7) === today.slice(0, 7);
   const ringTone = forecastTone(target > 0 ? spentNow / target : 0);
   const paid = transactions.filter((x) => x.date === selected && !x.planned && x.type !== "miles").sort((a, b) => b.id.localeCompare(a.id));
   const monthKey = selected.slice(0, 7);
-  const monthPlanned = transactions
-    .filter((x) => x.planned && x.type !== "miles" && x.date.startsWith(monthKey))
-    .sort((a, b) => a.date.localeCompare(b.date) || b.id.localeCompare(a.id));
-  const plannedRegularIds = new Set(monthPlanned.map((tx) => tx.recurringId).filter(Boolean));
-  const upcomingOnly = upcomingExpenseRegulars(recurring, asOf).filter((r) => !plannedRegularIds.has(r.id));
-  const unpaidAdhoc = adhocForMonth(adhoc, monthKey)
-    .filter((a) => !a.paidOn && a.date > today)
-    .sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label));
+  const schedule = monthSchedule({
+    monthKey,
+    recurring,
+    adhoc,
+    planned: transactions.filter((x) => x.planned && x.type !== "miles" && x.date.startsWith(monthKey) && !x.recurringId),
+    locale,
+    regularLabel: t.budget.monthlyRegulars,
+    adhocLabel: t.budget.adhoc,
+    plannedLabel: locale === "zh-HK" ? "計劃" : "Planned",
+  });
   const cells = monthGrid(selected, firstDay);
   const active = activityDates(transactions);
   const plannedDays = plannedIso(transactions);
+  for (const row of schedule) plannedDays.add(row.iso);
   const weekdays = weekdayLabels(locale, firstDay);
   const [showSummary, setShowSummary] = useState(false);
 
@@ -219,53 +222,130 @@ function TodayBody() {
         </>
       )}
 
-      {monthPlanned.length || upcomingOnly.length || unpaidAdhoc.length ? (
+      {schedule.length ? (
         <>
           <SectionLabel>{t.today.monthPlanned}</SectionLabel>
           <Hairline />
-          {monthPlanned.map((tx, i) => (
-            <div key={tx.id}>
+          {schedule.map((row, i) => (
+            <div key={row.id}>
               {i > 0 ? <Hairline /> : null}
-              <TransactionRow tx={tx} showDate onClick={() => setTx(tx.id)} />
-            </div>
-          ))}
-          {upcomingOnly.map((r, i) => (
-            <div key={r.id}>
-              {monthPlanned.length || i > 0 ? <Hairline /> : null}
-              <Link to="/budget" className="flex items-center justify-between px-5 py-3">
-                <div>
-                  <div className="text-sm">{pickName(locale, r.label, r.labelZh)}</div>
-                  <div className="text-xs text-muted">
-                    {t.budget.chargedDay} {chargedDayOf(r)}
-                  </div>
-                </div>
-                <AmountWithHkd
-                  amount={r.type === "expense" || r.countsAsExpense ? -r.amount : r.amount}
-                  currency={r.currency}
-                  rates={rates}
-                  sign
-                  className="text-sm font-semibold"
-                />
-              </Link>
-            </div>
-          ))}
-          {unpaidAdhoc.map((a, i) => (
-            <div key={a.id}>
-              {monthPlanned.length || upcomingOnly.length || i > 0 ? <Hairline /> : null}
-              <Link to="/more/adhoc" className="flex items-center justify-between gap-3 px-5 py-3">
-                <div className="min-w-0">
-                  <div className="break-words text-sm">{pickName(locale, a.label, a.labelZh)}</div>
-                  <div className="text-xs text-muted">
-                    {a.date.slice(8)} · {t.budget.adhoc}
-                  </div>
-                </div>
-                <AmountWithHkd amount={-a.amount} currency={a.currency} rates={rates} sign className="shrink-0 text-sm font-semibold" />
-              </Link>
+              <ScheduleRow row={row} onTx={setTx} />
             </div>
           ))}
         </>
       ) : null}
     </div>
+  );
+}
+
+function dayLabel(day: number, locale: Locale): string {
+  return locale === "zh-HK" ? `${day}日` : `Day ${day}`;
+}
+
+type ScheduleRowModel = {
+  id: string;
+  day: number;
+  iso: string;
+  title: string;
+  meta: string;
+  amount: number;
+  currency: MoneyUnit;
+  to?: "/budget" | "/more/adhoc";
+  txId?: string;
+};
+
+function monthSchedule(opts: {
+  monthKey: string;
+  recurring: Recurring[];
+  adhoc: AdhocBudget[];
+  planned: Transaction[];
+  locale: Locale;
+  regularLabel: string;
+  adhocLabel: string;
+  plannedLabel: string;
+}): ScheduleRowModel[] {
+  const rows: ScheduleRowModel[] = [];
+  for (const r of opts.recurring) {
+    if (r.frequency !== "monthly" || r.type === "miles") continue;
+    const day = chargedDayOf(r);
+    const spend = r.type === "expense" || Boolean(r.countsAsExpense);
+    const amount = r.type === "income" ? r.amount : spend ? -r.amount : r.amount;
+    rows.push({
+      id: `r-${r.id}`,
+      day,
+      iso: chargedIso(opts.monthKey, day),
+      title: pickName(opts.locale, r.label, r.labelZh),
+      meta: `${dayLabel(day, opts.locale)} · ${opts.regularLabel}`,
+      amount,
+      currency: r.currency,
+      to: "/budget",
+    });
+  }
+  for (const a of opts.adhoc) {
+    if (a.paidOn) continue;
+    if (a.month !== opts.monthKey && !a.date.startsWith(opts.monthKey)) continue;
+    const day = Number(a.date.slice(8, 10)) || 1;
+    rows.push({
+      id: `a-${a.id}`,
+      day,
+      iso: a.date.startsWith(opts.monthKey) ? a.date : chargedIso(opts.monthKey, day),
+      title: pickName(opts.locale, a.label, a.labelZh),
+      meta: `${dayLabel(day, opts.locale)} · ${opts.adhocLabel}`,
+      amount: -Math.abs(a.amount),
+      currency: a.currency,
+      to: "/more/adhoc",
+    });
+  }
+  for (const tx of opts.planned) {
+    const day = Number(tx.date.slice(8, 10)) || 1;
+    const spend = tx.type === "expense" || Boolean(tx.countsAsExpense);
+    const transfer = tx.type === "transfer" && !tx.countsAsExpense;
+    const amount = transfer ? tx.amount : spend ? -tx.amount : tx.amount;
+    rows.push({
+      id: `t-${tx.id}`,
+      day,
+      iso: tx.date,
+      title: pickName(opts.locale, tx.payee, tx.payeeZh),
+      meta: `${dayLabel(day, opts.locale)} · ${opts.plannedLabel}`,
+      amount,
+      currency: tx.currency,
+      txId: tx.id,
+    });
+  }
+  rows.sort((a, b) => a.day - b.day || a.title.localeCompare(b.title));
+  return rows;
+}
+
+function ScheduleRow({ row, onTx }: { row: ScheduleRowModel; onTx: (id: string) => void }) {
+  const rates = useApp((s) => s.fxRates);
+  const body = (
+    <>
+      <div className="min-w-0 flex-1">
+        <div className="break-words text-sm font-medium">{row.title}</div>
+        <div className="truncate text-xs text-muted">{row.meta}</div>
+      </div>
+      <AmountWithHkd amount={row.amount} currency={row.currency} rates={rates} sign className="text-sm font-semibold" />
+    </>
+  );
+  const className = "flex w-full items-center gap-3 px-5 py-3 text-left";
+  if (row.to === "/budget") {
+    return (
+      <Link to="/budget" className={className}>
+        {body}
+      </Link>
+    );
+  }
+  if (row.to === "/more/adhoc") {
+    return (
+      <Link to="/more/adhoc" className={className}>
+        {body}
+      </Link>
+    );
+  }
+  return (
+    <button type="button" className={className} onClick={() => row.txId && onTx(row.txId)}>
+      {body}
+    </button>
   );
 }
 
