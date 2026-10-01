@@ -397,7 +397,7 @@ export function monthCashflowForecast(
 /**
  * Cap card formulas (calendar day only — no txn matching):
  *   reserved (已預留) = monthly expense regulars + this-month ad-hoc whose charged/hold day is still after today
- *   realized (已入帳) = those same items whose charged/hold day is today or earlier
+ *   realized (已入帳) = regulars and unpaid ad-hoc whose day has arrived, plus ad-hoc expenses already posted
  *   avgDaily          = (spent − realized) / day of month
  *   dailyAllowed      = (cap − spent − reserved) / days after today
  *   projected (全月)  = (spent − realized) + avgDaily × remaining days
@@ -434,7 +434,7 @@ export function budgetActuals(
   const reservedAAll = reservedAdhoc(adhocRows, month, rates, asOf);
   const realizedA = realizedAdhoc(adhocRows, month, rates, asOf);
   const realizedR = realizedRegulars(recurring, rates, asOf);
-  const realized = realizedR + realizedA;
+  const realizedCalendar = realizedR + realizedA;
   const adhoc = adhocTotal(adhocRows, month, rates);
   const postedAdhoc = spentAdhocInMonth(txs, month, rates);
   const ignoreAdhoc = mode === "regular";
@@ -453,6 +453,7 @@ export function budgetActuals(
     const reservedA = ignoreAdhoc ? 0 : reservedAAll;
     const spentForTarget = isMonth && ignoreAdhoc ? Math.max(0, spent - realizedA - postedAdhoc) : spent;
     const hold = isMonth ? reservedReg + reservedA : 0;
+    const realized = isMonth ? realizedCalendar + postedAdhoc : 0;
     const paceBase = isMonth ? Math.max(0, spent - realized) : 0;
     const avgDaily = isMonth ? avgDailyNonRegular(paceBase, asOf) : 0;
     const projectedRemain = isMonth ? projectedNonRegularRemain(paceBase, asOf) : 0;
@@ -466,7 +467,7 @@ export function budgetActuals(
       reserved: isMonth ? reservedReg : 0,
       reservedAdhoc: isMonth ? reservedAAll : 0,
       adhoc: isMonth ? adhoc : 0,
-      realized: isMonth ? realized : 0,
+      realized: realized,
       nonRegular: paceBase,
       avgDaily,
       projected,

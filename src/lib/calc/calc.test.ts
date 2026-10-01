@@ -269,6 +269,25 @@ describe("cap projection", () => {
     assert.equal(row.avgDaily, 3_000 / 15);
     assert.equal(row.expected, 5_000 + 1_500 + (3_000 / 15) * 16);
   });
+
+  it("a posted ad-hoc transaction is left out of daily non-regular", () => {
+    const budgets: Budget[] = [
+      { id: MONTH_TOTAL_BUDGET_ID, label: "cap", labelZh: "上限", monthly: 20_000, spent: 0 },
+    ];
+    const adhoc: AdhocBudget[] = [hold({ id: "a-today", amount: 800, date: "2026-08-15", paidOn: "2026-08-15" })];
+    const txs: Transaction[] = [
+      tx({ id: "t-day", type: "expense", amount: 200, date: "2026-08-02" }),
+      tx({ id: "t-adhoc", type: "expense", amount: 800, date: "2026-08-15", adhoc: true }),
+    ];
+    const [row] = budgetActuals(budgets, txs, "2026-08", [], [], [], "2026-08-15", adhoc);
+    assert.equal(row.spent, 1_000);
+    assert.equal(row.reservedAdhoc, 0);
+    assert.equal(row.realized, 800);
+    assert.equal(row.nonRegular, 200);
+    assert.equal(row.avgDaily, 200 / 15);
+    const [regularOnly] = budgetActuals(budgets, txs, "2026-08", [], [], [], "2026-08-15", adhoc, "regular");
+    assert.equal(regularOnly.remaining, 20_000 - 200);
+  });
 });
 
 describe("convertAmount", () => {
