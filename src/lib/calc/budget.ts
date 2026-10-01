@@ -67,6 +67,23 @@ export function regularChargedBy(r: Recurring, asOfIso: string): boolean {
   return chargedDayOf(r) <= day;
 }
 
+/** A regular already has a posted transaction for this occurrence, so the schedule should not list it again. */
+export function regularSettledInMonth(r: Recurring, txs: Transaction[], month: string, iso: string): boolean {
+  const monthly = r.frequency === "monthly";
+  return txs.some((t) => {
+    if (t.planned || t.type === "miles") return false;
+    if (monthly) {
+      if (!t.date.startsWith(month)) return false;
+      if (t.recurringId === r.id) return true;
+    } else if (t.date !== iso) {
+      return false;
+    } else if (t.recurringId === r.id) {
+      return true;
+    }
+    return t.type === r.type && t.accountId === r.accountId && Math.abs(t.amount - r.amount) < 0.01 && t.date === iso;
+  });
+}
+
 export function reservedRegulars(recurring: Recurring[], rates: FxRate[], asOfIso: string): number {
   let sum = 0;
   for (const r of monthlyExpenseRegulars(recurring)) {

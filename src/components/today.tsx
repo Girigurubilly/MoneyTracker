@@ -6,7 +6,7 @@ import { pickName } from "@/lib/i18n";
 import { Link } from "@tanstack/react-router";
 import { activityDates, plannedIso, monthStats } from "@/lib/derived";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
-import { chargedDayOf, chargedIso, forecastTone } from "@/lib/calc/budget";
+import { chargedDayOf, chargedIso, forecastTone, regularSettledInMonth } from "@/lib/calc/budget";
 import type { AdhocBudget, Locale, MoneyUnit, Recurring, Transaction } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
@@ -104,6 +104,7 @@ function TodayBody() {
     recurring,
     adhoc,
     planned: transactions.filter((x) => x.planned && x.type !== "miles" && x.date.startsWith(monthKey) && !x.recurringId),
+    posted: transactions,
     locale,
     regularLabel: t.budget.monthlyRegulars,
     adhocLabel: t.budget.adhoc,
@@ -262,6 +263,7 @@ function monthSchedule(opts: {
   recurring: Recurring[];
   adhoc: AdhocBudget[];
   planned: Transaction[];
+  posted: Transaction[];
   locale: Locale;
   regularLabel: string;
   adhocLabel: string;
@@ -279,6 +281,7 @@ function monthSchedule(opts: {
     const iso = monthly ? chargedIso(opts.monthKey, day) : r.nextDate;
     if (!monthly && !iso.startsWith(opts.monthKey)) continue;
     if (!open(iso)) continue;
+    if (regularSettledInMonth(r, opts.posted, opts.monthKey, iso)) continue;
     const spend = r.type === "expense" || Boolean(r.countsAsExpense);
     const amount = r.type === "income" ? r.amount : spend ? -r.amount : r.amount;
     rows.push({
@@ -295,6 +298,15 @@ function monthSchedule(opts: {
   }
   for (const a of opts.adhoc) {
     if (a.paidOn) continue;
+    const paidTx = opts.posted.some(
+      (t) =>
+        !t.planned &&
+        t.adhoc &&
+        t.date.startsWith(opts.monthKey) &&
+        Math.abs(t.amount - a.amount) < 0.01 &&
+        (t.payee === a.label || t.payeeZh === a.labelZh),
+    );
+    if (paidTx) continue;
     if (a.month !== opts.monthKey && !a.date.startsWith(opts.monthKey)) continue;
     const day = Number(a.date.slice(8, 10)) || 1;
     const iso = a.date.startsWith(opts.monthKey) ? a.date : chargedIso(opts.monthKey, day);
@@ -313,6 +325,17 @@ function monthSchedule(opts: {
   }
   for (const tx of opts.planned) {
     if (!open(tx.date)) continue;
+    const already = opts.posted.some(
+      (t) =>
+        !t.planned &&
+        t.id !== tx.id &&
+        t.date === tx.date &&
+        t.type === tx.type &&
+        t.accountId === tx.accountId &&
+        Math.abs(t.amount - tx.amount) < 0.01 &&
+        t.payee === tx.payee,
+    );
+    if (already) continue;
     const day = Number(tx.date.slice(8, 10)) || 1;
     const spend = tx.type === "expense" || Boolean(tx.countsAsExpense);
     const transfer = tx.type === "transfer" && !tx.countsAsExpense;

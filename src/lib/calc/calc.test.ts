@@ -11,6 +11,7 @@ import {
   forecastTone,
   projectedNonRegularRemain,
   avgDailyNonRegular,
+  regularSettledInMonth,
 } from "./budget.ts";
 import { convertAmount, parseErApi, parseFrankfurter } from "./fx.ts";
 import { MONTH_TOTAL_BUDGET_ID } from "../types.ts";
@@ -548,5 +549,15 @@ describe("monthKey", () => {
     assert.equal(monthKey(), local);
     assert.equal(monthKey(todayISO()), local);
     assert.equal(monthKey("2026-10-01"), "2026-10");
+  });
+});
+
+describe("settled regulars", () => {
+  it("treats a posted transaction this month as already paid", () => {
+    const salary = rec({ id: "r-pay", type: "income", amount: 72000, chargedDay: 28 });
+    const posted = tx({ id: "t1", type: "income", amount: 72000, date: "2026-10-01", accountId: "cash", recurringId: "r-pay" });
+    assert.equal(regularSettledInMonth(salary, [posted], "2026-10", "2026-10-28"), true);
+    assert.equal(regularSettledInMonth(salary, [{ ...posted, planned: true }], "2026-10", "2026-10-28"), false);
+    assert.equal(regularSettledInMonth(salary, [tx({ id: "t2", type: "income", amount: 72000, date: "2026-09-28", recurringId: "r-pay" })], "2026-10", "2026-10-28"), false);
   });
 });
