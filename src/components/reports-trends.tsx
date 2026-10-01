@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Overlay, ScreenHeader } from "@/components/shared";
 import { compactHkd, money, monthGrid, monthTitle, todayISO, weekdayLabels } from "@/lib/format";
@@ -8,7 +8,8 @@ import { monthKeysBack, monthLabel } from "@/lib/derived";
 import { cashflowSide } from "@/lib/calc/ledger";
 import { toHkd } from "@/lib/calc/fx";
 import { taxCategoryIds } from "@/lib/categories";
-import { periodCategoryTotals } from "@/lib/calc/period";
+import { monthlyCashTrends, periodCategoryTotals } from "@/lib/calc/period";
+import { monthEndIso } from "@/lib/calc/budget";
 import { cn } from "@/lib/utils";
 import type { Category, FxRate, Locale, Transaction } from "@/lib/types";
 import { useApp } from "@/store/app";
@@ -24,6 +25,7 @@ export function TrendsPage() {
   const today = todayISO();
   const [windowN, setWindowN] = useState<3 | 6 | 12>(6);
   const [heatMonth, setHeatMonth] = useState(today.slice(0, 7));
+  const [pick, setPick] = useState<string | null>(null);
   const [openDay, setOpenDay] = useState<string | null>(null);
   const [skipTax, setSkipTax] = useState(true);
   const taxIds = useMemo(() => taxCategoryIds(cats), [cats]);
@@ -33,39 +35,43 @@ export function TrendsPage() {
   );
   const months = monthKeysBack(today.slice(0, 7), windowN);
   const series = useMemo(() => {
-    const raw = months.map((month) => {
-      let spend = 0;
-      for (const tx of scopedTxs) {
-        if (tx.planned || !tx.date.startsWith(month)) continue;
-        if (cashflowSide(tx) !== "expense") continue;
-        spend += Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
-      }
-      return { month, spend };
-    });
-    return raw.map((row, i) => {
-      const slice = raw.slice(0, i + 1);
-      const avg = slice.reduce((s, r) => s + r.spend, 0) / slice.length;
-      return { ...row, label: monthLabel(row.month, locale), avg };
-    });
+    return monthlyCashTrends(scopedTxs, rates, months).map((row) => ({
+      ...row,
+      label: monthLabel(row.month, locale),
+    }));
   }, [months, scopedTxs, rates, locale]);
-  const last = series.at(-1)?.spend ?? 0;
-  const avg = series.length ? series.reduce((s, r) => s + r.spend, 0) / series.length : 0;
-  const firstHalf = series.slice(0, Math.max(1, Math.floor(series.length / 2)));
-  const secondHalf = series.slice(Math.floor(series.length / 2));
-  const avg1 = firstHalf.reduce((s, r) => s + r.spend, 0) / firstHalf.length;
-  const avg2 = secondHalf.reduce((s, r) => s + r.spend, 0) / secondHalf.length;
+  const picked = pick && months.includes(pick) ? pick : (series.at(-1)?.month ?? today.slice(0, 7));
+  const last = series.at(-1)?.expense ?? 0;
+  const avg = series.length ? series.reduce((s, r) => s + r.expense, 0) / series.length : 0;
+  const half = Math.floor(series.length / 2) || 1;
+  const firstHalf = series.slice(0, half);
+  const secondHalf = series.slice(series.length - half);
+  const avg1 = firstHalf.reduce((s, r) => s + r.expense, 0) / (firstHalf.length || 1);
+  const avg2 = secondHalf.reduce((s, r) => s + r.expense, 0) / (secondHalf.length || 1);
   const growth = avg1 > 0 ? (avg2 - avg1) / avg1 : 0;
 
-  const from = `${months[0]}-01`;
-  const to = today;
-  const catNow = periodCategoryTotals(scopedTxs, cats, rates, from, to, "expense", true);
-  const mid = months[Math.floor(months.length / 2)] ?? months[0];
-  const catPrev = periodCategoryTotals(scopedTxs, cats, rates, from, `${mid}-28`, "expense", true);
-  const growthRows = catNow.rows.slice(0, 6).map((r) => {
-    const prev = catPrev.rows.find((x) => x.id === r.id)?.value ?? 0;
-    const g = prev > 0 ? (r.value - prev) / prev : r.value > 0 ? 1 : 0;
-    return { ...r, growth: g };
-  });
+  const firstMonths = months.slice(0, half);
+  const secondMonths = months.slice(months.length - half);
+  const nextEnd = secondMonths.at(-1) ?? today.slice(0, 7);
+  const nextTo = nextEnd >= today.slice(0, 7) ? today : monthEndIso(nextEnd);
+  const catPrev = periodCategoryTotals(scopedTxs, cats, rates, `${firstMonths[0]}-01`, monthEndIso(firstMonths.at(-1) ?? firstMonths[0]), "expense", true);
+  const catNow = periodCategoryTotals(scopedTxs, cats, rates, `${secondMonths[0]}-01`, nextTo, "expense", true);
+  const prevMap = new Map(catPrev.rows.map((r) => [r.id, r]));
+  const nowMap = new Map(catNow.rows.map((r) => [r.id, r]));
+  const growthRows = [...new Set([...prevMap.keys(), ...nowMap.keys()])]
+    .map((id) => {
+      const prev = prevMap.get(id)?.value ?? 0;
+      const value = nowMap.get(id)?.value ?? 0;
+      const src = nowMap.get(id) ?? prevMap.get(id)!;
+      const g = prev > 0 ? (value - prev) / prev : value > 0 ? 1 : 0;
+      return { ...src, value, growth: g, delta: value - prev };
+    })
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+    .slice(0, 6);
+  const pickTo = picked === today.slice(0, 7) ? today : monthEndIso(picked);
+  const pickCats = periodCategoryTotals(scopedTxs, cats, rates, `${picked}-01`, pickTo, "expense", true).rows.slice(0, 5);
+  const pickMax = pickCats[0]?.value ?? 1;
+  const pickRow = series.find((r) => r.month === picked);
 
   const daily = new Map<string, number>();
   let peakDay = "";
@@ -108,7 +114,7 @@ export function TrendsPage() {
           </button>
         ))}
       </div>
-      <p className="px-5 pt-2 text-[11px] leading-4 text-muted">{t.reports.trendsWindowHint}</p>
+      <p className="px-5 pt-2 text-[11px] leading-4 text-muted">{t.reports.trendsWindowHint} {t.reports.trendsTap}</p>
       <button
         type="button"
         className={cn("mx-5 mt-3 h-8 rounded-full px-3 text-sm font-medium", skipTax ? "bg-accent text-on-accent" : "bg-elevated text-muted")}
@@ -122,17 +128,54 @@ export function TrendsPage() {
         <Mini label={t.reports.catGrowth} value={pctSigned(growth)} tone={growth <= 0 ? "income" : "expense"} />
         <Mini label={t.reports.peakDay} value={peakDay ? peakDay.slice(8) : "—"} />
       </div>
-      <div className="mt-4 h-52 px-1">
+      <div className="mt-4 h-64 px-1">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={series}>
+          <ComposedChart
+            data={series}
+            onClick={(state) => {
+              const month = (state as { activePayload?: { payload?: { month?: string } }[] } | undefined)?.activePayload?.[0]?.payload?.month;
+              if (month) setPick(month);
+            }}
+          >
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
             <XAxis dataKey="label" tick={{ fontSize: 10 }} />
             <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => compactHkd(Number(v))} width={48} />
             <Tooltip formatter={(v) => money(Number(v), "HKD")} />
-            <Area type="monotone" dataKey="spend" name={t.reports.expense} fill="var(--color-expense)" fillOpacity={0.18} stroke="var(--color-expense)" />
-            <Line type="monotone" dataKey="avg" name={t.reports.movingAvg} stroke="var(--color-accent)" strokeWidth={2} dot={false} />
+            <Bar dataKey="income" name={t.reports.income} fill="var(--color-income)" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="expense" name={t.reports.expense} fill="var(--color-expense)" radius={[3, 3, 0, 0]} />
+            <Line type="monotone" dataKey="net" name={t.reports.net} stroke="var(--color-accent)" strokeWidth={2} dot={false} />
           </ComposedChart>
         </ResponsiveContainer>
+      </div>
+      <div className="mx-4 mt-3 rounded-2xl bg-elevated px-4 py-3">
+        <div className="text-sm font-medium">{monthTitle(`${picked}-01`, locale)}</div>
+        <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+          <div>
+            <div className="text-muted">{t.reports.income}</div>
+            <div className="mt-0.5 font-semibold tabular-nums text-income">{money(pickRow?.income ?? 0, "HKD")}</div>
+          </div>
+          <div>
+            <div className="text-muted">{t.reports.expense}</div>
+            <div className="mt-0.5 font-semibold tabular-nums text-expense">{money(pickRow?.expense ?? 0, "HKD")}</div>
+          </div>
+          <div>
+            <div className="text-muted">{t.reports.net}</div>
+            <div className={cn("mt-0.5 font-semibold tabular-nums", (pickRow?.net ?? 0) >= 0 ? "text-income" : "text-expense")}>{money(pickRow?.net ?? 0, "HKD", { sign: true })}</div>
+          </div>
+        </div>
+        <div className="mt-3 space-y-2">
+          {pickCats.map((r) => (
+            <div key={r.id}>
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="min-w-0 truncate">{pickName(locale, r.name, r.nameZh)}</span>
+                <span className="shrink-0 tabular-nums text-muted">{money(r.value, "HKD")}</span>
+              </div>
+              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-background">
+                <div className="h-full rounded-full bg-expense" style={{ width: `${Math.max(4, Math.round((r.value / pickMax) * 100))}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
       <h2 className="px-5 pb-1 pt-4 text-sm font-medium text-muted">{t.reports.catGrowth}</h2>
       <p className="px-5 pb-2 text-[11px] leading-4 text-muted">{t.reports.trendsGrowthHint}</p>

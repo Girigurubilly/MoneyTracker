@@ -20,7 +20,7 @@ import type { AdhocBudget, Budget, Category, Recurring, Transaction } from "../t
 import { monthlyLivingEssentials, monthlyHousingCost, isPrincipalRegular, housingRegularRows, housingMonthLines, projection12 } from "./housing.ts";
 import { todayISO } from "../format.ts";
 import { monthKey } from "./ledger.ts";
-import { periodCategoryTotals, periodCategoryTxs, periodRange, yearCategoryCompare, yearCompareRanges } from "./period.ts";
+import { periodCategoryTotals, periodCategoryTxs, periodRange, yearCategoryCompare, yearCompareRanges, monthlyCashTrends } from "./period.ts";
 import { periodNetWorthPoints } from "./networth.ts";
 import { runRetirement, sustainableMonthly } from "./retirement.ts";
 
@@ -486,6 +486,25 @@ describe("year compare", () => {
     assert.equal(zoom.rows[0].thisYear, 100);
     assert.equal(zoom.rows[0].lastYear, 40);
     assert.equal(zoom.thisTotal, 100);
+  });
+});
+
+describe("monthly trend", () => {
+  it("sums posted income and spending for each month", () => {
+    const rows = monthlyCashTrends(
+      [
+        tx({ id: "in", type: "income", amount: 1000, date: "2026-08-02" }),
+        tx({ id: "out", type: "expense", amount: 400, date: "2026-08-03" }),
+        tx({ id: "plan", type: "expense", amount: 999, date: "2026-08-04", planned: true }),
+        tx({ id: "sep", type: "expense", amount: 50, date: "2026-09-01" }),
+      ],
+      [],
+      ["2026-08", "2026-09"],
+    );
+    assert.deepEqual(rows, [
+      { month: "2026-08", income: 1000, expense: 400, net: 600 },
+      { month: "2026-09", income: 0, expense: 50, net: -50 },
+    ]);
   });
 });
 

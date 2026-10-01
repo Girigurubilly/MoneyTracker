@@ -148,6 +148,26 @@ export function periodCashflowPoints(
   return { points, income, expense, net: income - expense, grain };
 }
 
+export function monthlyCashTrends(
+  txs: Transaction[],
+  rates: FxRate[],
+  months: string[],
+): { month: string; income: number; expense: number; net: number }[] {
+  return months.map((month) => {
+    let income = 0;
+    let expense = 0;
+    for (const tx of txs) {
+      if (tx.planned || !tx.date.startsWith(month)) continue;
+      const side = cashflowSide(tx);
+      if (side === "none") continue;
+      const hkd = Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
+      if (side === "income") income += hkd;
+      else expense += hkd;
+    }
+    return { month, income, expense, net: income - expense };
+  });
+}
+
 /** Posted txs that make up one 費用/收入 chart row for the selected timeframe. */
 export function periodCategoryTxs(
   txs: Transaction[],
