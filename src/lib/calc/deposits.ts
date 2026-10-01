@@ -187,7 +187,48 @@ function regularIsDepositInterest(r: Recurring, categories: Category[]): boolean
   return isDepositInterestIncome(tx, cat, categories);
 }
 
-/** Monthly income regulars still due this month, excluding ones already posted and deposit interest. */
+/** This month: posted 利息收入, plus time-deposit interest not already in those transactions. */
+export function currentMonthDepositInterest(
+  deposits: TimeSaving[],
+  txs: Transaction[],
+  categories: Category[],
+  rates: FxRate[],
+  month: string,
+  postedInterest: number,
+): number {
+  let extra = 0;
+  for (const d of deposits) {
+    if (!d.endDate?.startsWith(month)) continue;
+    if (depositAlreadyPosted(d, txs, categories, rates, month)) continue;
+    extra += toHkd(d.interest || 0, d.currency, rates);
+  }
+  return postedInterest + extra;
+}
+
+function depositAlreadyPosted(
+  d: TimeSaving,
+  txs: Transaction[],
+  categories: Category[],
+  rates: FxRate[],
+  month: string,
+): boolean {
+  const interestHkd = toHkd(d.interest || 0, d.currency, rates);
+  for (const tx of txs) {
+    if (tx.planned || tx.type !== "income" || !tx.date.startsWith(month)) continue;
+    if (tx.depositId === d.id) return true;
+    const cat =
+      categories.find((c) => c.id === tx.categoryId) ??
+      categories.find((c) => c.name === tx.categoryId || c.nameZh === tx.categoryId);
+    if (!isDepositInterestIncome(tx, cat, categories)) continue;
+    const hkd = Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
+    const sameAmount = Math.abs(hkd - interestHkd) < 0.05;
+    const hay = `${tx.payee} ${tx.payeeZh}`;
+    const sameBank = Boolean(d.bank) && hay.includes(d.bank);
+    if (sameAmount && (tx.date === d.endDate || sameBank)) return true;
+  }
+  return false;
+}
+
 export function upcomingIncomeSplit(
   recurring: Recurring[],
   txs: Transaction[],
@@ -255,7 +296,9 @@ export function yearlyProjection(
     const expense = fromLedger ? (actual?.expense ?? 0) : plannedExpense;
     const depInt = fromLedger
       ? (actual?.interest ?? 0)
-      : getMonthlyDepositInterest(deposits, year, month0, rates);
+      : isCurrent && today.startsWith(plan.id)
+        ? currentMonthDepositInterest(deposits, txs, categories, rates, plan.id, actual?.interest ?? 0)
+        : getMonthlyDepositInterest(deposits, year, month0, rates);
     const income = salary + other + depInt;
     const saving = income - expense;
     yearIncome += income;

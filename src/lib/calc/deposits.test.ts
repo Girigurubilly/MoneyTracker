@@ -165,6 +165,7 @@ describe("deposits", () => {
       tx({ id: "s", type: "income", amount: 30000, date: "2026-10-01", categoryId: "salary", recurringId: "r-bonus" }),
       tx({ id: "g", type: "income", amount: 500, date: "2026-10-02", categoryId: "gift" }),
       tx({ id: "int", type: "income", amount: 200, date: "2026-10-03", categoryId: "interest-inc", depositId: "d1" }),
+      tx({ id: "sav", type: "income", amount: 80, date: "2026-10-04", categoryId: "interest-inc", payee: "Savings interest", payeeZh: "活期利息" }),
     ];
     const recurring: Recurring[] = [
       { id: "r-pay", type: "income", label: "Salary", labelZh: "薪金", amount: 72000, currency: "HKD", accountId: "cash", categoryId: "salary", frequency: "monthly", nextDate: "2026-10-28", chargedDay: 28 },
@@ -173,12 +174,23 @@ describe("deposits", () => {
       { id: "r-int", type: "income", label: "Deposit interest", labelZh: "存款利息", amount: 9000, currency: "HKD", accountId: "cash", categoryId: "interest-inc", frequency: "monthly", nextDate: "2026-10-18", chargedDay: 18 },
       { id: "r-past", type: "income", label: "Rent", labelZh: "租金", amount: 4000, currency: "HKD", accountId: "cash", categoryId: "gift", frequency: "monthly", nextDate: "2026-10-01", chargedDay: 1 },
     ];
-    const y = yearlyProjection(plans, [dep({ id: "d1", endDate: "2026-10-03", interest: 200 })], rates, 2026, 9, txs, cats, 0, recurring, "2026-10-05");
+    const y = yearlyProjection(
+      plans,
+      [dep({ id: "d1", endDate: "2026-10-03", interest: 200 }), dep({ id: "d2", endDate: "2026-10-20", interest: 150 })],
+      rates,
+      2026,
+      9,
+      txs,
+      cats,
+      0,
+      recurring,
+      "2026-10-05",
+    );
     const oct = y.rows[9];
     assert.equal(oct.incomeLocked, true);
     assert.equal(oct.salary, 30000 + 72000);
     assert.equal(oct.other, 500 + 1000);
-    assert.equal(oct.depInt, 200);
-    assert.equal(oct.income, 30000 + 72000 + 500 + 1000 + 200);
+    assert.equal(oct.depInt, 200 + 80 + 150);
+    assert.equal(oct.income, 30000 + 72000 + 500 + 1000 + 200 + 80 + 150);
   });
 });
