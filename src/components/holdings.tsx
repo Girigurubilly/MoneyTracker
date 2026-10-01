@@ -93,6 +93,7 @@ export function HoldingsPage() {
     <div className="pb-10">
       <ScreenHeader
         title={t.holdings.title}
+        backTo="/more"
         right={
           <button
             type="button"

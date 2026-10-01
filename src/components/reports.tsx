@@ -1,8 +1,23 @@
 import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { ChevronRight } from "lucide-react";
-import { Disclaimer, Group, Hairline, ScreenHeader, StatusChip, BudgetChip } from "@/components/shared";
+import {
+  ArrowLeftRight,
+  BadgeDollarSign,
+  CalendarRange,
+  ChevronRight,
+  GitCompare,
+  Home,
+  Landmark,
+  LayoutDashboard,
+  LineChart,
+  Plane,
+  Receipt,
+  Scale,
+  Sunset,
+  TrendingUp,
+} from "lucide-react";
+import { Disclaimer, Group, Hairline, Row, ScreenHeader, SectionLabel, StatusChip, BudgetChip } from "@/components/shared";
 import { money, pct, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { monthKeysBack, monthLabel } from "@/lib/derived";
@@ -31,19 +46,19 @@ export function ReportsHub() {
   const t = useT();
   const access = useUi((s) => s.accessMode);
   const items = [
-    { to: "/reports/dashboard", title: t.reports.dashboard, modes: ["standard", "elderly"] },
-    { to: "/reports/spending", title: t.reports.spending, modes: ["standard", "elderly", "kid"] },
-    { to: "/reports/cashflow", title: t.reports.cashflow, modes: ["standard", "elderly", "kid"] },
-    { to: "/reports/trends", title: t.reports.trends, modes: ["standard", "elderly"] },
-    { to: "/reports/compare", title: t.reports.yearCompare, modes: ["standard"] },
-    { to: "/reports/balance", title: t.reports.balance, modes: ["standard", "elderly"] },
-    { to: "/reports/worth", title: t.reports.worthTrend, modes: ["standard", "elderly"] },
-    { to: "/reports/deposits", title: t.reports.deposits, modes: ["standard", "elderly"] },
-    { to: "/reports/prices", title: t.prices.title, modes: ["standard", "elderly"] },
-    { to: "/reports/yearly", title: t.reports.yearly, modes: ["standard"] },
-    { to: "/reports/living", title: t.reports.living, modes: ["standard", "elderly"] },
-    { to: "/reports/travel", title: t.reports.travel, modes: ["standard", "elderly", "kid"] },
-    { to: "/reports/retirement", title: t.reports.retirement, modes: ["standard", "elderly"] },
+    { to: "/reports/dashboard", title: t.reports.dashboard, icon: LayoutDashboard, modes: ["standard", "elderly"] },
+    { to: "/reports/spending", title: t.reports.spending, icon: Receipt, modes: ["standard", "elderly", "kid"] },
+    { to: "/reports/cashflow", title: t.reports.cashflow, icon: ArrowLeftRight, modes: ["standard", "elderly", "kid"] },
+    { to: "/reports/trends", title: t.reports.trends, icon: TrendingUp, modes: ["standard", "elderly"] },
+    { to: "/reports/compare", title: t.reports.yearCompare, icon: GitCompare, modes: ["standard"] },
+    { to: "/reports/balance", title: t.reports.balance, icon: Scale, modes: ["standard", "elderly"] },
+    { to: "/reports/worth", title: t.reports.worthTrend, icon: LineChart, modes: ["standard", "elderly"] },
+    { to: "/reports/deposits", title: t.reports.deposits, icon: Landmark, modes: ["standard", "elderly"] },
+    { to: "/reports/prices", title: t.prices.title, icon: BadgeDollarSign, modes: ["standard", "elderly"] },
+    { to: "/reports/yearly", title: t.reports.yearly, icon: CalendarRange, modes: ["standard"] },
+    { to: "/reports/living", title: t.reports.living, icon: Home, modes: ["standard", "elderly"] },
+    { to: "/reports/travel", title: t.reports.travel, icon: Plane, modes: ["standard", "elderly", "kid"] },
+    { to: "/reports/retirement", title: t.reports.retirement, icon: Sunset, modes: ["standard", "elderly"] },
   ].filter((it) => it.modes.includes(access));
   const groups = [
     { id: "flow", title: t.reports.groupFlow, items: items.filter((it) => ["/reports/dashboard", "/reports/spending", "/reports/cashflow", "/reports/trends", "/reports/compare"].includes(it.to)) },
@@ -54,16 +69,13 @@ export function ReportsHub() {
     <div className="pb-10">
       <ScreenHeader title={t.reports.title} large />
       {groups.map((g) => (
-        <div key={g.id} className="mb-4">
-          <h2 className="px-5 pb-1 text-xs font-semibold uppercase tracking-wide text-muted">{g.title}</h2>
+        <div key={g.id}>
+          <SectionLabel>{g.title}</SectionLabel>
           <Group>
             {g.items.map((it, i) => (
               <div key={it.to}>
                 {i > 0 ? <Hairline /> : null}
-                <Link to={it.to} className="flex items-center justify-between px-4 py-3.5">
-                  <span className="text-sm">{it.title}</span>
-                  <ChevronRight className="size-4 text-faint" />
-                </Link>
+                <Row icon={<it.icon className="size-4" />} title={it.title} to={it.to} chevron />
               </div>
             ))}
           </Group>

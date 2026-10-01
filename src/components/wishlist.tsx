@@ -28,7 +28,7 @@ export function WishlistPage() {
   const t = useT();
   return (
     <div className="pb-10">
-      <ScreenHeader title={t.wish.title} />
+      <ScreenHeader title={t.wish.title} backTo="/more" />
       <p className="px-5 pb-3 text-xs text-muted">{t.wish.hint}</p>
       <WishlistBlock />
     </div>

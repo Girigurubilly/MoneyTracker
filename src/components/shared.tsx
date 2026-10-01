@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { money, monthTitle } from "@/lib/format";
@@ -24,9 +24,7 @@ export function ScreenHeader({
   if (backTo) {
     return (
       <header className="relative flex items-center justify-between px-2 pb-2 pt-[max(0.4rem,env(safe-area-inset-top))]">
-        <Link to={backTo as never} aria-label="Back" className="grid size-11 shrink-0 place-items-center text-accent">
-          <ChevronLeft className="size-6" />
-        </Link>
+        <BackControl backTo={backTo} />
         <h1 className="absolute left-1/2 max-w-[58%] -translate-x-1/2 truncate text-center text-lg font-semibold tracking-tight">
           {title}
         </h1>
@@ -39,6 +37,24 @@ export function ScreenHeader({
       <h1 className={cn("font-semibold tracking-tight", large ? "text-3xl" : "text-xl")}>{title}</h1>
       {right}
     </header>
+  );
+}
+
+function BackControl({ backTo }: { backTo: string }) {
+  const navigate = useNavigate();
+  return (
+    <button
+      type="button"
+      aria-label="Back"
+      className="grid size-11 shrink-0 place-items-center text-accent"
+      onClick={() => {
+        const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+        if (idx > 0) window.history.back();
+        else void navigate({ to: backTo as never });
+      }}
+    >
+      <ChevronLeft className="size-6" />
+    </button>
   );
 }
 

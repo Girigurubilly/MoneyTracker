@@ -20,6 +20,7 @@ import { Route as MoreAdhocRouteImport } from './routes/more.adhoc'
 import { Route as MoreAppearanceRouteImport } from './routes/more.appearance'
 import { Route as MoreBackupRouteImport } from './routes/more.backup'
 import { Route as MoreCategoriesRouteImport } from './routes/more.categories'
+import { Route as MoreDepositsRouteImport } from './routes/more.deposits'
 import { Route as MoreFxRouteImport } from './routes/more.fx'
 import { Route as MoreHoldingsRouteImport } from './routes/more.holdings'
 import { Route as MoreImportRouteImport } from './routes/more.import'
@@ -103,6 +104,11 @@ const MoreBackupRoute = MoreBackupRouteImport.update({
 const MoreCategoriesRoute = MoreCategoriesRouteImport.update({
   id: '/categories',
   path: '/categories',
+  getParentRoute: () => MoreRoute,
+} as any)
+const MoreDepositsRoute = MoreDepositsRouteImport.update({
+  id: '/deposits',
+  path: '/deposits',
   getParentRoute: () => MoreRoute,
 } as any)
 const MoreFxRoute = MoreFxRouteImport.update({
@@ -264,6 +270,7 @@ export interface FileRoutesByFullPath {
   '/more/appearance': typeof MoreAppearanceRoute
   '/more/backup': typeof MoreBackupRoute
   '/more/categories': typeof MoreCategoriesRoute
+  '/more/deposits': typeof MoreDepositsRoute
   '/more/fx': typeof MoreFxRoute
   '/more/holdings': typeof MoreHoldingsRoute
   '/more/import': typeof MoreImportRoute
@@ -304,6 +311,7 @@ export interface FileRoutesByTo {
   '/more/appearance': typeof MoreAppearanceRoute
   '/more/backup': typeof MoreBackupRoute
   '/more/categories': typeof MoreCategoriesRoute
+  '/more/deposits': typeof MoreDepositsRoute
   '/more/fx': typeof MoreFxRoute
   '/more/holdings': typeof MoreHoldingsRoute
   '/more/import': typeof MoreImportRoute
@@ -345,6 +353,7 @@ export interface FileRoutesById {
   '/more/appearance': typeof MoreAppearanceRoute
   '/more/backup': typeof MoreBackupRoute
   '/more/categories': typeof MoreCategoriesRoute
+  '/more/deposits': typeof MoreDepositsRoute
   '/more/fx': typeof MoreFxRoute
   '/more/holdings': typeof MoreHoldingsRoute
   '/more/import': typeof MoreImportRoute
@@ -389,6 +398,7 @@ export interface FileRouteTypes {
     | '/more/appearance'
     | '/more/backup'
     | '/more/categories'
+    | '/more/deposits'
     | '/more/fx'
     | '/more/holdings'
     | '/more/import'
@@ -429,6 +439,7 @@ export interface FileRouteTypes {
     | '/more/appearance'
     | '/more/backup'
     | '/more/categories'
+    | '/more/deposits'
     | '/more/fx'
     | '/more/holdings'
     | '/more/import'
@@ -469,6 +480,7 @@ export interface FileRouteTypes {
     | '/more/appearance'
     | '/more/backup'
     | '/more/categories'
+    | '/more/deposits'
     | '/more/fx'
     | '/more/holdings'
     | '/more/import'
@@ -587,6 +599,13 @@ declare module '@tanstack/react-router' {
       path: '/categories'
       fullPath: '/more/categories'
       preLoaderRoute: typeof MoreCategoriesRouteImport
+      parentRoute: typeof MoreRoute
+    }
+    '/more/deposits': {
+      id: '/more/deposits'
+      path: '/deposits'
+      fullPath: '/more/deposits'
+      preLoaderRoute: typeof MoreDepositsRouteImport
       parentRoute: typeof MoreRoute
     }
     '/more/fx': {
@@ -800,6 +819,7 @@ interface MoreRouteChildren {
   MoreAppearanceRoute: typeof MoreAppearanceRoute
   MoreBackupRoute: typeof MoreBackupRoute
   MoreCategoriesRoute: typeof MoreCategoriesRoute
+  MoreDepositsRoute: typeof MoreDepositsRoute
   MoreFxRoute: typeof MoreFxRoute
   MoreHoldingsRoute: typeof MoreHoldingsRoute
   MoreImportRoute: typeof MoreImportRoute
@@ -816,6 +836,7 @@ const MoreRouteChildren: MoreRouteChildren = {
   MoreAppearanceRoute: MoreAppearanceRoute,
   MoreBackupRoute: MoreBackupRoute,
   MoreCategoriesRoute: MoreCategoriesRoute,
+  MoreDepositsRoute: MoreDepositsRoute,
   MoreFxRoute: MoreFxRoute,
   MoreHoldingsRoute: MoreHoldingsRoute,
   MoreImportRoute: MoreImportRoute,

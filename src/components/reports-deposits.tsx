@@ -18,7 +18,7 @@ import {
 import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 
-export function DepositsPage() {
+export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/more" }) {
   const t = useT();
   const locale = useUi((s) => s.locale);
   const deposits = useApp((s) => s.deposits);
@@ -68,7 +68,7 @@ export function DepositsPage() {
     <div className="pb-10">
       <ScreenHeader
         title={t.reports.deposits}
-        backTo="/reports"
+        backTo={backTo}
         right={
           <button type="button" aria-label={t.reports.addDeposit} className="grid size-11 place-items-center text-accent" onClick={() => setEditing("new")}>
             <Plus className="size-6" />

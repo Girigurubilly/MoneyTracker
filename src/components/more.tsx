@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Archive, BookOpen, CalendarClock, FolderTree, Globe, Palette, PiggyBank, Settings2, ShoppingBag, SlidersHorizontal, TrendingUp, Undo2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
-import { Disclaimer, Group, Hairline, Overlay, Row, ScreenHeader } from "@/components/shared";
+import { Disclaimer, Group, Hairline, Overlay, Row, ScreenHeader, SectionLabel } from "@/components/shared";
 import { CurrencySelect } from "@/components/currency-field";
 import { CategoryPicker } from "@/components/category-picker";
 import { pickName } from "@/lib/i18n";
@@ -61,7 +61,7 @@ export function MoreScreen() {
       <ScreenHeader title={t.more.title} large />
       {kid ? null : (
         <>
-          <h2 className="px-5 pb-1 text-sm font-medium text-muted">{t.more.money}</h2>
+          <SectionLabel>{t.more.money}</SectionLabel>
           <Group>
             <Row icon={<Wallet className="size-4" />} title={t.more.budgets} to="/budget" chevron />
             <Hairline />
@@ -73,13 +73,13 @@ export function MoreScreen() {
             <Hairline />
             <Row icon={<PiggyBank className="size-4" />} title={t.more.retireAccounts} to="/more/retirement-accounts" chevron />
             <Hairline />
-            <Row icon={<PiggyBank className="size-4" />} title={t.more.deposits} to="/reports/deposits" chevron />
+            <Row icon={<PiggyBank className="size-4" />} title={t.more.deposits} to="/more/deposits" chevron />
             <Hairline />
             <Row icon={<Globe className="size-4" />} title={t.more.fx} to="/more/fx" chevron />
           </Group>
         </>
       )}
-      <h2 className="px-5 pb-1 pt-6 text-sm font-medium text-muted">{t.more.setup}</h2>
+      <SectionLabel>{t.more.setup}</SectionLabel>
       <Group>
         <Row icon={<SlidersHorizontal className="size-4" />} title={t.more.prefs} to="/more/setup" chevron />
         {kid ? null : (
@@ -93,19 +93,19 @@ export function MoreScreen() {
       </Group>
       {kid ? (
         <>
-          <h2 className="px-5 pb-1 pt-6 text-sm font-medium text-muted">{t.more.money}</h2>
+          <SectionLabel>{t.more.money}</SectionLabel>
           <Group>
             <Row icon={<Wallet className="size-4" />} title={t.more.budgets} to="/budget" chevron />
           </Group>
         </>
       ) : null}
-      <h2 className="px-5 pb-1 pt-6 text-sm font-medium text-muted">{t.more.quickFix}</h2>
+      <SectionLabel>{t.more.quickFix}</SectionLabel>
       <Group>
         <UndoLastRow />
       </Group>
       {kid ? null : (
         <>
-          <h2 className="px-5 pb-1 pt-6 text-sm font-medium text-muted">{t.more.data}</h2>
+          <SectionLabel>{t.more.data}</SectionLabel>
           <Group>
             <Row icon={<Archive className="size-4" />} title={t.more.importBackup} to="/more/backup" chevron />
             <Hairline />
@@ -152,7 +152,7 @@ export function CategoriesPage() {
   const [kind, setKind] = useState<"expense" | "income">("expense");
   return (
     <div className="flex min-h-[calc(100dvh-4.25rem)] flex-col pb-4">
-      <ScreenHeader title={t.more.categories} />
+      <ScreenHeader title={t.more.categories} backTo="/more" />
       <CategoryPicker
         categories={cats}
         kind={kind}
@@ -217,6 +217,7 @@ export function FxPage() {
     <div className="pb-10">
       <ScreenHeader
         title={t.fx.title}
+        backTo="/more"
         right={
           <button type="button" disabled={busy} className="h-11 px-3 text-sm font-medium text-accent disabled:opacity-50" onClick={() => void onRefresh()}>
             {t.fx.refresh}
@@ -452,7 +453,7 @@ export function BackupPage() {
 
   return (
     <div className="pb-10">
-      <ScreenHeader title={t.more.importBackup} />
+      <ScreenHeader title={t.more.importBackup} backTo="/more" />
       <h2 className="px-5 pb-2 text-sm font-medium text-muted">{t.backup.drive}</h2>
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.backup.driveHint}</p>
       <div className="px-5 space-y-3">
@@ -617,7 +618,7 @@ export function SecurityPage() {
   const t = useT();
   return (
     <div className="pb-10">
-      <ScreenHeader title={t.security.title} />
+      <ScreenHeader title={t.security.title} backTo="/more" />
       <p className="px-5 text-sm text-muted">{t.security.hint}</p>
     </div>
   );
