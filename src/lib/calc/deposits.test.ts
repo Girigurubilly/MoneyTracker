@@ -9,7 +9,7 @@ import {
   yearlyProjection,
   yearMonthKey,
 } from "./deposits.ts";
-import type { Category, FxRate, TimeSaving, Transaction } from "../types.ts";
+import type { Category, FxRate, Recurring, TimeSaving, Transaction } from "../types.ts";
 
 const rates: FxRate[] = [
   { currency: "USD", perHkd: 7.8, asOf: "2026-09-01", source: "test" },
@@ -157,5 +157,28 @@ describe("deposits", () => {
     const y = yearlyProjection([], [], rates, 2026, 8, txs, []);
     assert.equal(y.rows[1].depInt, 8707.7);
     assert.equal(y.rows[1].other, 0);
+  });
+
+  it("fills the current month from posted income plus regulars still ahead, without repeating deposit interest", () => {
+    const plans = [{ id: "2026-10", salary: 99999, other: 88888, expense: 4000 }];
+    const txs = [
+      tx({ id: "s", type: "income", amount: 30000, date: "2026-10-01", categoryId: "salary", recurringId: "r-bonus" }),
+      tx({ id: "g", type: "income", amount: 500, date: "2026-10-02", categoryId: "gift" }),
+      tx({ id: "int", type: "income", amount: 200, date: "2026-10-03", categoryId: "interest-inc", depositId: "d1" }),
+    ];
+    const recurring: Recurring[] = [
+      { id: "r-pay", type: "income", label: "Salary", labelZh: "薪金", amount: 72000, currency: "HKD", accountId: "cash", categoryId: "salary", frequency: "monthly", nextDate: "2026-10-28", chargedDay: 28 },
+      { id: "r-gift", type: "income", label: "Family", labelZh: "家用", amount: 1000, currency: "HKD", accountId: "cash", categoryId: "gift", frequency: "monthly", nextDate: "2026-10-15", chargedDay: 15 },
+      { id: "r-bonus", type: "income", label: "Bonus", labelZh: "花紅", amount: 30000, currency: "HKD", accountId: "cash", categoryId: "salary", frequency: "monthly", nextDate: "2026-10-20", chargedDay: 20 },
+      { id: "r-int", type: "income", label: "Deposit interest", labelZh: "存款利息", amount: 9000, currency: "HKD", accountId: "cash", categoryId: "interest-inc", frequency: "monthly", nextDate: "2026-10-18", chargedDay: 18 },
+      { id: "r-past", type: "income", label: "Rent", labelZh: "租金", amount: 4000, currency: "HKD", accountId: "cash", categoryId: "gift", frequency: "monthly", nextDate: "2026-10-01", chargedDay: 1 },
+    ];
+    const y = yearlyProjection(plans, [dep({ id: "d1", endDate: "2026-10-03", interest: 200 })], rates, 2026, 9, txs, cats, 0, recurring, "2026-10-05");
+    const oct = y.rows[9];
+    assert.equal(oct.incomeLocked, true);
+    assert.equal(oct.salary, 30000 + 72000);
+    assert.equal(oct.other, 500 + 1000);
+    assert.equal(oct.depInt, 200);
+    assert.equal(oct.income, 30000 + 72000 + 500 + 1000 + 200);
   });
 });

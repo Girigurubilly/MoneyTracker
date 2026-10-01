@@ -860,7 +860,7 @@ export const messages = {
       linkedMonthCap: "Same figure as this month’s spending cap in Budget.",
       saving: "Saving",
       nowBadge: "Now",
-      yearlyPastHint: "Closed months use posted salary, interest income, other income, and expenses. Scheduled deposit interest is only used from this month onward.",
+      yearlyPastHint: "Closed months use posted salary, interest, other income, and expenses. This month’s salary and other income add posted transactions to regular income still ahead. Deposit interest stays on its own line and is not counted again.",
     },
     prices: {
       title: "Stock prices",
@@ -1926,7 +1926,7 @@ export const messages = {
       linkedMonthCap: "同預算頁本月開支上限同一個數字。",
       saving: "儲蓄",
       nowBadge: "本月",
-      yearlyPastHint: "已過月份的薪金、利息收入、其他收入和開支取自已入帳交易。定期存款的預計利息只用於本月及之後。",
+      yearlyPastHint: "已過月份的薪金、利息、其他收入和開支取自已入帳交易。本月薪金同其他收入會加上已入帳交易，以及未到收款日的定期收入。存款利息只計定期存款，唔會再當其他收入計一次。",
     },
     prices: {
       title: "持股行情",

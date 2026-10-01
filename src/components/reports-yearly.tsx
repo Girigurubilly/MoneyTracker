@@ -14,13 +14,14 @@ export function YearlyPage() {
   const rates = useApp((s) => s.fxRates);
   const txs = useApp((s) => s.transactions);
   const cats = useApp((s) => s.categories);
+  const recurring = useApp((s) => s.recurring);
   const budgets = useApp((s) => s.budgets);
   const setYearlyCell = useApp((s) => s.setYearlyCell);
   const today = todayISO();
   const year = Number(today.slice(0, 4));
   const month0 = Number(today.slice(5, 7)) - 1;
   const monthCap = budgets.find((b) => b.id === MONTH_TOTAL_BUDGET_ID)?.monthly ?? 0;
-  const data = yearlyProjection(plans, deposits, rates, year, month0, txs, cats, monthCap);
+  const data = yearlyProjection(plans, deposits, rates, year, month0, txs, cats, monthCap, recurring, today);
   const months = locale === "zh-HK" ? MONTHS_ZH : MONTHS_EN;
 
   return (
@@ -64,7 +65,7 @@ export function YearlyPage() {
             <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
               <div>
                 <div className="text-muted">{t.reports.salary}</div>
-                {row.fromLedger ? (
+                {row.incomeLocked ? (
                   <LedgerNum value={row.salary} />
                 ) : (
                   <NumCell value={row.salary} onChange={(n) => void setYearlyCell(year, row.month0, "salary", n)} />
@@ -76,7 +77,7 @@ export function YearlyPage() {
               </div>
               <div>
                 <div className="text-muted">{t.reports.otherIncome}</div>
-                {row.fromLedger ? (
+                {row.incomeLocked ? (
                   <LedgerNum value={row.other} />
                 ) : (
                   <NumCell value={row.other} onChange={(n) => void setYearlyCell(year, row.month0, "other", n)} />

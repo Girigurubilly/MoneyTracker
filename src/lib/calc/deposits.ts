@@ -1,6 +1,7 @@
-import type { Category, Currency, FxRate, TimeSaving, Transaction, YearlyPlan } from "../types.ts";
+import type { Category, Currency, FxRate, Recurring, TimeSaving, Transaction, YearlyPlan } from "../types.ts";
 import { toHkd } from "./fx.ts";
 import { cashflowSide, roundMoney } from "./ledger.ts";
+import { hkdOfRegular, monthlyIncomeRegulars, regularChargedBy } from "./budget.ts";
 
 export const MONTHS_EN = [
   "January",
@@ -162,7 +163,56 @@ export type YearlyMonthRow = {
   saving: number;
   isCurrent: boolean;
   fromLedger: boolean;
+  incomeLocked: boolean;
 };
+
+function regularIsSalary(r: Recurring, cat: Category | undefined): boolean {
+  if (isSalaryCategory(cat)) return true;
+  return /薪金|薪水|工資|工资|salary|payroll/i.test(`${r.label} ${r.labelZh}`);
+}
+
+function regularIsDepositInterest(r: Recurring, categories: Category[]): boolean {
+  const cat = categories.find((c) => c.id === r.categoryId);
+  const tx: Transaction = {
+    id: r.id,
+    type: "income",
+    amount: r.amount,
+    currency: r.currency === "MILES" ? "HKD" : r.currency,
+    accountId: r.accountId,
+    categoryId: r.categoryId,
+    date: r.nextDate || "1970-01-01",
+    payee: r.label,
+    payeeZh: r.labelZh,
+  };
+  return isDepositInterestIncome(tx, cat, categories);
+}
+
+/** Monthly income regulars still due this month, excluding ones already posted and deposit interest. */
+export function upcomingIncomeSplit(
+  recurring: Recurring[],
+  txs: Transaction[],
+  categories: Category[],
+  rates: FxRate[],
+  month: string,
+  today: string,
+): { salary: number; other: number } {
+  if (!today.startsWith(month)) return { salary: 0, other: 0 };
+  const posted = new Set(
+    txs.filter((t) => !t.planned && t.recurringId && t.date.startsWith(month)).map((t) => t.recurringId as string),
+  );
+  let salary = 0;
+  let other = 0;
+  for (const r of monthlyIncomeRegulars(recurring)) {
+    if (posted.has(r.id)) continue;
+    if (regularChargedBy(r, today)) continue;
+    if (regularIsDepositInterest(r, categories)) continue;
+    const hkd = hkdOfRegular(r, rates);
+    const cat = categories.find((c) => c.id === r.categoryId);
+    if (regularIsSalary(r, cat)) salary += hkd;
+    else other += hkd;
+  }
+  return { salary, other };
+}
 
 export function yearlyProjection(
   plans: YearlyPlan[],
@@ -173,6 +223,8 @@ export function yearlyProjection(
   txs: Transaction[] = [],
   categories: Category[] = [],
   currentMonthCap = 0,
+  recurring: Recurring[] = [],
+  today = "",
 ): {
   rows: YearlyMonthRow[];
   yearIncome: number;
@@ -192,9 +244,12 @@ export function yearlyProjection(
   const rows = Array.from({ length: 12 }, (_, month0) => {
     const plan = getYearlyPlan(plans, year, month0);
     const fromLedger = month0 < month0Now;
+    const isCurrent = month0 === month0Now;
+    const useActivity = fromLedger || (isCurrent && today.startsWith(plan.id));
     const actual = actuals.get(plan.id);
-    const salary = fromLedger ? (actual?.salary ?? 0) : plan.salary || 0;
-    const other = fromLedger ? (actual?.other ?? 0) : plan.other || 0;
+    const upcoming = useActivity && isCurrent ? upcomingIncomeSplit(recurring, txs, categories, rates, plan.id, today) : { salary: 0, other: 0 };
+    const salary = useActivity ? (actual?.salary ?? 0) + upcoming.salary : plan.salary || 0;
+    const other = useActivity ? (actual?.other ?? 0) + upcoming.other : plan.other || 0;
     const plannedExpense =
       month0 === month0Now ? linkedMonthSpendCap(currentMonthCap, plan.expense || 0) : plan.expense || 0;
     const expense = fromLedger ? (actual?.expense ?? 0) : plannedExpense;
@@ -220,8 +275,9 @@ export function yearlyProjection(
       depInt,
       income,
       saving,
-      isCurrent: month0 === month0Now,
+      isCurrent,
       fromLedger,
+      incomeLocked: useActivity,
     };
   });
   return { rows, yearIncome, yearExpense, yearSaving, asOfIncome, asOfExpense, asOfSaving };
