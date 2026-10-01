@@ -624,24 +624,35 @@ function AdhocEditorBody({
   const locale = useUi((s) => s.locale);
   const add = useApp((s) => s.addAdhocBudget);
   const update = useApp((s) => s.updateAdhocBudget);
+  const addTx = useApp((s) => s.addTransaction);
   const del = useApp((s) => s.deleteAdhocBudget);
   const addWish = useApp((s) => s.addWishItem);
   const categories = useApp((s) => s.categories);
+  const accounts = useApp((s) => s.accounts);
   const defaultCurrency = useApp((s) => s.defaultCurrency);
   const today = todayISO();
+  const moneyAccounts = moneyAccountsForPicker(accounts);
   const [name, setName] = useState(initial ? pickName(locale, initial.label, initial.labelZh) : "");
   const [amount, setAmount] = useState(initial ? String(initial.amount) : "");
   const [currency, setCurrency] = useState<Currency>(initial && initial.currency !== "MILES" ? initial.currency : defaultCurrency);
   const [date, setDate] = useState(initial?.date ?? (today.startsWith(month) ? today : `${month}-28`));
   const [categoryId, setCategoryId] = useState(initial?.categoryId ?? "");
+  const [accountId, setAccountId] = useState(
+    () => moneyAccounts.find((x) => x.type === "cash" || x.type === "current" || x.type === "savings")?.id ?? moneyAccounts[0]?.id ?? "",
+  );
   const [pickCat, setPickCat] = useState(false);
   const cat = categories.find((c) => c.id === categoryId);
+  const postToday = !initial && date === today;
 
   async function save() {
     const n = name.trim();
     const amt = resolveAmountInput(amount);
     if (!n || amt <= 0) {
       toast(t.add.needAmount);
+      return;
+    }
+    if (postToday && !accountId) {
+      toast(t.add.account);
       return;
     }
     const iso = lockToMonth ? (date.startsWith(month) ? date : `${month}-28`) : date.slice(0, 7) < today.slice(0, 7) ? today : date;
@@ -655,12 +666,26 @@ function AdhocEditorBody({
       month: rowMonth,
       date: iso,
       categoryId: categoryId || undefined,
-      paidOn: initial?.paidOn,
+      paidOn: postToday && iso === today ? today : initial?.paidOn,
       priceCards: initial?.priceCards,
       valueCards: initial?.valueCards,
     };
     if (initial) await update(row);
     else await add(row);
+    if (postToday && iso === today) {
+      await addTx({
+        type: "expense",
+        date: today,
+        amount: amt,
+        currency,
+        accountId,
+        categoryId: categoryId || undefined,
+        payee: n,
+        payeeZh: n,
+        note: n,
+        adhoc: true,
+      });
+    }
     onClose();
   }
 
@@ -726,6 +751,12 @@ function AdhocEditorBody({
           className="h-10 w-full min-w-0 max-w-full bg-transparent text-sm text-accent outline-none"
         />
       </div>
+      {postToday ? (
+        <>
+          <AccountLine accounts={moneyAccounts} value={accountId} onChange={setAccountId} placeholder={t.add.account} role={t.budget.postAdhocFrom} />
+          <p className="px-4 py-3 text-xs leading-5 text-muted">{t.budget.postTodayHint}</p>
+        </>
+      ) : null}
       {initial ? (
         <>
           {initial.paidOn || !(initial.date > today) ? null : (
