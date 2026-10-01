@@ -84,6 +84,68 @@ export function regularSettledInMonth(r: Recurring, txs: Transaction[], month: s
   });
 }
 
+function plusDays(iso: string, n: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, (m || 1) - 1, (d || 1) + n);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+}
+
+function shiftMonth(ym: string, dir: number): string {
+  const [y, m] = ym.split("-").map(Number);
+  const dt = new Date(y, (m || 1) - 1 + dir, 1);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Expense still ahead in the next `days` days. A regular and its planned copy are counted once. Paid items are left out. */
+export function committedOutflows(
+  recurring: Recurring[],
+  adhoc: AdhocBudget[],
+  txs: Transaction[],
+  rates: FxRate[],
+  today: string,
+  days = 14,
+): number {
+  const until = plusDays(today, days);
+  const month = today.slice(0, 7);
+  let sum = 0;
+  for (const r of recurring) {
+    const spend = isExpenseRegular(r) || (r.type === "transfer" && Boolean(r.countsAsExpense));
+    if (!spend) continue;
+    const dates =
+      r.frequency === "monthly"
+        ? [chargedIso(month, chargedDayOf(r)), chargedIso(shiftMonth(month, 1), chargedDayOf(r))]
+        : [r.nextDate];
+    for (const iso of dates) {
+      if (iso <= today || iso > until) continue;
+      if (regularSettledInMonth(r, txs, iso.slice(0, 7), iso)) continue;
+      sum += hkdOfRegular(r, rates);
+    }
+  }
+  for (const a of adhoc) {
+    if (a.paidOn) continue;
+    if (a.date <= today || a.date > until) continue;
+    const posted = txs.some(
+      (t) =>
+        !t.planned &&
+        t.adhoc &&
+        Math.abs(t.amount - a.amount) < 0.01 &&
+        (t.payee === a.label || t.payeeZh === a.labelZh) &&
+        t.date.startsWith(a.date.slice(0, 7)),
+    );
+    if (posted) continue;
+    sum += Math.abs(toHkd(a.amount, a.currency, rates));
+  }
+  for (const tx of txs) {
+    if (!tx.planned || tx.recurringId) continue;
+    if (tx.date <= today || tx.date > until) continue;
+    const spend = tx.type === "expense" || (tx.type === "transfer" && Boolean(tx.countsAsExpense));
+    if (!spend) continue;
+    if (tx.adhoc && adhoc.some((a) => !a.paidOn && a.date === tx.date && Math.abs(a.amount - tx.amount) < 0.01)) continue;
+    sum += Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
+  }
+  return sum;
+}
+
 export function reservedRegulars(recurring: Recurring[], rates: FxRate[], asOfIso: string): number {
   let sum = 0;
   for (const r of monthlyExpenseRegulars(recurring)) {

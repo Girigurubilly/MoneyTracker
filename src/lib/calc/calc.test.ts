@@ -12,6 +12,7 @@ import {
   projectedNonRegularRemain,
   avgDailyNonRegular,
   regularSettledInMonth,
+  committedOutflows,
 } from "./budget.ts";
 import { convertAmount, parseErApi, parseFrankfurter } from "./fx.ts";
 import { MONTH_TOTAL_BUDGET_ID } from "../types.ts";
@@ -479,6 +480,12 @@ describe("year compare", () => {
     assert.equal(same.rows[0].delta, 60);
     const full = yearCategoryCompare(txs, cats, [], "2026-09-03", "full-last-year", "expense", true);
     assert.equal(full.rows[0].lastYear, 50);
+    const zoom = yearCategoryCompare(txs, cats, [], "2026-09-03", "same-stage", "expense", true, "food");
+    assert.equal(zoom.rows.length, 1);
+    assert.equal(zoom.rows[0].id, "dine");
+    assert.equal(zoom.rows[0].thisYear, 100);
+    assert.equal(zoom.rows[0].lastYear, 40);
+    assert.equal(zoom.thisTotal, 100);
   });
 });
 
@@ -559,5 +566,13 @@ describe("settled regulars", () => {
     assert.equal(regularSettledInMonth(salary, [posted], "2026-10", "2026-10-28"), true);
     assert.equal(regularSettledInMonth(salary, [{ ...posted, planned: true }], "2026-10", "2026-10-28"), false);
     assert.equal(regularSettledInMonth(salary, [tx({ id: "t2", type: "income", amount: 72000, date: "2026-09-28", recurringId: "r-pay" })], "2026-10", "2026-10-28"), false);
+  });
+
+  it("counts a regular once, and skips it after it is paid", () => {
+    const rent = rec({ id: "r-rent", type: "expense", amount: 8000, chargedDay: 5, accountId: "cash" });
+    const planned = tx({ id: "p", type: "expense", amount: 8000, date: "2026-10-05", accountId: "cash", recurringId: "r-rent", planned: true });
+    assert.equal(committedOutflows([rent], [], [planned], [], "2026-10-01", 14), 8000);
+    const paid = { ...planned, planned: false };
+    assert.equal(committedOutflows([rent], [], [paid], [], "2026-10-01", 14), 0);
   });
 });

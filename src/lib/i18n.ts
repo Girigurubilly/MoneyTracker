@@ -372,6 +372,7 @@ export const messages = {
       custom: "Custom",
       both: "Income / spend",
       mergeParents: "Merge by group",
+      compareAll: "All categories",
       hideAdhoc: "Hide ad-hoc",
       exportPeriodAi: "Period for AI",
       exportPeriodAiHint:
@@ -1441,6 +1442,7 @@ export const messages = {
       custom: "自訂",
       both: "收入 / 花費",
       mergeParents: "按主分類合併",
+      compareAll: "全部分類",
       hideAdhoc: "唔計臨時大額",
       exportPeriodAi: "呢段俾 AI",
       exportPeriodAiHint:

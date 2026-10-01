@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { ChevronRight } from "lucide-react";
 import { ScreenHeader } from "@/components/shared";
 import { money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
@@ -18,10 +19,12 @@ export function YearComparePage() {
   const [mode, setMode] = useState<"same-stage" | "full-last-year">("same-stage");
   const [tab, setTab] = useState<PeriodTab>("expense");
   const [merge, setMerge] = useState(true);
+  const [zoomId, setZoomId] = useState<string | null>(null);
   const range = yearCompareRanges(today, mode);
+  const zoom = zoomId ? cats.find((c) => c.id === zoomId) : undefined;
   const data = useMemo(
-    () => yearCategoryCompare(txs, cats, rates, today, mode, tab, merge),
-    [txs, cats, rates, today, mode, tab, merge],
+    () => yearCategoryCompare(txs, cats, rates, today, mode, tab, merge, zoomId ?? undefined),
+    [txs, cats, rates, today, mode, tab, merge, zoomId],
   );
   const chart = data.rows.slice(0, 8).map((r) => ({
     ...r,
@@ -71,12 +74,24 @@ export function YearComparePage() {
       <div className="px-4 pt-3">
         <button
           type="button"
-          onClick={() => setMerge((v) => !v)}
+          onClick={() => {
+            setMerge((v) => !v);
+            setZoomId(null);
+          }}
           className={cn("h-8 rounded-full px-3 text-sm font-medium", merge ? "bg-accent text-on-accent" : "bg-elevated text-muted")}
         >
           {t.reports.mergeParents}
         </button>
       </div>
+      {zoom ? (
+        <button type="button" className="mx-4 mt-3 flex h-11 w-[calc(100%-2rem)] items-center justify-between rounded-xl bg-elevated px-4 text-left" onClick={() => setZoomId(zoom.parentId ?? null)}>
+          <span className="min-w-0">
+            <span className="block text-[11px] text-muted">{t.reports.compareAll}</span>
+            <span className="block truncate text-sm font-medium">{pickName(locale, zoom.name, zoom.nameZh)}</span>
+          </span>
+          <ChevronRight className="size-4 rotate-180 text-faint" />
+        </button>
+      ) : null}
       <div className="mx-4 mt-3 grid grid-cols-2 gap-3 rounded-xl bg-elevated px-4 py-3">
         <div>
           <div className="text-xs text-muted">{t.reports.thisYearCol}</div>
@@ -111,12 +126,23 @@ export function YearComparePage() {
           const tone = r.delta > 0 ? "text-expense" : r.delta < 0 ? "text-income" : "text-muted";
           const pct =
             r.pct == null ? (r.thisYear > 0 ? "—" : "0%") : `${r.pct >= 0 ? "+" : ""}${Math.round(r.pct * 100)}%`;
+          const kids = cats.some((c) => c.parentId === r.id);
+          const open = kids;
           return (
-            <div key={r.id} className="border-t border-line py-3 first:border-0">
+            <button
+              key={r.id}
+              type="button"
+              disabled={!open}
+              onClick={() => open && setZoomId(r.id)}
+              className="block w-full border-t border-line py-3 text-left first:border-0 disabled:cursor-default"
+            >
               <div className="flex items-center justify-between gap-3">
                 <span className="min-w-0 truncate text-sm">{pickName(locale, r.name, r.nameZh)}</span>
-                <span className={cn("shrink-0 text-sm font-medium tabular-nums", tone)}>
-                  {money(r.delta, "HKD", { sign: true })} · {pct}
+                <span className="flex shrink-0 items-center gap-1">
+                  <span className={cn("text-sm font-medium tabular-nums", tone)}>
+                    {money(r.delta, "HKD", { sign: true })} · {pct}
+                  </span>
+                  {open ? <ChevronRight className="size-4 text-faint" /> : null}
                 </span>
               </div>
               <div className="mt-1 flex justify-between text-xs tabular-nums text-muted">
@@ -127,7 +153,7 @@ export function YearComparePage() {
                   {t.reports.lastYearCol} {money(r.lastYear, "HKD")}
                 </span>
               </div>
-            </div>
+            </button>
           );
         })}
       </div>

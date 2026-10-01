@@ -6,11 +6,11 @@ import { Disclaimer, Group, Hairline, ScreenHeader, StatusChip, BudgetChip } fro
 import { money, pct, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { monthKeysBack, monthLabel } from "@/lib/derived";
-import { chargedIso, isExpenseRegular, monthFlow } from "@/lib/calc/budget";
+import { budgetActuals, committedOutflows, monthEndIso, monthFlow } from "@/lib/calc/budget";
 import { nextTrip, travelSpendYtd, tripCashSpent } from "@/lib/calc/trips";
 import { effectiveRate } from "@/lib/calc/mortgage";
 import { housingStatus, monthlyHousingCost } from "@/lib/calc/housing";
-import { netWorthNow } from "@/lib/calc/networth";
+import { netWorthNow, periodNetWorthPoints } from "@/lib/calc/networth";
 import { retirementStatus } from "@/lib/calc/retirement";
 import { lifePlanMonthlyRoom } from "@/lib/calc/life-plan";
 import { useLifePlanResult, useRetirementModel } from "@/components/reports-retire";
@@ -83,7 +83,7 @@ export function DashboardPage() {
   const accounts = useApp((s) => s.accounts);
   const budgets = useApp((s) => s.budgets);
   const adhoc = useApp((s) => s.adhocBudgets);
-  const snaps = useApp((s) => s.snapshots);
+  const targetMode = useApp((s) => s.budgetTargetMode);
   const m = useApp((s) => s.mortgage);
   const trips = useApp((s) => s.trips);
   const annual = useApp((s) => s.annualTravelBudget);
@@ -108,6 +108,9 @@ export function DashboardPage() {
   const nxtSpent = nxt ? tripCashSpent(txs, nxt.id, rates) : 0;
   const month = monthKey(today);
   const flow = monthFlow(txs, month, rates);
+  const monthRow = budgetActuals(budgets, txs, month, rates, cats, rec, today, adhoc, targetMode).find(
+    (b) => b.id === MONTH_TOTAL_BUDGET_ID,
+  );
   const ytdFlow = monthKeysBack(month, Number(today.slice(5, 7))).reduce(
     (acc, m) => {
       const f = monthFlow(txs, m, rates);
@@ -115,30 +118,15 @@ export function DashboardPage() {
     },
     { income: 0, expense: 0 },
   );
-  const essentials = rec.filter((r) => r.essential && isExpenseRegular(r) && r.frequency === "monthly").reduce((s, r) => s + r.amount, 0);
-  const plannedXfer = rec.filter((r) => r.type === "transfer" && !r.countsAsExpense && r.frequency === "monthly").reduce((s, r) => s + r.amount, 0);
-  const cap = budgets.find((b) => b.id === MONTH_TOTAL_BUDGET_ID)?.monthly ?? 0;
-  const available = flow.income - essentials - plannedXfer - cap;
-  const until = addDaysIso(today, 14);
-  let next14 = 0;
-  for (const r of rec) {
-    if (!isExpenseRegular(r) && r.type !== "transfer") continue;
-    const dates = r.frequency === "monthly" ? [chargedIso(month, r.chargedDay ?? 1), chargedIso(shiftYm(month, 1), r.chargedDay ?? 1)] : [r.nextDate];
-    for (const iso of dates) {
-      if (iso > today && iso <= until) next14 += r.amount;
-    }
-  }
-  for (const a of adhoc) {
-    if (a.date > today && a.date <= until) next14 += a.amount;
-  }
-  for (const tx of txs) {
-    if (!tx.planned) continue;
-    if (tx.date <= today || tx.date > until) continue;
-    if (tx.type === "expense" || (tx.type === "transfer" && tx.countsAsExpense)) next14 += tx.amount;
-  }
+  const cap = monthRow?.monthly ?? 0;
+  const spent = monthRow?.spent ?? flow.expense;
+  const hold = (monthRow?.reserved ?? 0) + (targetMode === "regular" ? 0 : (monthRow?.reservedAdhoc ?? 0));
+  const available = cap > 0 ? (monthRow?.remaining ?? cap - spent - hold) : flow.income - spent - hold;
+  const next14 = committedOutflows(rec, adhoc, txs, rates, today, 14);
   const nw = netWorthNow(accounts, rates);
-  const prevSnap = snaps.find((s) => s.month === shiftYm(month, -1));
-  const nwDelta = prevSnap ? nw.net - prevSnap.net : 0;
+  const prevEnd = monthEndIso(shiftYm(month, -1));
+  const prevWorth = periodNetWorthPoints(accounts, txs, rates, prevEnd, prevEnd).at(-1)?.net;
+  const nwDelta = prevWorth == null ? 0 : nw.net - prevWorth;
   const saveM = flow.income > 0 ? flow.net / flow.income : 0;
   const saveY = ytdFlow.income > 0 ? (ytdFlow.income - ytdFlow.expense) / ytdFlow.income : 0;
 
@@ -147,7 +135,7 @@ export function DashboardPage() {
       <ScreenHeader title={t.reports.dashboard} backTo="/reports" />
       <div className="mx-4 mb-3 rounded-xl bg-elevated px-4 py-3">
         <DashRow label={t.reports.availableSpend} value={money(available, "HKD", { sign: true })} />
-        <DashRow label={t.reports.mtdVsBudget} value={cap ? `${money(flow.expense, "HKD")} / ${money(cap, "HKD")}` : money(flow.expense, "HKD")} />
+        <DashRow label={t.reports.mtdVsBudget} value={cap ? `${money(spent, "HKD")} / ${money(cap, "HKD")}` : money(spent, "HKD")} />
         <DashRow label={t.reports.next14} value={money(next14, "HKD")} />
         <DashRow label={t.reports.netWorthNow} value={`${money(nw.net, "HKD")} (${t.reports.vsLastMonth} ${money(nwDelta, "HKD", { sign: true })})`} />
         <DashRow label={t.reports.saveRateMonth} value={pct(saveM)} />
@@ -226,12 +214,6 @@ function DashRow({ label, value }: { label: string; value: string }) {
       <span className="max-w-[58%] text-right text-sm font-semibold tabular-nums">{value}</span>
     </div>
   );
-}
-
-function addDaysIso(iso: string, n: number): string {
-  const d = new Date(`${iso}T12:00:00`);
-  d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0, 10);
 }
 
 function shiftYm(ym: string, dir: number): string {

@@ -208,6 +208,18 @@ export type YearCompareRow = {
   colorIndex: number;
 };
 
+function directChildId(cat: Category, parentId: string, categories: Category[]): string | null {
+  if (cat.id === parentId) return parentId;
+  let cur: Category | undefined = cat;
+  for (let i = 0; i < 8 && cur; i++) {
+    if (cur.parentId === parentId) return cur.id;
+    if (!cur.parentId) return null;
+    const nextId: string | undefined = cur.parentId;
+    cur = categories.find((c) => c.id === nextId);
+  }
+  return null;
+}
+
 export function yearCategoryCompare(
   txs: Transaction[],
   categories: Category[],
@@ -216,10 +228,24 @@ export function yearCategoryCompare(
   mode: "same-stage" | "full-last-year",
   tab: PeriodTab,
   mergeParents: boolean,
+  parentId?: string,
 ): { rows: YearCompareRow[]; thisTotal: number; lastTotal: number } {
+  let source = txs;
+  let merge = mergeParents;
+  if (parentId) {
+    merge = false;
+    source = [];
+    for (const tx of txs) {
+      const cat = categories.find((c) => c.id === tx.categoryId);
+      if (!cat) continue;
+      const bucket = directChildId(cat, parentId, categories);
+      if (!bucket) continue;
+      source.push(bucket === tx.categoryId ? tx : { ...tx, categoryId: bucket });
+    }
+  }
   const range = yearCompareRanges(today, mode);
-  const current = periodCategoryTotals(txs, categories, rates, range.thisFrom, range.thisTo, tab, mergeParents);
-  const prior = periodCategoryTotals(txs, categories, rates, range.lastFrom, range.lastTo, tab, mergeParents);
+  const current = periodCategoryTotals(source, categories, rates, range.thisFrom, range.thisTo, tab, merge);
+  const prior = periodCategoryTotals(source, categories, rates, range.lastFrom, range.lastTo, tab, merge);
   const ids = new Set([...current.rows.map((r) => r.id), ...prior.rows.map((r) => r.id)]);
   const priorMap = new Map(prior.rows.map((r) => [r.id, r]));
   const currentMap = new Map(current.rows.map((r) => [r.id, r]));
