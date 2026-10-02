@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   depositDayCount,
+  depositsOutsideBalances,
   getMonthlyDepositInterest,
   monthActualsFromTxs,
   suggestedInterest,
@@ -9,7 +10,7 @@ import {
   yearlyProjection,
   yearMonthKey,
 } from "./deposits.ts";
-import type { Category, FxRate, Recurring, TimeSaving, Transaction } from "../types.ts";
+import type { Account, Category, FxRate, Recurring, TimeSaving, Transaction } from "../types.ts";
 
 const rates: FxRate[] = [
   { currency: "USD", perHkd: 7.8, asOf: "2026-09-01", source: "test" },
@@ -51,6 +52,15 @@ describe("deposits", () => {
 
   it("suggests simple interest on a 365-day year", () => {
     assert.equal(suggestedInterest(200000, 3.8, "2026-03-15", "2026-12-15"), 5726.03);
+  });
+
+  it("adds a time deposit only when the linked balance does not already contain it", () => {
+    const bank = { id: "cash", name: "Bank", nameZh: "銀行", type: "savings", currency: "HKD", balance: 300_000, includeInNetWorth: true, group: "cash" } as Account;
+    const inside = dep({ id: "in", amount: 200_000, endDate: "2026-12-01" });
+    const outside = dep({ id: "out", accountId: "other", amount: 50_000, endDate: "2026-12-01" });
+    const matured = dep({ id: "old", accountId: "missing", amount: 80_000, endDate: "2026-01-01" });
+    const rows = depositsOutsideBalances([inside, outside, matured], [bank], rates, "2026-10-02");
+    assert.deepEqual(rows.map((d) => d.id), ["out"]);
   });
 
   it("summarizes active vs realized interest in HKD", () => {

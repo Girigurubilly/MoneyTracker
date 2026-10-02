@@ -1,4 +1,4 @@
-import type { Category, Currency, FxRate, Recurring, TimeSaving, Transaction, YearlyPlan } from "../types.ts";
+import type { Account, Category, Currency, FxRate, Recurring, TimeSaving, Transaction, YearlyPlan } from "../types.ts";
 import { toHkd } from "./fx.ts";
 import { cashflowSide, roundMoney } from "./ledger.ts";
 import { hkdOfRegular, monthlyIncomeRegulars, regularChargedBy } from "./budget.ts";
@@ -37,6 +37,25 @@ export function suggestedInterest(amount: number, ratePct: number, startDate: st
   const days = depositDayCount(startDate, endDate);
   if (!days || !amount || !ratePct) return 0;
   return roundMoney(amount * (ratePct / 100) * (days / 365));
+}
+
+/** Active time deposits whose principal is not already inside the linked account balance. */
+export function depositsOutsideBalances(deposits: TimeSaving[], accounts: Account[], rates: FxRate[], today: string): TimeSaving[] {
+  const active = deposits.filter((d) => d.amount > 0 && (!d.endDate || d.endDate >= today));
+  const cover = new Map<string, number>();
+  for (const a of accounts) {
+    if (a.hidden || a.currency === "MILES") continue;
+    cover.set(a.id, (cover.get(a.id) ?? 0) + Math.max(0, toHkd(a.balance, a.currency, rates)));
+  }
+  const extra: TimeSaving[] = [];
+  const sorted = [...active].sort((a, b) => toHkd(a.amount, a.currency, rates) - toHkd(b.amount, b.currency, rates));
+  for (const d of sorted) {
+    const hkd = Math.max(0, toHkd(d.amount, d.currency, rates));
+    const left = d.accountId ? cover.get(d.accountId) : undefined;
+    if (left != null && left + 0.5 >= hkd) cover.set(d.accountId, left - hkd);
+    else extra.push(d);
+  }
+  return extra;
 }
 
 export type DepositSummary = {

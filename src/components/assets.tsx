@@ -18,7 +18,7 @@ import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Hairline, Overlay, ScreenHeader, SectionLabel, TxGroupedList } from "@/components/shared";
 import { AmountWithHkd } from "@/components/currency-field";
-import { money } from "@/lib/format";
+import { money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { resolveSignedAmountInput } from "@/lib/money-expr";
 import { isDebtAccount } from "@/lib/calc/ledger";
@@ -35,6 +35,7 @@ import {
 import { AssetBriefButton } from "@/components/asset-brief";
 import { netWorthNow } from "@/lib/calc/networth";
 import { toHkd } from "@/lib/calc/fx";
+import { depositsOutsideBalances } from "@/lib/calc/deposits";
 import { accountsInGroup, BALANCE_GROUP_ORDER, isKidVisibleAccount, nextSortOrder } from "@/lib/accounts";
 import {
   ACCOUNT_TYPE_OPTIONS,
@@ -89,14 +90,11 @@ function TypeGlyph({ type }: { type: AccountType }) {
   return map[type];
 }
 
-function isForeignSection(a: Account) {
-  return a.type === "fx";
-}
-
 export function AssetsScreen() {
   const t = useT();
   const kid = useUi((s) => s.accessMode) === "kid";
   const accounts = useApp((s) => s.accounts);
+  const deposits = useApp((s) => s.deposits);
   const rates = useApp((s) => s.fxRates);
   const scoped = kid ? accounts.filter(isKidVisibleAccount) : accounts;
   const nw = netWorthNow(scoped, rates);
@@ -113,8 +111,8 @@ export function AssetsScreen() {
   };
   const visible = scoped.filter((a) => !a.hidden);
   const hiddenRows = scoped.filter((a) => a.hidden);
-  const fxRows = visible.filter(isForeignSection);
-  const fxIds = new Set(fxRows.map((a) => a.id));
+  const today = todayISO();
+  const outsideDeposits = depositsOutsideBalances(deposits, visible, rates, today);
   const groups = BALANCE_GROUP_ORDER.filter((id) => {
     if (id === "loyalty") return false;
     if (kid && (id === "assets" || id === "housing")) return false;
@@ -164,9 +162,12 @@ export function AssetsScreen() {
         </div>
       )}
       {groups.map((g) => {
-        const rows = accountsInGroup(visible, g.id).filter((a) => !fxIds.has(a.id));
-        if (!rows.length) return null;
-        const total = rows.reduce((s, a) => s + toHkd(a.balance, a.currency, rates), 0);
+        const rows = accountsInGroup(visible, g.id);
+        const depositRows = g.id === "cash" && !kid ? outsideDeposits : [];
+        if (!rows.length && !depositRows.length) return null;
+        const total =
+          rows.reduce((s, a) => s + toHkd(a.balance, a.currency, rates), 0) +
+          depositRows.reduce((s, d) => s + toHkd(d.amount, d.currency, rates), 0);
         return (
           <AssetSection key={g.id} label={g.label} total={total} currencyHint="HKD">
             {rows.map((a, i) => (
@@ -179,20 +180,24 @@ export function AssetsScreen() {
                 onEdit={() => openAccount(a.id)}
               />
             ))}
+            {depositRows.map((d) => (
+              <Link key={d.id} to="/reports/deposits" className="flex items-center gap-3 rounded-2xl bg-elevated px-3 py-3 shadow-[0_6px_18px_rgba(15,23,42,0.05)]">
+                <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#e8f8ee] text-[#1f7a3a]">
+                  <PiggyBank className="size-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold">{d.bank || t.reports.deposits}</span>
+                  <span className="mt-0.5 block truncate text-[11px] text-muted">
+                    {t.reports.deposits}
+                    {d.endDate ? ` · ${d.endDate}` : ""}
+                  </span>
+                </span>
+                <AmountWithHkd amount={d.amount} currency={d.currency} rates={rates} className="text-base font-semibold" />
+              </Link>
+            ))}
           </AssetSection>
         );
       })}
-      {fxRows.length ? (
-        <AssetSection
-          label={t.assets.foreign}
-          total={fxRows.reduce((s, a) => s + toHkd(a.balance, a.currency, rates), 0)}
-          currencyHint="HKD"
-        >
-          {fxRows.map((a) => (
-            <AccountCard key={a.id} a={a} reorder={reorder} canUp={false} canDown={false} onEdit={() => openAccount(a.id)} />
-          ))}
-        </AssetSection>
-      ) : null}
       {hiddenRows.length ? (
         <div className="mb-4">
           <button

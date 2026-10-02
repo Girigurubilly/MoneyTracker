@@ -1,10 +1,10 @@
-import type { Account, AccountGroup } from "./types";
+import { groupForType, type Account, type AccountGroup } from "./types.ts";
 
 export const BALANCE_GROUP_ORDER: AccountGroup[] = ["cash", "credit", "assets", "housing", "loyalty"];
 
 export function accountsInGroup(accounts: Account[], group: AccountGroup): Account[] {
   return accounts
-    .filter((a) => a.group === group)
+    .filter((a) => groupForType(a.type) === group)
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
 }
 

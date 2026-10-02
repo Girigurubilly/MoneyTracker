@@ -940,7 +940,7 @@ export const useApp = create<AppState>((set, get) => ({
     const accounts = get().accounts;
     const acc = accounts.find((a) => a.id === id);
     if (!acc) return;
-    const rows = accountsInGroup(accounts, acc.group);
+    const rows = accountsInGroup(accounts, groupForType(acc.type));
     const i = rows.findIndex((a) => a.id === id);
     if (i < 0) return;
     let j = i + dir;
