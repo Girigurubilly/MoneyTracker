@@ -519,6 +519,8 @@ export type Mortgage = {
   livingMode?: "own-mortgage" | "own-outright" | "rent" | "other";
   propertyAccountId?: string;
   paymentOverride?: number;
+  /** Manual interest and principal for YYYY-MM, instead of the formula. */
+  scheduleEdits?: Record<string, { interest: number; principal: number }>;
 };
 
 export type Allowance = {

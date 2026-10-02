@@ -1,10 +1,10 @@
 import type { Account, Category, FxRate, Locale, Mortgage, Recurring, Transaction } from "../types.ts";
-import { isMortgagePrincipalCategory, isHousingCategory } from "../categories.ts";
+import { isMortgagePrincipalCategory, isMortgageInterestCategory, isHousingCategory } from "../categories.ts";
 import { isSpendLike, inMonth } from "./ledger.ts";
 import { monthlyExpenseRegulars, hkdOfRegular, coverRegulars } from "./budget.ts";
 import { monthlyPayment, remainingInterest, effectiveRate, originalPrincipal, originalTermMonths, amortizeFrom, monthsBetween } from "./mortgage.ts";
-import { todayISO } from "../format.ts";
 import { toHkd } from "./fx.ts";
+import { todayISO } from "../format.ts";
 
 export type LivingMode = NonNullable<Mortgage["livingMode"]>;
 
@@ -239,8 +239,7 @@ export function stressRows(m: Mortgage): { shock: number; payment: number; inter
   }));
 }
 
-export function projection12(m: Mortgage) {
-  const today = todayISO();
+export function projection12(m: Mortgage, today = todayISO()) {
   const orig = originalPrincipal(m);
   const term = originalTermMonths(m, today);
   let skip = m.startDate ? monthsBetween(m.startDate, today) : Math.max(0, term - m.remainingMonths);
@@ -252,10 +251,108 @@ export function projection12(m: Mortgage) {
   const shown = amortizeFrom(orig, effectiveRate(m), term, skip, 12);
   const [y, mo] = thisMonth.split("-").map(Number);
   const start = new Date(y, (mo || 1) - 1 + (includeCurrent ? 0 : 1), 1);
-  return {
-    ...shown,
-    firstMonth: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`,
-  };
+  const firstMonth = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
+  const edits = m.scheduleEdits ?? {};
+  const hasEdit = Object.keys(edits).some((month) => shown.rows.some((_, i) => addYearMonths(firstMonth, i) === month));
+  if (!hasEdit) {
+    return {
+      payment: shown.payment,
+      firstMonth,
+      rows: shown.rows.map((r, i) => ({ ...r, month: addYearMonths(firstMonth, i), edited: false })),
+    };
+  }
+  let bal = shown.rows[0] ? shown.rows[0].balance + shown.rows[0].principal : orig;
+  const rate = effectiveRate(m) / 12;
+  const rows = shown.rows.map((r, i) => {
+    const month = addYearMonths(firstMonth, i);
+    const edit = edits[month];
+    const interestCalc = bal * rate;
+    const principalCalc = Math.min(Math.max(0, shown.payment - interestCalc), bal);
+    const interest = edit ? roundMoney(edit.interest) : roundMoney(interestCalc);
+    const principal = edit ? roundMoney(Math.min(Math.max(0, edit.principal), bal)) : roundMoney(principalCalc);
+    bal = roundMoney(Math.max(0, bal - principal));
+    return { ...r, month, interest, principal, balance: bal, edited: Boolean(edit) };
+  });
+  return { payment: shown.payment, rows, firstMonth };
+}
+
+export function mortgageMonthLabel(month: string, locale: Locale): string {
+  const [y, m] = month.split("-").map(Number);
+  if (locale === "zh-HK") return `${y}年${m}月`;
+  return new Date(y, m - 1, 1).toLocaleDateString("en-HK", { month: "short", year: "numeric" });
+}
+
+export function mortgageRegularPair(recurring: Recurring[], categories: Category[]): { principal?: Recurring; interest?: Recurring } {
+  let principal: Recurring | undefined;
+  let interest: Recurring | undefined;
+  for (const r of recurring) {
+    if (r.frequency !== "monthly") continue;
+    const cat = categories.find((c) => c.id === r.categoryId);
+    if (!cat) continue;
+    if (!principal && isMortgagePrincipalCategory(cat)) principal = r;
+    else if (!interest && isMortgageInterestCategory(cat)) interest = r;
+  }
+  return { principal, interest };
+}
+
+/** After the regular 本金 / 利息 amounts change, store them on that payment month. */
+export function mortgageFromRegulars(m: Mortgage, recurring: Recurring[], categories: Category[], today: string): Mortgage | undefined {
+  const active = projection12(m, today).rows[0];
+  if (!active) return undefined;
+  const pair = mortgageRegularPair(recurring, categories);
+  if (!pair.principal && !pair.interest) return undefined;
+  const interest = pair.interest?.amount ?? active.interest;
+  const principal = pair.principal?.amount ?? active.principal;
+  if (Math.abs(interest - active.interest) < 0.05 && Math.abs(principal - active.principal) < 0.05) return undefined;
+  return { ...m, scheduleEdits: { ...m.scheduleEdits, [active.month]: { interest, principal } } };
+}
+export function alignMortgageAndRegulars(
+  m: Mortgage,
+  recurring: Recurring[],
+  categories: Category[],
+  today: string,
+): { mortgage?: Mortgage; regulars: Recurring[] } {
+  const shown = projection12(m, today);
+  const active = shown.rows[0];
+  if (!active) return { regulars: [] };
+  const pair = mortgageRegularPair(recurring, categories);
+  const edit = m.scheduleEdits?.[active.month];
+  if (!edit && pair.principal && pair.interest) {
+    const bare = projection12({ ...m, scheduleEdits: withoutMonth(m.scheduleEdits, active.month) }, today).rows[0];
+    if (
+      bare &&
+      (Math.abs(pair.principal.amount - bare.principal) > 0.05 || Math.abs(pair.interest.amount - bare.interest) > 0.05)
+    ) {
+      return {
+        mortgage: {
+          ...m,
+          scheduleEdits: { ...m.scheduleEdits, [active.month]: { interest: pair.interest.amount, principal: pair.principal.amount } },
+        },
+        regulars: [],
+      };
+    }
+  }
+  const regulars: Recurring[] = [];
+  if (pair.principal && Math.abs(pair.principal.amount - active.principal) > 0.05) regulars.push({ ...pair.principal, amount: active.principal });
+  if (pair.interest && Math.abs(pair.interest.amount - active.interest) > 0.05) regulars.push({ ...pair.interest, amount: active.interest });
+  return { regulars };
+}
+
+function withoutMonth(edits: Mortgage["scheduleEdits"], month: string): Mortgage["scheduleEdits"] {
+  if (!edits?.[month]) return edits;
+  const next = { ...edits };
+  delete next[month];
+  return next;
+}
+
+function addYearMonths(ym: string, n: number): string {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(y, m - 1 + n, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function roundMoney(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 export function linkedProperty(accounts: Account[], m: Mortgage | null): Account | undefined {

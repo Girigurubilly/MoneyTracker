@@ -16,8 +16,8 @@ import {
 } from "./budget.ts";
 import { convertAmount, parseErApi, parseFrankfurter } from "./fx.ts";
 import { MONTH_TOTAL_BUDGET_ID } from "../types.ts";
-import type { AdhocBudget, Budget, Category, Recurring, Transaction } from "../types.ts";
-import { monthlyLivingEssentials, monthlyHousingCost, isPrincipalRegular, housingRegularRows, housingMonthLines, projection12 } from "./housing.ts";
+import type { AdhocBudget, Budget, Category, Mortgage, Recurring, Transaction } from "../types.ts";
+import { monthlyLivingEssentials, monthlyHousingCost, isPrincipalRegular, housingRegularRows, housingMonthLines, projection12, mortgageFromRegulars, alignMortgageAndRegulars } from "./housing.ts";
 import { todayISO } from "../format.ts";
 import { monthKey } from "./ledger.ts";
 import { periodCategoryTotals, periodCategoryTxs, periodRange, yearCategoryCompare, yearCompareRanges, monthlyCashTrends } from "./period.ts";
@@ -414,6 +414,49 @@ describe("projection12 payment day", () => {
     assert.equal(onDay.rows.length, 12);
     const early = projection12({ ...mortgage, paymentDay: 1 });
     assert.equal(early.firstMonth, monthOf(day > 1 ? 1 : 0));
+  });
+  it("next 12 payments are dated and a month edit matches the regulars", () => {
+    const cats: Category[] = [
+      { id: "mortgage-p", name: "Mortgage principal", nameZh: "按揭本金", theme: "living", kind: "expense", icon: "home", parentId: "p-housing" },
+      { id: "mortgage-i", name: "Mortgage interest", nameZh: "按揭利息", theme: "living", kind: "expense", icon: "home", parentId: "p-housing" },
+    ];
+    const recurring: Recurring[] = [
+      rec({ id: "r-p", type: "transfer", amount: 8800, chargedDay: 1, categoryId: "mortgage-p", countsAsExpense: true, label: "Principal" }),
+      rec({ id: "r-i", type: "expense", amount: 5319, chargedDay: 1, categoryId: "mortgage-i", label: "Interest" }),
+    ];
+    const m: Mortgage = {
+      id: "m",
+      name: "m",
+      nameZh: "m",
+      accountId: "mortgage",
+      original: 1_000_000,
+      outstanding: 500_000,
+      rate: 0.03,
+      remainingMonths: 120,
+      paymentDay: 15,
+      type: "fixed",
+      livingMode: "own-mortgage",
+    };
+    const rows = projection12(m, "2026-10-02").rows;
+    assert.equal(rows.length, 12);
+    assert.equal(rows[0].month, "2026-10");
+    assert.equal(projection12(m, "2026-10-20").rows[0].month, "2026-11");
+    const edited = projection12({ ...m, scheduleEdits: { "2026-10": { interest: 1000, principal: 4000 } } }, "2026-10-02");
+    assert.equal(edited.rows[0].interest, 1000);
+    assert.equal(edited.rows[0].principal, 4000);
+    assert.equal(edited.rows[1].month, "2026-11");
+    const saved = mortgageFromRegulars(m, recurring, cats, "2026-10-02");
+    assert.equal(saved?.scheduleEdits?.["2026-10"].principal, 8800);
+    assert.equal(saved?.scheduleEdits?.["2026-10"].interest, 5319);
+    const aligned = alignMortgageAndRegulars(saved!, recurring, cats, "2026-10-02");
+    assert.equal(aligned.regulars.length, 0);
+    const forced = alignMortgageAndRegulars(
+      saved!,
+      recurring.map((r) => (r.id === "r-p" ? { ...r, amount: 1 } : r)),
+      cats,
+      "2026-10-02",
+    );
+    assert.equal(forced.regulars.find((r) => r.id === "r-p")?.amount, 8800);
   });
 });
 

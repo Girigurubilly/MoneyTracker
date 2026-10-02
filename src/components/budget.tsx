@@ -29,6 +29,7 @@ import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 import { WishlistBlock } from "@/components/wishlist";
 import { defaultMortgageAccountId, moneyAccountsForPicker } from "@/lib/accounts";
+import { mortgageFromRegulars } from "@/lib/calc/housing";
 import { categoryPath, canSplitMortgage, isMortgageInterestCategory, isMortgagePrincipalCategory, mortgageEntryKind, resolvedDefaultAccountId } from "@/lib/categories";
 import { applyTxRules } from "@/lib/tx-rules";
 
@@ -801,6 +802,8 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
   const addRecurring = useApp((s) => s.addRecurring);
   const updateRecurring = useApp((s) => s.updateRecurring);
   const deleteRecurring = useApp((s) => s.deleteRecurring);
+  const mortgage = useApp((s) => s.mortgage);
+  const updateMortgage = useApp((s) => s.updateMortgage);
   const moneyAccounts = moneyAccountsForPicker(accounts);
   const mate = initial?.splitWithId ? recurring.find((r) => r.id === initial.splitWithId) : null;
   const alreadySplit = Boolean(mate);
@@ -914,6 +917,12 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
       if (initial) await updateRecurring(row);
       else await addRecurring(row);
     }
+    if (mortgage) {
+      const latest = useApp.getState();
+      const nextMortgage = mortgageFromRegulars(mortgage, latest.recurring, categories, todayISO());
+      if (nextMortgage) await updateMortgage(nextMortgage);
+    }
+    toast(t.add.savedToast);
     onClose();
   }
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Hairline, InfoButton, Overlay, ProgressRing, ScreenHeader, SectionLabel, TxGroupedList } from "@/components/shared";
 import { money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
@@ -12,6 +12,8 @@ import {
   livingModeOf,
   loanTimeProgress,
   monthsAgoIso,
+  alignMortgageAndRegulars,
+  mortgageMonthLabel,
   projection12,
   rateLine,
   remainingMonthsLabel,
@@ -33,6 +35,8 @@ export function LivingPage() {
   const accounts = useApp((s) => s.accounts);
   const txs = useApp((s) => s.transactions);
   const setTx = useUi((s) => s.setTxDetailId);
+  const updateMortgage = useApp((s) => s.updateMortgage);
+  const updateRecurring = useApp((s) => s.updateRecurring);
   const [edit, setEdit] = useState(false);
   const today = todayISO();
   const lines = housingMonthLines(txs, rec, cats, rates, today);
@@ -53,10 +57,20 @@ export function LivingPage() {
   const left = m ? remainingFromStart(m, today) : null;
   const interest = m ? remainingInterest(m.outstanding, rate, left?.remainingMonths ?? m.remainingMonths) : 0;
   const end = m ? endDateFromRemaining(today, left?.remainingMonths ?? m.remainingMonths, m.paymentDay) : "";
-  const proj = m ? projection12(m) : null;
+  const proj = m ? projection12(m, today) : null;
   const stress = m ? stressRows(m) : [];
   const paidPct = m ? loanTimeProgress(m, today) : 0;
   const related = housingTransactions(txs, cats, monthsAgoIso(today, 12), today);
+
+  useEffect(() => {
+    if (!m) return;
+    const aligned = alignMortgageAndRegulars(m, rec, cats, today);
+    if (aligned.mortgage) {
+      void updateMortgage(aligned.mortgage);
+      return;
+    }
+    for (const row of aligned.regulars) void updateRecurring(row);
+  }, [m, rec, cats, today, updateMortgage, updateRecurring]);
 
   return (
     <div className="pb-10">
@@ -178,34 +192,26 @@ export function LivingPage() {
           {proj ? (
             <>
               <SectionLabel>{t.reports.projection12}</SectionLabel>
+              <p className="px-5 pb-2 text-xs leading-5 text-muted">{t.reports.scheduleEditHint}</p>
               <div className="mx-4 space-y-2">
-                {proj.rows.map((r, i) => {
-                  const [fy, fm] = proj.firstMonth.split("-").map(Number);
-                  const d = new Date(fy, (fm || 1) - 1 + i, 1);
-                  const label = locale === "zh-HK" ? `${d.getMonth() + 1}月` : d.toLocaleString("en", { month: "short" });
-                  return (
-                    <div key={r.n} className="rounded-2xl bg-elevated px-3 py-3">
-                      <div className="flex items-baseline justify-between">
-                        <span className="text-sm font-semibold">{label}</span>
-                        <span className="text-sm font-semibold tabular-nums">{money(proj.payment, "HKD")}</span>
-                      </div>
-                      <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
-                        <div>
-                          <div className="text-muted">{t.reports.interestCol}</div>
-                          <div className="mt-0.5 tabular-nums">{money(r.interest, "HKD")}</div>
-                        </div>
-                        <div>
-                          <div className="text-muted">{t.reports.principalCol}</div>
-                          <div className="mt-0.5 tabular-nums">{money(r.principal, "HKD")}</div>
-                        </div>
-                        <div>
-                          <div className="text-muted">{t.reports.balanceCol}</div>
-                          <div className="mt-0.5 tabular-nums">{money(r.balance, "HKD")}</div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                {proj.rows.map((r) => (
+                  <ScheduleMonth
+                    key={r.month}
+                    month={r.month}
+                    label={mortgageMonthLabel(r.month, locale)}
+                    interest={r.interest}
+                    principal={r.principal}
+                    balance={r.balance}
+                    interestLabel={t.reports.interestCol}
+                    principalLabel={t.reports.principalCol}
+                    balanceLabel={t.reports.balanceCol}
+                    onSave={async (interest, principal) => {
+                      if (!m) return;
+                      const scheduleEdits = { ...m.scheduleEdits, [r.month]: { interest, principal } };
+                      await updateMortgage({ ...m, scheduleEdits });
+                    }}
+                  />
+                ))}
               </div>
             </>
           ) : null}
@@ -214,6 +220,74 @@ export function LivingPage() {
 
       <TxGroupedList txs={related} onClick={(tx) => setTx(tx.id)} empty={t.common.none} />
       <MortgageEditor key={edit ? m?.id ?? "new" : "closed"} open={edit} onClose={() => setEdit(false)} />
+    </div>
+  );
+}
+
+function ScheduleMonth({
+  month,
+  label,
+  interest,
+  principal,
+  balance,
+  interestLabel,
+  principalLabel,
+  balanceLabel,
+  onSave,
+}: {
+  month: string;
+  label: string;
+  interest: number;
+  principal: number;
+  balance: number;
+  interestLabel: string;
+  principalLabel: string;
+  balanceLabel: string;
+  onSave: (interest: number, principal: number) => Promise<void>;
+}) {
+  const [interestText, setInterestText] = useState(String(interest));
+  const [principalText, setPrincipalText] = useState(String(principal));
+  useEffect(() => {
+    setInterestText(String(interest));
+    setPrincipalText(String(principal));
+  }, [month, interest, principal]);
+
+  async function commit() {
+    const nextInterest = Number(interestText);
+    const nextPrincipal = Number(principalText);
+    if (!Number.isFinite(nextInterest) || !Number.isFinite(nextPrincipal) || nextInterest < 0 || nextPrincipal < 0) return;
+    if (Math.abs(nextInterest - interest) < 0.005 && Math.abs(nextPrincipal - principal) < 0.005) return;
+    await onSave(nextInterest, nextPrincipal);
+  }
+
+  return (
+    <div className="rounded-2xl bg-elevated px-3 py-3">
+      <div className="text-sm font-medium">{label}</div>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <label className="block text-[11px] text-muted">
+          {interestLabel}
+          <input
+            inputMode="decimal"
+            value={interestText}
+            onChange={(e) => setInterestText(e.target.value)}
+            onBlur={() => void commit()}
+            className="mt-1 h-10 w-full rounded-lg bg-background px-2 text-right text-sm tabular-nums text-foreground outline-none"
+          />
+        </label>
+        <label className="block text-[11px] text-muted">
+          {principalLabel}
+          <input
+            inputMode="decimal"
+            value={principalText}
+            onChange={(e) => setPrincipalText(e.target.value)}
+            onBlur={() => void commit()}
+            className="mt-1 h-10 w-full rounded-lg bg-background px-2 text-right text-sm tabular-nums text-foreground outline-none"
+          />
+        </label>
+      </div>
+      <div className="mt-1 text-xs text-muted">
+        {balanceLabel} {money(balance, "HKD")}
+      </div>
     </div>
   );
 }
@@ -370,6 +444,7 @@ function MortgageEditor({ open, onClose }: { open: boolean; onClose: () => void 
               livingMode: mode,
               propertyAccountId: propertyId || undefined,
               paymentOverride: Number(override) > 0 ? Number(override) : undefined,
+              scheduleEdits: m?.scheduleEdits,
             };
             await update(next);
             onClose();
