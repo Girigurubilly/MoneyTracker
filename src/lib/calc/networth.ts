@@ -65,7 +65,7 @@ export function investableNow(accounts: Account[], rates: FxRate[]): number {
   return n;
 }
 
-export type WorthPoint = { date: string; net: number; assets: number; liab: number };
+export type WorthPoint = { date: string; net: number; assets: number; liab: number; flow: number };
 
 function pad(n: number): string {
   return String(n).padStart(2, "0");
@@ -92,7 +92,13 @@ function cloneAccounts(accounts: Account[]): Account[] {
   return accounts.map((a) => ({ ...a }));
 }
 
-/** Reconstruct net worth at each day (short range) or month-end (longer range) by reversing posted txs. */
+/** Reconstruct net worth from posted income, expenses and transfers.
+
+The latest point is the balance on `to` (or today). Each earlier point walks
+those transactions back, so a previous month's change is that month's flow.
+An opening point sits the day before `from`, which keeps the first month's
+transactions inside the period change.
+*/
 export function periodNetWorthPoints(
   accounts: Account[],
   txs: Transaction[],
@@ -105,13 +111,14 @@ export function periodNetWorthPoints(
   const start = from > end ? end : from;
   let accs = cloneAccounts(accounts);
   const posted = txs
-    .filter((t) => !t.planned && t.type !== "miles")
+    .filter((t) => !t.planned && (t.type === "income" || t.type === "expense" || t.type === "transfer"))
     .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
   for (const tx of posted) {
     if (tx.date > end) accs = applyDeltas(accs, balanceDeltas(tx, accs, rates), -1);
   }
   const span = (Date.parse(`${end}T12:00:00`) - Date.parse(`${start}T12:00:00`)) / 86_400_000;
   const points: WorthPoint[] = [];
+  const snap = (date: string): WorthPoint => ({ date, ...netWorthNow(accs, rates), flow: 0 });
   if (span <= 62) {
     const byDay = new Map<string, Transaction[]>();
     for (const tx of posted) {
@@ -121,7 +128,7 @@ export function periodNetWorthPoints(
       byDay.set(tx.date, list);
     }
     for (let d = end; d >= start; d = addDays(d, -1)) {
-      points.push({ date: d, ...netWorthNow(accs, rates) });
+      points.push(snap(d));
       for (const tx of byDay.get(d) ?? []) accs = applyDeltas(accs, balanceDeltas(tx, accs, rates), -1);
     }
   } else {
@@ -129,7 +136,7 @@ export function periodNetWorthPoints(
     let ym = end.slice(0, 7);
     while (ym >= startYm) {
       const sample = ym === end.slice(0, 7) ? end : monthEnd(ym);
-      points.push({ date: sample, ...netWorthNow(accs, rates) });
+      if (sample >= start) points.push(snap(sample));
       for (const tx of posted) {
         if (!tx.date.startsWith(ym) || tx.date < start || tx.date > end) continue;
         accs = applyDeltas(accs, balanceDeltas(tx, accs, rates), -1);
@@ -137,5 +144,10 @@ export function periodNetWorthPoints(
       ym = shiftYm(ym, -1);
     }
   }
-  return points.reverse();
+  points.push(snap(addDays(start, -1)));
+  const ordered = points.reverse();
+  return ordered.map((p, i) => ({
+    ...p,
+    flow: i === 0 ? 0 : Math.round((p.net - ordered[i - 1].net) * 100) / 100,
+  }));
 }

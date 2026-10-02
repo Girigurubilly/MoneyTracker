@@ -24,9 +24,10 @@ export function WorthTrendPage() {
   const to = preset === "custom" ? customTo : range.to;
   const points = useMemo(() => periodNetWorthPoints(accounts, txs, rates, from, to), [accounts, txs, rates, from, to]);
   const daily = (Date.parse(`${to}T12:00:00`) - Date.parse(`${from}T12:00:00`)) / 86_400_000 <= 62;
+  const years = new Set(points.map((p) => p.date.slice(0, 4)));
   const series = points.map((p) => ({
     ...p,
-    label: daily ? p.date.slice(8) : monthLabel(p.date.slice(0, 7), locale),
+    label: daily ? p.date.slice(5) : years.size > 1 ? `${p.date.slice(2, 4)}/${p.date.slice(5, 7)}` : monthLabel(p.date.slice(0, 7), locale),
   }));
   const first = series[0];
   const last = series.at(-1);
@@ -102,10 +103,22 @@ export function WorthTrendPage() {
       </div>
       <p className="px-5 pt-2 text-[11px] leading-4 text-muted">{t.reports.worthTrendHint}</p>
       <div className="mt-2">
+        <div className="flex items-center justify-between px-5 pb-1 text-[11px] text-faint">
+          <span />
+          <span className="flex gap-3">
+            <span>{t.reports.worthFlow}</span>
+            <span>{t.assets.netWorth}</span>
+          </span>
+        </div>
         {series.slice().reverse().slice(0, 14).map((p) => (
           <div key={p.date} className="flex items-center justify-between px-5 py-2 text-sm">
             <span className="text-muted">{shortDate(p.date, locale)}</span>
-            <span className="tabular-nums">{money(p.net, "HKD")}</span>
+            <span className="flex items-baseline gap-3 tabular-nums">
+              <span className={cn("w-24 text-right text-xs", p.flow > 0 ? "text-income" : p.flow < 0 ? "text-expense" : "text-faint")}>
+                {p.flow ? money(p.flow, "HKD", { sign: true }) : "—"}
+              </span>
+              <span className="w-28 text-right">{money(p.net, "HKD")}</span>
+            </span>
           </div>
         ))}
       </div>

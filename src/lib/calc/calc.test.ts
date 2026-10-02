@@ -592,11 +592,63 @@ describe("period net worth", () => {
       "2026-09-01",
       "2026-09-03",
     );
-    assert.equal(rows.length, 3);
-    assert.equal(rows[0].date, "2026-09-01");
+    assert.equal(rows.length, 4);
+    assert.equal(rows[0].date, "2026-08-31");
     assert.equal(rows[0].net, 9000);
-    assert.equal(rows[1].net, 14000);
-    assert.equal(rows[2].net, 12000);
+    assert.equal(rows[0].flow, 0);
+    assert.equal(rows[1].date, "2026-09-01");
+    assert.equal(rows[1].net, 9000);
+    assert.equal(rows[1].flow, 0);
+    assert.equal(rows[2].net, 14000);
+    assert.equal(rows[2].flow, 5000);
+    assert.equal(rows[3].net, 12000);
+    assert.equal(rows[3].flow, -2000);
+  });
+
+  it("counts the first month's income, expenses and transfers in the yearly flow", () => {
+    const cash = {
+      id: "cash",
+      name: "Cash",
+      nameZh: "現金",
+      type: "cash" as const,
+      currency: "HKD" as const,
+      balance: 11000,
+      includeInNetWorth: true,
+      group: "cash" as const,
+    };
+    const save = {
+      id: "save",
+      name: "Save",
+      nameZh: "儲蓄",
+      type: "savings" as const,
+      currency: "HKD" as const,
+      balance: 1000,
+      includeInNetWorth: true,
+      group: "cash" as const,
+    };
+    const rows = periodNetWorthPoints(
+      [cash, save],
+      [
+        tx({ id: "in", type: "income", amount: 5000, date: "2026-01-15", accountId: "cash" }),
+        tx({ id: "move", type: "transfer", amount: 1000, date: "2026-01-20", accountId: "cash", toAccountId: "save" }),
+        tx({ id: "out", type: "expense", amount: 2000, date: "2026-09-03", accountId: "cash" }),
+        tx({ id: "plan", type: "income", amount: 9999, date: "2026-02-01", accountId: "cash", planned: true }),
+      ],
+      [],
+      "2026-01-01",
+      "2026-09-03",
+    );
+    const opening = rows[0];
+    const january = rows.find((r) => r.date === "2026-01-31");
+    const september = rows.at(-1);
+    assert.equal(opening.date, "2025-12-31");
+    assert.equal(opening.net, 9000);
+    assert.equal(january?.net, 14000);
+    assert.equal(january?.flow, 5000);
+    assert.equal(september?.date, "2026-09-03");
+    assert.equal(september?.net, 12000);
+    assert.equal(september?.flow, -2000);
+    assert.equal((september?.net ?? 0) - opening.net, 3000);
   });
 });
 
