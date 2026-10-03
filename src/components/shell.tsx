@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Link, Navigate, useRouterState } from "@tanstack/react-router";
 import { BarChart3, Bone, Building2, Cat, Cpu, Fish, Heart, Home, Landmark, Leaf, Moon, MoreHorizontal, PawPrint, PieChart, Sparkles, TreePine, Wallet, WalletCards } from "lucide-react";
 import { Toaster, toast } from "sonner";
@@ -12,7 +12,8 @@ import { AddFlow } from "@/components/add-sheet";
 import { SearchFlow } from "@/components/search-sheet";
 import { TxDetail } from "@/components/tx-detail";
 import { assetUrl } from "@/lib/base";
-import { isApplyingRemote, markLocalEdit, runDailyDriveSync } from "@/lib/drive-sync";
+import { isApplyingRemote, markLocalEdit, runDailyDriveSync, syncWithDrive } from "@/lib/drive-sync";
+import { runDailyOpen } from "@/lib/daily-open";
 
 export function AppGate({ children }: { children: ReactNode }) {
   const ready = useApp((s) => s.ready);
@@ -62,16 +63,41 @@ export function AppGate({ children }: { children: ReactNode }) {
 
 function DailyDriveSync() {
   const ready = useApp((s) => s.ready);
-  const exportSnapshot = useApp((s) => s.exportSnapshot);
-  const replaceAll = useApp((s) => s.replaceAll);
   const t = useT();
+  const toldPass = useRef(false);
   useEffect(() => {
     if (!ready) return;
-    void runDailyDriveSync({ exportSnapshot, replaceAll }).then((r) => {
-      if (r === "pulled") toast(t.backup.synced);
-      if (r === "need-pass") toast(t.backup.driveNeedPass);
-    });
-  }, [ready, exportSnapshot, replaceAll, t]);
+    let cancel = false;
+    const run = () => {
+      const s = useApp.getState();
+      void runDailyOpen({
+        holdingCount: s.holdings.length,
+        refreshFx: () => s.refreshFx(),
+        refreshQuotes: () => s.refreshHoldingPrices(),
+        drive: () => runDailyDriveSync({ exportSnapshot: s.exportSnapshot, replaceAll: s.replaceAll }),
+        resync: () => {
+          markLocalEdit();
+          return syncWithDrive({ exportSnapshot: useApp.getState().exportSnapshot, replaceAll: useApp.getState().replaceAll });
+        },
+      }).then((r) => {
+        if (cancel) return;
+        if (r.drive === "pulled") toast(t.backup.synced);
+        if (r.drive === "need-pass" && !toldPass.current) {
+          toldPass.current = true;
+          toast(t.backup.driveNeedPass);
+        }
+      });
+    };
+    run();
+    const onVis = () => {
+      if (document.visibilityState === "visible") run();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      cancel = true;
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [ready, t]);
   return null;
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ArrowDownAZ, ArrowUpAZ, Pencil, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Group, Hairline, Overlay, ScreenHeader } from "@/components/shared";
@@ -37,36 +37,6 @@ export function HoldingsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [ai, setAi] = useState(false);
   const invest = accounts.filter((a) => a.type === "investment" && !a.hidden);
-
-  useEffect(() => {
-    if (!holdings.length) return;
-    const today = todayISO();
-    try {
-      if (sessionStorage.getItem("hk-life-quotes-day") === today) return;
-    } catch {
-      /* ignore */
-    }
-    const stale = holdings.some((h) => !h.lastPriceAt || h.lastPriceAt.slice(0, 10) !== today);
-    if (!stale) {
-      try {
-        sessionStorage.setItem("hk-life-quotes-day", today);
-      } catch {
-        /* ignore */
-      }
-      return;
-    }
-    try {
-      sessionStorage.setItem("hk-life-quotes-day", today);
-    } catch {
-      /* ignore */
-    }
-    setBusy(true);
-    void refresh()
-      .then((n) => {
-        if (n) toast(t.holdings.priced.replace("{n}", String(n)));
-      })
-      .finally(() => setBusy(false));
-  }, [holdings.length]);
 
   async function onFile(file: File) {
     setBusy(true);

@@ -736,6 +736,9 @@ async function reconcileLinkedMonthSpendCap(data: {
   };
 }
 
+let fxInflight: Promise<void> | null = null;
+let quoteInflight: Promise<number> | null = null;
+
 export const useApp = create<AppState>((set, get) => ({
   ready: false,
   accounts: [],
@@ -1085,11 +1088,17 @@ export const useApp = create<AppState>((set, get) => ({
     set({ fxRates: rows });
   },
   refreshFx: async () => {
-    const rows = await fetchLiveFx(get().fxRates);
-    const synced = new Date().toISOString();
-    await idb().fxRates.bulkPut(rows);
-    await writeMeta({ lastFxSyncAt: synced }, get());
-    set({ fxRates: rows, lastFxSyncAt: synced });
+    if (fxInflight) return fxInflight;
+    fxInflight = (async () => {
+      const rows = await fetchLiveFx(get().fxRates);
+      const synced = new Date().toISOString();
+      await idb().fxRates.bulkPut(rows);
+      await writeMeta({ lastFxSyncAt: synced }, get());
+      set({ fxRates: rows, lastFxSyncAt: synced });
+    })().finally(() => {
+      fxInflight = null;
+    });
+    return fxInflight;
   },
   setAnnualTravel: async (n) => {
     await writeMeta({ annualTravelBudget: n }, get());
@@ -1214,23 +1223,29 @@ export const useApp = create<AppState>((set, get) => ({
     return rows.length;
   },
   refreshHoldingPrices: async () => {
-    const rows = get().holdings;
-    if (!rows.length) return 0;
-    const quotes = await fetchHoldingQuotes(rows);
-    const now = new Date().toISOString();
-    const rates = get().fxRates;
-    let n = 0;
-    const holdings = rows.map((h) => {
-      const hit = quotes.get(quoteKey(h.market, h.symbol));
-      if (!hit) return h;
-      n += 1;
-      const named = hit.name && hit.name !== h.symbol ? hit.name : h.name;
-      const px = quoteToCurrency(hit, h.currency, rates, inferredQuoteCurrency(h.market, h.symbol));
-      return { ...h, lastPrice: px.price, name: named || h.name, lastPriceAt: now };
+    if (quoteInflight) return quoteInflight;
+    quoteInflight = (async () => {
+      const rows = get().holdings;
+      if (!rows.length) return 0;
+      const quotes = await fetchHoldingQuotes(rows);
+      const now = new Date().toISOString();
+      const rates = get().fxRates;
+      let n = 0;
+      const holdings = rows.map((h) => {
+        const hit = quotes.get(quoteKey(h.market, h.symbol));
+        if (!hit) return h;
+        n += 1;
+        const named = hit.name && hit.name !== h.symbol ? hit.name : h.name;
+        const px = quoteToCurrency(hit, h.currency, rates, inferredQuoteCurrency(h.market, h.symbol));
+        return { ...h, lastPrice: px.price, name: named || h.name, lastPriceAt: now };
+      });
+      clearHoldingMoveCache();
+      await writeHoldings(holdings, get, set);
+      return n;
+    })().finally(() => {
+      quoteInflight = null;
     });
-    clearHoldingMoveCache();
-    await writeHoldings(holdings, get, set);
-    return n;
+    return quoteInflight;
   },
   setHoldingBook: async (book, accountId) => {
     const accounts = applyHoldingBalances(

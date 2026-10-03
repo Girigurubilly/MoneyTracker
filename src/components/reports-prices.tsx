@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { ScreenHeader, Group, Hairline } from "@/components/shared";
-import { money, todayISO } from "@/lib/format";
+import { money } from "@/lib/format";
 import { toHkd } from "@/lib/calc/fx";
 import { holdingTitle, sortHoldingsBySymbol } from "@/lib/holdings";
 import { fetchHoldingMoves, inferredQuoteCurrency, quoteKey, quoteToCurrency, type PriceMove, type PriceRange } from "@/lib/quotes";
@@ -36,33 +36,6 @@ export function StockPricesPage() {
       setSyncing(false);
     }
   }
-
-  useEffect(() => {
-    if (!holdings.length) return;
-    const today = todayISO();
-    try {
-      if (sessionStorage.getItem("hk-life-quotes-day") === today) return;
-    } catch {
-      /* ignore */
-    }
-    const stale = holdings.some((h) => !h.lastPriceAt || h.lastPriceAt.slice(0, 10) !== today);
-    if (!stale) {
-      try {
-        sessionStorage.setItem("hk-life-quotes-day", today);
-      } catch {
-        /* ignore */
-      }
-      return;
-    }
-    try {
-      sessionStorage.setItem("hk-life-quotes-day", today);
-    } catch {
-      /* ignore */
-    }
-    void refresh().then((n) => {
-      if (n) toast(t.holdings.priced.replace("{n}", String(n)));
-    });
-  }, [holdings.length]);
 
   const rows = useMemo(() => {
     const list = holdings.filter((h) => book === "both" || h.market === book);
