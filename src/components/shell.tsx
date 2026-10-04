@@ -68,7 +68,25 @@ function DailyDriveSync() {
   useEffect(() => {
     if (!ready) return;
     let cancel = false;
+    let timer = 0;
+    let attempt = 0;
+    const clearTimer = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = 0;
+    };
+    const schedule = () => {
+      if (attempt >= 6) return;
+      const wait = [3000, 8000, 20000, 40000, 60000, 60000][attempt] ?? 60000;
+      attempt += 1;
+      clearTimer();
+      timer = window.setTimeout(run, wait);
+    };
     const run = () => {
+      clearTimer();
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        schedule();
+        return;
+      }
       const s = useApp.getState();
       void runDailyOpen({
         holdingCount: s.holdings.length,
@@ -86,16 +104,24 @@ function DailyDriveSync() {
           toldPass.current = true;
           toast(t.backup.driveNeedPass);
         }
+        if (r.fxPending || r.quotesPending || r.drive === "offline" || r.drive === "fail") schedule();
       });
     };
-    run();
-    const onVis = () => {
-      if (document.visibilityState === "visible") run();
+    const wake = () => {
+      attempt = 0;
+      run();
     };
+    const onVis = () => {
+      if (document.visibilityState === "visible") wake();
+    };
+    wake();
     document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("online", wake);
     return () => {
       cancel = true;
+      clearTimer();
       document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("online", wake);
     };
   }, [ready, t]);
   return null;

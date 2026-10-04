@@ -32,11 +32,22 @@ function writeDay(key: string, today: string) {
   }
 }
 
-export type DailyOpenResult = { fx: boolean; quotes: boolean; drive: SyncResult | "skip" };
+export type DailyOpenResult = {
+  fx: boolean;
+  quotes: boolean;
+  drive: SyncResult | "skip";
+  fxPending: boolean;
+  quotesPending: boolean;
+};
 
 let inflight: Promise<DailyOpenResult> | null = null;
 
-/** First open of the local day: exchange rates, stock prices, then Drive (pull if the cloud copy is newer). */
+function deviceOnline(online?: () => boolean): boolean {
+  if (online) return online();
+  return typeof navigator === "undefined" || navigator.onLine !== false;
+}
+
+/** First time the phone is online on this local calendar day: rates, prices, then Drive. */
 export function runDailyOpen(opts: {
   today?: string;
   holdingCount: number;
@@ -44,6 +55,7 @@ export function runDailyOpen(opts: {
   refreshQuotes: () => Promise<number>;
   drive: () => Promise<SyncResult>;
   resync?: () => Promise<SyncResult>;
+  online?: () => boolean;
 }): Promise<DailyOpenResult> {
   if (inflight) return inflight;
   inflight = runDailyOpenOnce(opts).finally(() => {
@@ -59,8 +71,16 @@ async function runDailyOpenOnce(opts: {
   refreshQuotes: () => Promise<number>;
   drive: () => Promise<SyncResult>;
   resync?: () => Promise<SyncResult>;
+  online?: () => boolean;
 }): Promise<DailyOpenResult> {
   const today = opts.today ?? todayISO();
+  const pending = () => ({
+    fxPending: fxDue(readDay(FX_KEY), today),
+    quotesPending: quotesDue(readDay(QUOTE_KEY), opts.holdingCount, today),
+  });
+  if (!deviceOnline(opts.online)) {
+    return { fx: false, quotes: false, drive: "offline", ...pending() };
+  }
   const jobs: Promise<unknown>[] = [];
   let fx = false;
   let quotes = false;
@@ -124,5 +144,5 @@ async function runDailyOpenOnce(opts: {
       }
     }
   }
-  return { fx, quotes, drive };
+  return { fx, quotes, drive, ...pending() };
 }

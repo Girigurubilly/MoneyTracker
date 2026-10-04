@@ -1,5 +1,6 @@
 import type { Locale, MoneyUnit } from "@/lib/types";
 
+/** Calendar day on the phone clock (system timezone), never UTC. */
 export function todayISO(d = new Date()): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");

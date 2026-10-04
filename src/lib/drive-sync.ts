@@ -17,7 +17,6 @@ import type { AppSnapshot } from "@/store/app";
 const LOCAL_EDIT_KEY = "hk-life-money-local-edited";
 const LAST_SYNC_KEY = "hk-life-money-last-sync";
 const DAILY_KEY = "hk-life-money-daily-sync-day";
-const DAILY_TRIED_KEY = "hk-life-money-daily-sync-tried";
 const PASS_KEY = "hk-life-money-drive-pass";
 
 export type SyncResult = "pulled" | "pushed" | "ok" | "offline" | "off" | "need-auth" | "need-pass" | "fail";
@@ -99,15 +98,14 @@ function writeLastSync(iso = new Date().toISOString()) {
 export function markDailyDriveSync(today = todayISO()) {
   try {
     localStorage.setItem(DAILY_KEY, today);
-    sessionStorage.setItem(DAILY_TRIED_KEY, today);
   } catch {
     /* ignore */
   }
 }
 
+/** Due until a sync succeeds on this phone-local day. A failed or offline attempt does not count. */
 export function dailyDriveSyncDue(today = todayISO()): boolean {
   try {
-    if (sessionStorage.getItem(DAILY_TRIED_KEY) === today) return false;
     return localStorage.getItem(DAILY_KEY) !== today;
   } catch {
     return true;
@@ -183,13 +181,9 @@ export function runDailyDriveSync(opts: {
   dailyInflight = (async () => {
     const today = todayISO();
     if (!dailyDriveSyncDue(today)) return "ok";
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return "offline";
     if (!readGoogleClientId() || (!storedAccessToken() && !hasDriveGrant())) return "off";
     if (!readDrivePass()) return "need-pass";
-    try {
-      sessionStorage.setItem(DAILY_TRIED_KEY, today);
-    } catch {
-      /* ignore */
-    }
     const result = await syncWithDrive(opts);
     if (result === "pulled" || result === "pushed" || result === "ok") markDailyDriveSync(today);
     return result;
