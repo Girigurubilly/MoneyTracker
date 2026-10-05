@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { accountsInBalanceOrder, moneyAccountsForPicker } from "./accounts.ts";
+import { accountsInBalanceOrder, countCashInNetWorth, moneyAccountsForPicker } from "./accounts.ts";
 import type { Account } from "./types.ts";
 
 function acc(partial: Partial<Account> & Pick<Account, "id" | "group" | "type">): Account {
@@ -46,5 +46,14 @@ describe("accountsInBalanceOrder", () => {
       moneyAccountsForPicker(rows, { includeId: "old" }).map((a) => a.id),
       ["cash", "old"],
     );
+  });
+
+  it("puts a cash account back into the asset total", () => {
+    const rows = countCashInNetWorth([
+      acc({ id: "bank", group: "cash", type: "savings", includeInNetWorth: false, balance: 500 }),
+      acc({ id: "loan", group: "credit", type: "loan", includeInNetWorth: false, balance: -100 }),
+    ]);
+    assert.equal(rows[0].includeInNetWorth, true);
+    assert.equal(rows[1].includeInNetWorth, false);
   });
 });

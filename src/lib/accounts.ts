@@ -36,6 +36,15 @@ export function nextSortOrder(accounts: Account[], group: AccountGroup): number 
   return rows.length ? Math.max(...rows.map((a) => a.sortOrder ?? 0)) + 1 : 0;
 }
 
+/** Cash and bank accounts belong in the asset total. The old editor used the housing icon for this switch. */
+export function countCashInNetWorth(accounts: Account[]): Account[] {
+  return accounts.map((a) => {
+    if (a.includeInNetWorth || a.currency === "MILES" || a.type === "miles") return a;
+    if (groupForType(a.type) !== "cash") return a;
+    return { ...a, includeInNetWorth: true };
+  });
+}
+
 export function defaultMortgageAccountId(accounts: Account[]): string | undefined {
   const loan = accounts.find((a) => a.type === "mortgage" && !a.hidden) ?? accounts.find((a) => a.type === "loan" && !a.hidden);
   return loan?.id;

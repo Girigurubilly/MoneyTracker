@@ -55,7 +55,7 @@ import { clearHoldingMoveCache, fetchHoldingQuotes, inferredQuoteCurrency, quote
 import { chargedDayOf, chargedIso, inferLivingRegular, isExpenseRegular } from "@/lib/calc/budget";
 import { emptyYearlyPlan, linkedMonthSpendCap } from "@/lib/calc/deposits";
 import { isMortgageInterestCategory, isMortgagePrincipalCategory, missingMortgageLeaf } from "@/lib/categories";
-import { accountsInGroup, nextSortOrder } from "@/lib/accounts";
+import { accountsInGroup, countCashInNetWorth, nextSortOrder } from "@/lib/accounts";
 import { applyTxRules } from "@/lib/tx-rules";
 import { applyDeltas, balanceDeltas, monthKey } from "@/lib/calc/ledger";
 import { todayISO } from "@/lib/format";
@@ -794,6 +794,21 @@ export const useApp = create<AppState>((set, get) => ({
         }
       }
       const data = await loadAll();
+      try {
+        if (typeof localStorage === "undefined" || localStorage.getItem("hk-life-money-cash-counted") !== "1") {
+          const repaired = countCashInNetWorth(data.accounts);
+          const putBack = repaired.filter((a, i) => a !== data.accounts[i]);
+          if (putBack.length) {
+            await idb().transaction("rw", idb().accounts, async () => {
+              for (const a of putBack) await idb().accounts.put(a);
+            });
+            data.accounts = repaired;
+          }
+          localStorage?.setItem("hk-life-money-cash-counted", "1");
+        }
+      } catch {
+        /* keep the saved accounts */
+      }
       if (!data.fxRates.length) {
         await idb().fxRates.bulkPut(seedFx);
         data.fxRates = seedFx;

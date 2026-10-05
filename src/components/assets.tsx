@@ -165,8 +165,9 @@ export function AssetsScreen() {
         const rows = accountsInGroup(visible, g.id);
         const depositRows = g.id === "cash" && !kid ? outsideDeposits : [];
         if (!rows.length && !depositRows.length) return null;
+        const counted = rows.filter((a) => a.includeInNetWorth && a.currency !== "MILES");
         const total =
-          rows.reduce((s, a) => s + toHkd(a.balance, a.currency, rates), 0) +
+          counted.reduce((s, a) => s + toHkd(a.balance, a.currency, rates), 0) +
           depositRows.reduce((s, d) => s + toHkd(d.amount, d.currency, rates), 0);
         return (
           <AssetSection key={g.id} label={g.label} total={total} currencyHint="HKD">
@@ -301,7 +302,8 @@ function AccountCard({
             {groupLabel}
             {typeLabel ? ` · ${locale === "zh-HK" ? typeLabel.zh : typeLabel.en}` : ""}
             {a.currency !== "HKD" ? ` · ${a.currency}` : ""}
-            {a.hidden ? (locale === "zh-HK" ? " · 已隱藏" : " · Hidden") : ""}
+            {a.hidden ? ` · ${t.assets.hidden}` : ""}
+            {!a.includeInNetWorth && a.type !== "miles" ? ` · ${t.assets.excluded}` : ""}
           </span>
         </span>
         <AmountWithHkd
@@ -547,6 +549,12 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
           />
         )}
         <LineRow label={t.assets.balance} amount={bal} active onFocusAmount={() => undefined} />
+        {type === "miles" ? null : (
+          <label className="flex min-h-12 items-center justify-between gap-3 border-b border-line px-4">
+            <span className="text-sm">{t.assets.include}</span>
+            <input type="checkbox" className="size-5" checked={include} onChange={(e) => setInclude(e.target.checked)} />
+          </label>
+        )}
         {kid ? null : linkOptions.length ? (
           <SelectLine
             label={type === "property" ? t.assets.linkedLoan : t.assets.linkedProperty}
@@ -573,9 +581,6 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
           extra={extra}
           onExtra={(v) => setExtra(v === "note" ? "note" : extra)}
           noteOn={!!notes}
-          housingOn={include}
-          showHousing
-          onHousing={() => setInclude((v) => !v)}
           noteValue={notes}
           onNoteChange={setNotes}
         />
