@@ -86,6 +86,14 @@ export function summarizeDeposits(list: TimeSaving[], today: string, rates: FxRa
   return { depHKD, intHKD, realizedHKD, unrealizedThisYearHKD, unrealizedAfterYearHKD };
 }
 
+export function depositYearPrincipal(rows: TimeSaving[], rates: FxRate[]): { amount: number; currency: Currency } {
+  const currency = rows[0]?.currency ?? "HKD";
+  if (rows.length && rows.every((r) => r.currency === currency)) {
+    return { amount: rows.reduce((s, r) => s + (r.amount || 0), 0), currency };
+  }
+  return { amount: rows.reduce((s, r) => s + toHkd(r.amount || 0, r.currency, rates), 0), currency: "HKD" };
+}
+
 export function getMonthlyDepositInterest(list: TimeSaving[], year: number, month0: number, rates: FxRate[]): number {
   const key = yearMonthKey(year, month0);
   let total = 0;
