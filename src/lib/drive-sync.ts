@@ -1,5 +1,5 @@
 import { decryptSnapshot, encryptSnapshot, isEncryptedBackup } from "@/lib/backup";
-import { pickSyncSide } from "@/lib/sync-side";
+import { pickSyncSide, latestTxnCreatedAt } from "@/lib/sync-side";
 import { isAppSnapshot } from "@/lib/import-btp";
 import { todayISO } from "@/lib/format";
 import {
@@ -18,6 +18,7 @@ const LOCAL_EDIT_KEY = "hk-life-money-local-edited";
 const LAST_SYNC_KEY = "hk-life-money-last-sync";
 const DAILY_KEY = "hk-life-money-daily-sync-day";
 const PASS_KEY = "hk-life-money-drive-pass";
+const SEEN_FILE_KEY = "hk-life-money-drive-file-created";
 
 export type SyncResult = "pulled" | "pushed" | "ok" | "offline" | "off" | "need-auth" | "need-pass" | "fail";
 
@@ -95,6 +96,33 @@ function writeLastSync(iso = new Date().toISOString()) {
   }
 }
 
+function seenDriveCreated(): string {
+  try {
+    return localStorage.getItem(SEEN_FILE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function rememberDriveCreated(iso: string) {
+  if (!iso) return;
+  try {
+    localStorage.setItem(SEEN_FILE_KEY, iso);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Remember the newest Drive file so the same backup is not downloaded again. */
+export async function noteNewestDriveFile(token: string) {
+  try {
+    const iso = await backupModifiedAt(token);
+    if (iso) rememberDriveCreated(iso);
+  } catch {
+    /* the upload already landed */
+  }
+}
+
 export function markDailyDriveSync(today = todayISO()) {
   try {
     localStorage.setItem(DAILY_KEY, today);
@@ -135,8 +163,9 @@ export async function syncWithDrive(opts: {
     if ((err as Error).message !== "missing") return "fail";
   }
 
-  const side = pickSyncSide(localEditedAt() || lastDriveSyncAt(), remoteIso);
-  if (side === "ok") {
+  const localTxn = latestTxnCreatedAt(opts.exportSnapshot().transactions);
+  const side = pickSyncSide(localTxn, remoteIso);
+  if (side === "ok" || (side === "pull" && remoteIso && remoteIso === seenDriveCreated())) {
     writeLastSync();
     return "ok";
   }
@@ -148,6 +177,7 @@ export async function syncWithDrive(opts: {
         await opts.replaceAll(remote);
         markLocalEdit(remote.exportedAt);
         writeLastSync(remote.exportedAt);
+        rememberDriveCreated(remoteIso);
       } finally {
         applyingRemote = false;
       }
@@ -161,6 +191,7 @@ export async function syncWithDrive(opts: {
   try {
     const snap = opts.exportSnapshot();
     await uploadBackup(token, await encodeDriveBody(snap));
+    await noteNewestDriveFile(token);
     markLocalEdit(snap.exportedAt);
     writeLastSync(snap.exportedAt);
     return "pushed";

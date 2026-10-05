@@ -12,7 +12,7 @@ const GRANTED_KEY = "hk-life-money-drive-granted";
 
 export type DriveAction = "save" | "restore" | "sync" | "list";
 
-export type DriveBackupRef = { id: string; name: string; modifiedTime: string };
+export type DriveBackupRef = { id: string; name: string; modifiedTime: string; createdTime: string };
 
 export function isDriveBackupName(name: string): boolean {
   return name === FILE_NAME || /^hk-life-money-\d{8}-\d{6}\.backup\.json$/.test(name);
@@ -25,20 +25,34 @@ export function driveBackupName(at = new Date()): string {
   return `hk-life-money-${day}-${time}.backup.json`;
 }
 
-/** Fewer than 3: create another copy. Otherwise overwrite the oldest, and drop any extras. */
-export function planDriveBackups(files: DriveBackupRef[], max = MAX_DRIVE_BACKUPS): { replaceId?: string; trashIds: string[] } {
-  const sorted = [...files].sort((a, b) => a.modifiedTime.localeCompare(b.modifiedTime) || a.id.localeCompare(b.id));
-  if (sorted.length < max) return { trashIds: [] };
-  const keep = new Set(sorted.slice(-(max - 1)).map((f) => f.id));
-  const oldest = sorted[0];
-  return {
-    replaceId: oldest.id,
-    trashIds: sorted.filter((f) => f.id !== oldest.id && !keep.has(f.id)).map((f) => f.id),
-  };
+/** Timestamp baked into `hk-life-money-YYYYMMDD-HHMMSS.backup.json`. */
+export function backupNameInstant(name: string): string {
+  const m = /^hk-life-money-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})\.backup\.json$/.exec(name);
+  if (!m) return "";
+  return `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}.000Z`;
+}
+
+/** When this backup was written. A new file uses its creation time. A copy replaced in place keeps the later time. */
+export function driveFileInstant(file: { name: string; createdTime?: string; modifiedTime?: string }): string {
+  const created = file.createdTime || backupNameInstant(file.name) || "";
+  const modified = file.modifiedTime || "";
+  if (created && modified) return created > modified ? created : modified;
+  return created || modified;
+}
+
+function byInstant(a: DriveBackupRef, b: DriveBackupRef): number {
+  return driveFileInstant(a).localeCompare(driveFileInstant(b)) || a.id.localeCompare(b.id);
+}
+
+/** Drop the oldest creations so only `max` copies remain. */
+export function planDriveBackups(files: DriveBackupRef[], max = MAX_DRIVE_BACKUPS): { trashIds: string[] } {
+  const sorted = [...files].sort(byInstant);
+  if (sorted.length <= max) return { trashIds: [] };
+  return { trashIds: sorted.slice(0, sorted.length - max).map((f) => f.id) };
 }
 
 export function newestDriveBackup(files: DriveBackupRef[]): DriveBackupRef | undefined {
-  return [...files].sort((a, b) => b.modifiedTime.localeCompare(a.modifiedTime) || b.id.localeCompare(a.id))[0];
+  return [...files].sort((a, b) => byInstant(b, a))[0];
 }
 
 export function readGoogleClientId(): string {
@@ -296,13 +310,13 @@ export async function listDriveBackups(token: string): Promise<DriveBackupRef[]>
   const folder = await ensureFolder(token);
   const q = encodeURIComponent(`'${folder}' in parents and trashed=false and name contains 'hk-life-money' and name contains '.backup.json'`);
   const res = await driveFetch(
-    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&pageSize=20`,
+    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,createdTime,modifiedTime)&pageSize=20`,
     token,
   );
-  const data = (await res.json()) as { files?: { id: string; name: string; modifiedTime?: string }[] };
+  const data = (await res.json()) as { files?: { id: string; name: string; createdTime?: string; modifiedTime?: string }[] };
   return (data.files ?? [])
     .filter((f) => f.id && isDriveBackupName(f.name))
-    .map((f) => ({ id: f.id, name: f.name, modifiedTime: f.modifiedTime ?? "" }));
+    .map((f) => ({ id: f.id, name: f.name, createdTime: f.createdTime ?? "", modifiedTime: f.modifiedTime ?? "" }));
 }
 
 async function deleteDriveFile(token: string, id: string) {
@@ -317,9 +331,11 @@ async function deleteDriveFile(token: string, id: string) {
   if (!res.ok && res.status !== 404) throw new Error(`drive ${res.status}`);
 }
 
+/** Creation time of the newest backup file. */
 export async function backupModifiedAt(token: string): Promise<string | undefined> {
   const newest = newestDriveBackup(await listDriveBackups(token));
-  return newest?.modifiedTime || undefined;
+  const iso = newest ? driveFileInstant(newest) : "";
+  return iso || undefined;
 }
 
 async function uploadTo(token: string, body: string, existing: string, folder: string | undefined, name: string) {
@@ -347,19 +363,9 @@ async function uploadTo(token: string, body: string, existing: string, folder: s
 
 export async function uploadBackup(token: string, body: string): Promise<void> {
   const folder = await ensureFolder(token);
+  await uploadTo(token, body, "", folder, driveBackupName());
   const files = await listDriveBackups(token);
-  const plan = planDriveBackups(files);
-  for (const id of plan.trashIds) await deleteDriveFile(token, id);
-  const name = driveBackupName();
-  if (plan.replaceId) {
-    try {
-      await uploadTo(token, body, plan.replaceId, undefined, name);
-      return;
-    } catch (err) {
-      if ((err as Error).message !== "missing") throw err;
-    }
-  }
-  await uploadTo(token, body, "", folder, name);
+  for (const id of planDriveBackups(files).trashIds) await deleteDriveFile(token, id);
 }
 
 export function rememberDrivePick(id: string) {

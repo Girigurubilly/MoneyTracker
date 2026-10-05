@@ -830,7 +830,10 @@ export const useApp = create<AppState>((set, get) => ({
 
   addTransaction: async (partial) => {
     const ctx = { categories: get().categories, accounts: get().accounts };
-    const tx: Transaction = applyAutoTrip(applyTxRules({ ...partial, id: partial.id ?? nid() }, ctx), get().trips);
+    const tx: Transaction = applyAutoTrip(
+      applyTxRules({ ...partial, id: partial.id ?? nid(), createdAt: partial.createdAt || new Date().toISOString() }, ctx),
+      get().trips,
+    );
     const accounts = applyDeltas(get().accounts, balanceDeltas(tx, get().accounts, get().fxRates));
     const mortgage = syncMortgageOutstanding(get().mortgage, accounts, tx.toAccountId);
     await idb().transaction("rw", [idb().transactions, idb().accounts, idb().mortgage], async () => {

@@ -376,6 +376,8 @@ export type Transaction = {
   housing?: boolean;
   adhoc?: boolean;
   fxToHkd?: number;
+  /** When this row was entered on a device. Missing on older records. */
+  createdAt?: string;
 };
 
 export type Recurring = {

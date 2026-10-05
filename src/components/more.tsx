@@ -8,7 +8,6 @@ import { CategoryPicker } from "@/components/category-picker";
 import { pickName } from "@/lib/i18n";
 import { downloadBlob, encryptSnapshot } from "@/lib/backup";
 import {
-  backupModifiedAt,
   downloadBackup,
   downloadBackupById,
   getAccessToken,
@@ -21,10 +20,10 @@ import {
   takePendingDriveAction,
   takeRedirectToken,
   uploadBackup,
+  driveFileInstant,
   type DriveBackupRef,
 } from "@/lib/google-drive";
-import { lastDriveSyncAt, localEditedAt, markDailyDriveSync, markLocalEdit, readDrivePass, writeDrivePass, encodeDriveBody, decodeDriveBody } from "@/lib/drive-sync";
-import { pickSyncSide } from "@/lib/sync-side";
+import { markDailyDriveSync, markLocalEdit, noteNewestDriveFile, readDrivePass, writeDrivePass, encodeDriveBody, decodeDriveBody, syncWithDrive } from "@/lib/drive-sync";
 import { transactionsToCsv } from "@/lib/derived";
 import { convertBtp, isAppSnapshot, isBtpFile } from "@/lib/import-btp";
 import { CURRENCIES, type BudgetTargetMode } from "@/lib/types";
@@ -313,7 +312,7 @@ export function BackupPage() {
 
   async function refreshCopies(token: string) {
     const files = await listDriveBackups(token);
-    files.sort((a, b) => b.modifiedTime.localeCompare(a.modifiedTime) || b.id.localeCompare(a.id));
+    files.sort((a, b) => driveFileInstant(b).localeCompare(driveFileInstant(a)) || b.id.localeCompare(a.id));
     setCopies(files);
   }
 
@@ -334,6 +333,7 @@ export function BackupPage() {
     writeDrivePass(pass);
     if (action === "save") {
       await uploadBackup(token, await encodeDriveBody(exportSnap(), pass));
+      await noteNewestDriveFile(token);
       markLocalEdit();
       markDailyDriveSync();
       toast(t.backup.driveSaved);
@@ -356,20 +356,18 @@ export function BackupPage() {
       }
       return;
     }
-    const remoteIso = await backupModifiedAt(token);
-    const side = pickSyncSide(localEditedAt() || lastDriveSyncAt(), remoteIso);
-    if (side === "pull" && remoteIso) {
-      const text = await downloadBackup(token);
-      await importPayload(text, true);
-      markLocalEdit();
-      markDailyDriveSync();
-      toast(t.backup.synced);
-      await refreshCopies(token);
+    const result = await syncWithDrive({ exportSnapshot: exportSnap, replaceAll });
+    if (result === "need-pass") {
+      toast(t.backup.driveNeedPass);
       return;
     }
-    if (side === "push" || !remoteIso) {
-      await uploadBackup(token, await encodeDriveBody(exportSnap(), pass));
-      markLocalEdit();
+    if (result === "need-auth") {
+      startGoogleSignIn("sync");
+      return;
+    }
+    if (result === "fail" || result === "offline") {
+      toast(t.backup.driveFail);
+      return;
     }
     markDailyDriveSync();
     await refreshCopies(token);
@@ -505,7 +503,7 @@ export function BackupPage() {
           <div className="overflow-hidden rounded-2xl bg-elevated">
             {copies.length ? (
               copies.map((file, i) => {
-                const when = driveWhen(file.modifiedTime, locale);
+                const when = driveWhen(driveFileInstant(file), locale);
                 return (
                   <div key={file.id} className={i > 0 ? "border-t border-line" : ""}>
                     <div className="flex items-center justify-between gap-3 px-4 py-3">
