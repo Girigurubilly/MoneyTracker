@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Hairline, Overlay, ScreenHeader } from "@/components/shared";
 import { moneyAccountsForPicker } from "@/lib/accounts";
-import { MONTHS_S, depositYearPrincipal, suggestedInterest, summarizeDeposits } from "@/lib/calc/deposits";
+import { MONTHS_S, depositYearTotals, suggestedInterest, summarizeDeposits } from "@/lib/calc/deposits";
 import { money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { resolveAmountInput } from "@/lib/money-expr";
@@ -124,12 +124,15 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
         <p className="px-5 text-sm text-muted">{t.reports.noDepositsHint}</p>
       ) : (
         grouped.map(([yr, rows]) => {
-          const lump = depositYearPrincipal(rows, rates);
+          const lump = depositYearTotals(rows, rates);
           return (
           <div key={yr} className="mb-4">
             <div className="flex items-baseline justify-between gap-3 px-5 pb-1 pt-5">
               <h2 className="text-sm font-medium text-muted">{yr}</h2>
-              <span className="text-sm font-semibold tabular-nums">{money(lump.amount, lump.currency)}</span>
+              <div className="text-right">
+                <div className="text-sm font-semibold tabular-nums">{money(lump.principal, lump.currency)}</div>
+                <div className="text-xs font-medium tabular-nums text-income">+{money(lump.interest, lump.currency)}</div>
+              </div>
             </div>
             <div className="mx-4 overflow-hidden rounded-2xl bg-elevated">
               {rows.map((r, i) => {

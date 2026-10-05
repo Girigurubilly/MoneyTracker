@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   depositDayCount,
-  depositYearPrincipal,
+  depositYearTotals,
   depositsOutsideBalances,
   getMonthlyDepositInterest,
   monthActualsFromTxs,
@@ -78,17 +78,23 @@ describe("deposits", () => {
     assert.equal(s.unrealizedAfterYearHKD, 78);
   });
 
-  it("totals the principal maturing in one year", () => {
-    const same = depositYearPrincipal(
-      [dep({ id: "a", endDate: "2027-01-01", amount: 100000 }), dep({ id: "b", endDate: "2027-06-01", amount: 50000 })],
+  it("totals principal and interest maturing in one year", () => {
+    const same = depositYearTotals(
+      [
+        dep({ id: "a", endDate: "2027-01-01", amount: 100000, interest: 2000 }),
+        dep({ id: "b", endDate: "2027-06-01", amount: 50000, interest: 500 }),
+      ],
       rates,
     );
-    assert.deepEqual(same, { amount: 150000, currency: "HKD" });
-    const mixed = depositYearPrincipal(
-      [dep({ id: "a", endDate: "2027-01-01", amount: 100000 }), dep({ id: "b", endDate: "2027-06-01", currency: "USD", amount: 1000 })],
+    assert.deepEqual(same, { principal: 150000, interest: 2500, currency: "HKD" });
+    const mixed = depositYearTotals(
+      [
+        dep({ id: "a", endDate: "2027-01-01", amount: 100000, interest: 1000 }),
+        dep({ id: "b", endDate: "2027-06-01", currency: "USD", amount: 1000, interest: 10 }),
+      ],
       rates,
     );
-    assert.deepEqual(mixed, { amount: 107800, currency: "HKD" });
+    assert.deepEqual(mixed, { principal: 107800, interest: 1078, currency: "HKD" });
   });
 
   it("attributes maturity-month interest in HKD for any currency", () => {
