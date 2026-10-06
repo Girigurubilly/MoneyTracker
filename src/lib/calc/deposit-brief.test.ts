@@ -38,11 +38,28 @@ describe("deposit brief", () => {
     assert.equal(brief.unrealizedThisYearHkd, 78);
     assert.equal(brief.unrealizedAfterYearHkd, 2000);
     assert.equal(brief.nextMaturity, "2026-12-01");
-    assert.ok(Math.abs((brief.weightedRate ?? 0) - (4 * 100000 + 5 * 7800) / 107800) < 0.0001);
+    const laterRate = (2000 / 100000) * (365 / 379) * 100;
+    const soonRate = (10 / 1000) * (365 / 334) * 100;
+    assert.ok(Math.abs((brief.weightedRate ?? 0) - (laterRate * 100000 + soonRate * 7800) / 107800) < 0.0001);
+    assert.equal(brief.rateBasisCount, 2);
     assert.equal(brief.rows.find((r) => r.end === "2027-01-15")?.account, "HSBC HKD");
     const md = renderDepositBriefMarkdown(brief);
     assert.match(md, /2027,1,100000,2000,102000/);
     assert.match(md, /2026-12,1,7800,78/);
     assert.match(md, /How to use with an LLM/);
+  });
+
+  it("does not treat a blank rate as 0%", () => {
+    const brief = buildDepositBrief({
+      today: "2026-10-06",
+      rates,
+      accounts: [],
+      deposits: [
+        dep({ id: "known", startDate: "2026-01-01", endDate: "2027-01-01", amount: 100000, interest: 3000, rate: 0 }),
+        dep({ id: "blank", startDate: "2026-01-01", endDate: "2027-01-01", amount: 900000, interest: 0, rate: 0 }),
+      ],
+    });
+    assert.equal(brief.rateBasisCount, 1);
+    assert.ok(Math.abs((brief.weightedRate ?? 0) - 3) < 0.0001);
   });
 });

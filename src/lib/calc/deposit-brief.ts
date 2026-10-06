@@ -15,6 +15,8 @@ export type DepositBriefRow = {
   principalHkd: number;
   interestHkd: number;
   weight: number;
+  /** Annual percent from interest, principal and tenor. Null when it cannot be known. */
+  annualRate: number | null;
 };
 
 export type DepositBrief = {
@@ -31,6 +33,8 @@ export type DepositBrief = {
   largestHkd: number;
   largestWeight: number;
   nextMaturity: string;
+  /** Active deposits that contributed to weightedRate. */
+  rateBasisCount: number;
 };
 
 function round(n: number): number {
@@ -48,6 +52,15 @@ function addMonths(ym: string, n: number): string {
   const [y, m] = ym.split("-").map(Number);
   const d = new Date(Date.UTC(y, m - 1 + n, 1));
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function annualRatePct(d: TimeSaving): number | null {
+  const days = d.startDate && d.endDate ? dayDiff(d.startDate, d.endDate) : null;
+  if ((d.amount || 0) > 0 && (d.interest || 0) > 0 && days && days > 0) {
+    return ((d.interest || 0) / d.amount) * (365 / days) * 100;
+  }
+  if ((d.rate || 0) > 0) return d.rate;
+  return null;
 }
 
 function accountName(accounts: Account[], id?: string): string {
@@ -75,7 +88,16 @@ export function buildDepositBrief(input: {
   const unrealizedThisYearHkd = active
     .filter((r) => (r.d.endDate || "").slice(0, 4) === year)
     .reduce((s, r) => s + r.interestHkd, 0);
-  const rateWeight = active.reduce((s, r) => s + (r.d.rate || 0) * r.principalHkd, 0);
+  let basisPrincipal = 0;
+  let basisRate = 0;
+  let rateBasisCount = 0;
+  for (const r of active) {
+    const pct = annualRatePct(r.d);
+    if (pct == null) continue;
+    basisPrincipal += r.principalHkd;
+    basisRate += pct * r.principalHkd;
+    rateBasisCount += 1;
+  }
   const largest = active.reduce((best, r) => (r.principalHkd > best ? r.principalHkd : best), 0);
   const next = active
     .map((r) => r.d.endDate)
@@ -96,6 +118,7 @@ export function buildDepositBrief(input: {
       principalHkd: round(principalHkd),
       interestHkd: round(interestHkd),
       weight: !matured && activePrincipalHkd > 0 ? principalHkd / activePrincipalHkd : 0,
+      annualRate: annualRatePct(d),
     }))
     .sort((a, b) => a.end.localeCompare(b.end) || a.bank.localeCompare(b.bank));
   return {
@@ -108,10 +131,11 @@ export function buildDepositBrief(input: {
     realizedInterestHkd: round(realizedInterestHkd),
     unrealizedThisYearHkd: round(unrealizedThisYearHkd),
     unrealizedAfterYearHkd: round(interestToEarnHkd - unrealizedThisYearHkd),
-    weightedRate: activePrincipalHkd > 0 ? rateWeight / activePrincipalHkd : null,
+    weightedRate: basisPrincipal > 0 ? basisRate / basisPrincipal : null,
     largestHkd: round(largest),
     largestWeight: activePrincipalHkd > 0 ? largest / activePrincipalHkd : 0,
     nextMaturity: next || "",
+    rateBasisCount,
   };
 }
 
@@ -178,7 +202,8 @@ export function renderDepositBriefMarkdown(b: DepositBrief): string {
     `- Interest already matured (HKD): ${hkd(b.realizedInterestHkd)}`,
     `- Of the interest still to earn, due this calendar year (HKD): ${hkd(b.unrealizedThisYearHkd)}`,
     `- Of the interest still to earn, due after this year (HKD): ${hkd(b.unrealizedAfterYearHkd)}`,
-    `- Principal-weighted average rate on active deposits: ${b.weightedRate == null ? "n/a" : `${b.weightedRate.toFixed(2)}%`}`,
+    `- Principal-weighted average annual rate: ${b.weightedRate == null ? "n/a" : `${b.weightedRate.toFixed(2)}%`} (${b.rateBasisCount} of ${b.activeCount} active deposits)`,
+    "- Rate method: annual rate of one deposit = interest ÷ principal × 365 ÷ days from start to end. The average weights those rates by HKD principal. A saved rate is used only when interest is missing. A deposit with neither is skipped, not counted as 0%.",
     `- Largest active deposit (HKD): ${hkd(b.largestHkd)} (${pct(b.largestWeight)} of active principal)`,
     `- Next maturity: ${b.nextMaturity || "none"}`,
     "",
@@ -211,7 +236,7 @@ export function renderDepositBriefMarkdown(b: DepositBrief): string {
     ...next12.map((m) => `${m.month},${m.count},${hkd(m.principal)},${hkd(m.interest)}`),
     "",
     "## Deposits",
-    "status,bank,account,currency,principal,rate_pct,start,end,days_left,interest,principal_hkd,interest_hkd,weight_of_active",
+    "status,bank,account,currency,principal,saved_rate_pct,annual_rate_pct,start,end,days_left,interest,principal_hkd,interest_hkd,weight_of_active",
     ...(b.rows.length
       ? b.rows.map((r) =>
           [
@@ -221,6 +246,7 @@ export function renderDepositBriefMarkdown(b: DepositBrief): string {
             r.currency,
             r.principal,
             r.rate,
+            r.annualRate == null ? "" : r.annualRate.toFixed(2),
             r.start,
             r.end,
             r.daysLeft ?? "",
