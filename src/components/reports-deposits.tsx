@@ -1,8 +1,12 @@
 import { useMemo, useState } from "react";
 import { Plus, RefreshCw, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { Hairline, Overlay, ScreenHeader } from "@/components/shared";
 import { moneyAccountsForPicker } from "@/lib/accounts";
+import { downloadBlob } from "@/lib/backup";
 import { MONTHS_S, depositYearTotals, suggestedInterest, summarizeDeposits } from "@/lib/calc/deposits";
+import { buildDepositBrief, renderDepositBriefMarkdown } from "@/lib/calc/deposit-brief";
+import { copyPlainText, sharePlainText } from "@/lib/copy-text";
 import { money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { resolveAmountInput } from "@/lib/money-expr";
@@ -37,6 +41,7 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
   const today = todayISO();
   const year = Number(today.slice(0, 4));
   const [editing, setEditing] = useState<TimeSaving | null | "new">(null);
+  const [ai, setAi] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const summary = useMemo(() => summarizeDeposits(deposits, today, rates), [deposits, today, rates]);
@@ -102,6 +107,15 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
           </button>
         </div>
       </div>
+
+      <button
+        type="button"
+        className="mx-4 mb-4 flex h-11 w-[calc(100%-2rem)] items-center justify-center rounded-xl bg-elevated text-sm font-medium"
+        onClick={() => setAi(true)}
+      >
+        {t.reports.exportBrief}
+      </button>
+      {ai ? <DepositBriefSheet onClose={() => setAi(false)} /> : null}
 
       <div className="mx-4 mb-5 rounded-2xl bg-elevated px-4 py-3">
         <div className="text-xs text-muted">{t.reports.depositIncomeCat}</div>
@@ -266,6 +280,44 @@ function DepositEditor({ open, initial, onClose }: { open: boolean; initial: Tim
         <LineRow label={t.reports.depositAmount} amount={amount} active={field === "amount"} onFocusAmount={() => setField("amount")} />
         <LineRow label={t.reports.interest} amount={interest} active={field === "interest"} onFocusAmount={() => setField("interest")} />
       </ComposerShell>
+    </Overlay>
+  );
+}
+
+function DepositBriefSheet({ onClose }: { onClose: () => void }) {
+  const t = useT();
+  const deposits = useApp((s) => s.deposits);
+  const accounts = useApp((s) => s.accounts);
+  const rates = useApp((s) => s.fxRates);
+  const markdown = useMemo(
+    () => renderDepositBriefMarkdown(buildDepositBrief({ today: todayISO(), deposits, accounts, rates })),
+    [deposits, accounts, rates],
+  );
+  async function copy() {
+    if (await copyPlainText(markdown)) {
+      toast(t.assets.copied);
+      return;
+    }
+    const shared = await sharePlainText(markdown, t.reports.exportBrief);
+    if (shared === "shared" || shared === "aborted") return;
+    toast(t.assets.copyFailed);
+  }
+  return (
+    <Overlay open onClose={onClose} title={t.reports.exportBrief} variant="page">
+      <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.depositAiHint}</p>
+      <div className="mx-4 mb-3 grid grid-cols-2 gap-2">
+        <button type="button" className="h-11 rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={() => void copy()}>
+          {t.assets.copyBrief}
+        </button>
+        <button
+          type="button"
+          className="h-11 rounded-xl bg-elevated text-sm font-medium"
+          onClick={() => downloadBlob(`hk-life-deposits-${todayISO()}.md`, markdown, "text/markdown")}
+        >
+          {t.assets.downloadBrief}
+        </button>
+      </div>
+      <pre className="mx-4 mb-8 max-h-[70dvh] select-text overflow-auto whitespace-pre-wrap rounded-2xl bg-elevated p-4 text-[11px] leading-4 text-muted">{markdown}</pre>
     </Overlay>
   );
 }

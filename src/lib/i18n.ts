@@ -849,6 +849,8 @@ export const messages = {
       interestRealized: "Interest realized (HKD)",
       unrealizedThisYear: "Unrealized interest this year",
       interestAfterYear: "Interest after {year}",
+      depositAiHint:
+        "Markdown of every time deposit: principal, interest, rate, maturity and bank, in HKD. Copy it into an LLM together with the asset and retirement briefs.",
       fxUpdated: "FX rates updated.",
       fxFailed: "Could not fetch live FX.",
       depositNeedFields: "Please fill in bank, dates, account and deposit amount.",
@@ -1921,6 +1923,8 @@ export const messages = {
       interestRealized: "已實現利息（港元）",
       unrealizedThisYear: "本年尚未實現利息",
       interestAfterYear: "{year} 年後利息",
+      depositAiHint:
+        "全部定期存款嘅 Markdown：本金、利息、利率、到期日同銀行，折成港元。複製之後，連同資產同退休頁嘅匯出一齊貼去大型語言模型。",
       fxUpdated: "匯率已更新。",
       fxFailed: "未能取得最新匯率。",
       depositNeedFields: "請填寫銀行、日期、戶口及存款金額。",
