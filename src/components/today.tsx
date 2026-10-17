@@ -7,6 +7,8 @@ import { Link } from "@tanstack/react-router";
 import { activityDates, plannedIso, monthStats } from "@/lib/derived";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
 import { chargedDayOf, chargedIso, forecastTone, regularSettledInMonth } from "@/lib/calc/budget";
+import { toHkd } from "@/lib/calc/fx";
+import { cashflowSide } from "@/lib/calc/ledger";
 import type { AdhocBudget, Locale, MoneyUnit, Recurring, Transaction } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
@@ -97,6 +99,16 @@ function TodayBody() {
   const onThisMonth = selected.slice(0, 7) === today.slice(0, 7);
   const ringTone = forecastTone(target > 0 ? spentNow / target : 0);
   const paid = transactions.filter((x) => x.date === selected && !x.planned && x.type !== "miles").sort((a, b) => b.id.localeCompare(a.id));
+  let dayIncome = 0;
+  let dayExpense = 0;
+  for (const tx of paid) {
+    const side = cashflowSide(tx);
+    if (side === "none") continue;
+    const hkd = Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
+    if (side === "income") dayIncome += hkd;
+    else dayExpense += hkd;
+  }
+  const dayNet = dayIncome - dayExpense;
   const monthKey = selected.slice(0, 7);
   const schedule = monthSchedule({
     monthKey,
@@ -208,9 +220,26 @@ function TodayBody() {
         </>
       ) : null}
 
-      <SectionLabel>{t.today.dayTx}</SectionLabel>
+      <div className="flex items-baseline justify-between gap-3 px-5 pb-1 pt-5">
+        <h2 className="text-sm font-medium text-muted">{t.today.dayTx}</h2>
+        {paid.length ? (
+          <span className={cn("text-sm font-semibold tabular-nums", dayNet > 0 ? "text-income" : dayNet < 0 ? "text-expense" : "text-muted")}>
+            {money(dayNet, "HKD", { sign: true })}
+          </span>
+        ) : null}
+      </div>
       <Hairline />
-      <p className="px-5 pt-2 text-xs text-muted">{longDate(selected, locale)}</p>
+      <p className="px-5 pt-2 text-xs text-muted">
+        {longDate(selected, locale)}
+        {dayIncome > 0 && dayExpense > 0 ? (
+          <>
+            {" · "}
+            <span className="text-income">{t.reports.income} {money(dayIncome, "HKD")}</span>
+            {" · "}
+            <span className="text-expense">{t.reports.expense} {money(dayExpense, "HKD")}</span>
+          </>
+        ) : null}
+      </p>
       {paid.length === 0 ? (
         <p className="px-5 py-6 text-sm text-muted">{t.today.noTxDay}</p>
       ) : (
