@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Overlay } from "@/components/shared";
-import { asMoneyCurrency, linkFromHash, proposalFromHash, type TripSpendItem } from "@/lib/trip-link";
+import { asMoneyCurrency, linkFromHash, plannerTripUrl, proposalFromHash, type TripSpendItem } from "@/lib/trip-link";
 import { CURRENCIES, type MoneyUnit } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { newId, useApp } from "@/store/app";
@@ -17,6 +17,8 @@ export function TripProposal() {
   const categories = useApp((s) => s.categories);
   const trips = useApp((s) => s.trips);
   const [open, setOpen] = useState(false);
+  const [done, setDone] = useState(false);
+  const [backUrl, setBackUrl] = useState("");
   const [tripName, setTripName] = useState("");
   const [tripId, setTripId] = useState("");
   const [rows, setRows] = useState<Draft[]>([]);
@@ -35,6 +37,8 @@ export function TripProposal() {
         on: true,
       })),
     );
+    setDone(false);
+    setBackUrl("");
     setOpen(true);
     const url = new URL(window.location.href);
     url.hash = "";
@@ -88,12 +92,29 @@ export function TripProposal() {
       }
     }
     toast(t.reports.proposalDone);
-    setOpen(false);
+    const day = picked[0]?.date || "";
+    const trip = trips.find((row) => row.id === tripId);
+    setBackUrl(trip && day ? plannerTripUrl(trip, { day }) : "");
+    setDone(true);
   }
 
   return (
     <Overlay open={open} onClose={() => setOpen(false)} title={t.reports.proposalTitle}>
       <div className="px-5 pb-8">
+        {done ? (
+          <>
+            <p className="text-sm leading-6">{t.reports.proposalDone}</p>
+            {backUrl ? (
+              <a href={backUrl} target="trip-planner" className="mt-4 flex h-12 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-on-accent">
+                {t.reports.proposalBack}
+              </a>
+            ) : null}
+            <button type="button" className="mt-2 h-11 w-full text-sm text-muted" onClick={() => setOpen(false)}>
+              {t.reports.proposalStay}
+            </button>
+          </>
+        ) : (
+          <>
         <p className="text-xs leading-5 text-muted">
           {tripName ? `${tripName} · ` : ""}
           {t.reports.proposalHint}
@@ -152,6 +173,8 @@ export function TripProposal() {
         <button type="button" className="mt-2 h-11 w-full text-sm text-muted" onClick={() => setOpen(false)}>
           {t.reports.proposalSkip}
         </button>
+          </>
+        )}
       </div>
     </Overlay>
   );
