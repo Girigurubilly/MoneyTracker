@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { decodeProposal, encodeProposal, linkFromHash, plannerTripUrl, proposalFromHash } from "./trip-link.ts";
+import { decodeProposal, encodeProposal, linkFromHash, plannerTripUrl, proposalFromHash, tripCovering } from "./trip-link.ts";
+import type { Trip } from "./types.ts";
 
 describe("trip link", () => {
   it("opens the planner on this money trip, not the bare home page", () => {
@@ -13,6 +14,17 @@ describe("trip link", () => {
     const picked = new URL(plannerTripUrl({ id: "osaka", name: "Osaka", nameZh: "大阪", destination: "大阪", start: "2026-04-02", end: "2026-04-08", plannerId: "osaka-book" }, { pick: true }));
     assert.equal(picked.searchParams.get("book"), "osaka-book");
     assert.equal(picked.searchParams.get("pick"), "1");
+    const day = new URL(plannerTripUrl({ id: "osaka", name: "Osaka", nameZh: "大阪", destination: "大阪", start: "2026-04-02", end: "2026-04-08" }, { day: "2026-04-03" }));
+    assert.equal(day.searchParams.get("day"), "2026-04-03");
+  });
+
+  it("only links a date that sits inside a trip", () => {
+    const row = (id: string, start: string, end: string): Trip => ({
+      id, name: id, nameZh: id, destination: id, start, end, status: "booked", cashBudget: 0, cashSaved: 0, milesTarget: 0, milesSaved: 0, monthlyCash: 0,
+    });
+    const trips = [row("early", "2026-04-01", "2026-04-03"), row("later", "2026-04-02", "2026-04-08")];
+    assert.equal(tripCovering(trips, "2026-04-04")?.id, "later");
+    assert.equal(tripCovering(trips, "2026-04-09"), undefined);
   });
 
   it("round-trips a spend proposal", () => {

@@ -1,4 +1,4 @@
-import type { Currency, MoneyUnit } from "./types.ts";
+import type { Currency, MoneyUnit, Trip } from "./types.ts";
 import { CURRENCIES } from "./types.ts";
 
 export const PLANNER_URL = "https://girigurubilly.github.io/TripPlanner/";
@@ -35,7 +35,7 @@ export function plannerTripUrl(
     end: string;
     plannerId?: string;
   },
-  opts?: { pick?: boolean },
+  opts?: { pick?: boolean; day?: string },
 ): string {
   const q = new URLSearchParams({
     money: trip.id,
@@ -45,8 +45,15 @@ export function plannerTripUrl(
     dest: trip.destination.slice(0, 80),
   });
   if (trip.plannerId) q.set("book", trip.plannerId);
+  if (opts?.day && /^\d{4}-\d{2}-\d{2}$/.test(opts.day)) q.set("day", opts.day);
   if (opts?.pick) q.set("pick", "1");
   return `${PLANNER_URL}?${q.toString()}`;
+}
+
+export function tripCovering(trips: Trip[], iso: string): Trip | undefined {
+  const hits = trips.filter((trip) => trip.status !== "cancelled" && trip.start <= iso && iso <= trip.end);
+  hits.sort((a, b) => Number(Boolean(b.plannerId)) - Number(Boolean(a.plannerId)) || b.start.localeCompare(a.start));
+  return hits[0];
 }
 
 export function encodeProposal(body: TripSpendProposal): string {

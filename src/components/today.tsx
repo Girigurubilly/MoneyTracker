@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, ChevronDown, Plus, Search, Wallet } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, MapPinned, Plus, Search, Wallet } from "lucide-react";
 import { Hairline, InfoButton, ProgressRing, SectionLabel, TransactionRow } from "@/components/shared";
 import { AmountWithHkd } from "@/components/currency-field";
 import { longDate, money, monthGrid, monthTitle, shiftMonth, todayISO, weekdayLabels } from "@/lib/format";
@@ -12,6 +12,7 @@ import { cashflowSide } from "@/lib/calc/ledger";
 import type { AdhocBudget, Locale, MoneyUnit, Recurring, Transaction } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
+import { plannerTripUrl, tripCovering } from "@/lib/trip-link";
 import { useT, useUi, readSavedLocale } from "@/store/ui";
 import { useEffect, useState } from "react";
 
@@ -24,6 +25,8 @@ export function TodayScreen() {
   const openAdd = useUi((s) => s.openAdd);
   const setSearch = useUi((s) => s.setSearchOpen);
   const today = todayISO();
+  const trips = useApp((s) => s.trips);
+  const covering = tripCovering(trips, selected);
   const onThisMonth = selected.slice(0, 7) === today.slice(0, 7);
 
   useEffect(() => {
@@ -48,6 +51,17 @@ export function TodayScreen() {
             <button type="button" aria-label={t.today.search} onClick={() => setSearch(true)} className="grid size-11 place-items-center">
               <Search className="size-6" strokeWidth={1.7} />
             </button>
+            {covering ? (
+              <a
+                href={plannerTripUrl(covering, { day: selected })}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={t.today.openPlan}
+                className="grid size-11 place-items-center text-accent"
+              >
+                <MapPinned className="size-6" strokeWidth={1.7} />
+              </a>
+            ) : null}
             <button type="button" aria-label={t.add.title} onClick={() => openAdd("expense")} className="grid size-11 place-items-center">
               <Plus className="size-7" strokeWidth={1.7} />
             </button>
