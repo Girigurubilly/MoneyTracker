@@ -141,6 +141,39 @@ function TripCard({ trip }: { trip: Trip }) {
   );
 }
 
+function TripLinkSetup({ trip }: { trip: Trip }) {
+  const t = useT();
+  const linked = Boolean(trip.plannerId);
+  return (
+    <>
+      <div className="text-xs text-muted">{t.reports.plannerLink}</div>
+      <div className="mt-1 text-sm font-medium">{linked ? trip.plannerTitle || trip.plannerId : t.reports.plannerUnlinked}</div>
+      {linked && trip.plannerTitle ? <div className="mt-0.5 break-all text-xs text-faint">{trip.plannerId}</div> : null}
+      <p className="mt-1 text-xs leading-5 text-muted">{t.reports.plannerHint}</p>
+      <div className="mt-2 flex gap-2">
+        <a
+          href={plannerTripUrl(trip, { pick: true })}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex h-10 flex-1 items-center justify-center rounded-full bg-accent text-xs font-medium text-on-accent"
+        >
+          {linked ? t.reports.plannerChange : t.reports.plannerPick}
+        </a>
+        {linked ? (
+          <a
+            href={plannerTripUrl(trip)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex h-10 flex-1 items-center justify-center gap-1 rounded-full bg-background text-xs font-medium text-accent"
+          >
+            {t.reports.planTrip}
+          </a>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
 function PlannerLink({ trip, className = "" }: { trip: Trip; className?: string }) {
   const t = useT();
   return (
@@ -200,8 +233,8 @@ export function TripDetailPage({ id }: { id: string }) {
           </button>
         }
       />
-      <div className="mx-4 mb-3 overflow-hidden rounded-xl bg-elevated">
-        <PlannerLink trip={trip} />
+      <div className="mx-4 mb-3 overflow-hidden rounded-xl bg-elevated px-4 py-3">
+        <TripLinkSetup trip={trip} />
       </div>
       <div className="mx-4 overflow-hidden rounded-2xl bg-elevated p-4">
         <div className="flex items-start justify-between gap-3">
@@ -277,6 +310,7 @@ function TripEditor({
   const [end, setEnd] = useState(trip?.end || today);
   const [budget, setBudget] = useState(String(trip?.cashBudget ?? 10000));
   const [monthly, setMonthly] = useState(String(trip?.monthlyCash ?? 0));
+  const [plannerId, setPlannerId] = useState(trip?.plannerId || "");
 
   const [field, setField] = useState<"amount" | "dest" | "principal" | "interest">("amount");
 
@@ -296,6 +330,8 @@ function TripEditor({
       milesTarget: trip?.milesTarget ?? 0,
       milesSaved: trip?.milesSaved ?? 0,
       monthlyCash: Number(monthly) || 0,
+      plannerId: plannerId.trim() || undefined,
+      plannerTitle: plannerId.trim() && plannerId.trim() === (trip?.plannerId || "") ? trip?.plannerTitle : undefined,
     };
     if (trip) await update(row);
     else await add(row);
@@ -334,6 +370,20 @@ function TripEditor({
         </div>
         <LineRow label={t.reports.cashBudget} amount={budget} active={field === "amount"} onFocusAmount={() => setField("amount")} />
         <TextLine value={monthly} onChange={setMonthly} placeholder={t.reports.monthlyCash} />
+        <TextLine value={plannerId} onChange={setPlannerId} placeholder={t.reports.plannerId} />
+        <p className="px-4 py-2 text-xs leading-5 text-muted">{t.reports.plannerHint}</p>
+        {trip ? (
+          <a
+            href={plannerTripUrl({ ...trip, plannerId: plannerId.trim() || trip.plannerId }, { pick: true })}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mx-4 mb-3 flex h-11 items-center justify-center rounded-xl bg-elevated text-sm font-medium text-accent"
+          >
+            {t.reports.plannerPick}
+          </a>
+        ) : (
+          <p className="px-4 pb-3 text-xs text-muted">{t.reports.plannerSaveFirst}</p>
+        )}
         {trip && onDeleted ? (
           <button type="button" className="mx-4 my-3 h-11 text-sm text-expense" onClick={onDeleted}>
             {t.reports.removeTrip}

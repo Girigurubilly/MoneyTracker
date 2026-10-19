@@ -463,6 +463,9 @@ export type Trip = {
   milesTarget: number;
   milesSaved: number;
   monthlyCash: number;
+  /** TripPlanner book id, set from the trip’s link setup. */
+  plannerId?: string;
+  plannerTitle?: string;
 };
 
 export type WishItem = {

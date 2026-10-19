@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Overlay } from "@/components/shared";
-import { asMoneyCurrency, proposalFromHash, type TripSpendItem } from "@/lib/trip-link";
+import { asMoneyCurrency, linkFromHash, proposalFromHash, type TripSpendItem } from "@/lib/trip-link";
 import { CURRENCIES, type MoneyUnit } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { newId, useApp } from "@/store/app";
@@ -155,4 +155,25 @@ export function TripProposal() {
       </div>
     </Overlay>
   );
+}
+
+export function TripLinkCatcher() {
+  const t = useT();
+  const trips = useApp((s) => s.trips);
+  const update = useApp((s) => s.updateTrip);
+  useEffect(() => {
+    const link = linkFromHash(window.location.hash);
+    if (!link) return;
+    const url = new URL(window.location.href);
+    url.hash = "";
+    window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+    const trip = trips.find((row) => row.id === link.tripId);
+    if (!trip) {
+      toast(t.reports.plannerMissing);
+      return;
+    }
+    void update({ ...trip, plannerId: link.bookId, plannerTitle: link.title || trip.plannerTitle });
+    toast(t.reports.plannerSaved);
+  }, [trips, update, t]);
+  return null;
 }

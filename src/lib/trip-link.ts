@@ -18,14 +18,25 @@ export type TripSpendProposal = {
   items: TripSpendItem[];
 };
 
-export function plannerTripUrl(trip: {
-  id: string;
-  name: string;
-  nameZh: string;
-  destination: string;
-  start: string;
-  end: string;
-}): string {
+export type TripPlanLink = {
+  v: 1;
+  tripId: string;
+  bookId: string;
+  title: string;
+};
+
+export function plannerTripUrl(
+  trip: {
+    id: string;
+    name: string;
+    nameZh: string;
+    destination: string;
+    start: string;
+    end: string;
+    plannerId?: string;
+  },
+  opts?: { pick?: boolean },
+): string {
   const q = new URLSearchParams({
     money: trip.id,
     start: trip.start,
@@ -33,6 +44,8 @@ export function plannerTripUrl(trip: {
     name: (trip.nameZh || trip.name).slice(0, 80),
     dest: trip.destination.slice(0, 80),
   });
+  if (trip.plannerId) q.set("book", trip.plannerId);
+  if (opts?.pick) q.set("pick", "1");
   return `${PLANNER_URL}?${q.toString()}`;
 }
 
@@ -46,10 +59,7 @@ export function encodeProposal(body: TripSpendProposal): string {
 
 export function decodeProposal(token: string): TripSpendProposal | null {
   try {
-    const pad = token.replace(/-/g, "+").replace(/_/g, "/");
-    const bin = atob(pad + "===".slice((pad.length + 3) % 4));
-    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
-    const json = JSON.parse(new TextDecoder().decode(bytes)) as Partial<TripSpendProposal>;
+    const json = JSON.parse(decodeToken(token)) as Partial<TripSpendProposal>;
     if (json.v !== 1 || !Array.isArray(json.items)) return null;
     const items: TripSpendItem[] = [];
     for (const row of json.items) {
@@ -69,13 +79,36 @@ export function decodeProposal(token: string): TripSpendProposal | null {
   }
 }
 
-/** Read `#proposal=` once. Returns null when the hash is not a proposal. */
 export function proposalFromHash(hash: string): TripSpendProposal | null {
-  const raw = hash.startsWith("#") ? hash.slice(1) : hash;
-  const q = new URLSearchParams(raw);
-  const token = q.get("proposal");
+  const token = hashParam(hash, "proposal");
   if (!token) return null;
   return decodeProposal(token);
+}
+
+export function linkFromHash(hash: string): TripPlanLink | null {
+  const token = hashParam(hash, "link");
+  if (!token) return null;
+  try {
+    const json = JSON.parse(decodeToken(token)) as Partial<TripPlanLink>;
+    const tripId = String(json.tripId || "").trim();
+    const bookId = String(json.bookId || "").trim();
+    if (json.v !== 1 || !tripId || !bookId) return null;
+    return { v: 1, tripId: tripId.slice(0, 80), bookId: bookId.slice(0, 80), title: String(json.title || "").slice(0, 80) };
+  } catch {
+    return null;
+  }
+}
+
+function hashParam(hash: string, key: string): string {
+  const raw = hash.startsWith("#") ? hash.slice(1) : hash;
+  return new URLSearchParams(raw).get(key) || "";
+}
+
+function decodeToken(token: string): string {
+  const pad = token.replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(pad + "===".slice((pad.length + 3) % 4));
+  const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
 }
 
 export function asMoneyCurrency(code: string): MoneyUnit {
