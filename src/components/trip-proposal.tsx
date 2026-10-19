@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Overlay } from "@/components/shared";
-import { todayISO } from "@/lib/format";
+import { todayISO, clockNow } from "@/lib/format";
+import { WhenField } from "@/components/when-picker";
 import { pickName } from "@/lib/i18n";
 import { asMoneyCurrency, linkFromHash, plannerTripUrl, proposalFromHash, type TripSpendItem } from "@/lib/trip-link";
 import { CURRENCIES, type MoneyUnit } from "@/lib/types";
@@ -16,6 +17,7 @@ type Draft = TripSpendItem & {
   currency: MoneyUnit;
   categoryId: string;
   accountId: string;
+  time: string;
 };
 
 const ACCOUNT_KEY = "hk-life-money-pay-account";
@@ -70,6 +72,7 @@ export function TripProposal() {
         on: true,
         categoryId,
         accountId,
+        time: clockNow(),
       })),
     );
     setDone(false);
@@ -132,6 +135,7 @@ export function TripProposal() {
           accountId,
           categoryId,
           date: row.date,
+          time: row.time,
           payee: row.label,
           payeeZh: row.label,
           note: tripName,
@@ -148,6 +152,7 @@ export function TripProposal() {
           currency: row.currency,
           month: row.date.slice(0, 7),
           date: row.date,
+          time: row.time,
           categoryId,
           accountId,
           tripId: knownTrip ? tripId : undefined,
@@ -189,9 +194,15 @@ export function TripProposal() {
                 <input type="checkbox" className="mt-1" checked={row.on} onChange={(e) => patch(row.id, { on: e.target.checked })} />
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-medium">{row.label}</span>
-                  <span className="text-xs text-muted">{row.date}</span>
                 </span>
               </label>
+              <WhenField
+                date={row.date}
+                time={row.time}
+                locale={locale}
+                onDate={(iso) => patch(row.id, { date: iso })}
+                onTime={(next) => patch(row.id, { time: next })}
+              />
               <div className="mt-2 flex gap-2">
                 <input
                   inputMode="decimal"

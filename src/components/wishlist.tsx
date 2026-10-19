@@ -4,13 +4,14 @@ import { toast } from "sonner";
 import { CategoryPicker } from "@/components/category-picker";
 import { CategoryIcon } from "@/components/category-icon";
 import { Group, Hairline, Overlay, ScreenHeader } from "@/components/shared";
-import { money, todayISO } from "@/lib/format";
+import { money, todayISO, clockNow } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { resolveAmountInput } from "@/lib/money-expr";
 import { moneyAccountsForPicker } from "@/lib/accounts";
 import { applyTxRules } from "@/lib/tx-rules";
 import { captureFxToHkd } from "@/lib/calc/fx";
 import { categoryPath } from "@/lib/categories";
+import { WhenField } from "@/components/when-picker";
 import type { Category, Currency, WishCard, WishItem } from "@/lib/types";
 import {
   AccountLine,
@@ -297,6 +298,7 @@ function ConvertSheet({ item, onClose }: { item: WishItem; onClose: () => void }
   const [categoryId, setCategoryId] = useState(item.categoryId ?? "");
   const [accountId, setAccountId] = useState(moneyAccounts[0]?.id ?? "");
   const [date, setDate] = useState(today);
+  const [time, setTime] = useState(clockNow);
   const [paid, setPaid] = useState(true);
   const [pickCat, setPickCat] = useState(false);
   const cat = categories.find((c) => c.id === categoryId);
@@ -312,6 +314,7 @@ function ConvertSheet({ item, onClose }: { item: WishItem; onClose: () => void }
           accountId,
           categoryId: categoryId || undefined,
           date,
+          time,
           payee: item.name,
           payeeZh: item.name,
           planned: !paid,
@@ -335,6 +338,7 @@ function ConvertSheet({ item, onClose }: { item: WishItem; onClose: () => void }
       currency: item.currency,
       month: iso.slice(0, 7),
       date: iso,
+      time,
       categoryId: categoryId || undefined,
       priceCards: item.priceCards,
       valueCards: item.valueCards,
@@ -419,16 +423,7 @@ function ConvertSheet({ item, onClose }: { item: WishItem; onClose: () => void }
             placeholder={t.add.pickCategory}
             onPressLabel={() => setPickCat(true)}
           />
-          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-            <span className="text-sm text-muted">{t.wish.holdDate}</span>
-            <input
-              type="date"
-              value={date}
-              min={today}
-              onChange={(e) => setDate(e.target.value)}
-              className="h-10 bg-transparent text-sm text-accent outline-none"
-            />
-          </div>
+          <WhenField date={date} time={time} locale={locale} min={today} onDate={setDate} onTime={setTime} />
           <p className="px-4 py-3 text-xs leading-5 text-muted">{t.wish.holdDateHint}</p>
         </ComposerShell>
       </Overlay>
@@ -469,7 +464,7 @@ function ConvertSheet({ item, onClose }: { item: WishItem; onClose: () => void }
           placeholder={t.add.pickCategory}
           onPressLabel={() => setPickCat(true)}
         />
-        <DatePaidRow date={date} paid={paid} onDate={setDate} onPaid={setPaid} />
+        <DatePaidRow date={date} time={time} paid={paid} onDate={setDate} onTime={setTime} onPaid={setPaid} />
       </ComposerShell>
     </Overlay>
   );

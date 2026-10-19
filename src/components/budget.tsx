@@ -6,7 +6,7 @@ import { InfoButton, Overlay, ScreenHeader, StatusChip } from "@/components/shar
 import { CategoryPicker, TypeSwitch } from "@/components/category-picker";
 import { CategoryIcon } from "@/components/category-icon";
 import { AmountWithHkd, asFiat, autoDestAmount } from "@/components/currency-field";
-import { money, pct, todayISO } from "@/lib/format";
+import { money, pct, todayISO, clockNow } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { resolveAmountInput } from "@/lib/money-expr";
 import {
@@ -20,6 +20,7 @@ import {
   TextLine,
 } from "@/components/txn-composer";
 import { asOfForMonth, adhocTotal, budgetActuals, chargedDayOf, forecastTone } from "@/lib/calc/budget";
+import { WhenField } from "@/components/when-picker";
 import { travelSpendYtd } from "@/lib/calc/trips";
 import { monthKey } from "@/lib/calc/ledger";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
@@ -558,6 +559,7 @@ function PostAdhocBody({ item, onClose }: { item: AdhocBudget; onClose: () => vo
     await addTx({
       type: "expense",
       date: today,
+      time: item.time,
       amount: item.amount,
       currency: item.currency,
       accountId,
@@ -643,6 +645,7 @@ function AdhocEditorBody({
   const [amount, setAmount] = useState(initial ? String(initial.amount) : "");
   const [currency, setCurrency] = useState<Currency>(initial && initial.currency !== "MILES" ? initial.currency : defaultCurrency);
   const [date, setDate] = useState(initial?.date ?? (today.startsWith(month) ? today : `${month}-28`));
+  const [time, setTime] = useState(initial?.time || clockNow());
   const [categoryId, setCategoryId] = useState(initial?.categoryId ?? "");
   const [accountId, setAccountId] = useState(
     () => moneyAccounts.find((x) => x.type === "cash" || x.type === "current" || x.type === "savings")?.id ?? moneyAccounts[0]?.id ?? "",
@@ -672,6 +675,7 @@ function AdhocEditorBody({
       currency,
       month: rowMonth,
       date: iso,
+      time,
       categoryId: categoryId || undefined,
       paidOn: postToday && iso === today ? today : initial?.paidOn,
       priceCards: initial?.priceCards,
@@ -685,6 +689,7 @@ function AdhocEditorBody({
       await addTx({
         type: "expense",
         date: today,
+        time,
         amount: amt,
         currency,
         accountId,
@@ -752,16 +757,15 @@ function AdhocEditorBody({
         active
         onFocusAmount={() => undefined}
       />
-      <div className="min-w-0 border-b border-line px-4 py-2.5">
-        <input
-          type="date"
-          value={date}
-          min={lockToMonth ? `${month}-01` : `${today.slice(0, 7)}-01`}
-          max={lockToMonth ? `${month}-31` : undefined}
-          onChange={(e) => setDate(e.target.value)}
-          className="h-10 w-full min-w-0 max-w-full bg-transparent text-sm text-accent outline-none"
-        />
-      </div>
+      <WhenField
+        date={date}
+        time={time}
+        locale={locale}
+        min={lockToMonth ? `${month}-01` : `${today.slice(0, 7)}-01`}
+        max={lockToMonth ? monthEnd(month) : undefined}
+        onDate={setDate}
+        onTime={setTime}
+      />
       {postToday ? (
         <>
           <AccountLine accounts={moneyAccounts} value={accountId} onChange={setAccountId} placeholder={t.add.account} role={t.budget.postAdhocFrom} />
@@ -1046,4 +1050,10 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
       ) : null}
     </ComposerShell>
   );
+}
+
+function monthEnd(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  const day = new Date(y, m, 0).getDate();
+  return `${month}-${String(day).padStart(2, "0")}`;
 }
