@@ -2,6 +2,7 @@ const TRIPS_KEY = "tripbooks.v1";
 const NOTES_KEY = "tripnotes.v1";
 const VISITS_KEY = "tripvisits.v1";
 const EXTRAS_KEY = "tripextras.v1";
+const WISHES_KEY = "tripwishes.v1";
 const CHECKS_KEY = "tripchecks.v1";
 const LINKS_KEY = "tripbook-money-links";
 const EDIT_KEY = "tripbook-local-edited";
@@ -15,6 +16,7 @@ export type TripLibrary = {
   checks?: unknown;
   visits?: unknown;
   extras?: unknown;
+  wishes?: unknown;
   links?: Record<string, string>;
 };
 
@@ -66,6 +68,7 @@ export function readTripLibrary(storage: Store = localStorage): TripLibrary | nu
     checks: readJson(storage, CHECKS_KEY),
     visits: readJson(storage, VISITS_KEY),
     extras: readJson(storage, EXTRAS_KEY),
+    wishes: readJson(storage, WISHES_KEY),
     links: links && typeof links === "object" && !Array.isArray(links) ? (links as Record<string, string>) : {},
   };
 }
@@ -78,6 +81,7 @@ export function writeTripLibrary(library: TripLibrary, storage: Store = localSto
     if (library.checks && typeof library.checks === "object") storage.setItem(CHECKS_KEY, JSON.stringify(library.checks));
     if (library.visits && typeof library.visits === "object") storage.setItem(VISITS_KEY, JSON.stringify(library.visits));
     if (library.extras && typeof library.extras === "object") storage.setItem(EXTRAS_KEY, JSON.stringify(library.extras));
+    if (library.wishes && typeof library.wishes === "object") storage.setItem(WISHES_KEY, JSON.stringify(library.wishes));
     if (library.links && typeof library.links === "object") storage.setItem(LINKS_KEY, JSON.stringify(library.links));
     if (library.exportedAt) storage.setItem(EDIT_KEY, library.exportedAt);
   } catch {
