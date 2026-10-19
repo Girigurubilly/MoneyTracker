@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { decodeProposal, encodeProposal, linkFromHash, plannerTripUrl, proposalFromHash, tripCovering } from "./trip-link.ts";
+import { decodeProposal, encodeProposal, linkFromHash, plannerTripUrl, proposalFromHash, tripCovering, carriedTrip } from "./trip-link.ts";
 import type { Trip } from "./types.ts";
 
 describe("trip link", () => {
@@ -54,5 +54,16 @@ describe("trip link", () => {
     const back = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
     assert.equal(linkFromHash(`#link=${back}`)?.bookId, "osaka-book");
     assert.equal(linkFromHash(`#link=${back}`)?.title, "大阪散步");
+  });
+
+  it("attaches a carried cost to the linked trip, or the one with the same name", () => {
+    const row = (id: string, nameZh: string, start: string, end: string, plannerId?: string): Trip => ({
+      id, name: nameZh, nameZh, destination: nameZh, start, end, status: "booked", cashBudget: 0, cashSaved: 0, milesTarget: 0, milesSaved: 0, monthlyCash: 0, plannerId,
+    });
+    const trips = [row("money-osaka", "大阪散步", "2026-04-02", "2026-04-08", "book-osaka"), row("other", "東京", "2026-05-01", "2026-05-05")];
+    const items = [{ date: "2026-04-03" }];
+    assert.equal(carriedTrip(trips, { trip: "大阪散步", tripId: "", bookId: "book-osaka", items })?.id, "money-osaka");
+    assert.equal(carriedTrip(trips, { trip: "大阪散步", tripId: "", items })?.id, "money-osaka");
+    assert.equal(carriedTrip(trips, { trip: "", tripId: "", items })?.id, "money-osaka");
   });
 });

@@ -8,7 +8,7 @@ import { todayISO, clockNow } from "@/lib/format";
 import { WhenField } from "@/components/when-picker";
 import { categoryPath, resolvedDefaultAccountId } from "@/lib/categories";
 import { pickName } from "@/lib/i18n";
-import { asMoneyCurrency, linkFromHash, plannerTripUrl, proposalFromHash, type TripSpendItem } from "@/lib/trip-link";
+import { asMoneyCurrency, carriedTrip, linkFromHash, plannerTripUrl, proposalFromHash, type TripSpendItem } from "@/lib/trip-link";
 import { CURRENCIES, type Category, type MoneyUnit } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { newId, useApp } from "@/store/app";
@@ -58,6 +58,7 @@ export function TripProposal() {
   const [backUrl, setBackUrl] = useState("");
   const [tripName, setTripName] = useState("");
   const [tripId, setTripId] = useState("");
+  const [bookId, setBookId] = useState("");
   const [rows, setRows] = useState<Draft[]>([]);
 
   useEffect(() => {
@@ -65,6 +66,7 @@ export function TripProposal() {
     if (!parsed) return;
     setTripName(parsed.trip);
     setTripId(parsed.tripId);
+    setBookId(parsed.bookId || "");
     const today = todayISO();
     const accountId = remembered(ACCOUNT_KEY);
     const categoryId =
@@ -133,7 +135,7 @@ export function TripProposal() {
       return;
     }
     const picked = chosen;
-    const knownTrip = Boolean(tripId) && trips.some((trip) => trip.id === tripId);
+    const matched = carriedTrip(trips, { trip: tripName, tripId, bookId, items: picked });
     const expenseCats = categories.filter((c) => c.kind === "expense");
     for (const row of picked) {
       const categoryId = expenseCats.some((c) => c.id === row.categoryId) ? row.categoryId : undefined;
@@ -157,8 +159,8 @@ export function TripProposal() {
           payeeZh: row.label,
           note: tripName,
           planned: true,
-          tripId: knownTrip ? tripId : undefined,
-          tripManual: knownTrip,
+          tripId: matched?.id,
+          tripManual: Boolean(matched),
         });
       } else {
         await addAdhoc({
@@ -172,16 +174,18 @@ export function TripProposal() {
           time: row.time,
           categoryId,
           accountId,
-          tripId: knownTrip ? tripId : undefined,
+          tripId: matched?.id,
         });
       }
     }
     toast(t.reports.proposalDone);
     const day = picked[0]?.date || "";
-    const trip = trips.find((row) => row.id === tripId);
+    const trip = matched || trips.find((row) => row.id === tripId);
     setBackUrl(trip && day ? plannerTripUrl(trip, { day }) : "");
     setDone(true);
   }
+
+  const attached = carriedTrip(trips, { trip: tripName, tripId, bookId, items: rows });
 
   if (pickAccount) {
     return (
@@ -232,6 +236,9 @@ export function TripProposal() {
           {tripName ? `${tripName} · ` : ""}
           {t.reports.proposalHint}
         </p>
+        {attached ? (
+          <p className="mt-2 text-sm font-medium">{t.add.trip} · {pickName(locale, attached.name, attached.nameZh)}</p>
+        ) : null}
         <div className="mt-3 space-y-3">
           {rows.map((row) => {
             const cat = categories.find((c) => c.id === row.categoryId);

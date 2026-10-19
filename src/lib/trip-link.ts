@@ -15,6 +15,7 @@ export type TripSpendProposal = {
   v: 1;
   trip: string;
   tripId: string;
+  bookId?: string;
   items: TripSpendItem[];
 };
 
@@ -56,6 +57,30 @@ export function tripCovering(trips: Trip[], iso: string): Trip | undefined {
   return hits[0];
 }
 
+export function carriedTrip(
+  trips: Trip[],
+  proposal: { trip: string; tripId: string; bookId?: string; items: { date: string }[] },
+): Trip | undefined {
+  const alive = trips.filter((trip) => trip.status !== "cancelled");
+  const byId = alive.find((trip) => trip.id === proposal.tripId);
+  if (byId) return byId;
+  const book = proposal.bookId || "";
+  const byBook = alive.find((trip) => trip.plannerId && (trip.plannerId === book || trip.plannerId === proposal.tripId));
+  if (byBook) return byBook;
+  const title = proposal.trip.trim().toLowerCase();
+  const named = alive.filter((trip) => {
+    const fields = [trip.name, trip.nameZh, trip.destination].map((value) => value.toLowerCase()).filter(Boolean);
+    return Boolean(title) && fields.some((name) => name === title || name.includes(title) || title.includes(name));
+  });
+  const covers = (trip: Trip) => proposal.items.some((item) => trip.start <= item.date && item.date <= trip.end);
+  const namedOnDate = named.filter(covers);
+  if (namedOnDate.length === 1) return namedOnDate[0];
+  if (named.length === 1) return named[0];
+  const covering = alive.filter(covers);
+  if (covering.length === 1) return covering[0];
+  return undefined;
+}
+
 export function encodeProposal(body: TripSpendProposal): string {
   const json = JSON.stringify(body);
   const bytes = new TextEncoder().encode(json);
@@ -80,7 +105,14 @@ export function decodeProposal(token: string): TripSpendProposal | null {
       if (items.length >= 20) break;
     }
     if (!items.length) return null;
-    return { v: 1, trip: String(json.trip || "").slice(0, 80), tripId: String(json.tripId || "").slice(0, 80), items };
+    const bookId = String(json.bookId || "").trim().slice(0, 80);
+    return {
+      v: 1,
+      trip: String(json.trip || "").slice(0, 80),
+      tripId: String(json.tripId || "").slice(0, 80),
+      ...(bookId ? { bookId } : {}),
+      items,
+    };
   } catch {
     return null;
   }
