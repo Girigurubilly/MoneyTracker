@@ -11,8 +11,8 @@ import { cashflowSide } from "@/lib/calc/ledger";
 import {
   travelSpendYtd,
   tripBudgetUsed,
-  tripCashSpent,
   tripLinkedTxs,
+  tripMoneySplit,
 } from "@/lib/calc/trips";
 import type { Category, FxRate, Locale, Transaction, Trip } from "@/lib/types";
 import { plannerTripUrl } from "@/lib/trip-link";
@@ -103,9 +103,11 @@ function TripCard({ trip }: { trip: Trip }) {
   const txs = useApp((s) => s.transactions);
   const rates = useApp((s) => s.fxRates);
   const adhoc = useApp((s) => s.adhocBudgets);
-  const spent = tripCashSpent(txs, trip.id, rates, adhoc);
-  const used = tripBudgetUsed(spent, trip.cashBudget);
-  const over = trip.cashBudget > 0 && spent > trip.cashBudget;
+  const split = tripMoneySplit(txs, trip.id, rates, adhoc);
+  const used = tripBudgetUsed(split.total, trip.cashBudget);
+  const paidPct = trip.cashBudget > 0 ? split.paid / trip.cashBudget : 0;
+  const scheduledPct = trip.cashBudget > 0 ? split.scheduled / trip.cashBudget : 0;
+  const over = trip.cashBudget > 0 && split.total > trip.cashBudget;
   return (
     <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
       <Link to="/reports/travel/$id" params={{ id: trip.id }} className="block p-4">
@@ -122,20 +124,24 @@ function TripCard({ trip }: { trip: Trip }) {
             </div>
           </div>
           <div className="relative shrink-0">
-            <ProgressRing value={used.pct} size={52} stroke={4} tone={over ? "expense" : "income"} />
+            <ProgressRing value={paidPct} extra={scheduledPct} size={52} stroke={4} tone={over ? "expense" : "income"} />
             <span className="pointer-events-none absolute inset-0 grid place-items-center text-[10px] font-semibold tabular-nums">
               {Math.round(used.pct * 100)}%
             </span>
           </div>
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <div className="rounded-xl bg-background px-3 py-2">
-            <div className="text-[11px] text-muted">{t.reports.tripSpent}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(spent, "HKD")}</div>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <div className="rounded-xl bg-background px-2 py-2">
+            <div className="text-[11px] text-expense">{t.reports.tripPaid}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(split.paid, "HKD")}</div>
           </div>
-          <div className="rounded-xl bg-background px-3 py-2">
-            <div className="text-[11px] text-muted">{t.reports.tripBudget}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(trip.cashBudget, "HKD")}</div>
+          <div className="rounded-xl bg-background px-2 py-2">
+            <div className="text-[11px] text-watch">{t.reports.tripScheduled}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(split.scheduled, "HKD")}</div>
+          </div>
+          <div className="rounded-xl bg-background px-2 py-2">
+            <div className="text-[11px] text-income">{t.reports.remaining}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(used.remaining, "HKD")}</div>
           </div>
         </div>
         <div className="mt-2 flex justify-end">
@@ -209,10 +215,13 @@ export function TripDetailPage({ id }: { id: string }) {
   const setTx = useUi((s) => s.setTxDetailId);
   const [edit, setEdit] = useState(false);
   if (!trip) return <div className="p-5 text-sm text-muted">—</div>;
-  const spent = tripCashSpent(txs, trip.id, rates, adhoc);
-  const used = tripBudgetUsed(spent, trip.cashBudget);
+  const split = tripMoneySplit(txs, trip.id, rates, adhoc);
+  const used = tripBudgetUsed(split.total, trip.cashBudget);
+  const paidPct = trip.cashBudget > 0 ? split.paid / trip.cashBudget : 0;
+  const scheduledPct = trip.cashBudget > 0 ? split.scheduled / trip.cashBudget : 0;
   const linked = tripLinkedTxs(txs, trip.id);
-  const over = trip.cashBudget > 0 && spent > trip.cashBudget;
+  const scheduledAdhoc = adhoc.filter((row) => row.tripId === trip.id && !row.paidOn);
+  const over = trip.cashBudget > 0 && split.total > trip.cashBudget;
 
   return (
     <div className="pb-10">
@@ -237,7 +246,7 @@ export function TripDetailPage({ id }: { id: string }) {
             </div>
           </div>
           <div className="relative shrink-0">
-            <ProgressRing value={used.pct} size={64} stroke={5} tone={over ? "expense" : "income"} />
+            <ProgressRing value={paidPct} extra={scheduledPct} size={64} stroke={5} tone={over ? "expense" : "income"} />
             <span className="pointer-events-none absolute inset-0 grid place-items-center text-[11px] font-semibold tabular-nums">
               {Math.round(used.pct * 100)}%
             </span>
@@ -249,19 +258,35 @@ export function TripDetailPage({ id }: { id: string }) {
             <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(trip.cashBudget, "HKD")}</div>
           </div>
           <div className="rounded-xl bg-expense-soft px-3 py-2">
-            <div className="text-[11px] text-expense">{t.reports.tripSpent}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(spent, "HKD")}</div>
+            <div className="text-[11px] text-expense">{t.reports.tripPaid}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(split.paid, "HKD")}</div>
+          </div>
+          <div className="rounded-xl bg-watch-soft px-3 py-2">
+            <div className="text-[11px] text-watch">{t.reports.tripScheduled}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(split.scheduled, "HKD")}</div>
           </div>
           <div className="rounded-xl bg-success-soft px-3 py-2">
             <div className="text-[11px] text-income">{t.reports.remaining}</div>
             <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(used.remaining, "HKD")}</div>
           </div>
-          <div className="rounded-xl bg-background px-3 py-2">
-            <div className="text-[11px] text-muted">{t.reports.budgetUsed}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{Math.round(used.pct * 100)}%</div>
-          </div>
         </div>
       </div>
+      {scheduledAdhoc.length ? (
+        <>
+          <h2 className="px-5 pb-1 pt-5 text-sm font-medium text-muted">{t.reports.tripScheduled}</h2>
+          <div className="mx-4 overflow-hidden rounded-2xl bg-elevated">
+            {scheduledAdhoc.map((row) => (
+              <div key={row.id} className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 last:border-0">
+                <div className="min-w-0">
+                  <div className="truncate text-sm">{pickName(loc, row.label, row.labelZh)}</div>
+                  <div className="text-xs text-muted">{row.date}</div>
+                </div>
+                <div className="shrink-0 text-sm font-medium tabular-nums text-watch">{money(row.amount, row.currency)}</div>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : null}
       <h2 className="px-5 pb-1 pt-5 text-sm font-medium text-muted">{t.reports.tripCats}</h2>
       <TripCatRows txs={linked} cats={cats} rates={rates} locale={loc} />
       <h2 className="px-5 pb-1 pt-4 text-sm font-medium text-muted">{t.reports.tripHeat}</h2>

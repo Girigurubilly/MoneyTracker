@@ -85,18 +85,21 @@ export function Metric({ label, value, tone }: { label: string; value: string; t
 
 export function ProgressRing({
   value,
+  extra = 0,
   size = 40,
   stroke = 3,
   tone = "income",
 }: {
   value: number;
+  extra?: number;
   size?: number;
   stroke?: number;
   tone?: "income" | "watch" | "expense";
 }) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
-  const pct = Math.max(0, Math.min(1.2, value));
+  const paid = Math.max(0, Math.min(1, value));
+  const scheduled = Math.max(0, Math.min(1 - paid, extra));
   const color = tone === "expense" ? "var(--color-expense)" : tone === "watch" ? "var(--color-watch)" : "var(--color-income)";
   return (
     <svg width={size} height={size} className="block -rotate-90">
@@ -108,9 +111,22 @@ export function ProgressRing({
         fill="none"
         stroke={color}
         strokeWidth={stroke}
-        strokeDasharray={`${c * Math.min(1, pct)} ${c}`}
+        strokeDasharray={`${c * paid} ${c}`}
         strokeLinecap="round"
       />
+      {scheduled > 0 ? (
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="var(--color-watch)"
+          strokeWidth={stroke}
+          strokeDasharray={`${c * scheduled} ${c}`}
+          strokeDashoffset={-c * paid}
+          strokeLinecap="round"
+        />
+      ) : null}
     </svg>
   );
 }

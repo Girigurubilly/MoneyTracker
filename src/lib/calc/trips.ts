@@ -15,17 +15,24 @@ export function isTripActive(t: Trip, today: string): boolean {
   return true;
 }
 
-export function tripCashSpent(txs: Transaction[], tripId: string, rates: FxRate[], adhoc: AdhocBudget[] = []): number {
-  let sum = 0;
+export function tripMoneySplit(txs: Transaction[], tripId: string, rates: FxRate[], adhoc: AdhocBudget[] = []) {
+  let paid = 0;
+  let scheduled = 0;
   for (const tx of txs) {
-    if (tx.planned || tx.tripId !== tripId || tx.type !== "expense") continue;
-    sum += Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
+    if (tx.tripId !== tripId || tx.type !== "expense") continue;
+    const hkd = Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
+    if (tx.planned) scheduled += hkd;
+    else paid += hkd;
   }
   for (const row of adhoc) {
     if (row.tripId !== tripId || row.paidOn) continue;
-    sum += Math.abs(toHkd(row.amount, row.currency, rates));
+    scheduled += Math.abs(toHkd(row.amount, row.currency, rates));
   }
-  return sum;
+  return { paid, scheduled, total: paid + scheduled };
+}
+
+export function tripCashSpent(txs: Transaction[], tripId: string, rates: FxRate[], adhoc: AdhocBudget[] = []): number {
+  return tripMoneySplit(txs, tripId, rates, adhoc).total;
 }
 
 export function travelSpendYtd(

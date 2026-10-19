@@ -21,7 +21,7 @@ import {
 } from "@/components/txn-composer";
 import { asOfForMonth, adhocTotal, budgetActuals, chargedDayOf, forecastTone } from "@/lib/calc/budget";
 import { WhenField } from "@/components/when-picker";
-import { travelSpendYtd } from "@/lib/calc/trips";
+import { travelSpendYtd, isTripActive } from "@/lib/calc/trips";
 import { monthKey } from "@/lib/calc/ledger";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
 import type { AdhocBudget, Budget, Currency, Recurring, TxType, WishItem } from "@/lib/types";
@@ -638,6 +638,7 @@ function AdhocEditorBody({
   const addWish = useApp((s) => s.addWishItem);
   const categories = useApp((s) => s.categories);
   const accounts = useApp((s) => s.accounts);
+  const trips = useApp((s) => s.trips);
   const defaultCurrency = useApp((s) => s.defaultCurrency);
   const today = todayISO();
   const moneyAccounts = moneyAccountsForPicker(accounts);
@@ -646,6 +647,7 @@ function AdhocEditorBody({
   const [currency, setCurrency] = useState<Currency>(initial && initial.currency !== "MILES" ? initial.currency : defaultCurrency);
   const [date, setDate] = useState(initial?.date ?? (today.startsWith(month) ? today : `${month}-28`));
   const [time, setTime] = useState(initial?.time || clockNow());
+  const [tripId, setTripId] = useState(initial?.tripId ?? "");
   const [categoryId, setCategoryId] = useState(initial?.categoryId ?? "");
   const [accountId, setAccountId] = useState(
     () => moneyAccounts.find((x) => x.type === "cash" || x.type === "current" || x.type === "savings")?.id ?? moneyAccounts[0]?.id ?? "",
@@ -680,7 +682,7 @@ function AdhocEditorBody({
       paidOn: postToday && iso === today ? today : initial?.paidOn,
       priceCards: initial?.priceCards,
       valueCards: initial?.valueCards,
-      tripId: initial?.tripId,
+      tripId: tripId || undefined,
       accountId: initial?.accountId,
     };
     if (initial) await update(row);
@@ -766,6 +768,19 @@ function AdhocEditorBody({
         onDate={setDate}
         onTime={setTime}
       />
+      <label className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
+        <span className="text-sm text-muted">{t.add.trip}</span>
+        <select value={tripId} onChange={(e) => setTripId(e.target.value)} className="h-10 max-w-[14rem] bg-transparent text-right text-sm text-accent outline-none">
+          <option value="">{t.reports.noneTrip}</option>
+          {trips
+            .filter((trip) => isTripActive(trip, today) || trip.id === tripId)
+            .map((trip) => (
+              <option key={trip.id} value={trip.id}>
+                {pickName(locale, trip.name, trip.nameZh)}
+              </option>
+            ))}
+        </select>
+      </label>
       {postToday ? (
         <>
           <AccountLine accounts={moneyAccounts} value={accountId} onChange={setAccountId} placeholder={t.add.account} role={t.budget.postAdhocFrom} />
