@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Overlay } from "@/components/shared";
+import { CategoryIcon } from "@/components/category-icon";
+import { CategoryPicker } from "@/components/category-picker";
+import { AccountLine } from "@/components/txn-composer";
 import { todayISO, clockNow } from "@/lib/format";
 import { WhenField } from "@/components/when-picker";
-import { pickName } from "@/lib/i18n";
+import { moneyAccountsForPicker } from "@/lib/accounts";
+import { categoryPath, resolvedDefaultAccountId } from "@/lib/categories";
 import { asMoneyCurrency, linkFromHash, plannerTripUrl, proposalFromHash, type TripSpendItem } from "@/lib/trip-link";
-import { CURRENCIES, type MoneyUnit } from "@/lib/types";
+import { CURRENCIES, type Category, type MoneyUnit } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { newId, useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -47,7 +51,10 @@ export function TripProposal() {
   const categories = useApp((s) => s.categories);
   const trips = useApp((s) => s.trips);
   const locale = useUi((s) => s.locale);
+  const kid = useUi((s) => s.accessMode) === "kid";
+  const moneyAccounts = moneyAccountsForPicker(accounts, { kid });
   const [open, setOpen] = useState(false);
+  const [pickCat, setPickCat] = useState("");
   const [done, setDone] = useState(false);
   const [backUrl, setBackUrl] = useState("");
   const [tripName, setTripName] = useState("");
@@ -103,6 +110,17 @@ export function TripProposal() {
 
   function patch(id: string, next: Partial<Draft>) {
     setRows((list) => list.map((row) => (row.id === id ? { ...row, ...next } : row)));
+  }
+
+  function chooseCategory(c: Category | null) {
+    const id = pickCat;
+    if (!id) return;
+    const accountId = resolvedDefaultAccountId(c, categories);
+    patch(id, {
+      categoryId: c?.id ?? "",
+      ...(accountId && accounts.some((a) => a.id === accountId) ? { accountId } : {}),
+    });
+    setPickCat("");
   }
 
   async function save() {
@@ -166,6 +184,20 @@ export function TripProposal() {
     setDone(true);
   }
 
+  if (pickCat) {
+    const row = rows.find((item) => item.id === pickCat);
+    return (
+      <CategoryPicker
+        categories={categories}
+        kind="expense"
+        selectedId={row?.categoryId || undefined}
+        txType="expense"
+        onClose={() => setPickCat("")}
+        onSelect={chooseCategory}
+      />
+    );
+  }
+
   return (
     <Overlay open={open} onClose={() => setOpen(false)} title={t.reports.proposalTitle}>
       <div className="px-5 pb-8">
@@ -188,9 +220,11 @@ export function TripProposal() {
           {t.reports.proposalHint}
         </p>
         <div className="mt-3 space-y-3">
-          {rows.map((row) => (
-            <div key={row.id} className={cn("rounded-xl bg-elevated px-3 py-3", !row.on && "opacity-50")}>
-              <label className="flex items-start gap-2">
+          {rows.map((row) => {
+            const cat = categories.find((c) => c.id === row.categoryId);
+            return (
+            <div key={row.id} className={cn("overflow-hidden rounded-xl bg-elevated", !row.on && "opacity-50")}>
+              <label className="flex items-start gap-2 px-4 pt-3">
                 <input type="checkbox" className="mt-1" checked={row.on} onChange={(e) => patch(row.id, { on: e.target.checked })} />
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-medium">{row.label}</span>
@@ -203,7 +237,7 @@ export function TripProposal() {
                 onDate={(iso) => patch(row.id, { date: iso })}
                 onTime={(next) => patch(row.id, { time: next })}
               />
-              <div className="mt-2 flex gap-2">
+              <div className="flex gap-2 px-4 py-2">
                 <input
                   inputMode="decimal"
                   value={row.amount > 0 ? String(row.amount) : ""}
@@ -223,35 +257,23 @@ export function TripProposal() {
                   ))}
                 </select>
               </div>
-              <select
-                value={row.categoryId}
-                onChange={(e) => patch(row.id, { categoryId: e.target.value })}
-                className="mt-2 h-10 w-full rounded-lg bg-background px-2 text-sm"
-              >
-                <option value="">{t.add.category}</option>
-                {categories
-                  .filter((c) => c.kind === "expense")
-                  .map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {pickName(locale, c.name, c.nameZh)}
-                    </option>
-                  ))}
-              </select>
-              <select
+              <AccountLine
+                accounts={moneyAccounts}
                 value={row.accountId}
-                onChange={(e) => patch(row.id, { accountId: e.target.value })}
-                className="mt-2 h-10 w-full rounded-lg bg-background px-2 text-sm"
-              >
-                <option value="">{t.add.account}</option>
-                {accounts
-                  .filter((a) => a.currency !== "MILES")
-                  .map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {pickName(locale, a.name, a.nameZh)}
-                    </option>
-                  ))}
-              </select>
-              <div className="mt-2 flex gap-2">
+                onChange={(id) => patch(row.id, { accountId: id })}
+                placeholder={t.add.account}
+              />
+              <button type="button" className="flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left" onClick={() => setPickCat(row.id)}>
+                {cat ? (
+                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-background">
+                    <CategoryIcon name={cat.icon} />
+                  </span>
+                ) : null}
+                <span className={cn("min-w-0 flex-1 text-sm", cat ? "text-foreground" : "text-muted")}>
+                  {cat ? categoryPath(cat, categories, locale) : t.add.pickCategory}
+                </span>
+              </button>
+              <div className="flex gap-2 px-4 py-3">
                 <button
                   type="button"
                   className={cn("h-8 flex-1 rounded-full text-xs font-medium", row.kind === "adhoc" ? "bg-accent text-on-accent" : "bg-background")}
@@ -268,7 +290,8 @@ export function TripProposal() {
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
         <button type="button" className="mt-4 h-12 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={() => void save()}>
           {t.reports.proposalSave}
