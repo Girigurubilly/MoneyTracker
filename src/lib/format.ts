@@ -8,6 +8,56 @@ export function todayISO(d = new Date()): string {
   return `${y}-${m}-${day}`;
 }
 
+export function clockNow(d = new Date()): string {
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/** A planned row is due once its date and time have arrived. No time means the start of that day. */
+export function plannedIsDue(date: string, time: string | undefined, now = new Date()): boolean {
+  const [y, m, d] = date.split("-").map(Number);
+  if (!y || !m || !d) return false;
+  const [hh, mm] = (time || "00:00").split(":").map(Number);
+  return new Date(y, m - 1, d, hh || 0, mm || 0).getTime() <= now.getTime();
+}
+
+const ZH_WEEK = ["週日", "週一", "週二", "週三", "週四", "週五", "週六"];
+const EN_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+export function whenDayLabel(iso: string, today: string, locale: "en" | "zh-HK"): string {
+  if (iso === today) return locale === "zh-HK" ? "今天" : "Today";
+  const [y, m, d] = iso.split("-").map(Number);
+  const date = new Date(y, (m || 1) - 1, d || 1);
+  const week = locale === "zh-HK" ? ZH_WEEK[date.getDay()] : EN_WEEK[date.getDay()];
+  return locale === "zh-HK" ? `${m}月${d}日 ${week}` : `${d} ${EN_WEEK[date.getDay()]} ${m}`;
+}
+
+export function whenStamp(iso: string, time: string, locale: "en" | "zh-HK"): string {
+  const [y, m, d] = iso.split("-");
+  const [H, M] = time.split(":").map(Number);
+  const hour = Number.isFinite(H) ? H : 0;
+  const minute = Number.isFinite(M) ? M : 0;
+  const h12 = hour % 12 || 12;
+  const mm = String(minute).padStart(2, "0");
+  if (locale === "zh-HK") {
+    const ap = hour < 12 ? "上午" : "下午";
+    return `${Number(d)}/${Number(m)}/${y} ${ap}${h12}:${mm}`;
+  }
+  const ap = hour < 12 ? "AM" : "PM";
+  return `${Number(d)}/${Number(m)}/${y} ${h12}:${mm} ${ap}`;
+}
+
+export function to12h(time: string): { ap: 0 | 1; hour: number; minute: number } {
+  const [H, M] = time.split(":").map(Number);
+  const hour24 = Number.isFinite(H) ? H : 0;
+  return { ap: hour24 < 12 ? 0 : 1, hour: hour24 % 12 || 12, minute: Number.isFinite(M) ? M : 0 };
+}
+
+export function from12h(ap: 0 | 1, hour: number, minute: number): string {
+  const h12 = Math.min(12, Math.max(1, hour));
+  const hour24 = ap === 0 ? h12 % 12 : (h12 % 12) + 12;
+  return `${String(hour24).padStart(2, "0")}:${String(Math.min(59, Math.max(0, minute))).padStart(2, "0")}`;
+}
+
 export function money(
   amount: number,
   unit: MoneyUnit = "HKD",

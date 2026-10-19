@@ -14,7 +14,7 @@ import {
   type AmountField,
   type ExtraPanel,
 } from "@/components/txn-composer";
-import { todayISO } from "@/lib/format";
+import { todayISO, clockNow } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { defaultMortgageAccountId } from "@/lib/accounts";
 import { canSplitMortgage, categoryPath, mortgageEntryKind, resolvedDefaultAccountId } from "@/lib/categories";
@@ -64,6 +64,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
   const [destAmount, setDestAmount] = useState(tx.destAmount != null ? String(tx.destAmount) : "");
   const [destLocked, setDestLocked] = useState(tx.destAmount != null);
   const [date, setDate] = useState(tx.date);
+  const [time, setTime] = useState(tx.time || clockNow());
   const [accountId, setAccountId] = useState(tx.accountId);
   const [toAccountId, setToAccountId] = useState(tx.toAccountId ?? defaultMortgageAccountId(accounts) ?? "");
   const [categoryId, setCategoryId] = useState(tx.categoryId ?? "");
@@ -149,6 +150,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
             destAmount: autoDestAmount(p, ccy, destCcy, rates) || p,
             categoryId: pCat?.id,
             date,
+            time,
             payee: payee || t.add.principal,
             payeeZh: payee || t.add.principal,
             planned,
@@ -171,6 +173,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
             destAmount: undefined,
             categoryId: iCat?.id ?? categoryId,
             date,
+            time,
             payee: payee || t.add.interest,
             payeeZh: payee || t.add.interest,
             planned,
@@ -201,6 +204,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
               destAmount: autoDestAmount(p, ccy, destCcy, rates) || p,
               categoryId: pCat?.id ?? categoryId,
               date,
+            time,
               payee: payee || tx.payee,
               payeeZh: payee || tx.payeeZh,
               planned,
@@ -223,6 +227,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
               accountId,
               categoryId: iCat?.id ?? categoryId,
               date,
+            time,
               payee: payee || tx.payee,
               payeeZh: payee || tx.payeeZh,
               planned,
@@ -251,6 +256,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
           destAmount: type === "transfer" || principalOnly ? destN || amt : undefined,
           categoryId: categoryId || undefined,
           date,
+          time,
           payee: payee || tx.payee,
           payeeZh: payee || tx.payeeZh,
           planned,
@@ -382,7 +388,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
             <AccountLine accounts={accounts} value={toAccountId} onChange={setToAccountId} placeholder={t.add.mortgageTo} />
           </>
         ) : null}
-        <DatePaidRow date={date} paid={paid} onDate={setDate} onPaid={setPaid} />
+        <DatePaidRow date={date} time={time} paid={paid} onDate={setDate} onTime={setTime} onPaid={setPaid} />
         <ExtraIconBar
           extra={extra}
           onExtra={setExtra}

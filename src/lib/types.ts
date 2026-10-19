@@ -361,6 +361,8 @@ export type Transaction = {
   destAmount?: number;
   categoryId?: string;
   date: string;
+  /** Local time HH:mm. A planned row is posted once this moment has passed. */
+  time?: string;
   payee: string;
   payeeZh: string;
   note?: string;

@@ -59,7 +59,7 @@ import { isMortgageInterestCategory, isMortgagePrincipalCategory, missingMortgag
 import { accountsInGroup, countCashInNetWorth, nextSortOrder } from "@/lib/accounts";
 import { applyTxRules } from "@/lib/tx-rules";
 import { applyDeltas, balanceDeltas, monthKey } from "@/lib/calc/ledger";
-import { todayISO } from "@/lib/format";
+import { todayISO, plannedIsDue } from "@/lib/format";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
 
 export type AppSnapshot = {
@@ -190,6 +190,7 @@ type Dispatchers = {
   exportSnapshot: () => AppSnapshot;
   resetSample: () => Promise<void>;
   clearAll: () => Promise<void>;
+  realizePlanned: () => Promise<void>;
 };
 
 type AppState = {
@@ -477,10 +478,10 @@ async function upsertScheduledFor(r: Recurring) {
 }
 
 async function postDuePlanned() {
-  const today = todayISO();
+  const now = new Date();
   const txs = await idb().transactions.toArray();
-  const due = txs.filter((t) => t.planned && t.date <= today);
-  if (!due.length) return;
+  const due = txs.filter((t) => t.planned && plannedIsDue(t.date, t.time, now));
+  if (!due.length) return false;
   let accounts = await idb().accounts.toArray();
   const rates = await idb().fxRates.toArray();
   await idb().transaction("rw", [idb().transactions, idb().accounts, idb().mortgage], async () => {
@@ -494,6 +495,7 @@ async function postDuePlanned() {
     const next = syncMortgageOutstanding(m, accounts);
     if (next) await idb().mortgage.put(next);
   });
+  return true;
 }
 
 async function migrateAnnuityAllowances() {
@@ -771,6 +773,16 @@ export const useApp = create<AppState>((set, get) => ({
   depositCategoryId: undefined as string | undefined,
   lastFxSyncAt: undefined,
 
+  realizePlanned: async () => {
+    const posted = await postDuePlanned();
+    if (!posted) return;
+    const [transactions, accounts, mortgage] = await Promise.all([
+      idb().transactions.toArray(),
+      idb().accounts.toArray(),
+      idb().mortgage.toArray(),
+    ]);
+    set({ transactions, accounts, mortgage: mortgage[0] ?? null });
+  },
   hydrate: async () => {
     try {
       if (typeof navigator !== "undefined" && navigator.storage?.persist) void navigator.storage.persist();

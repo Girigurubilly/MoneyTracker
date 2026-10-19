@@ -1,8 +1,10 @@
-import { type ReactNode } from "react";
-import { Hash, Home, MessageSquare, Plane, Sparkles } from "lucide-react";
+import { type ReactNode, useState } from "react";
+import { Check, Hash, Home, MessageSquare, Plane, Sparkles } from "lucide-react";
 import { AmountKeypad } from "@/components/amount-keypad";
 import { AccountSelect } from "@/components/account-select";
+import { WhenPicker } from "@/components/when-picker";
 import { Overlay } from "@/components/shared";
+import { clockNow, whenStamp } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { parseMoneyExpr } from "@/lib/money-expr";
 import type { Account, Currency } from "@/lib/types";
@@ -200,23 +202,48 @@ export function AccountLine({
 
 export function DatePaidRow({
   date,
+  time,
   paid,
   onDate,
+  onTime,
   onPaid,
 }: {
   date: string;
+  time?: string;
   paid: boolean;
   onDate: (v: string) => void;
+  onTime?: (v: string) => void;
   onPaid: (v: boolean) => void;
 }) {
   const t = useT();
+  const locale = useUi((s) => s.locale);
+  const [open, setOpen] = useState(!paid && Boolean(onTime));
+  const clock = time || clockNow();
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
-      <input type="date" value={date} onChange={(e) => onDate(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
-      <label className="flex items-center gap-1.5 text-sm text-accent">
-        {t.add.paid}
-        <input type="checkbox" checked={paid} onChange={(e) => onPaid(e.target.checked)} className="size-5 accent-[var(--color-accent)]" />
-      </label>
+    <div className="border-b border-line">
+      <div className="flex items-center justify-between gap-3 px-4 py-2.5">
+        {onTime ? (
+          <button type="button" className="h-10 text-left text-sm font-medium text-accent" onClick={() => setOpen((v) => !v)}>
+            {whenStamp(date, clock, locale)}
+          </button>
+        ) : (
+          <input type="date" value={date} onChange={(e) => onDate(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
+        )}
+        <button
+          type="button"
+          className="flex items-center gap-1.5 text-sm font-medium text-accent"
+          onClick={() => {
+            if (paid && onTime) setOpen(true);
+            onPaid(!paid);
+          }}
+        >
+          {t.add.paid}
+          <span className={cn("grid size-6 place-items-center rounded-full border-2 border-accent", paid ? "" : "opacity-40")}>
+            {paid ? <Check className="size-3.5" strokeWidth={3} /> : null}
+          </span>
+        </button>
+      </div>
+      {onTime && open ? <WhenPicker date={date} time={clock} locale={locale} onDate={onDate} onTime={onTime} /> : null}
     </div>
   );
 }

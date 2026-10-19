@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { money, monthTitle } from "@/lib/format";
+import { money, monthTitle, whenStamp } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { AmountWithHkd } from "@/components/currency-field";
 import type { Transaction } from "@/lib/types";
@@ -321,6 +321,7 @@ export function TransactionRow({ tx, onClick, showDate }: { tx: Transaction; onC
           {meta}
           {showDate ? ` · ${tx.date}` : ""}
           {tx.planned ? (locale === "zh-HK" ? " · 計劃" : " · planned") : ""}
+          {tx.planned && tx.time ? ` · ${whenStamp(tx.date, tx.time, locale).split(" ").slice(1).join(" ")}` : ""}
         </div>
       </div>
       <span

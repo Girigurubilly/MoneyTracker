@@ -70,6 +70,13 @@ function DailyDriveSync() {
   const toldPass = useRef(false);
   useEffect(() => {
     if (!ready) return;
+    const tick = () => void useApp.getState().realizePlanned();
+    tick();
+    const id = window.setInterval(tick, 30_000);
+    return () => window.clearInterval(id);
+  }, [ready]);
+  useEffect(() => {
+    if (!ready) return;
     let cancel = false;
     let timer = 0;
     let attempt = 0;

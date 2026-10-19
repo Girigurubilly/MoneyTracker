@@ -14,7 +14,7 @@ import {
   type ExtraPanel,
 } from "@/components/txn-composer";
 import { asFiat, autoDestAmount } from "@/components/currency-field";
-import { todayISO } from "@/lib/format";
+import { todayISO, clockNow } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { defaultMortgageAccountId, moneyAccountsForPicker } from "@/lib/accounts";
 import { canSplitMortgage, categoryPath, mortgageEntryKind, resolvedDefaultAccountId } from "@/lib/categories";
@@ -110,6 +110,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
   const [destAmount, setDestAmount] = useState("");
   const [destLocked, setDestLocked] = useState(false);
   const [date, setDate] = useState(selectedDate || todayISO());
+  const [time, setTime] = useState(clockNow);
   const [accountId, setAccountId] = useState(moneyAccounts[0]?.id ?? "");
   const [toAccountId, setToAccountId] = useState(
     moneyAccounts.find((a) => a.id !== moneyAccounts[0]?.id)?.id ?? defaultMortgageAccountId(accounts) ?? "",
@@ -211,6 +212,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
               destAmount: autoDestAmount(p, ccy, destCcy, rates) || p,
               categoryId: pCat?.id,
               date,
+              time,
               payee: payee || t.add.principal,
               payeeZh: payee || t.add.principal,
               planned,
@@ -233,6 +235,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
               accountId,
               categoryId: iCat?.id ?? categoryId,
               date,
+              time,
               payee: payee || t.add.interest,
               payeeZh: payee || t.add.interest,
               planned,
@@ -257,6 +260,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
             destAmount: type === "transfer" || principalOnly ? destN || amt : undefined,
             categoryId: categoryId || undefined,
             date,
+            time,
             payee: payee || t.add[type],
             payeeZh: payee || t.add[type],
             planned,
@@ -430,11 +434,13 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
       ) : null}
       <DatePaidRow
         date={date}
+        time={time}
         paid={paid}
         onDate={(iso) => {
           setDate(iso);
           if (!tripTouched.current) setTripId(tripForDate(trips, iso) ?? "");
         }}
+        onTime={setTime}
         onPaid={setPaid}
       />
       {kid ? null : (
