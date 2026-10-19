@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
+import { Plus, ExternalLink } from "lucide-react";
 import { Hairline, InfoButton, Overlay, ProgressBar, ProgressRing, ScreenHeader, SectionLabel, BudgetChip, TxGroupedList } from "@/components/shared";
 import { ComposerHeader, ComposerShell, LineRow, TextLine, ActiveKeypad } from "@/components/txn-composer";
 import { AmountWithHkd } from "@/components/currency-field";
@@ -75,6 +75,15 @@ export function TravelPage() {
           </div>
         </div>
       </div>
+      <a
+        href="https://girigurubilly.github.io/TripPlanner/"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mx-4 mb-3 flex h-11 items-center justify-center gap-1.5 rounded-xl bg-elevated text-sm font-medium text-accent"
+      >
+        {t.reports.planTrip}
+        <ExternalLink className="size-3.5" />
+      </a>
       <SectionLabel>{t.reports.trips}</SectionLabel>
       {current.map((tr) => (
         <TripCard key={tr.id} trip={tr} />
