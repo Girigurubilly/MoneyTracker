@@ -75,7 +75,7 @@ export function decodeProposal(token: string): TripSpendProposal | null {
       const label = String(row.label || "").trim().slice(0, 80);
       const amount = Number(row.amount);
       const currency = String(row.currency || "HKD");
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !label || !Number.isFinite(amount) || amount <= 0) continue;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !label || !Number.isFinite(amount) || amount < 0) continue;
       items.push({ date, label, amount, currency });
       if (items.length >= 20) break;
     }

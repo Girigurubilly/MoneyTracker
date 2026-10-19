@@ -50,11 +50,16 @@ export function TripProposal() {
   }
 
   async function save() {
-    const picked = rows.filter((row) => row.on && row.amount > 0);
-    if (!picked.length) {
+    const chosen = rows.filter((row) => row.on);
+    if (!chosen.length) {
       setOpen(false);
       return;
     }
+    if (chosen.some((row) => !(row.amount > 0))) {
+      toast(t.reports.proposalNeedAmount);
+      return;
+    }
+    const picked = chosen;
     const accountId = accounts.find((a) => a.type === "cash" || a.type === "current" || a.type === "savings")?.id || accounts[0]?.id || "";
     const categoryId = categories.find((c) => c.kind === "expense" && c.theme === "travel")?.id;
     const knownTrip = Boolean(tripId) && trips.some((trip) => trip.id === tripId);
@@ -132,7 +137,8 @@ export function TripProposal() {
               <div className="mt-2 flex gap-2">
                 <input
                   inputMode="decimal"
-                  value={String(row.amount)}
+                  value={row.amount > 0 ? String(row.amount) : ""}
+                  placeholder={t.reports.proposalAmount}
                   onChange={(e) => patch(row.id, { amount: Number(e.target.value) || 0 })}
                   className="h-10 min-w-0 flex-1 rounded-lg bg-background px-2 text-sm tabular-nums"
                 />

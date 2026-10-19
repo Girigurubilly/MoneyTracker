@@ -38,6 +38,8 @@ describe("trip link", () => {
     assert.equal(back?.tripId, "osaka");
     assert.equal(back?.items[0]?.label, "地鐵");
     assert.equal(back?.items[0]?.amount, 12.5);
+    const blank = encodeProposal({ v: 1, trip: "大阪", tripId: "osaka", items: [{ date: "2026-04-03", label: "咖啡", amount: 0, currency: "HKD" }] });
+    assert.equal(proposalFromHash(`#proposal=${blank}`)?.items[0]?.amount, 0);
     assert.equal(decodeProposal("nope"), null);
   });
 
