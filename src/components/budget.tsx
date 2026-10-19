@@ -19,7 +19,7 @@ import {
   SelectLine,
   TextLine,
 } from "@/components/txn-composer";
-import { asOfForMonth, budgetActuals, chargedDayOf, forecastTone } from "@/lib/calc/budget";
+import { asOfForMonth, adhocTotal, budgetActuals, chargedDayOf, forecastTone } from "@/lib/calc/budget";
 import { travelSpendYtd } from "@/lib/calc/trips";
 import { monthKey } from "@/lib/calc/ledger";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
@@ -459,22 +459,26 @@ function AdhocBlock({
   const rows = useApp((s) => s.adhocBudgets)
     .filter((a) => a.month === month || a.date.startsWith(month))
     .sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label));
+  const lump = adhocTotal(rows, month, rates);
   return (
     <div className="pt-4">
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-5 pb-1">
+      <div className="flex items-baseline justify-between gap-3 px-5">
         <h2 className="text-sm font-medium text-muted">{t.budget.adhoc}</h2>
-        <div className="flex items-center gap-3">
-          <Link to="/more/adhoc" className="text-xs font-medium text-accent">
-            {t.budget.manageAdhoc}
-          </Link>
-          <button type="button" onClick={onAdd} className="text-sm font-medium text-accent">
-            {t.budget.addAdhoc}
-          </button>
-        </div>
+        {rows.length ? (
+          <span className="text-sm font-semibold tabular-nums text-expense">{money(-lump, "HKD", { sign: true })}</span>
+        ) : null}
+      </div>
+      <div className="flex items-center justify-end gap-4 px-5 pb-1 pt-1">
+        <Link to="/more/adhoc" className="text-xs font-medium text-accent">
+          {t.budget.manageAdhoc}
+        </Link>
+        <button type="button" onClick={onAdd} className="text-sm font-medium text-accent">
+          {t.budget.addShort}
+        </button>
       </div>
       <p className="px-5 pb-2 text-xs text-faint">{t.budget.adhocHint}</p>
       {rows.length === 0 ? (
-        <p className="px-5 py-4 text-sm text-muted">{t.budget.addAdhoc}</p>
+        <p className="px-5 py-4 text-sm text-muted">{t.budget.adhocNone}</p>
       ) : (
         <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
           {rows.map((a) => {
@@ -485,7 +489,7 @@ function AdhocBlock({
               <button type="button" className="flex w-full items-start gap-2 text-left" onClick={() => onEdit(a)}>
                 <div className="min-w-0 flex-1">
                   <div className="break-words text-sm font-medium">{pickName(locale, a.label, a.labelZh)}</div>
-                  <div className="mt-0.5 text-xs text-muted">{paid ? `${dayPart(a.paidOn ?? today, locale)} · ${t.budget.paidToday}` : dayPart(a.date, locale)}</div>
+                  <div className="mt-0.5 text-xs text-muted">{dayPart(paid ? (a.paidOn ?? today) : a.date, locale)}</div>
                 </div>
                 <AmountWithHkd amount={-a.amount} currency={a.currency} rates={rates} sign className="shrink-0 text-sm font-semibold text-expense" />
                 <ChevronRight className="mt-0.5 size-4 shrink-0 text-faint" />
@@ -494,25 +498,25 @@ function AdhocBlock({
                 <div className="mt-2 flex gap-2">
                   <button
                     type="button"
-                    className="min-h-11 flex-1 rounded-full bg-accent-soft px-3 text-xs font-medium text-accent"
+                    className="h-8 rounded-full bg-accent-soft px-3 text-xs font-medium text-accent"
                     onClick={() => setPosting(a)}
                   >
-                    {t.budget.postAdhoc}
+                    {t.budget.postAdhocShort}
                   </button>
                   <button
                     type="button"
-                    className="min-h-11 flex-1 rounded-full bg-background px-3 text-xs font-medium"
+                    className="h-8 rounded-full bg-background px-3 text-xs font-medium"
                     onClick={async () => {
                       await addWish(wishFromAdhoc(a, locale));
                       await delAdhoc(a.id);
                       toast(t.budget.toWishlistDone);
                     }}
                   >
-                    {t.budget.toWishlist}
+                    {t.budget.toWishlistShort}
                   </button>
                 </div>
               ) : (
-                <span className="mt-2 inline-flex rounded-full bg-success-soft px-2 py-1 text-xs font-medium text-income">{paid ? t.budget.paidToday : t.budget.charged}</span>
+                <span className="mt-2 inline-flex rounded-full bg-success-soft px-2 py-1 text-xs font-medium text-income">{t.budget.charged}</span>
               )}
             </div>
             );
