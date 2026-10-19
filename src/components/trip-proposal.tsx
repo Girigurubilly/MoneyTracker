@@ -4,7 +4,7 @@ import { Overlay } from "@/components/shared";
 import { CategoryIcon } from "@/components/category-icon";
 import { CategoryPicker } from "@/components/category-picker";
 import { AccountPicker } from "@/components/account-select";
-import { todayISO, clockNow } from "@/lib/format";
+import { clockNow } from "@/lib/format";
 import { WhenField } from "@/components/when-picker";
 import { categoryPath, resolvedDefaultAccountId } from "@/lib/categories";
 import { pickName } from "@/lib/i18n";
@@ -16,7 +16,6 @@ import { useT, useUi } from "@/store/ui";
 
 type Draft = TripSpendItem & {
   id: string;
-  kind: "adhoc" | "planned";
   on: boolean;
   currency: MoneyUnit;
   categoryId: string;
@@ -45,8 +44,8 @@ function remember(key: string, value: string) {
 
 export function TripProposal() {
   const t = useT();
-  const addTx = useApp((s) => s.addTransaction);
   const addAdhoc = useApp((s) => s.addAdhocBudget);
+  const updateTrip = useApp((s) => s.updateTrip);
   const accounts = useApp((s) => s.accounts);
   const categories = useApp((s) => s.categories);
   const trips = useApp((s) => s.trips);
@@ -59,6 +58,7 @@ export function TripProposal() {
   const [tripName, setTripName] = useState("");
   const [tripId, setTripId] = useState("");
   const [bookId, setBookId] = useState("");
+  const [tripPick, setTripPick] = useState<string | null>(null);
   const [rows, setRows] = useState<Draft[]>([]);
 
   useEffect(() => {
@@ -67,7 +67,7 @@ export function TripProposal() {
     setTripName(parsed.trip);
     setTripId(parsed.tripId);
     setBookId(parsed.bookId || "");
-    const today = todayISO();
+    setTripPick(null);
     const accountId = remembered(ACCOUNT_KEY);
     const categoryId =
       remembered(CATEGORY_KEY) || categories.find((c) => c.kind === "expense" && c.theme === "travel")?.id || "";
@@ -76,7 +76,6 @@ export function TripProposal() {
         ...item,
         id: newId(),
         currency: asMoneyCurrency(item.currency),
-        kind: item.date > today ? "planned" : "adhoc",
         on: true,
         categoryId,
         accountId,
@@ -89,6 +88,15 @@ export function TripProposal() {
     const url = new URL(window.location.href);
     url.hash = "";
     window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+  }, []);
+
+  useEffect(() => {
+    function onHash() {
+      if (!proposalFromHash(window.location.hash)) return;
+      window.location.reload();
+    }
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
   useEffect(() => {
@@ -135,7 +143,8 @@ export function TripProposal() {
       return;
     }
     const picked = chosen;
-    const matched = carriedTrip(trips, { trip: tripName, tripId, bookId, items: picked });
+    const guess = carriedTrip(trips, { trip: tripName, tripId, bookId, items: picked });
+    const matched = trips.find((trip) => trip.id === (tripPick ?? guess?.id ?? ""));
     const expenseCats = categories.filter((c) => c.kind === "expense");
     for (const row of picked) {
       const categoryId = expenseCats.some((c) => c.id === row.categoryId) ? row.categoryId : undefined;
@@ -146,37 +155,22 @@ export function TripProposal() {
       }
       remember(ACCOUNT_KEY, accountId);
       if (categoryId) remember(CATEGORY_KEY, categoryId);
-      if (row.kind === "planned") {
-        await addTx({
-          type: "expense",
-          amount: row.amount,
-          currency: row.currency,
-          accountId,
-          categoryId,
-          date: row.date,
-          time: row.time,
-          payee: row.label,
-          payeeZh: row.label,
-          note: tripName,
-          planned: true,
-          tripId: matched?.id,
-          tripManual: Boolean(matched),
-        });
-      } else {
-        await addAdhoc({
-          id: newId(),
-          label: row.label,
-          labelZh: row.label,
-          amount: row.amount,
-          currency: row.currency,
-          month: row.date.slice(0, 7),
-          date: row.date,
-          time: row.time,
-          categoryId,
-          accountId,
-          tripId: matched?.id,
-        });
-      }
+      await addAdhoc({
+        id: newId(),
+        label: row.label,
+        labelZh: row.label,
+        amount: row.amount,
+        currency: row.currency,
+        month: row.date.slice(0, 7),
+        date: row.date,
+        time: row.time,
+        categoryId,
+        accountId,
+        tripId: matched?.id,
+      });
+    }
+    if (matched && bookId && !matched.plannerId) {
+      await updateTrip({ ...matched, plannerId: bookId, plannerTitle: tripName || matched.plannerTitle });
     }
     toast(t.reports.proposalDone);
     const day = picked[0]?.date || "";
@@ -236,8 +230,24 @@ export function TripProposal() {
           {tripName ? `${tripName} · ` : ""}
           {t.reports.proposalHint}
         </p>
-        {attached ? (
-          <p className="mt-2 text-sm font-medium">{t.add.trip} · {pickName(locale, attached.name, attached.nameZh)}</p>
+        {attached || trips.some((trip) => trip.status !== "cancelled") ? (
+          <label className="mt-3 flex items-center justify-between gap-3">
+            <span className="text-sm text-muted">{t.add.trip}</span>
+            <select
+              value={tripPick ?? attached?.id ?? ""}
+              onChange={(e) => setTripPick(e.target.value)}
+              className="h-10 max-w-[16rem] bg-transparent text-right text-sm font-medium text-accent outline-none"
+            >
+              <option value="">{t.reports.noneTrip}</option>
+              {trips
+                .filter((trip) => trip.status !== "cancelled")
+                .map((trip) => (
+                  <option key={trip.id} value={trip.id}>
+                    {pickName(locale, trip.name, trip.nameZh)}
+                  </option>
+                ))}
+            </select>
+          </label>
         ) : null}
         <div className="mt-3 space-y-3">
           {rows.map((row) => {
@@ -299,22 +309,6 @@ export function TripProposal() {
                   {cat ? categoryPath(cat, categories, locale) : t.add.pickCategory}
                 </span>
               </button>
-              <div className="flex gap-2 px-4 py-3">
-                <button
-                  type="button"
-                  className={cn("h-8 flex-1 rounded-full text-xs font-medium", row.kind === "adhoc" ? "bg-accent text-on-accent" : "bg-background")}
-                  onClick={() => patch(row.id, { kind: "adhoc" })}
-                >
-                  {t.reports.proposalAdhoc}
-                </button>
-                <button
-                  type="button"
-                  className={cn("h-8 flex-1 rounded-full text-xs font-medium", row.kind === "planned" ? "bg-accent text-on-accent" : "bg-background")}
-                  onClick={() => patch(row.id, { kind: "planned" })}
-                >
-                  {t.reports.proposalPlanned}
-                </button>
-              </div>
             </div>
             );
           })}

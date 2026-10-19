@@ -62,14 +62,15 @@ export function carriedTrip(
   proposal: { trip: string; tripId: string; bookId?: string; items: { date: string }[] },
 ): Trip | undefined {
   const alive = trips.filter((trip) => trip.status !== "cancelled");
-  const byId = alive.find((trip) => trip.id === proposal.tripId);
+  const remembered = rememberedMoneyId(proposal.bookId || "");
+  const byId = alive.find((trip) => trip.id === proposal.tripId || trip.id === remembered);
   if (byId) return byId;
   const book = proposal.bookId || "";
   const byBook = alive.find((trip) => trip.plannerId && (trip.plannerId === book || trip.plannerId === proposal.tripId));
   if (byBook) return byBook;
   const title = proposal.trip.trim().toLowerCase();
   const named = alive.filter((trip) => {
-    const fields = [trip.name, trip.nameZh, trip.destination].map((value) => value.toLowerCase()).filter(Boolean);
+    const fields = [trip.name, trip.nameZh, trip.destination, trip.plannerTitle || ""].map((value) => value.toLowerCase()).filter(Boolean);
     return Boolean(title) && fields.some((name) => name === title || name.includes(title) || title.includes(name));
   });
   const covers = (trip: Trip) => proposal.items.some((item) => trip.start <= item.date && item.date <= trip.end);
@@ -78,7 +79,18 @@ export function carriedTrip(
   if (named.length === 1) return named[0];
   const covering = alive.filter(covers);
   if (covering.length === 1) return covering[0];
+  if (namedOnDate.length > 1) return namedOnDate[0];
   return undefined;
+}
+
+function rememberedMoneyId(bookId: string): string {
+  if (!bookId || typeof localStorage === "undefined") return "";
+  try {
+    const parsed = JSON.parse(localStorage.getItem("tripbook-money-links") || "{}") as Record<string, string>;
+    return Object.entries(parsed).find(([, book]) => book === bookId)?.[0] || "";
+  } catch {
+    return "";
+  }
 }
 
 export function encodeProposal(body: TripSpendProposal): string {
