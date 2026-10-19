@@ -102,7 +102,8 @@ function TripCard({ trip }: { trip: Trip }) {
   const loc = useUi((s) => s.locale);
   const txs = useApp((s) => s.transactions);
   const rates = useApp((s) => s.fxRates);
-  const spent = tripCashSpent(txs, trip.id, rates);
+  const adhoc = useApp((s) => s.adhocBudgets);
+  const spent = tripCashSpent(txs, trip.id, rates, adhoc);
   const used = tripBudgetUsed(spent, trip.cashBudget);
   const over = trip.cashBudget > 0 && spent > trip.cashBudget;
   return (
@@ -204,10 +205,11 @@ export function TripDetailPage({ id }: { id: string }) {
   const txs = useApp((s) => s.transactions);
   const cats = useApp((s) => s.categories);
   const rates = useApp((s) => s.fxRates);
+  const adhoc = useApp((s) => s.adhocBudgets);
   const setTx = useUi((s) => s.setTxDetailId);
   const [edit, setEdit] = useState(false);
   if (!trip) return <div className="p-5 text-sm text-muted">—</div>;
-  const spent = tripCashSpent(txs, trip.id, rates);
+  const spent = tripCashSpent(txs, trip.id, rates, adhoc);
   const used = tripBudgetUsed(spent, trip.cashBudget);
   const linked = tripLinkedTxs(txs, trip.id);
   const over = trip.cashBudget > 0 && spent > trip.cashBudget;

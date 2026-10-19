@@ -1,4 +1,4 @@
-import type { Account, Transaction, FxRate, Trip } from "../types.ts";
+import type { Account, AdhocBudget, Transaction, FxRate, Trip } from "../types.ts";
 import { toHkd } from "./fx.ts";
 
 export function isTripExpired(t: Trip, today: string): boolean {
@@ -15,11 +15,15 @@ export function isTripActive(t: Trip, today: string): boolean {
   return true;
 }
 
-export function tripCashSpent(txs: Transaction[], tripId: string, rates: FxRate[]): number {
+export function tripCashSpent(txs: Transaction[], tripId: string, rates: FxRate[], adhoc: AdhocBudget[] = []): number {
   let sum = 0;
   for (const tx of txs) {
     if (tx.planned || tx.tripId !== tripId || tx.type !== "expense") continue;
     sum += Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
+  }
+  for (const row of adhoc) {
+    if (row.tripId !== tripId || row.paidOn) continue;
+    sum += Math.abs(toHkd(row.amount, row.currency, rates));
   }
   return sum;
 }

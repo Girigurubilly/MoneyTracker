@@ -546,7 +546,7 @@ function PostAdhocBody({ item, onClose }: { item: AdhocBudget; onClose: () => vo
   const moneyAccounts = moneyAccountsForPicker(accounts);
   const today = todayISO();
   const [accountId, setAccountId] = useState(
-    () => moneyAccounts.find((x) => x.type === "cash" || x.type === "current" || x.type === "savings")?.id ?? moneyAccounts[0]?.id ?? "",
+    () => item.accountId || moneyAccounts.find((x) => x.type === "cash" || x.type === "current" || x.type === "savings")?.id || moneyAccounts[0]?.id || "",
   );
   const cat = categories.find((c) => c.id === item.categoryId);
 
@@ -566,6 +566,8 @@ function PostAdhocBody({ item, onClose }: { item: AdhocBudget; onClose: () => vo
       payeeZh: item.labelZh,
       note: item.label,
       adhoc: true,
+      tripId: item.tripId,
+      tripManual: Boolean(item.tripId),
     });
     await update({ ...item, paidOn: today });
     onClose();
@@ -674,6 +676,8 @@ function AdhocEditorBody({
       paidOn: postToday && iso === today ? today : initial?.paidOn,
       priceCards: initial?.priceCards,
       valueCards: initial?.valueCards,
+      tripId: initial?.tripId,
+      accountId: initial?.accountId,
     };
     if (initial) await update(row);
     else await add(row);
@@ -689,6 +693,8 @@ function AdhocEditorBody({
         payeeZh: n,
         note: n,
         adhoc: true,
+        tripId: row.tripId,
+        tripManual: Boolean(row.tripId),
       });
     }
     onClose();

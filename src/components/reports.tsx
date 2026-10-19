@@ -117,7 +117,7 @@ export function DashboardPage() {
     room.planned,
     years.map((y) => ({ corpus: y.closingFinancial })),
   );
-  const nxtSpent = nxt ? tripCashSpent(txs, nxt.id, rates) : 0;
+  const nxtSpent = nxt ? tripCashSpent(txs, nxt.id, rates, adhoc) : 0;
   const month = monthKey(today);
   const flow = monthFlow(txs, month, rates);
   const monthRow = budgetActuals(budgets, txs, month, rates, cats, rec, today, adhoc, targetMode).find(

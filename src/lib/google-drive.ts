@@ -1,7 +1,7 @@
 const FILE_NAME = "hk-life-money.backup.json";
 const FOLDER_NAME = "HK Life Money";
 export const MAX_DRIVE_BACKUPS = 3;
-const SCOPE = "https://www.googleapis.com/auth/drive.file";
+const SCOPE = "https://www.googleapis.com/auth/drive";
 const CLIENT_KEY = "hk-life-money-google-client-id";
 const FOLDER_ID_KEY = "hk-life-money-drive-folder-id";
 const ACTION_KEY = "hk-life-money-drive-action";
@@ -395,4 +395,26 @@ export async function downloadBackup(token: string): Promise<string> {
   const newest = newestDriveBackup(await listDriveBackups(token));
   if (!newest) throw new Error("missing");
   return downloadBackupById(token, newest.id);
+}
+
+export async function downloadNamedFile(token: string, name: string): Promise<{ id: string; text: string; modifiedTime: string }> {
+  const folder = await ensureFolder(token);
+  const q = encodeURIComponent(`name='${name}' and '${folder}' in parents and trashed=false`);
+  const listed = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,modifiedTime)&pageSize=1`, token);
+  const data = (await listed.json()) as { files?: { id: string; modifiedTime?: string }[] };
+  const file = data.files?.[0];
+  if (!file?.id) throw new Error("missing");
+  const text = await downloadBackupById(token, file.id);
+  return { id: file.id, text, modifiedTime: file.modifiedTime ?? "" };
+}
+
+export async function uploadNamedFile(token: string, name: string, body: string): Promise<void> {
+  const folder = await ensureFolder(token);
+  let existing = "";
+  try {
+    existing = (await downloadNamedFile(token, name)).id;
+  } catch (err) {
+    if ((err as Error).message !== "missing") throw err;
+  }
+  await uploadTo(token, body, existing, existing ? undefined : folder, name);
 }

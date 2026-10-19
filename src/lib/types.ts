@@ -436,6 +436,8 @@ export type AdhocBudget = {
   date: string;
   paidOn?: string;
   categoryId?: string;
+  accountId?: string;
+  tripId?: string;
   priceCards?: WishCard[];
   valueCards?: WishCard[];
 };

@@ -1,6 +1,7 @@
 import { decryptSnapshot, encryptSnapshot, isEncryptedBackup } from "@/lib/backup";
 import { pickSyncSide, latestTxnCreatedAt } from "@/lib/sync-side";
 import { attachTripLibrary, laterIso, readTripEditedAt } from "@/lib/trip-library";
+import { syncSharedTripFile } from "@/lib/trip-drive";
 import { isAppSnapshot } from "@/lib/import-btp";
 import { todayISO } from "@/lib/format";
 import {
@@ -164,6 +165,12 @@ export async function syncWithDrive(opts: {
   const token = storedAccessToken() ?? (await requestSilentToken());
   if (!token) return "need-auth";
   rememberAccessToken(token);
+  try {
+    await syncSharedTripFile(token, readDrivePass());
+  } catch (err) {
+    const msg = (err as Error).message;
+    if (msg === "pass" || msg === "bad-pass") return "need-pass";
+  }
 
   let remoteIso: string | undefined;
   try {

@@ -1,13 +1,41 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Overlay } from "@/components/shared";
+import { todayISO } from "@/lib/format";
+import { pickName } from "@/lib/i18n";
 import { asMoneyCurrency, linkFromHash, plannerTripUrl, proposalFromHash, type TripSpendItem } from "@/lib/trip-link";
 import { CURRENCIES, type MoneyUnit } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { newId, useApp } from "@/store/app";
-import { useT } from "@/store/ui";
+import { useT, useUi } from "@/store/ui";
 
-type Draft = TripSpendItem & { id: string; kind: "adhoc" | "planned"; on: boolean; currency: MoneyUnit };
+type Draft = TripSpendItem & {
+  id: string;
+  kind: "adhoc" | "planned";
+  on: boolean;
+  currency: MoneyUnit;
+  categoryId: string;
+  accountId: string;
+};
+
+const ACCOUNT_KEY = "hk-life-money-pay-account";
+const CATEGORY_KEY = "hk-life-money-pay-category";
+
+function remembered(key: string): string {
+  try {
+    return localStorage.getItem(key) || "";
+  } catch {
+    return "";
+  }
+}
+
+function remember(key: string, value: string) {
+  try {
+    if (value) localStorage.setItem(key, value);
+  } catch {
+    /* ignore */
+  }
+}
 
 export function TripProposal() {
   const t = useT();
@@ -16,6 +44,7 @@ export function TripProposal() {
   const accounts = useApp((s) => s.accounts);
   const categories = useApp((s) => s.categories);
   const trips = useApp((s) => s.trips);
+  const locale = useUi((s) => s.locale);
   const [open, setOpen] = useState(false);
   const [done, setDone] = useState(false);
   const [backUrl, setBackUrl] = useState("");
@@ -28,13 +57,19 @@ export function TripProposal() {
     if (!parsed) return;
     setTripName(parsed.trip);
     setTripId(parsed.tripId);
+    const today = todayISO();
+    const accountId = remembered(ACCOUNT_KEY);
+    const categoryId =
+      remembered(CATEGORY_KEY) || categories.find((c) => c.kind === "expense" && c.theme === "travel")?.id || "";
     setRows(
       parsed.items.map((item) => ({
         ...item,
         id: newId(),
         currency: asMoneyCurrency(item.currency),
-        kind: "adhoc",
+        kind: item.date > today ? "planned" : "adhoc",
         on: true,
+        categoryId,
+        accountId,
       })),
     );
     setDone(false);
@@ -44,6 +79,24 @@ export function TripProposal() {
     url.hash = "";
     window.history.replaceState({}, "", `${url.pathname}${url.search}`);
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const accountId =
+      remembered(ACCOUNT_KEY) ||
+      accounts.find((a) => a.type === "cash" || a.type === "current" || a.type === "savings")?.id ||
+      accounts.find((a) => a.currency !== "MILES")?.id ||
+      "";
+    const categoryId =
+      remembered(CATEGORY_KEY) || categories.find((c) => c.kind === "expense" && c.theme === "travel")?.id || "";
+    setRows((list) =>
+      list.map((row) => ({
+        ...row,
+        accountId: row.accountId || accountId,
+        categoryId: row.categoryId || categoryId,
+      })),
+    );
+  }, [open, accounts, categories]);
 
   function patch(id: string, next: Partial<Draft>) {
     setRows((list) => list.map((row) => (row.id === id ? { ...row, ...next } : row)));
@@ -60,15 +113,18 @@ export function TripProposal() {
       return;
     }
     const picked = chosen;
-    const accountId = accounts.find((a) => a.type === "cash" || a.type === "current" || a.type === "savings")?.id || accounts[0]?.id || "";
-    const categoryId = categories.find((c) => c.kind === "expense" && c.theme === "travel")?.id;
     const knownTrip = Boolean(tripId) && trips.some((trip) => trip.id === tripId);
+    const expenseCats = categories.filter((c) => c.kind === "expense");
     for (const row of picked) {
+      const categoryId = expenseCats.some((c) => c.id === row.categoryId) ? row.categoryId : undefined;
+      const accountId = accounts.some((a) => a.id === row.accountId) ? row.accountId : "";
+      if (!accountId) {
+        toast(t.add.account);
+        return;
+      }
+      remember(ACCOUNT_KEY, accountId);
+      if (categoryId) remember(CATEGORY_KEY, categoryId);
       if (row.kind === "planned") {
-        if (!accountId) {
-          toast(t.add.account);
-          return;
-        }
         await addTx({
           type: "expense",
           amount: row.amount,
@@ -93,6 +149,8 @@ export function TripProposal() {
           month: row.date.slice(0, 7),
           date: row.date,
           categoryId,
+          accountId,
+          tripId: knownTrip ? tripId : undefined,
         });
       }
     }
@@ -154,6 +212,34 @@ export function TripProposal() {
                   ))}
                 </select>
               </div>
+              <select
+                value={row.categoryId}
+                onChange={(e) => patch(row.id, { categoryId: e.target.value })}
+                className="mt-2 h-10 w-full rounded-lg bg-background px-2 text-sm"
+              >
+                <option value="">{t.add.category}</option>
+                {categories
+                  .filter((c) => c.kind === "expense")
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {pickName(locale, c.name, c.nameZh)}
+                    </option>
+                  ))}
+              </select>
+              <select
+                value={row.accountId}
+                onChange={(e) => patch(row.id, { accountId: e.target.value })}
+                className="mt-2 h-10 w-full rounded-lg bg-background px-2 text-sm"
+              >
+                <option value="">{t.add.account}</option>
+                {accounts
+                  .filter((a) => a.currency !== "MILES")
+                  .map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {pickName(locale, a.name, a.nameZh)}
+                    </option>
+                  ))}
+              </select>
               <div className="mt-2 flex gap-2">
                 <button
                   type="button"

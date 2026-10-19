@@ -48,7 +48,7 @@ import {
   netWorthSeries as seedNw,
 } from "@/lib/mock";
 import { applyAutoTrip, patchAutoTrips } from "@/lib/calc/trips";
-import { readTripLibrary, writeTripLibrary } from "@/lib/trip-library";
+import { readTripEditedAt, readTripLibrary, writeTripLibrary } from "@/lib/trip-library";
 import { netWorthNow } from "@/lib/calc/networth";
 import { fetchLiveFx } from "@/lib/calc/fx";
 import { applyHoldingBalances, assignHoldingBook, mergeHoldings, parseHoldingsFile } from "@/lib/holdings";
@@ -1333,7 +1333,11 @@ export const useApp = create<AppState>((set, get) => ({
     });
     await migrateAdhocFromPlannedTxs();
     await migrateAnnuityAllowances();
-    if (snap.tripLibrary) writeTripLibrary(snap.tripLibrary);
+    if (snap.tripLibrary) {
+      const localAt = readTripEditedAt();
+      const remoteAt = snap.tripLibrary.exportedAt || "";
+      if (!localAt || !remoteAt || remoteAt >= localAt) writeTripLibrary(snap.tripLibrary);
+    }
     const data = await loadAll();
     set({ ...data, ready: true });
   },
