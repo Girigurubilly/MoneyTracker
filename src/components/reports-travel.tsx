@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Plus, ExternalLink } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Hairline, InfoButton, Overlay, ProgressBar, ProgressRing, ScreenHeader, SectionLabel, BudgetChip, TxGroupedList } from "@/components/shared";
 import { ComposerHeader, ComposerShell, LineRow, TextLine, ActiveKeypad } from "@/components/txn-composer";
 import { AmountWithHkd } from "@/components/currency-field";
@@ -110,7 +110,12 @@ function TripCard({ trip }: { trip: Trip }) {
       <Link to="/reports/travel/$id" params={{ id: trip.id }} className="block p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-base font-semibold">{pickName(loc, trip.name, trip.nameZh)}</div>
+            <div className="text-base font-semibold">
+              {pickName(loc, trip.name, trip.nameZh)}
+              {trip.start <= todayISO() && todayISO() <= trip.end ? (
+                <span className="ml-2 rounded-full bg-success-soft px-2 py-0.5 align-middle text-[10px] font-medium text-income">{t.reports.onTrip}</span>
+              ) : null}
+            </div>
             <div className="mt-0.5 text-xs text-muted">
               {trip.destination} · {trip.start} → {trip.end}
             </div>
@@ -136,56 +141,41 @@ function TripCard({ trip }: { trip: Trip }) {
           <BudgetChip over={over} />
         </div>
       </Link>
-      <PlannerLink trip={trip} className="border-t border-line" />
+      <TripPlannerBar trip={trip} compact />
     </div>
   );
 }
 
-function TripLinkSetup({ trip }: { trip: Trip }) {
+function TripPlannerBar({ trip, compact }: { trip: Trip; compact?: boolean }) {
   const t = useT();
+  const today = todayISO();
+  const live = trip.start <= today && today <= trip.end;
   const linked = Boolean(trip.plannerId);
+  const href = plannerTripUrl(trip, { day: live ? today : undefined, pick: !linked });
+  const label = !linked ? t.reports.plannerConnect : live ? t.reports.plannerOpenToday : t.reports.planTrip;
   return (
-    <>
-      <div className="text-xs text-muted">{t.reports.plannerLink}</div>
-      <div className="mt-1 text-sm font-medium">{linked ? trip.plannerTitle || trip.plannerId : t.reports.plannerUnlinked}</div>
-      {linked && trip.plannerTitle ? <div className="mt-0.5 break-all text-xs text-faint">{trip.plannerId}</div> : null}
-      <p className="mt-1 text-xs leading-5 text-muted">{t.reports.plannerHint}</p>
-      <div className="mt-2 flex gap-2">
+    <div className={compact ? "border-t border-line" : ""}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[11px] font-medium text-muted">{t.reports.plannerLink}</div>
+          <div className="truncate text-sm font-semibold">{linked ? trip.plannerTitle || t.reports.plannerLinked : t.reports.plannerUnlinked}</div>
+        </div>
         <a
-          href={plannerTripUrl(trip, { pick: true })}
+          href={href}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex h-10 flex-1 items-center justify-center rounded-full bg-accent text-xs font-medium text-on-accent"
+          className="flex h-9 shrink-0 items-center rounded-full bg-accent px-3 text-xs font-medium text-on-accent"
         >
-          {linked ? t.reports.plannerChange : t.reports.plannerPick}
+          {label}
         </a>
-        {linked ? (
-          <a
-            href={plannerTripUrl(trip)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex h-10 flex-1 items-center justify-center gap-1 rounded-full bg-background text-xs font-medium text-accent"
-          >
-            {t.reports.planTrip}
-          </a>
-        ) : null}
       </div>
-    </>
-  );
-}
-
-function PlannerLink({ trip, className = "" }: { trip: Trip; className?: string }) {
-  const t = useT();
-  return (
-    <a
-      href={plannerTripUrl(trip)}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={`flex h-11 items-center justify-center gap-1.5 text-sm font-medium text-accent ${className}`}
-    >
-      {t.reports.planTrip}
-      <ExternalLink className="size-3.5" />
-    </a>
+      {linked ? (
+        <a href={plannerTripUrl(trip, { pick: true })} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex text-xs font-medium text-accent">
+          {t.reports.plannerChange}
+        </a>
+      ) : null}
+      {compact ? null : <p className="mt-2 text-xs leading-5 text-muted">{t.reports.plannerOneLine}</p>}
+    </div>
   );
 }
 
@@ -234,7 +224,7 @@ export function TripDetailPage({ id }: { id: string }) {
         }
       />
       <div className="mx-4 mb-3 overflow-hidden rounded-xl bg-elevated px-4 py-3">
-        <TripLinkSetup trip={trip} />
+        <TripPlannerBar trip={trip} />
       </div>
       <div className="mx-4 overflow-hidden rounded-2xl bg-elevated p-4">
         <div className="flex items-start justify-between gap-3">

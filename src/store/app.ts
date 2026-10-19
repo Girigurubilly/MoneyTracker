@@ -48,6 +48,7 @@ import {
   netWorthSeries as seedNw,
 } from "@/lib/mock";
 import { applyAutoTrip, patchAutoTrips } from "@/lib/calc/trips";
+import { readTripLibrary, writeTripLibrary } from "@/lib/trip-library";
 import { netWorthNow } from "@/lib/calc/networth";
 import { fetchLiveFx } from "@/lib/calc/fx";
 import { applyHoldingBalances, assignHoldingBook, mergeHoldings, parseHoldingsFile } from "@/lib/holdings";
@@ -90,6 +91,7 @@ export type AppSnapshot = {
   budgetTargetMode?: BudgetTargetMode;
   depositCategoryId?: string;
   lastFxSyncAt?: string;
+  tripLibrary?: import("@/lib/trip-library").TripLibrary;
 };
 
 function idb() {
@@ -1331,6 +1333,7 @@ export const useApp = create<AppState>((set, get) => ({
     });
     await migrateAdhocFromPlannedTxs();
     await migrateAnnuityAllowances();
+    if (snap.tripLibrary) writeTripLibrary(snap.tripLibrary);
     const data = await loadAll();
     set({ ...data, ready: true });
   },
@@ -1365,6 +1368,7 @@ export const useApp = create<AppState>((set, get) => ({
       budgetTargetMode: s.budgetTargetMode,
       depositCategoryId: s.depositCategoryId,
       lastFxSyncAt: s.lastFxSyncAt,
+      tripLibrary: readTripLibrary() ?? undefined,
     };
   },
   resetSample: async () => {

@@ -1,5 +1,6 @@
 import { decryptSnapshot, encryptSnapshot, isEncryptedBackup } from "@/lib/backup";
 import { pickSyncSide, latestTxnCreatedAt } from "@/lib/sync-side";
+import { attachTripLibrary, laterIso, readTripEditedAt } from "@/lib/trip-library";
 import { isAppSnapshot } from "@/lib/import-btp";
 import { todayISO } from "@/lib/format";
 import {
@@ -145,6 +146,14 @@ export function isApplyingRemote(): boolean {
   return applyingRemote;
 }
 
+async function remoteTripLibrary(token: string): Promise<AppSnapshot | null> {
+  try {
+    return await decodeDriveBody(await downloadBackup(token));
+  } catch {
+    return null;
+  }
+}
+
 export async function syncWithDrive(opts: {
   exportSnapshot: () => AppSnapshot;
   replaceAll: (snap: AppSnapshot) => Promise<void>;
@@ -163,7 +172,7 @@ export async function syncWithDrive(opts: {
     if ((err as Error).message !== "missing") return "fail";
   }
 
-  const localTxn = latestTxnCreatedAt(opts.exportSnapshot().transactions);
+  const localTxn = laterIso(latestTxnCreatedAt(opts.exportSnapshot().transactions), readTripEditedAt());
   const side = pickSyncSide(localTxn, remoteIso);
   if (side === "ok" || (side === "pull" && remoteIso && remoteIso === seenDriveCreated())) {
     writeLastSync();
@@ -189,7 +198,8 @@ export async function syncWithDrive(opts: {
     }
   }
   try {
-    const snap = opts.exportSnapshot();
+    const local = opts.exportSnapshot();
+    const snap = local.tripLibrary ? local : attachTripLibrary(local, await remoteTripLibrary(token));
     await uploadBackup(token, await encodeDriveBody(snap));
     await noteNewestDriveFile(token);
     markLocalEdit(snap.exportedAt);
