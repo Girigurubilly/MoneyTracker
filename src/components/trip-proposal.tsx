@@ -3,11 +3,11 @@ import { toast } from "sonner";
 import { Overlay } from "@/components/shared";
 import { CategoryIcon } from "@/components/category-icon";
 import { CategoryPicker } from "@/components/category-picker";
-import { AccountLine } from "@/components/txn-composer";
+import { AccountPicker } from "@/components/account-select";
 import { todayISO, clockNow } from "@/lib/format";
 import { WhenField } from "@/components/when-picker";
-import { moneyAccountsForPicker } from "@/lib/accounts";
 import { categoryPath, resolvedDefaultAccountId } from "@/lib/categories";
+import { pickName } from "@/lib/i18n";
 import { asMoneyCurrency, linkFromHash, plannerTripUrl, proposalFromHash, type TripSpendItem } from "@/lib/trip-link";
 import { CURRENCIES, type Category, type MoneyUnit } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -51,10 +51,9 @@ export function TripProposal() {
   const categories = useApp((s) => s.categories);
   const trips = useApp((s) => s.trips);
   const locale = useUi((s) => s.locale);
-  const kid = useUi((s) => s.accessMode) === "kid";
-  const moneyAccounts = moneyAccountsForPicker(accounts, { kid });
   const [open, setOpen] = useState(false);
   const [pickCat, setPickCat] = useState("");
+  const [pickAccount, setPickAccount] = useState("");
   const [done, setDone] = useState(false);
   const [backUrl, setBackUrl] = useState("");
   const [tripName, setTripName] = useState("");
@@ -184,6 +183,20 @@ export function TripProposal() {
     setDone(true);
   }
 
+  if (pickAccount) {
+    return (
+      <AccountPicker
+        accounts={accounts}
+        value={rows.find((item) => item.id === pickAccount)?.accountId || ""}
+        onClose={() => setPickAccount("")}
+        onSelect={(id) => {
+          patch(pickAccount, { accountId: id });
+          setPickAccount("");
+        }}
+      />
+    );
+  }
+
   if (pickCat) {
     const row = rows.find((item) => item.id === pickCat);
     return (
@@ -237,32 +250,38 @@ export function TripProposal() {
                 onDate={(iso) => patch(row.id, { date: iso })}
                 onTime={(next) => patch(row.id, { time: next })}
               />
-              <div className="flex gap-2 px-4 py-2">
+              <div className="px-4 py-2">
                 <input
                   inputMode="decimal"
                   value={row.amount > 0 ? String(row.amount) : ""}
                   placeholder={t.reports.proposalAmount}
                   onChange={(e) => patch(row.id, { amount: Number(e.target.value) || 0 })}
-                  className="h-10 min-w-0 flex-1 rounded-lg bg-background px-2 text-sm tabular-nums"
+                  className="h-10 w-full rounded-lg bg-background px-2 text-sm tabular-nums"
                 />
-                <select
-                  value={row.currency}
-                  onChange={(e) => patch(row.id, { currency: e.target.value as MoneyUnit })}
-                  className="h-10 rounded-lg bg-background px-2 text-sm"
-                >
-                  {CURRENCIES.map((code) => (
-                    <option key={code} value={code}>
-                      {code}
-                    </option>
-                  ))}
-                </select>
               </div>
-              <AccountLine
-                accounts={moneyAccounts}
-                value={row.accountId}
-                onChange={(id) => patch(row.id, { accountId: id })}
-                placeholder={t.add.account}
-              />
+              <div className="flex gap-2 overflow-x-auto px-4 py-2">
+                {CURRENCIES.map((code) => (
+                  <button
+                    key={code}
+                    type="button"
+                    className={cn(
+                      "h-8 shrink-0 rounded-full px-3 text-xs font-medium",
+                      row.currency === code ? "bg-accent text-on-accent" : "bg-background",
+                    )}
+                    onClick={() => patch(row.id, { currency: code })}
+                  >
+                    {code}
+                  </button>
+                ))}
+              </div>
+              <button type="button" className="flex h-12 w-full items-center gap-3 border-b border-line px-4 text-left" onClick={() => setPickAccount(row.id)}>
+                <span className={cn("min-w-0 flex-1 truncate text-sm", row.accountId ? "text-foreground" : "text-muted")}>
+                  {(() => {
+                    const acc = accounts.find((a) => a.id === row.accountId);
+                    return acc ? pickName(locale, acc.name, acc.nameZh) : t.add.account;
+                  })()}
+                </span>
+              </button>
               <button type="button" className="flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left" onClick={() => setPickCat(row.id)}>
                 {cat ? (
                   <span className="grid size-8 shrink-0 place-items-center rounded-full bg-background">

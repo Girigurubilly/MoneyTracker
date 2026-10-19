@@ -1,5 +1,5 @@
 /* HK Life Money — cache the app shell so the ledger works offline. */
-const CACHE = "hk-life-money-shell-v1";
+const CACHE = "hk-life-money-shell-v2";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -26,7 +26,7 @@ self.addEventListener("fetch", (event) => {
 
   if (req.mode === "navigate") {
     event.respondWith(
-      fetch(req)
+      fetch(req, { cache: "no-store" })
         .then((res) => {
           const copy = res.clone();
           void caches.open(CACHE).then((c) => {
