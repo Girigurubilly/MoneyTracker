@@ -11,6 +11,7 @@ import { Overlay } from "@/components/shared";
 import { AddFlow } from "@/components/add-sheet";
 import { SearchFlow } from "@/components/search-sheet";
 import { TxDetail } from "@/components/tx-detail";
+import { TripProposal } from "@/components/trip-proposal";
 import { assetUrl } from "@/lib/base";
 import { isApplyingRemote, markLocalEdit, runDailyDriveSync, syncWithDrive } from "@/lib/drive-sync";
 import { runDailyOpen } from "@/lib/daily-open";
@@ -53,6 +54,7 @@ export function AppGate({ children }: { children: ReactNode }) {
       <AddFlow />
       <SearchFlow />
       <TxDetail />
+      <TripProposal />
       <InfoDialog />
       <LocalEditMark />
       <DailyDriveSync />

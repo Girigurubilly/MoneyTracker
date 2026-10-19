@@ -15,6 +15,7 @@ import {
   tripLinkedTxs,
 } from "@/lib/calc/trips";
 import type { Category, FxRate, Locale, Transaction, Trip } from "@/lib/types";
+import { plannerTripUrl } from "@/lib/trip-link";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 
@@ -75,15 +76,6 @@ export function TravelPage() {
           </div>
         </div>
       </div>
-      <a
-        href="https://girigurubilly.github.io/TripPlanner/"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mx-4 mb-3 flex h-11 items-center justify-center gap-1.5 rounded-xl bg-elevated text-sm font-medium text-accent"
-      >
-        {t.reports.planTrip}
-        <ExternalLink className="size-3.5" />
-      </a>
       <SectionLabel>{t.reports.trips}</SectionLabel>
       {current.map((tr) => (
         <TripCard key={tr.id} trip={tr} />
@@ -114,35 +106,53 @@ function TripCard({ trip }: { trip: Trip }) {
   const used = tripBudgetUsed(spent, trip.cashBudget);
   const over = trip.cashBudget > 0 && spent > trip.cashBudget;
   return (
-    <Link to="/reports/travel/$id" params={{ id: trip.id }} className="mx-4 mb-3 block overflow-hidden rounded-2xl bg-elevated p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-base font-semibold">{pickName(loc, trip.name, trip.nameZh)}</div>
-          <div className="mt-0.5 text-xs text-muted">
-            {trip.destination} · {trip.start} → {trip.end}
+    <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
+      <Link to="/reports/travel/$id" params={{ id: trip.id }} className="block p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-base font-semibold">{pickName(loc, trip.name, trip.nameZh)}</div>
+            <div className="mt-0.5 text-xs text-muted">
+              {trip.destination} · {trip.start} → {trip.end}
+            </div>
+          </div>
+          <div className="relative shrink-0">
+            <ProgressRing value={used.pct} size={52} stroke={4} tone={over ? "expense" : "income"} />
+            <span className="pointer-events-none absolute inset-0 grid place-items-center text-[10px] font-semibold tabular-nums">
+              {Math.round(used.pct * 100)}%
+            </span>
           </div>
         </div>
-        <div className="relative shrink-0">
-          <ProgressRing value={used.pct} size={52} stroke={4} tone={over ? "expense" : "income"} />
-          <span className="pointer-events-none absolute inset-0 grid place-items-center text-[10px] font-semibold tabular-nums">
-            {Math.round(used.pct * 100)}%
-          </span>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="rounded-xl bg-background px-3 py-2">
+            <div className="text-[11px] text-muted">{t.reports.tripSpent}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(spent, "HKD")}</div>
+          </div>
+          <div className="rounded-xl bg-background px-3 py-2">
+            <div className="text-[11px] text-muted">{t.reports.tripBudget}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(trip.cashBudget, "HKD")}</div>
+          </div>
         </div>
-      </div>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <div className="rounded-xl bg-background px-3 py-2">
-          <div className="text-[11px] text-muted">{t.reports.tripSpent}</div>
-          <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(spent, "HKD")}</div>
+        <div className="mt-2 flex justify-end">
+          <BudgetChip over={over} />
         </div>
-        <div className="rounded-xl bg-background px-3 py-2">
-          <div className="text-[11px] text-muted">{t.reports.tripBudget}</div>
-          <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(trip.cashBudget, "HKD")}</div>
-        </div>
-      </div>
-      <div className="mt-2 flex justify-end">
-        <BudgetChip over={over} />
-      </div>
-    </Link>
+      </Link>
+      <PlannerLink trip={trip} className="border-t border-line" />
+    </div>
+  );
+}
+
+function PlannerLink({ trip, className = "" }: { trip: Trip; className?: string }) {
+  const t = useT();
+  return (
+    <a
+      href={plannerTripUrl(trip)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`flex h-11 items-center justify-center gap-1.5 text-sm font-medium text-accent ${className}`}
+    >
+      {t.reports.planTrip}
+      <ExternalLink className="size-3.5" />
+    </a>
   );
 }
 
@@ -190,6 +200,9 @@ export function TripDetailPage({ id }: { id: string }) {
           </button>
         }
       />
+      <div className="mx-4 mb-3 overflow-hidden rounded-xl bg-elevated">
+        <PlannerLink trip={trip} />
+      </div>
       <div className="mx-4 overflow-hidden rounded-2xl bg-elevated p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
