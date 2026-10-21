@@ -1544,7 +1544,7 @@ export const messages = {
       tripPaid: "已付",
       tripScheduled: "已排程",
       budgetUsed: "預算已用",
-      remaining: "尚欠",
+      remaining: "尚餘",
       cash: "現金",
       tripBudget: "預算",
       related: "相關紀錄",
