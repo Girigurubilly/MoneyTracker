@@ -21,7 +21,8 @@ import { monthlyLivingEssentials, monthlyHousingCost, isPrincipalRegular, housin
 import { todayISO } from "../format.ts";
 import { monthKey } from "./ledger.ts";
 import { periodCategoryTotals, periodCategoryTxs, periodRange, yearCategoryCompare, yearCompareRanges, monthlyCashTrends } from "./period.ts";
-import { periodNetWorthPoints } from "./networth.ts";
+import { periodNetWorthPoints, netWorthNow } from "./networth.ts";
+import type { TimeSaving } from "../types.ts";
 import { runRetirement, sustainableMonthly } from "./retirement.ts";
 
 function rec(partial: Partial<Recurring> & Pick<Recurring, "id" | "type" | "amount" | "chargedDay">): Recurring {
@@ -649,6 +650,33 @@ describe("period net worth", () => {
     assert.equal(september?.net, 12000);
     assert.equal(september?.flow, -2000);
     assert.equal((september?.net ?? 0) - opening.net, 3000);
+  });
+
+  it("counts a new bank account even when it was left out, and a deposit that is not already in that balance", () => {
+    const bank = {
+      id: "new-bank",
+      name: "New bank",
+      nameZh: "新銀行",
+      type: "current" as const,
+      currency: "HKD" as const,
+      balance: 80_000,
+      includeInNetWorth: false,
+      group: "cash" as const,
+    };
+    const deposit = {
+      id: "td",
+      bank: "渣打",
+      amount: 50_000,
+      currency: "HKD" as const,
+      rate: 3,
+      startDate: "2026-10-01",
+      endDate: "2027-10-01",
+      interest: 0,
+      accountId: "",
+    } satisfies TimeSaving;
+    const covered = { ...deposit, id: "inside", amount: 80_000, accountId: "new-bank" };
+    assert.equal(netWorthNow([bank], [], [deposit], "2026-10-23").net, 130_000);
+    assert.equal(netWorthNow([bank], [], [covered], "2026-10-23").net, 80_000);
   });
 });
 

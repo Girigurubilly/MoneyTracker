@@ -809,7 +809,7 @@ export const useApp = create<AppState>((set, get) => ({
       }
       const data = await loadAll();
       try {
-        if (typeof localStorage === "undefined" || localStorage.getItem("hk-life-money-cash-counted") !== "1") {
+        if (typeof localStorage !== "undefined") {
           const repaired = countCashInNetWorth(data.accounts);
           const putBack = repaired.filter((a, i) => a !== data.accounts[i]);
           if (putBack.length) {
@@ -818,7 +818,6 @@ export const useApp = create<AppState>((set, get) => ({
             });
             data.accounts = repaired;
           }
-          localStorage?.setItem("hk-life-money-cash-counted", "1");
         }
       } catch {
         /* keep the saved accounts */
@@ -830,7 +829,7 @@ export const useApp = create<AppState>((set, get) => ({
       const linked = await reconcileLinkedMonthSpendCap(data);
       data.budgets = linked.budgets;
       data.yearlyPlans = linked.yearlyPlans;
-      const nw = netWorthNow(data.accounts, data.fxRates);
+      const nw = netWorthNow(data.accounts, data.fxRates, data.deposits);
       const month = monthKey();
       if (!data.snapshots.some((s) => s.month === month)) {
         const row = { month, net: nw.net, assets: nw.assets, liab: nw.liab };

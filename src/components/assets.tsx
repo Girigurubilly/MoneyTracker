@@ -33,7 +33,7 @@ import {
   TextLine,
 } from "@/components/txn-composer";
 import { AssetBriefButton } from "@/components/asset-brief";
-import { netWorthNow } from "@/lib/calc/networth";
+import { netWorthNow, countsInNetWorth } from "@/lib/calc/networth";
 import { toHkd } from "@/lib/calc/fx";
 import { depositsOutsideBalances } from "@/lib/calc/deposits";
 import { accountsInGroup, BALANCE_GROUP_ORDER, isKidVisibleAccount, nextSortOrder } from "@/lib/accounts";
@@ -97,7 +97,7 @@ export function AssetsScreen() {
   const deposits = useApp((s) => s.deposits);
   const rates = useApp((s) => s.fxRates);
   const scoped = kid ? accounts.filter(isKidVisibleAccount) : accounts;
-  const nw = netWorthNow(scoped, rates);
+  const nw = netWorthNow(scoped, rates, kid ? [] : deposits);
   const [editingId, setEditingId] = useState<string | null | "new">(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [reorder, setReorder] = useState(false);
@@ -165,7 +165,7 @@ export function AssetsScreen() {
         const rows = accountsInGroup(visible, g.id);
         const depositRows = g.id === "cash" && !kid ? outsideDeposits : [];
         if (!rows.length && !depositRows.length) return null;
-        const counted = rows.filter((a) => a.includeInNetWorth && a.currency !== "MILES");
+        const counted = rows.filter((a) => countsInNetWorth(a));
         const total =
           counted.reduce((s, a) => s + toHkd(a.balance, a.currency, rates), 0) +
           depositRows.reduce((s, d) => s + toHkd(d.amount, d.currency, rates), 0);
@@ -303,7 +303,7 @@ function AccountCard({
             {typeLabel ? ` · ${locale === "zh-HK" ? typeLabel.zh : typeLabel.en}` : ""}
             {a.currency !== "HKD" ? ` · ${a.currency}` : ""}
             {a.hidden ? ` · ${t.assets.hidden}` : ""}
-            {!a.includeInNetWorth && a.type !== "miles" ? ` · ${t.assets.excluded}` : ""}
+            {!countsInNetWorth(a) && a.type !== "miles" ? ` · ${t.assets.excluded}` : ""}
           </span>
         </span>
         <AmountWithHkd
@@ -440,7 +440,7 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
       type,
       currency: type === "miles" ? "MILES" : currency === "MILES" ? "HKD" : currency,
       balance,
-      includeInNetWorth: type === "miles" ? false : include,
+      includeInNetWorth: type === "miles" ? false : groupForType(type) === "cash" ? true : include,
       group,
       hidden,
       notes: notes || undefined,

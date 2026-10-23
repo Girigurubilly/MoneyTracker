@@ -27,8 +27,9 @@ export function BalancePage() {
   const locale = useUi((s) => s.locale);
   const accounts = useApp((s) => s.accounts);
   const rates = useApp((s) => s.fxRates);
-  const nw = netWorthNow(accounts, rates);
-  const parts = netWorthBreakdown(accounts, rates);
+  const deposits = useApp((s) => s.deposits);
+  const nw = netWorthNow(accounts, rates, deposits);
+  const parts = netWorthBreakdown(accounts, rates, deposits);
   const [focus, setFocus] = useState<"assets" | "liab" | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -43,7 +44,7 @@ export function BalancePage() {
   ].filter((r) => r.value > 0);
   const typed = (focus === "assets" ? parts.assets : focus === "liab" ? parts.liabilities : []).map((r, i) => ({
     ...r,
-    name: typeLabel(r.type),
+    name: r.id === "deposits" ? (locale === "zh-HK" ? r.labelZh : r.label) : typeLabel(r.type),
     value: r.amount,
     colorIndex: i % 8,
   }));

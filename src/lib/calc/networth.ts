@@ -1,17 +1,36 @@
-import type { Account, FxRate, Transaction } from "../types.ts";
+import type { Account, FxRate, TimeSaving, Transaction } from "../types.ts";
+import { groupForType } from "../types.ts";
 import { toHkd } from "./fx.ts";
 import { applyDeltas, balanceDeltas } from "./ledger.ts";
+import { depositsOutsideBalances } from "./deposits.ts";
 import { todayISO } from "../format.ts";
 
-export function netWorthNow(accounts: Account[], rates: FxRate[]): { assets: number; liab: number; net: number } {
+export function countsInNetWorth(a: Account): boolean {
+  if (a.currency === "MILES" || a.type === "miles") return false;
+  if (groupForType(a.type) === "cash") return true;
+  return Boolean(a.includeInNetWorth);
+}
+
+function outsideDepositHkd(accounts: Account[], rates: FxRate[], deposits: TimeSaving[], asOf: string): number {
+  const cover = accounts.map((a) => (a.hidden ? { ...a, hidden: false } : a));
+  return depositsOutsideBalances(deposits, cover, rates, asOf).reduce((sum, row) => sum + Math.max(0, toHkd(row.amount, row.currency, rates)), 0);
+}
+
+export function netWorthNow(
+  accounts: Account[],
+  rates: FxRate[],
+  deposits: TimeSaving[] = [],
+  asOf = todayISO(),
+): { assets: number; liab: number; net: number } {
   let assets = 0;
   let liab = 0;
   for (const a of accounts) {
-    if (!a.includeInNetWorth || a.currency === "MILES") continue;
+    if (!countsInNetWorth(a)) continue;
     const hkd = toHkd(a.balance, a.currency, rates);
     if (hkd >= 0) assets += hkd;
     else liab += -hkd;
   }
+  assets += outsideDepositHkd(accounts, rates, deposits, asOf);
   return { assets, liab, net: assets - liab };
 }
 
@@ -25,11 +44,16 @@ export type WorthRow = {
   accounts: Account[];
 };
 
-export function netWorthBreakdown(accounts: Account[], rates: FxRate[]): { assets: WorthRow[]; liabilities: WorthRow[] } {
+export function netWorthBreakdown(
+  accounts: Account[],
+  rates: FxRate[],
+  deposits: TimeSaving[] = [],
+  asOf = todayISO(),
+): { assets: WorthRow[]; liabilities: WorthRow[] } {
   const assetMap = new Map<string, WorthRow>();
   const liabMap = new Map<string, WorthRow>();
   for (const a of accounts) {
-    if (!a.includeInNetWorth || a.currency === "MILES") continue;
+    if (!countsInNetWorth(a)) continue;
     const hkd = toHkd(a.balance, a.currency, rates);
     if (hkd === 0) continue;
     const side = hkd >= 0 ? assetMap : liabMap;
@@ -47,6 +71,18 @@ export function netWorthBreakdown(accounts: Account[], rates: FxRate[]): { asset
     row.accounts.push(a);
     side.set(key, row);
   }
+  const extra = outsideDepositHkd(accounts, rates, deposits, asOf);
+  if (extra > 0) {
+    assetMap.set("deposits", {
+      id: "deposits",
+      label: "Time deposits",
+      labelZh: "定期存款",
+      group: "cash",
+      type: "savings",
+      amount: extra,
+      accounts: [],
+    });
+  }
   const sort = (a: WorthRow, b: WorthRow) => b.amount - a.amount;
   return {
     assets: [...assetMap.values()].sort(sort),
@@ -55,14 +91,14 @@ export function netWorthBreakdown(accounts: Account[], rates: FxRate[]): { asset
 }
 
 /** Liquid / investable assets: property and the linked mortgage are excluded (PRD). */
-export function investableNow(accounts: Account[], rates: FxRate[]): number {
+export function investableNow(accounts: Account[], rates: FxRate[], deposits: TimeSaving[] = [], asOf = todayISO()): number {
   let n = 0;
   for (const a of accounts) {
-    if (!a.includeInNetWorth || a.currency === "MILES") continue;
+    if (!countsInNetWorth(a)) continue;
     if (a.type === "property" || a.type === "mortgage") continue;
     n += toHkd(a.balance, a.currency, rates);
   }
-  return n;
+  return n + outsideDepositHkd(accounts, rates, deposits, asOf);
 }
 
 export type WorthPoint = { date: string; net: number; assets: number; liab: number; flow: number };
@@ -105,6 +141,7 @@ export function periodNetWorthPoints(
   rates: FxRate[],
   from: string,
   to: string,
+  deposits: TimeSaving[] = [],
 ): WorthPoint[] {
   const today = todayISO();
   const end = to > today ? today : to;
@@ -118,7 +155,7 @@ export function periodNetWorthPoints(
   }
   const span = (Date.parse(`${end}T12:00:00`) - Date.parse(`${start}T12:00:00`)) / 86_400_000;
   const points: WorthPoint[] = [];
-  const snap = (date: string): WorthPoint => ({ date, ...netWorthNow(accs, rates), flow: 0 });
+  const snap = (date: string): WorthPoint => ({ date, ...netWorthNow(accs, rates, deposits, date), flow: 0 });
   if (span <= 62) {
     const byDay = new Map<string, Transaction[]>();
     for (const tx of posted) {

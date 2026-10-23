@@ -92,6 +92,7 @@ export function DashboardPage() {
   const cats = useApp((s) => s.categories);
   const rates = useApp((s) => s.fxRates);
   const rec = useApp((s) => s.recurring);
+  const deposits = useApp((s) => s.deposits);
   const accounts = useApp((s) => s.accounts);
   const budgets = useApp((s) => s.budgets);
   const adhoc = useApp((s) => s.adhocBudgets);
@@ -135,9 +136,9 @@ export function DashboardPage() {
   const hold = (monthRow?.reserved ?? 0) + (targetMode === "regular" ? 0 : (monthRow?.reservedAdhoc ?? 0));
   const available = cap > 0 ? (monthRow?.remaining ?? cap - spent - hold) : flow.income - spent - hold;
   const next14 = committedOutflows(rec, adhoc, txs, rates, today, 14);
-  const nw = netWorthNow(accounts, rates);
+  const nw = netWorthNow(accounts, rates, deposits);
   const prevEnd = monthEndIso(shiftYm(month, -1));
-  const prevWorth = periodNetWorthPoints(accounts, txs, rates, prevEnd, prevEnd).at(-1)?.net;
+  const prevWorth = periodNetWorthPoints(accounts, txs, rates, prevEnd, prevEnd, deposits).at(-1)?.net;
   const nwDelta = prevWorth == null ? 0 : nw.net - prevWorth;
   const saveM = flow.income > 0 ? flow.net / flow.income : 0;
   const saveY = ytdFlow.income > 0 ? (ytdFlow.income - ytdFlow.expense) / ytdFlow.income : 0;

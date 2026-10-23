@@ -14,7 +14,8 @@ import { ACCOUNT_TYPE_OPTIONS } from "../types.ts";
 import { toHkd } from "./fx.ts";
 import { cashflowSide } from "./ledger.ts";
 import { monthFlow } from "./budget.ts";
-import { investableNow, netWorthNow, periodNetWorthPoints } from "./networth.ts";
+import { investableNow, netWorthNow, periodNetWorthPoints, countsInNetWorth } from "./networth.ts";
+import { depositsOutsideBalances } from "./deposits.ts";
 import { todayISO } from "../format.ts";
 
 const LIQUID_TYPES = new Set<AccountType>(["cash", "current", "savings", "ewallet", "fx", "debit"]);
@@ -169,7 +170,7 @@ export function buildAssetBrief(input: {
   const monthsKeys = monthKeysBack(month, 12);
   const from = `${monthsKeys[0]}-01`;
   const to = today;
-  const nw = netWorthNow(input.accounts, input.rates);
+  const nw = netWorthNow(input.accounts, input.rates, input.deposits ?? [], today);
   const sleeves = {
     liquid: 0,
     invest: 0,
@@ -183,7 +184,8 @@ export function buildAssetBrief(input: {
   let excludedHkd = 0;
   const accounts: AssetBriefAccount[] = input.accounts.map((a) => {
     const hkd = toHkd(a.balance, a.currency, input.rates);
-    if (!a.includeInNetWorth || a.currency === "MILES") {
+    const counted = countsInNetWorth(a);
+    if (!counted) {
       if (a.currency !== "MILES") excludedHkd += hkd;
     } else {
       const s = sleeveOf(a.type);
@@ -202,13 +204,16 @@ export function buildAssetBrief(input: {
       currency: a.currency,
       balance: a.balance,
       hkd: roundHkd(hkd),
-      includeInNetWorth: a.includeInNetWorth && a.currency !== "MILES",
+      includeInNetWorth: counted,
       hidden: Boolean(a.hidden),
     };
   });
   accounts.sort((a, b) => Math.abs(b.hkd) - Math.abs(a.hkd));
 
-  const worthPts = periodNetWorthPoints(input.accounts, input.txs, input.rates, from, to);
+  const outside = depositsOutsideBalances(input.deposits ?? [], input.accounts.map((a) => ({ ...a, hidden: false })), input.rates, today);
+  sleeves.liquid += outside.reduce((sum, row) => sum + Math.max(0, toHkd(row.amount, row.currency, input.rates)), 0);
+
+  const worthPts = periodNetWorthPoints(input.accounts, input.txs, input.rates, from, to, input.deposits ?? []);
   const worthByMonth = new Map<string, (typeof worthPts)[number]>();
   for (const p of worthPts) worthByMonth.set(p.date.slice(0, 7), p);
 
@@ -280,7 +285,7 @@ export function buildAssetBrief(input: {
       net: roundHkd(nw.net),
       assets: roundHkd(nw.assets),
       liab: roundHkd(nw.liab),
-      investable: roundHkd(investableNow(input.accounts, input.rates)),
+      investable: roundHkd(investableNow(input.accounts, input.rates, input.deposits ?? [], today)),
       liquid: roundHkd(sleeves.liquid),
       investments: roundHkd(sleeves.invest),
       mpf: roundHkd(sleeves.mpf),

@@ -12,6 +12,7 @@ import { useT, useUi } from "@/store/ui";
 export function WorthTrendPage() {
   const t = useT();
   const locale = useUi((s) => s.locale);
+  const deposits = useApp((s) => s.deposits);
   const accounts = useApp((s) => s.accounts);
   const txs = useApp((s) => s.transactions);
   const rates = useApp((s) => s.fxRates);
@@ -22,7 +23,7 @@ export function WorthTrendPage() {
   const range = periodRange(preset, today, customFrom, customTo);
   const from = preset === "custom" ? customFrom : range.from;
   const to = preset === "custom" ? customTo : range.to;
-  const points = useMemo(() => periodNetWorthPoints(accounts, txs, rates, from, to), [accounts, txs, rates, from, to]);
+  const points = useMemo(() => periodNetWorthPoints(accounts, txs, rates, from, to, deposits), [accounts, txs, rates, from, to, deposits]);
   const daily = (Date.parse(`${to}T12:00:00`) - Date.parse(`${from}T12:00:00`)) / 86_400_000 <= 62;
   const years = new Set(points.map((p) => p.date.slice(0, 4)));
   const series = points.map((p) => ({
