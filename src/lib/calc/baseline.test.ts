@@ -14,7 +14,7 @@ import {
   retirementOnce,
   viewDeposit,
 } from "./baseline.ts";
-import { emptyLifePlan, employedMonthsInYear, estimateHkNetMonthly, mortgageMonthsInYear, runLifePlan, unemployedMonthsInYear } from "./life-plan.ts";
+import { emptyLifePlan, runLifePlan } from "./life-plan.ts";
 
 function bank(partial: Partial<Account> = {}): Account {
   return {
@@ -71,13 +71,13 @@ describe("reconciled baseline", () => {
     assert.equal(paid.interestIncome, 3_000);
   });
 
-  it("C. changes a promotional rate without moving the principal", () => {
+  it("C. a promotional expiry does not move principal or invent a rate", () => {
     const row = viewDeposit(
       deposit({ product: "promotional", promoEnds: "2026-06-01", postPromoRate: 0.5, rateStatus: "unknown", lifecycle: "active" }),
       "2026-07-01",
     );
     assert.equal(row.lifecycle, "active");
-    assert.equal(row.rate, 0.5);
+    assert.equal(row.rateLabel, "unknown");
     assert.equal(row.principalStaysPut, true);
     assert.equal(row.principalBecomesCash, false);
   });
@@ -169,9 +169,11 @@ describe("reconciled baseline", () => {
     assert.equal(next.planningShare, undefined);
     assert.equal(next.availableConfirmed, undefined);
     assert.equal(next.balance, legacy.balance);
-    const dep = migrateDeposit(deposit({ lifecycle: undefined, principalInclusion: undefined, rate: 0, rateStatus: undefined }));
+    const dep = migrateDeposit(deposit({ lifecycle: undefined, principalInclusion: undefined, rate: 0, rateStatus: undefined, product: undefined }));
     assert.equal(dep.principalInclusion, "unknown");
     assert.equal(dep.rateStatus, "unknown");
+    assert.equal(dep.lifecycle, undefined);
+    assert.equal(dep.product, undefined);
   });
 
   it("does not let a proposal replace an approved decision", () => {
@@ -191,10 +193,8 @@ describe("reconciled baseline", () => {
   });
 });
 
-describe("monthly employment and mortgage", () => {
-  it("G. leaves six months without salary when work ends in July and resumes in January", () => {
-    assert.equal(unemployedMonthsInYear(2026, "2026-07-01", "2027-01-01"), 6);
-    assert.equal(employedMonthsInYear(2026, "2026-07-01", null), 6);
+describe("scenarios stay out of the plan", () => {
+  it("G. a July-to-January gap is not applied to the life plan", () => {
     const plan = emptyLifePlan();
     plan.personal.dateOfBirth = "1980-01-15";
     plan.personal.planStartDate = "2025-01-15";
@@ -207,12 +207,10 @@ describe("monthly employment and mortgage", () => {
     plan.currentJob.actualMonthlySpending = 10_000;
     plan.lowerStressJob.enabled = false;
     const year = runLifePlan(plan, "2025-01-15").stay?.years.find((y) => y.calendarYear === 2026);
-    assert.equal(year?.income, estimateHkNetMonthly(30_000) * 6);
+    assert.equal(year?.income, 0);
   });
 
-  it("H. stops mortgage payments in the month the loan ends", () => {
-    assert.equal(mortgageMonthsInYear(2026, "2026-06-30"), 6);
-    assert.equal(mortgageMonthsInYear(2035, "2035-01-01"), 0);
+  it("H. a mid-year mortgage date does not change the yearly plan by itself", () => {
     const plan = emptyLifePlan();
     plan.personal.dateOfBirth = "1980-01-15";
     plan.personal.planStartDate = "2025-01-15";
@@ -227,6 +225,6 @@ describe("monthly employment and mortgage", () => {
     plan.mortgage.endDate = "2026-06-30";
     plan.mortgage.paymentIncludedInCurrentSpending = false;
     const year = runLifePlan(plan, "2025-01-15").stay?.years.find((y) => y.calendarYear === 2026);
-    assert.equal(year?.mortgage, 6_000);
+    assert.equal(year?.mortgage, 0);
   });
 });
