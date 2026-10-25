@@ -115,6 +115,16 @@ export type Account = {
   /** When set, this investment account’s balance follows matching holdings. */
   stockBook?: "hk" | "us" | "all";
   holdingSync?: boolean;
+  /** What `balance` means. Missing means unverified, not available cash. */
+  balanceBasis?: BalanceBasis;
+  balanceAsOf?: string;
+  balanceSource?: BalanceSource;
+  verified?: boolean;
+  ownership?: Ownership;
+  /** Share one person may plan with. Null or missing means unknown, not 100%. */
+  planningShare?: number | null;
+  /** User-confirmed amount that can be spent. Missing means not confirmed. */
+  availableConfirmed?: number | null;
 };
 
 export type CategoryIconName =
@@ -414,6 +424,63 @@ export type TimeSaving = {
   amount: number;
   interest: number;
   accountId: string;
+  lifecycle?: DepositLifecycle;
+  /** Explicit only. A large account balance does not imply inclusion. */
+  principalInclusion?: PrincipalInclusion;
+  interestPayDate?: string;
+  renewal?: RenewalInstruction;
+  replacementDepositId?: string;
+  earlyWithdrawal?: string;
+  rateStatus?: "verified" | "unknown";
+  product?: "term" | "promotional";
+  promoEnds?: string;
+  promoRestrictions?: string;
+  postPromoRate?: number | null;
+};
+
+export type BalanceBasis = "bank_total" | "available" | "derived" | "unverified";
+export type BalanceSource = "manual" | "statement" | "import" | "unknown";
+export type Ownership = "sole" | "joint" | "other" | "unknown";
+export type DepositLifecycle = "active" | "matured_unconfirmed" | "paid_out" | "renewed" | "closed_early";
+export type PrincipalInclusion = "included" | "excluded" | "unknown";
+export type RenewalInstruction = "unknown" | "hold_cash" | "renew" | "none";
+export type AllocationPurpose = "bills" | "tax" | "career" | "near_term" | "long_term";
+export type AllocationStatus = "proposed" | "approved" | "superseded";
+export type AllocationRef = "account" | "deposit" | "holding" | "retirement_account";
+
+export type PurposeAllocation = {
+  id: string;
+  purpose: AllocationPurpose;
+  amount: number;
+  currency: Currency;
+  refType: AllocationRef;
+  refId: string;
+  availableBy: string;
+  status: AllocationStatus;
+  notes?: string;
+  updatedAt: string;
+};
+
+export type PlanFactStatus = "confirmed" | "assumption" | "goal" | "proposal" | "approved" | "unknown";
+
+export type PlanChange = {
+  id: string;
+  version: number;
+  effectiveDate: string;
+  source: string;
+  previous: string;
+  next: string;
+  description: string;
+  status: PlanFactStatus;
+};
+
+export type SpendCoverage = {
+  mortgage: boolean | null;
+  tax: boolean | null;
+  parentalSupport: boolean | null;
+  insurance: boolean | null;
+  travel: boolean | null;
+  irregular: boolean | null;
 };
 
 export type YearlyPlan = {
@@ -614,6 +681,14 @@ export type RetirementAccount = {
   includeInRetirementProjection: boolean;
   notes?: string;
   linkedAccountId?: string;
+  ownership?: Ownership;
+  planningShare?: number | null;
+  consentRequired?: boolean | null;
+  /** Set only when this record is already inside a headline account. */
+  representedByAccountId?: string;
+  vestedAmount?: number | null;
+  bookValue?: number | null;
+  surrenderValue?: number | null;
   createdAt: string;
   updatedAt: string;
 };

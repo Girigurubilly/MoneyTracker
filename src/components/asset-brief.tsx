@@ -5,6 +5,7 @@ import { Overlay } from "@/components/shared";
 import { downloadBlob } from "@/lib/backup";
 import { todayISO } from "@/lib/format";
 import { buildAssetBrief, renderAssetBriefMarkdown } from "@/lib/calc/asset-brief";
+import { buildDiscussionSnapshot, renderDiscussionJson, renderDiscussionMarkdown } from "@/lib/calc/baseline";
 import { useApp } from "@/store/app";
 import { useT } from "@/store/ui";
 
@@ -50,6 +51,17 @@ function AssetBriefSheet({ onClose }: { onClose: () => void }) {
       ),
     [accounts, rates, txs, categories, holdings, deposits, retirementAccounts, mortgage, recurring],
   );
+  const pack = useMemo(() => {
+    const snap = buildDiscussionSnapshot({
+      asOf: todayISO(),
+      accounts,
+      deposits,
+      holdings,
+      retirement: retirementAccounts,
+      rates,
+    });
+    return { md: renderDiscussionMarkdown(snap), json: renderDiscussionJson(snap) };
+  }, [accounts, deposits, holdings, retirementAccounts, rates]);
 
   async function copy() {
     if (await copyPlainText(markdown)) {
@@ -74,6 +86,15 @@ function AssetBriefSheet({ onClose }: { onClose: () => void }) {
           onClick={() => downloadBlob(`hk-life-assets-${todayISO()}.md`, markdown, "text/markdown")}
         >
           {t.assets.downloadBrief}
+        </button>
+      </div>
+      <p className="px-5 pb-2 text-xs leading-5 text-muted">{t.assets.discussionPackHint}</p>
+      <div className="mx-4 mb-3 grid grid-cols-2 gap-2">
+        <button type="button" className="h-11 rounded-xl bg-elevated text-sm font-medium" onClick={() => downloadBlob(`hk-life-discussion-${todayISO()}.md`, pack.md, "text/markdown")}>
+          {t.assets.discussionPack}
+        </button>
+        <button type="button" className="h-11 rounded-xl bg-elevated text-sm font-medium" onClick={() => downloadBlob(`hk-life-discussion-${todayISO()}.json`, pack.json, "application/json")}>
+          JSON
         </button>
       </div>
       <pre className="mx-4 mb-8 max-h-[70dvh] select-text overflow-auto whitespace-pre-wrap rounded-2xl bg-elevated p-4 text-[11px] leading-4 text-muted">
