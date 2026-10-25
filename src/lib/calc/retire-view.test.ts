@@ -5,11 +5,14 @@ import {
   accessBreakdown,
   allocateTypedSpend,
   annuityClash,
+  corpusAgeLabels,
   enoughStory,
   goalsReady,
+  inflatedMonthly,
   mortgageStory,
   pickedFigure,
   pickedTarget,
+  suggestMpfFromAssets,
   suggestMpfFromRecurring,
 } from "./retire-view.ts";
 
@@ -144,5 +147,35 @@ describe("accounts", () => {
     assert.equal(annuityClash([{ id: "ra-inherit-annuity", type: "ANNUITY" }, { id: "a2", type: "ANNUITY" }], []), true);
     assert.equal(annuityClash([{ id: "a2", type: "ANNUITY" }], []), false);
     assert.equal(annuityClash([{ id: "a2", type: "ANNUITY" }], [{ kind: "annuity" }]), true);
+  });
+});
+
+describe("inflation and corpus ages", () => {
+  it("inflates today's monthly to then-money", () => {
+    assert.ok(Math.abs(inflatedMonthly(10_000, 10, 0.025) - 10_000 * Math.pow(1.025, 10)) < 1e-6);
+    assert.equal(inflatedMonthly(10_000, 0, 0.025), 10_000);
+  });
+
+  it("labels corpus as end of working year / start of retire age", () => {
+    assert.deepEqual(corpusAgeLabels(65), { endWorkingAge: 64, startRetireAge: 65 });
+  });
+});
+
+describe("assets MPF suggestion", () => {
+  it("suggests balance from an assets MPF account when no retirement account exists", () => {
+    assert.deepEqual(
+      suggestMpfFromAssets({
+        accounts: [{ type: "mpf", balance: 980_000, name: "MPF", nameZh: "強積金" }],
+        hasRetirementAccount: false,
+      }),
+      { balance: 980_000, name: "強積金" },
+    );
+    assert.equal(
+      suggestMpfFromAssets({
+        accounts: [{ type: "mpf", balance: 980_000, name: "MPF", nameZh: "強積金" }],
+        hasRetirementAccount: true,
+      }),
+      null,
+    );
   });
 });

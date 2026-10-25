@@ -554,7 +554,14 @@ export function runLifePlan(
   const missing = lifePlanMissing(shockedPlan);
   if (missing.length) return { ready: false, missing, stay: null, switch: null };
   const stay = shockedPlan.currentJob.enabled ? simulatePath(shockedPlan, "stay", asOf, inflows, shock) : null;
-  const sw = shockedPlan.lowerStressJob.enabled && Boolean(shockedPlan.lowerStressJob.startDate) ? simulatePath(shockedPlan, "switch", asOf, inflows, shock) : null;
+  const soft = shockedPlan.lowerStressJob;
+  const softIncome =
+    (soft.estimatedNetMonthlyIncomeOverride != null && soft.estimatedNetMonthlyIncomeOverride > 0) ||
+    (soft.grossMonthlyIncome != null && soft.grossMonthlyIncome > 0);
+  const sw =
+    soft.enabled && Boolean(soft.startDate) && softIncome
+      ? simulatePath(shockedPlan, "switch", asOf, inflows, shock)
+      : null;
   return { ready: true, missing: [], stay, switch: sw };
 }
 
