@@ -34,6 +34,7 @@ import { Route as ReportsBalanceRouteImport } from './routes/reports.balance'
 import { Route as ReportsCashflowRouteImport } from './routes/reports.cashflow'
 import { Route as ReportsCompareRouteImport } from './routes/reports.compare'
 import { Route as ReportsDashboardRouteImport } from './routes/reports.dashboard'
+import { Route as ReportsAllRouteImport } from './routes/reports.all'
 import { Route as ReportsDepositsRouteImport } from './routes/reports.deposits'
 import { Route as ReportsHistoryRouteImport } from './routes/reports.history'
 import { Route as ReportsLivingRouteImport } from './routes/reports.living'
@@ -176,6 +177,11 @@ const ReportsDashboardRoute = ReportsDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => ReportsRoute,
 } as any)
+const ReportsAllRoute = ReportsAllRouteImport.update({
+  id: '/all',
+  path: '/all',
+  getParentRoute: () => ReportsRoute,
+} as any)
 const ReportsDepositsRoute = ReportsDepositsRouteImport.update({
   id: '/deposits',
   path: '/deposits',
@@ -283,6 +289,7 @@ export interface FileRoutesByFullPath {
   '/reports/cashflow': typeof ReportsCashflowRoute
   '/reports/compare': typeof ReportsCompareRoute
   '/reports/dashboard': typeof ReportsDashboardRoute
+  '/reports/all': typeof ReportsAllRoute
   '/reports/deposits': typeof ReportsDepositsRoute
   '/reports/history': typeof ReportsHistoryRoute
   '/reports/living': typeof ReportsLivingRoute
@@ -324,6 +331,7 @@ export interface FileRoutesByTo {
   '/reports/cashflow': typeof ReportsCashflowRoute
   '/reports/compare': typeof ReportsCompareRoute
   '/reports/dashboard': typeof ReportsDashboardRoute
+  '/reports/all': typeof ReportsAllRoute
   '/reports/deposits': typeof ReportsDepositsRoute
   '/reports/history': typeof ReportsHistoryRoute
   '/reports/living': typeof ReportsLivingRoute
@@ -366,6 +374,7 @@ export interface FileRoutesById {
   '/reports/cashflow': typeof ReportsCashflowRoute
   '/reports/compare': typeof ReportsCompareRoute
   '/reports/dashboard': typeof ReportsDashboardRoute
+  '/reports/all': typeof ReportsAllRoute
   '/reports/deposits': typeof ReportsDepositsRoute
   '/reports/history': typeof ReportsHistoryRoute
   '/reports/living': typeof ReportsLivingRoute
@@ -411,6 +420,7 @@ export interface FileRouteTypes {
     | '/reports/cashflow'
     | '/reports/compare'
     | '/reports/dashboard'
+    | '/reports/all'
     | '/reports/deposits'
     | '/reports/history'
     | '/reports/living'
@@ -452,6 +462,7 @@ export interface FileRouteTypes {
     | '/reports/cashflow'
     | '/reports/compare'
     | '/reports/dashboard'
+    | '/reports/all'
     | '/reports/deposits'
     | '/reports/history'
     | '/reports/living'
@@ -493,6 +504,7 @@ export interface FileRouteTypes {
     | '/reports/cashflow'
     | '/reports/compare'
     | '/reports/dashboard'
+    | '/reports/all'
     | '/reports/deposits'
     | '/reports/history'
     | '/reports/living'
@@ -699,6 +711,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReportsDashboardRouteImport
       parentRoute: typeof ReportsRoute
     }
+    '/reports/all': {
+      id: '/reports/all'
+      path: '/all'
+      fullPath: '/reports/all'
+      preLoaderRoute: typeof ReportsAllRouteImport
+      parentRoute: typeof ReportsRoute
+    }
     '/reports/deposits': {
       id: '/reports/deposits'
       path: '/deposits'
@@ -886,6 +905,7 @@ interface ReportsRouteChildren {
   ReportsCashflowRoute: typeof ReportsCashflowRoute
   ReportsCompareRoute: typeof ReportsCompareRoute
   ReportsDashboardRoute: typeof ReportsDashboardRoute
+  ReportsAllRoute: typeof ReportsAllRoute
   ReportsDepositsRoute: typeof ReportsDepositsRoute
   ReportsHistoryRoute: typeof ReportsHistoryRoute
   ReportsLivingRoute: typeof ReportsLivingRoute
@@ -904,6 +924,7 @@ const ReportsRouteChildren: ReportsRouteChildren = {
   ReportsCashflowRoute: ReportsCashflowRoute,
   ReportsCompareRoute: ReportsCompareRoute,
   ReportsDashboardRoute: ReportsDashboardRoute,
+  ReportsAllRoute: ReportsAllRoute,
   ReportsDepositsRoute: ReportsDepositsRoute,
   ReportsHistoryRoute: ReportsHistoryRoute,
   ReportsLivingRoute: ReportsLivingRoute,

@@ -96,6 +96,7 @@ function TodayBody() {
   const setSelected = useUi((s) => s.setSelectedDate);
   const firstDay = useUi((s) => s.firstDayOfWeek);
   const setTx = useUi((s) => s.setTxDetailId);
+  const openAdd = useUi((s) => s.openAdd);
   const kid = useUi((s) => s.accessMode) === "kid";
   const transactions = useApp((s) => s.transactions);
   const budgets = useApp((s) => s.budgets);
@@ -255,7 +256,12 @@ function TodayBody() {
         ) : null}
       </p>
       {paid.length === 0 ? (
-        <p className="px-5 py-6 text-sm text-muted">{t.today.noTxDay}</p>
+        <div className="mx-5 my-6 rounded-2xl bg-elevated px-4 py-6 text-center">
+          <p className="text-sm leading-5 text-muted">{t.today.emptyDay}</p>
+          <button type="button" className="mt-4 h-11 rounded-xl bg-accent px-5 text-sm font-semibold text-on-accent" onClick={() => openAdd("expense")}>
+            {t.today.addExpense}
+          </button>
+        </div>
       ) : (
         <>
           {paid.map((tx, i) => (
