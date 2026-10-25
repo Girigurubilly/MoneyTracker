@@ -21,6 +21,7 @@ import {
 } from "@/components/txn-composer";
 import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
+import { ArrangementsSection } from "@/components/arrangements";
 
 export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/more" }) {
   const t = useT();
@@ -132,6 +133,8 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
         </select>
         <p className="mt-2 text-[11px] leading-4 text-muted">{t.reports.depositIncomeHint}</p>
       </div>
+
+      <ArrangementsSection />
 
       <h2 className="px-5 pb-2 text-xs font-semibold uppercase tracking-wide text-muted">{t.reports.depositRecords}</h2>
       {grouped.length === 0 ? (

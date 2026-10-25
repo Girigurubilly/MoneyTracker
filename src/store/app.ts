@@ -23,6 +23,7 @@ import type {
   RetirementAccount,
   RetirementAssetAccess,
   RetirementLifePlan,
+  ProductArrangement,
 } from "@/lib/types";
 import { defaultTypeForGroup, groupForType } from "@/lib/types";
 import { applyAnnuityTerms, blankRetirementAccount } from "@/lib/calc/mpf";
@@ -87,6 +88,7 @@ export type AppSnapshot = {
   retirementAccounts?: RetirementAccount[];
   retirementAssetAccess?: RetirementAssetAccess[];
   lifePlan?: RetirementLifePlan[];
+  arrangements?: ProductArrangement[];
   defaultCurrency?: Currency;
   budgetTargetMode?: BudgetTargetMode;
   depositCategoryId?: string;
@@ -186,6 +188,8 @@ type Dispatchers = {
   deleteRetirementAccount: (id: string) => Promise<void>;
   upsertRetirementAssetAccess: (row: RetirementAssetAccess) => Promise<void>;
   updateLifePlan: (row: RetirementLifePlan) => Promise<void>;
+  upsertArrangement: (row: ProductArrangement) => Promise<void>;
+  deleteArrangement: (id: string) => Promise<void>;
   replaceAll: (snap: AppSnapshot) => Promise<void>;
   exportSnapshot: () => AppSnapshot;
   resetSample: () => Promise<void>;
@@ -214,6 +218,7 @@ type AppState = {
   retirementAccounts: RetirementAccount[];
   retirementAssetAccess: RetirementAssetAccess[];
   lifePlan: RetirementLifePlan | null;
+  arrangements: ProductArrangement[];
   lastPostedTxId?: string | null;
   fxRates: FxRate[];
   snapshots: SnapshotRow[];
@@ -249,6 +254,7 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     retirementAccounts,
     retirementAssetAccess,
     lifePlanRows,
+    arrangements,
   ] = await Promise.all([
     idb().accounts.toArray(),
     idb().categories.toArray(),
@@ -272,6 +278,7 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     idb().retirementAccounts.toArray().catch(() => []),
     idb().retirementAssetAccess.toArray().catch(() => []),
     idb().lifePlans.toArray().catch(() => []),
+    idb().arrangements.toArray().catch(() => []),
   ]);
   return {
     accounts,
@@ -293,6 +300,7 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     retirementAccounts: retirementAccounts ?? [],
     retirementAssetAccess: retirementAssetAccess ?? [],
     lifePlan: lifePlanRows[0] ?? null,
+    arrangements: arrangements ?? [],
     fxRates,
     snapshots,
     annualTravelBudget: meta?.annualTravelBudget ?? seedTravelBudget,
@@ -764,6 +772,7 @@ export const useApp = create<AppState>((set, get) => ({
   retirementAccounts: [],
   retirementAssetAccess: [],
   lifePlan: null,
+  arrangements: [],
   lastPostedTxId: null as string | null,
   fxRates: seedFx,
   snapshots: [],
@@ -1307,6 +1316,15 @@ export const useApp = create<AppState>((set, get) => ({
     await idb().lifePlans.put(row);
     set({ lifePlan: row });
   },
+  upsertArrangement: async (row) => {
+    await idb().arrangements.put(row);
+    const rows = get().arrangements;
+    set({ arrangements: rows.some((x) => x.id === row.id) ? rows.map((x) => (x.id === row.id ? row : x)) : [...rows, row] });
+  },
+  deleteArrangement: async (id) => {
+    await idb().arrangements.delete(id);
+    set({ arrangements: get().arrangements.filter((x) => x.id !== id) });
+  },
   replaceAll: async (snap) => {
     await idb().transaction("rw", idb().tables, async () => {
       await Promise.all(idb().tables.map((t) => t.clear()));
@@ -1329,6 +1347,7 @@ export const useApp = create<AppState>((set, get) => ({
       await bulkChunk((rows) => idb().retirementAccounts.bulkAdd(rows), snap.retirementAccounts ?? []);
       await bulkChunk((rows) => idb().retirementAssetAccess.bulkAdd(rows), snap.retirementAssetAccess ?? []);
       await bulkChunk((rows) => idb().lifePlans.bulkAdd(rows), snap.lifePlan ?? []);
+      await bulkChunk((rows) => idb().arrangements.bulkAdd(rows), snap.arrangements ?? []);
       await idb().fxRates.bulkPut(snap.fxRates.length ? snap.fxRates : seedFx);
       if (snap.snapshots.length) await idb().snapshots.bulkPut(snap.snapshots);
       await idb().meta.put({
@@ -1379,6 +1398,7 @@ export const useApp = create<AppState>((set, get) => ({
       retirementAccounts: s.retirementAccounts,
       retirementAssetAccess: s.retirementAssetAccess,
       lifePlan: s.lifePlan ? [s.lifePlan] : [],
+      arrangements: s.arrangements,
       defaultCurrency: s.defaultCurrency,
       budgetTargetMode: s.budgetTargetMode,
       depositCategoryId: s.depositCategoryId,
