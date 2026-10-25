@@ -1,6 +1,9 @@
+import { useMemo, useState } from "react";
 import { MONTHS_EN, MONTHS_ZH, yearlyProjection } from "@/lib/calc/deposits";
+import { renderYearlyBriefMarkdown } from "@/lib/calc/yearly-brief";
 import { money, todayISO } from "@/lib/format";
 import { ScreenHeader } from "@/components/shared";
+import { ReportAiButton, ReportAiSheet } from "@/components/report-ai-sheet";
 import { cn } from "@/lib/utils";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
 import { useApp } from "@/store/app";
@@ -17,12 +20,17 @@ export function YearlyPage() {
   const recurring = useApp((s) => s.recurring);
   const budgets = useApp((s) => s.budgets);
   const setYearlyCell = useApp((s) => s.setYearlyCell);
+  const [ai, setAi] = useState(false);
   const today = todayISO();
   const year = Number(today.slice(0, 4));
   const month0 = Number(today.slice(5, 7)) - 1;
   const monthCap = budgets.find((b) => b.id === MONTH_TOTAL_BUDGET_ID)?.monthly ?? 0;
   const data = yearlyProjection(plans, deposits, rates, year, month0, txs, cats, monthCap, recurring, today);
   const months = locale === "zh-HK" ? MONTHS_ZH : MONTHS_EN;
+  const markdown = useMemo(
+    () => renderYearlyBriefMarkdown({ asOf: today, year, monthCap, ...data }),
+    [today, year, monthCap, data],
+  );
 
   return (
     <div className="pb-10">
@@ -52,6 +60,8 @@ export function YearlyPage() {
           </div>
         </div>
       </div>
+      <ReportAiButton onClick={() => setAi(true)} />
+      {ai ? <ReportAiSheet title={t.reports.exportBrief} hint={t.reports.yearlyAiHint} filename={`hk-life-yearly-${today}.md`} markdown={markdown} onClose={() => setAi(false)} /> : null}
       <div className="mx-4 space-y-2">
         {data.rows.map((row) => (
           <div key={row.id} className={cn("rounded-2xl bg-elevated px-3 py-3", row.isCurrent && "ring-1 ring-accent")}>

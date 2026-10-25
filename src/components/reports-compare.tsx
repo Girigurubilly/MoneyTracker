@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ChevronRight } from "lucide-react";
 import { ScreenHeader } from "@/components/shared";
+import { ReportAiButton, ReportAiSheet } from "@/components/report-ai-sheet";
+import { renderYearCompareMarkdown } from "@/lib/calc/compare-brief";
 import { money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { yearCategoryCompare, yearCompareRanges, type PeriodTab } from "@/lib/calc/period";
@@ -20,6 +22,7 @@ export function YearComparePage() {
   const [tab, setTab] = useState<PeriodTab>("expense");
   const [merge, setMerge] = useState(true);
   const [zoomId, setZoomId] = useState<string | null>(null);
+  const [ai, setAi] = useState(false);
   const range = yearCompareRanges(today, mode);
   const zoom = zoomId ? cats.find((c) => c.id === zoomId) : undefined;
   const data = useMemo(
@@ -30,6 +33,32 @@ export function YearComparePage() {
     ...r,
     label: pickName(locale, r.name, r.nameZh),
   }));
+  const markdown = useMemo(() => {
+    const label = (name: string, nameZh: string) => pickName(locale, name, nameZh);
+    const groups = !zoom && merge
+      ? data.rows
+          .filter((r) => cats.some((c) => c.parentId === r.id))
+          .map((r) => ({
+            name: label(r.name, r.nameZh),
+            rows: yearCategoryCompare(txs, cats, rates, today, mode, tab, true, r.id).rows.map((row) => ({
+              ...row,
+              name: label(row.name, row.nameZh),
+            })),
+          }))
+      : [];
+    return renderYearCompareMarkdown({
+      asOf: today,
+      mode,
+      kind: tab,
+      groupedByParent: merge && !zoom,
+      focus: zoom ? label(zoom.name, zoom.nameZh) : undefined,
+      ...range,
+      thisTotal: data.thisTotal,
+      lastTotal: data.lastTotal,
+      rows: data.rows.map((r) => ({ ...r, name: label(r.name, r.nameZh) })),
+      groups,
+    });
+  }, [data, cats, txs, rates, today, mode, tab, merge, zoom, locale, range]);
   const tabs: { id: PeriodTab; label: string }[] = [
     { id: "expense", label: t.reports.expense },
     { id: "income", label: t.reports.income },
@@ -102,6 +131,16 @@ export function YearComparePage() {
           <div className="mt-1 text-base font-semibold tabular-nums">{money(data.lastTotal, "HKD")}</div>
         </div>
       </div>
+      <ReportAiButton onClick={() => setAi(true)} />
+      {ai ? (
+        <ReportAiSheet
+          title={t.reports.exportBrief}
+          hint={t.reports.compareAiHint}
+          filename={`hk-life-compare-${today}.md`}
+          markdown={markdown}
+          onClose={() => setAi(false)}
+        />
+      ) : null}
       {chart.length ? (
         <div className="mt-3 h-64 px-1">
           <ResponsiveContainer width="100%" height="100%">
