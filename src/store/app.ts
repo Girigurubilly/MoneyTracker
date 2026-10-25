@@ -314,14 +314,14 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
 
 const emptyRetirement = {
   id: "base",
-  currentAge: 42,
-  retireAge: 50,
-  deathAge: 85,
+  currentAge: 0,
+  retireAge: 65,
+  deathAge: 90,
   monthlyIncomeNow: 0,
   monthlySpendNow: 0,
-  targetMonthly: 25000,
+  targetMonthly: 0,
   preReturn: 0.05,
-  postReturn: 0.03,
+  postReturn: 0.035,
   inflation: 0.025,
   travelInRetirement: 0,
 };
