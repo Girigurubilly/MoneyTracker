@@ -6,11 +6,12 @@ import { moneyAccountsForPicker } from "@/lib/accounts";
 import { downloadBlob } from "@/lib/backup";
 import { MONTHS_S, depositYearTotals, suggestedInterest, summarizeDeposits } from "@/lib/calc/deposits";
 import { buildDepositBrief, renderDepositBriefMarkdown } from "@/lib/calc/deposit-brief";
+import { looksLikePromoDeposit } from "@/lib/calc/fc-baseline";
 import { copyPlainText, sharePlainText } from "@/lib/copy-text";
 import { money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { resolveAmountInput } from "@/lib/money-expr";
-import { CURRENCIES, type Currency, type TimeSaving } from "@/lib/types";
+import { CURRENCIES, type Currency, type PromoAccessibility, type PromoSaving, type TimeSaving } from "@/lib/types";
 import {
   AccountLine,
   ActiveKeypad,
@@ -22,15 +23,22 @@ import {
 import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 
+function newId(): string {
+  return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `id-${Date.now()}`;
+}
+
 export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/more" }) {
   const t = useT();
   const locale = useUi((s) => s.locale);
   const deposits = useApp((s) => s.deposits);
+  const promoSavings = useApp((s) => s.promoSavings);
   const accounts = useApp((s) => s.accounts);
   const categories = useApp((s) => s.categories);
   const rates = useApp((s) => s.fxRates);
   const lastFx = useApp((s) => s.lastFxSyncAt);
   const deleteDeposit = useApp((s) => s.deleteDeposit);
+  const deletePromoSaving = useApp((s) => s.deletePromoSaving);
+  const syncPromoFromDeposits = useApp((s) => s.syncPromoFromDeposits);
   const refreshFx = useApp((s) => s.refreshFx);
   const depositCatStored = useApp((s) => s.depositCategoryId);
   const setDepositCategory = useApp((s) => s.setDepositCategory);
@@ -41,6 +49,7 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
   const today = todayISO();
   const year = Number(today.slice(0, 4));
   const [editing, setEditing] = useState<TimeSaving | null | "new">(null);
+  const [editingPromo, setEditingPromo] = useState<PromoSaving | null | "new">(null);
   const [ai, setAi] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
@@ -56,6 +65,7 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
     }
     return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [deposits]);
+  const promoTotal = useMemo(() => promoSavings.reduce((s, p) => s + (p.residualHkd || 0), 0), [promoSavings]);
 
   async function fetchFx() {
     setBusy(true);
@@ -133,6 +143,59 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
         <p className="mt-2 text-[11px] leading-4 text-muted">{t.reports.depositIncomeHint}</p>
       </div>
 
+      <div className="mb-2 flex items-center justify-between px-5">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">{t.reports.promoSavings}</h2>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="text-xs font-medium text-accent"
+            onClick={() => void syncPromoFromDeposits().then(() => toast(t.reports.syncPromo))}
+          >
+            {t.reports.syncPromo}
+          </button>
+          <button type="button" className="grid size-9 place-items-center text-accent" aria-label={t.reports.addPromo} onClick={() => setEditingPromo("new")}>
+            <Plus className="size-5" />
+          </button>
+        </div>
+      </div>
+      <p className="px-5 pb-2 text-[11px] leading-4 text-muted">{t.reports.promoHint}</p>
+      {promoSavings.length === 0 ? (
+        <p className="px-5 pb-4 text-sm text-muted">{t.reports.noPromos}</p>
+      ) : (
+        <div className="mx-4 mb-5 overflow-hidden rounded-2xl bg-elevated">
+          <div className="flex items-baseline justify-between px-4 py-3">
+            <span className="text-xs text-muted">{t.reports.promoResidual}</span>
+            <span className="text-sm font-semibold tabular-nums">{money(promoTotal, "HKD")}</span>
+          </div>
+          {promoSavings.map((p, i) => {
+            const acc = accounts.find((a) => a.id === p.accountId);
+            const title = p.nameZh || p.name || (acc ? pickName(locale, acc.name, acc.nameZh) : p.id);
+            const rate = p.rateSchedule[p.rateSchedule.length - 1]?.rate;
+            return (
+              <div key={p.id}>
+                {i > 0 ? <Hairline /> : null}
+                <div className="flex items-start gap-3 px-4 py-3">
+                  <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setEditingPromo(p)}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-sm font-semibold">{title}</span>
+                      <span className="text-xs text-muted">{p.arrangementEnd || "—"}</span>
+                    </div>
+                    <div className="mt-1 text-xs text-muted">
+                      {money(p.residualHkd, "HKD")}
+                      {rate != null ? ` · ${rate}%` : ""}
+                      {` · ${p.accessibility}`}
+                    </div>
+                  </button>
+                  <button type="button" className="mt-1 text-expense" onClick={() => void deletePromoSaving(p.id)} aria-label={locale === "zh-HK" ? "刪除" : "Delete"}>
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <h2 className="px-5 pb-2 text-xs font-semibold uppercase tracking-wide text-muted">{t.reports.depositRecords}</h2>
       {grouped.length === 0 ? (
         <p className="px-5 text-sm text-muted">{t.reports.noDepositsHint}</p>
@@ -155,14 +218,18 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
                 const rm = d && !Number.isNaN(d.getTime()) ? `${MONTHS_S[d.getMonth()]} ${d.getFullYear()}` : "—";
                 const tone = realized ? "text-income" : d && d.getFullYear() === year ? "text-accent" : "text-muted";
                 const acc = accounts.find((a) => a.id === r.accountId);
-                const title = acc ? pickName(locale, acc.name, acc.nameZh) : r.bank;
+                const title = r.bank || (acc ? pickName(locale, acc.name, acc.nameZh) : "—");
+                const promoLike = looksLikePromoDeposit(r, accounts);
                 return (
                   <div key={r.id}>
                     {i > 0 ? <Hairline /> : null}
                     <div className="flex items-start gap-3 px-4 py-3">
                       <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setEditing(r)}>
                         <div className="flex items-center justify-between gap-2">
-                          <span className="truncate text-sm font-semibold">{title}</span>
+                          <span className="truncate text-sm font-semibold">
+                            {title}
+                            {promoLike ? <span className="ml-2 text-[10px] font-medium text-accent">promo?</span> : null}
+                          </span>
                           <span className={`text-xs font-medium ${tone}`}>{rm}</span>
                         </div>
                         <div className="mt-1 text-xs text-muted">
@@ -194,6 +261,12 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
         initial={editing === "new" ? null : editing}
         onClose={() => setEditing(null)}
       />
+      <PromoEditor
+        key={editingPromo === "new" ? "promo-new" : editingPromo?.id ?? "promo-closed"}
+        open={editingPromo !== null}
+        initial={editingPromo === "new" ? null : editingPromo}
+        onClose={() => setEditingPromo(null)}
+      />
     </div>
   );
 }
@@ -204,6 +277,8 @@ function DepositEditor({ open, initial, onClose }: { open: boolean; initial: Tim
   const accounts = useApp((s) => s.accounts);
   const addDeposit = useApp((s) => s.addDeposit);
   const updateDeposit = useApp((s) => s.updateDeposit);
+  const deleteDeposit = useApp((s) => s.deleteDeposit);
+  const upsertPromoSaving = useApp((s) => s.upsertPromoSaving);
   const picker = moneyAccountsForPicker(accounts);
   const today = todayISO();
   const [startDate, setStartDate] = useState(initial?.startDate ?? today);
@@ -213,6 +288,9 @@ function DepositEditor({ open, initial, onClose }: { open: boolean; initial: Tim
   const [amount, setAmount] = useState(initial ? String(initial.amount) : "");
   const [interest, setInterest] = useState(initial ? String(initial.interest) : "");
   const [accountId, setAccountId] = useState(initial?.accountId ?? picker[0]?.id ?? "");
+  const [bank, setBank] = useState(initial?.bank ?? "");
+  const [proceeds, setProceeds] = useState(initial?.proceedsDestination ?? "");
+  const [asPromo, setAsPromo] = useState(false);
   const [interestTouched, setInterestTouched] = useState(Boolean(initial));
   const [field, setField] = useState<"amount" | "dest" | "principal" | "interest">("amount");
   const asset = accounts.find((a) => a.id === accountId);
@@ -221,13 +299,38 @@ function DepositEditor({ open, initial, onClose }: { open: boolean; initial: Tim
     return suggestedInterest(resolveAmountInput(nextAmt), parseFloat(nextRate) || 0, nextStart, nextEnd);
   }
 
+  function productLabel(): string {
+    const typed = bank.trim();
+    if (typed) return typed;
+    return asset ? (locale === "zh-HK" ? asset.nameZh || asset.name : asset.name) : "";
+  }
+
   async function save() {
     const amt = resolveAmountInput(amount);
     if (!accountId || !startDate || !endDate || amt <= 0) return;
     let int = resolveAmountInput(interest);
     if (!int) int = suggest();
+    const label = productLabel();
+    if (asPromo) {
+      const id = initial?.id ? (initial.id.startsWith("promo-") ? initial.id : `promo-${initial.id}`) : `promo-${newId()}`;
+      const row: PromoSaving = {
+        id,
+        accountId,
+        residualHkd: amt,
+        rateSchedule: [{ from: startDate, to: endDate, rate: parseFloat(rate) || 0 }],
+        arrangementEnd: endDate,
+        accessibility: "unknown",
+        distinctFromTd: true,
+        name: label,
+        nameZh: label,
+      };
+      await upsertPromoSaving(row);
+      if (initial) await deleteDeposit(initial.id);
+      onClose();
+      return;
+    }
     const row = {
-      bank: asset ? (locale === "zh-HK" ? asset.nameZh || asset.name : asset.name) : "",
+      bank: label,
       startDate,
       endDate,
       rate: parseFloat(rate) || 0,
@@ -235,6 +338,7 @@ function DepositEditor({ open, initial, onClose }: { open: boolean; initial: Tim
       amount: amt,
       interest: int,
       accountId,
+      proceedsDestination: proceeds.trim() || null,
     };
     if (initial) await updateDeposit({ ...initial, ...row });
     else await addDeposit(row);
@@ -269,6 +373,15 @@ function DepositEditor({ open, initial, onClose }: { open: boolean; initial: Tim
       >
         <AccountLine accounts={picker} value={accountId} onChange={setAccountId} placeholder={t.reports.bank} role={t.reports.bank} />
         <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+          <span className="text-sm text-muted">{t.reports.productLabel}</span>
+          <input
+            value={bank}
+            onChange={(e) => setBank(e.target.value)}
+            placeholder="Marathon / 馬拉松"
+            className="h-10 w-[55%] bg-transparent text-right text-sm text-accent outline-none"
+          />
+        </div>
+        <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
           <span className="text-sm text-muted">{t.reports.startDate}</span>
           <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
         </div>
@@ -276,13 +389,115 @@ function DepositEditor({ open, initial, onClose }: { open: boolean; initial: Tim
           <span className="text-sm text-muted">{t.reports.endDate}</span>
           <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
         </div>
+        <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+          <span className="text-sm text-muted">{t.reports.ratePct}</span>
+          <input
+            value={rate}
+            onChange={(e) => {
+              setRate(e.target.value);
+              if (!interestTouched) setInterest(String(suggest(amount, e.target.value) || ""));
+            }}
+            inputMode="decimal"
+            className="h-10 w-24 bg-transparent text-right text-sm text-accent outline-none"
+          />
+        </div>
+        <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+          <span className="text-sm text-muted">{t.reports.proceedsDest}</span>
+          <input
+            value={proceeds}
+            onChange={(e) => setProceeds(e.target.value)}
+            className="h-10 w-[55%] bg-transparent text-right text-sm text-accent outline-none"
+          />
+        </div>
+        <label className="flex items-center justify-between border-b border-line px-4 py-3">
+          <span className="text-sm text-muted">{t.reports.convertToPromo}</span>
+          <input type="checkbox" checked={asPromo} onChange={(e) => setAsPromo(e.target.checked)} className="size-5 accent-[var(--accent)]" />
+        </label>
         <SelectLine label={t.reports.currency} value={currency} onChange={(v) => setCurrency(v as Currency)} options={CURRENCIES.map((c) => ({ id: c, label: c }))} />
         <LineRow label={t.reports.depositAmount} amount={amount} currency={currency} active={field === "amount"} onFocusAmount={() => setField("amount")} />
-        <LineRow label={t.reports.interest} amount={interest} currency={currency} active={field === "interest"} onFocusAmount={() => setField("interest")} />
+        {!asPromo ? (
+          <LineRow label={t.reports.interest} amount={interest} currency={currency} active={field === "interest"} onFocusAmount={() => setField("interest")} />
+        ) : null}
       </ComposerShell>
     </Overlay>
   );
 }
+
+function PromoEditor({ open, initial, onClose }: { open: boolean; initial: PromoSaving | null; onClose: () => void }) {
+  const t = useT();
+  const accounts = useApp((s) => s.accounts);
+  const upsertPromoSaving = useApp((s) => s.upsertPromoSaving);
+  const picker = moneyAccountsForPicker(accounts);
+  const today = todayISO();
+  const last = initial?.rateSchedule[initial.rateSchedule.length - 1];
+  const [accountId, setAccountId] = useState(initial?.accountId ?? picker[0]?.id ?? "");
+  const [name, setName] = useState(initial?.nameZh || initial?.name || "Marathon");
+  const [residual, setResidual] = useState(initial ? String(initial.residualHkd) : "");
+  const [end, setEnd] = useState(initial?.arrangementEnd ?? "");
+  const [rate, setRate] = useState(last ? String(last.rate) : "");
+  const [from, setFrom] = useState(last?.from ?? today);
+  const [access, setAccess] = useState<PromoAccessibility>(initial?.accessibility ?? "unknown");
+
+  async function save() {
+    const residualHkd = resolveAmountInput(residual);
+    if (!accountId || residualHkd <= 0 || !end) return;
+    const row: PromoSaving = {
+      id: initial?.id ?? `promo-${newId()}`,
+      accountId,
+      residualHkd,
+      rateSchedule: [{ from: from || today, to: end, rate: parseFloat(rate) || 0 }],
+      arrangementEnd: end,
+      accessibility: access,
+      distinctFromTd: true,
+      name: name.trim() || "Promo",
+      nameZh: name.trim() || "推廣儲蓄",
+    };
+    await upsertPromoSaving(row);
+    onClose();
+  }
+
+  return (
+    <Overlay open={open} onClose={onClose} variant="page">
+      <div className="flex h-full flex-col bg-background">
+        <ComposerHeader onClose={onClose} onSave={() => void save()} title={initial ? t.reports.editPromo : t.reports.addPromo} />
+        <div className="flex-1 overflow-auto pb-10">
+          <AccountLine accounts={picker} value={accountId} onChange={setAccountId} placeholder={t.reports.bank} role={t.reports.bank} />
+          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+            <span className="text-sm text-muted">{t.reports.promoName}</span>
+            <input value={name} onChange={(e) => setName(e.target.value)} className="h-10 w-[55%] bg-transparent text-right text-sm text-accent outline-none" />
+          </div>
+          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+            <span className="text-sm text-muted">{t.reports.promoResidual}</span>
+            <input value={residual} onChange={(e) => setResidual(e.target.value)} inputMode="decimal" className="h-10 w-36 bg-transparent text-right text-sm text-accent outline-none" />
+          </div>
+          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+            <span className="text-sm text-muted">{t.reports.promoRate}</span>
+            <input value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" className="h-10 w-24 bg-transparent text-right text-sm text-accent outline-none" />
+          </div>
+          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+            <span className="text-sm text-muted">{t.reports.startDate}</span>
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
+          </div>
+          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+            <span className="text-sm text-muted">{t.reports.promoEnd}</span>
+            <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
+          </div>
+          <SelectLine
+            label={t.reports.promoAccess}
+            value={access}
+            onChange={(v) => setAccess(v as PromoAccessibility)}
+            options={[
+              { id: "unknown", label: "unknown" },
+              { id: "accessible", label: "accessible" },
+              { id: "restricted", label: "restricted" },
+            ]}
+          />
+        </div>
+      </div>
+    </Overlay>
+  );
+}
+
 
 function DepositBriefSheet({ onClose }: { onClose: () => void }) {
   const t = useT();

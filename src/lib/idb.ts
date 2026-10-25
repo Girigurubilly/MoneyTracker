@@ -34,6 +34,10 @@ export type MetaRow = {
   lastFxSyncAt?: string;
   budgetTargetMode?: BudgetTargetMode;
   depositCategoryId?: string;
+  /** User-edited FC baseline confirmed facts (replaces defaults when non-empty). */
+  fcConfirmedFacts?: string[];
+  /** User-edited FC baseline open gaps (merged with auto checks on export). */
+  fcOpenGaps?: string[];
 };
 
 export type RetirementRow = RetirementInputs & { id: string };

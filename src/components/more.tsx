@@ -7,6 +7,7 @@ import { CurrencySelect } from "@/components/currency-field";
 import { CategoryPicker } from "@/components/category-picker";
 import { pickName } from "@/lib/i18n";
 import { downloadBlob, encryptSnapshot } from "@/lib/backup";
+import { copyPlainText } from "@/lib/copy-text";
 import {
   downloadBackup,
   downloadBackupById,
@@ -28,7 +29,7 @@ import { transactionsToCsv } from "@/lib/derived";
 import { convertBtp, isAppSnapshot, isBtpFile } from "@/lib/import-btp";
 import { CURRENCIES, MONTH_TOTAL_BUDGET_ID, type BudgetTargetMode } from "@/lib/types";
 import { ageFromBirthday } from "@/lib/calc/retirement";
-import { baselineChecks, buildFcBaseline, renderFcBaselineMarkdown, todayHkt } from "@/lib/calc/fc-baseline";
+import { DEFAULT_CONFIRMED_FACTS, buildFcBaseline, renderFcBaselineMarkdown, todayHkt } from "@/lib/calc/fc-baseline";
 import { todayISO } from "@/lib/format";
 import { useApp, type AppSnapshot } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -284,6 +285,52 @@ export function BackupPage() {
   const [copies, setCopies] = useState<DriveBackupRef[] | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
+  const fcConfirmedFacts = useApp((s) => s.fcConfirmedFacts);
+  const fcOpenGaps = useApp((s) => s.fcOpenGaps);
+  const setFcNotes = useApp((s) => s.setFcNotes);
+  const syncPromoFromDeposits = useApp((s) => s.syncPromoFromDeposits);
+  const [factsText, setFactsText] = useState(() => (fcConfirmedFacts.length ? fcConfirmedFacts : DEFAULT_CONFIRMED_FACTS).join("\n"));
+  const [gapsText, setGapsText] = useState(() => fcOpenGaps.join("\n"));
+
+  async function persistFcNotes() {
+    const facts = factsText.split("\n").map((l) => l.trim()).filter(Boolean);
+    const gaps = gapsText.split("\n").map((l) => l.trim()).filter(Boolean);
+    await setFcNotes(facts, gaps);
+  }
+
+  async function makeFcBaseline() {
+    await syncPromoFromDeposits();
+    await persistFcNotes();
+    const s = useApp.getState();
+    const asOf = todayHkt();
+    const monthCap = s.budgets.find((b) => b.id === MONTH_TOTAL_BUDGET_ID)?.monthly ?? 0;
+    const snap = buildFcBaseline({
+      asOf,
+      accounts: s.accounts,
+      deposits: s.deposits,
+      promo: s.promoSavings,
+      holdings: s.holdings,
+      mortgage: s.mortgage,
+      retirementAccounts: s.retirementAccounts,
+      allowances: s.allowances,
+      adhoc: s.adhocBudgets,
+      rates: s.fxRates,
+      plans: s.yearlyPlans,
+      txs: s.transactions,
+      categories: s.categories,
+      recurring: s.recurring,
+      monthCap,
+      confirmedFacts: s.fcConfirmedFacts.length ? s.fcConfirmedFacts : undefined,
+      openGaps: s.fcOpenGaps,
+    });
+    const warnChecks = snap.checks.filter((c) =>
+      ["missing_balance_basis", "holdings_derived_empty", "promo_expected_but_empty", "bank_total_td_promo_overshoot", "holdings_investment_mismatch", "liability_unexplained_diff"].includes(c.code),
+    );
+    if (warnChecks.length && !window.confirm(`${t.backup.baselineWarn}\n\n${warnChecks.map((c) => c.detail).join("\n")}`)) {
+      return null;
+    }
+    return { snap, asOf };
+  }
 
   function setPass(next: string) {
     setPassword(next);
@@ -539,37 +586,55 @@ export function BackupPage() {
         <button type="button" className="h-11 w-full rounded-xl bg-elevated text-sm" onClick={() => downloadBlob("hk-life-money.json", JSON.stringify(exportSnap(), null, 2))}>
           {t.backup.exportJson}
         </button>
+        <div className="rounded-2xl bg-elevated p-3 space-y-2">
+          <div className="text-xs font-medium text-muted">{t.backup.baselineFacts}</div>
+          <textarea
+            value={factsText}
+            onChange={(e) => setFactsText(e.target.value)}
+            onBlur={() => void persistFcNotes()}
+            rows={4}
+            className="w-full rounded-lg bg-background px-3 py-2 text-xs leading-5"
+          />
+          <p className="text-[11px] leading-4 text-muted">{t.backup.baselineFactsHint}</p>
+          <div className="pt-1 text-xs font-medium text-muted">{t.backup.baselineGaps}</div>
+          <textarea
+            value={gapsText}
+            onChange={(e) => setGapsText(e.target.value)}
+            onBlur={() => void persistFcNotes()}
+            rows={3}
+            className="w-full rounded-lg bg-background px-3 py-2 text-xs leading-5"
+          />
+          <p className="text-[11px] leading-4 text-muted">{t.backup.baselineGapsHint}</p>
+        </div>
         <button
           type="button"
           className="h-11 w-full rounded-xl bg-elevated text-sm"
           onClick={() => {
-            const s = useApp.getState();
-            const asOf = todayHkt();
-            const monthCap = s.budgets.find((b) => b.id === MONTH_TOTAL_BUDGET_ID)?.monthly ?? 0;
-            const checks = baselineChecks(s.accounts, s.holdings);
-            if (checks.length && !window.confirm(`${t.backup.baselineWarn}\n\n${checks.map((c) => c.detail).join("\n")}`)) return;
-            const snap = buildFcBaseline({
-              asOf,
-              accounts: s.accounts,
-              deposits: s.deposits,
-              promo: s.promoSavings,
-              holdings: s.holdings,
-              mortgage: s.mortgage,
-              retirementAccounts: s.retirementAccounts,
-              allowances: s.allowances,
-              adhoc: s.adhocBudgets,
-              rates: s.fxRates,
-              plans: s.yearlyPlans,
-              txs: s.transactions,
-              categories: s.categories,
-              recurring: s.recurring,
-              monthCap,
-            });
-            downloadBlob(`hk-life-fc-baseline-${asOf}.json`, JSON.stringify(snap, null, 2));
-            downloadBlob(`hk-life-fc-baseline-${asOf}.md`, renderFcBaselineMarkdown(snap), "text/markdown");
+            void (async () => {
+              const out = await makeFcBaseline();
+              if (!out) return;
+              const { snap, asOf } = out;
+              downloadBlob(`hk-life-fc-baseline-${asOf}.json`, JSON.stringify(snap, null, 2));
+              downloadBlob(`hk-life-fc-baseline-${asOf}.md`, renderFcBaselineMarkdown(snap), "text/markdown");
+            })();
           }}
         >
           {t.backup.exportBaseline}
+        </button>
+        <button
+          type="button"
+          className="h-11 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent"
+          onClick={() => {
+            void (async () => {
+              const out = await makeFcBaseline();
+              if (!out) return;
+              const json = JSON.stringify(out.snap, null, 2);
+              if (await copyPlainText(json)) toast(t.backup.baselineCopied);
+              else toast(locale === "zh-HK" ? "無法複製" : "Copy failed");
+            })();
+          }}
+        >
+          {t.backup.copyBaselineJson}
         </button>
         <button type="button" className="h-11 w-full rounded-xl bg-elevated text-sm" onClick={() => downloadBlob("hk-life-money.csv", transactionsToCsv(txs), "text/csv")}>
           {t.backup.exportCsv}
