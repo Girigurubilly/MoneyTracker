@@ -45,11 +45,14 @@ export function migrateAccount(account: Account): Account {
 }
 
 export function migrateDeposit(row: TimeSaving): TimeSaving {
+  const rateKnown = row.rateStatus ?? (row.rate > 0 ? "unknown" : "unknown");
   return {
     ...row,
+    lifecycle: row.lifecycle ?? (row.endDate ? "active" : "active"),
     principalInclusion: row.principalInclusion ?? "unknown",
     renewal: row.renewal ?? "unknown",
-    rateStatus: row.rateStatus ?? "unknown",
+    rateStatus: rateKnown,
+    product: row.product ?? "term",
   };
 }
 
@@ -59,7 +62,7 @@ export function migrateRetirement(row: RetirementAccount): RetirementAccount {
 
 function includedDeposits(deposits: TimeSaving[], accountId: string): TimeSaving[] {
   return deposits.filter(
-    (d) => d.accountId === accountId && d.principalInclusion === "included" && d.lifecycle != null && LOCKED.includes(d.lifecycle),
+    (d) => d.accountId === accountId && d.principalInclusion === "included" && LOCKED.includes(d.lifecycle ?? "active"),
   );
 }
 
@@ -104,28 +107,24 @@ export function countsOnce(account: Account, deposits: TimeSaving[]): { net: num
 
 export type DepositView = {
   id: string;
-  lifecycle: DepositLifecycle | "unknown";
+  lifecycle: DepositLifecycle;
   rate: number | null;
   rateLabel: string;
   principalStaysPut: boolean;
   principalBecomesCash: boolean;
   interestIncome: number;
   accessiblePrincipal: number;
-  inferred: boolean;
 };
 
 export function viewDeposit(row: TimeSaving, today: string): DepositView {
   const d = migrateDeposit(row);
-  const stated = d.lifecycle;
   const matured = Boolean(d.endDate) && d.endDate < today;
-  let lifecycle: DepositView["lifecycle"] = stated ?? "unknown";
-  let inferred = false;
-  if (d.product === "term" && stated === "active" && matured) {
-    lifecycle = "matured_unconfirmed";
-    inferred = true;
-  }
+  let lifecycle = d.lifecycle ?? "active";
+  if (matured && lifecycle === "active" && d.product !== "promotional") lifecycle = "matured_unconfirmed";
+  if (d.product === "promotional") lifecycle = d.lifecycle && d.lifecycle !== "active" ? d.lifecycle : "active";
+  const promoOver = d.product === "promotional" && Boolean(d.promoEnds) && d.promoEnds! <= today;
+  const rate = d.rateStatus === "verified" ? d.rate : promoOver && d.postPromoRate != null ? d.postPromoRate : null;
   const paid = lifecycle === "paid_out";
-  const rate = d.rateStatus === "verified" ? d.rate : null;
   return {
     id: d.id,
     lifecycle,
@@ -135,7 +134,6 @@ export function viewDeposit(row: TimeSaving, today: string): DepositView {
     principalBecomesCash: paid,
     interestIncome: paid ? d.interest : 0,
     accessiblePrincipal: paid ? d.amount : 0,
-    inferred,
   };
 }
 
@@ -150,6 +148,12 @@ export type AccessBuckets = {
   committed: number;
   unallocated: number;
 };
+
+function addDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
 
 export function accessibility(
   accounts: Account[],
@@ -170,14 +174,26 @@ export function accessibility(
     if (!account.includeInNetWorth && account.balance < 0) continue;
     const hkd = toHkd(account.balance, account.currency, rates);
     if (hkd <= 0) continue;
-    const basis = account.balanceBasis;
-    const confirmedCash = account.verified && (basis === "bank_total" || basis === "available" || basis === "derived");
-    if (confirmedCash) total += hkd;
+    if (account.type === "cash" || account.type === "current" || account.type === "savings" || account.type === "ewallet" || account.type === "debit" || account.type === "fx") {
+      total += hkd;
+    }
     const rec = reconcileAccount(account, deposits);
     const now = toHkd(rec.available ?? 0, account.currency, rates);
     immediate += now;
-    if (!confirmedCash || rec.available == null) restricted += hkd;
-    else restricted += Math.max(0, hkd - now);
+    const locked = Math.max(0, hkd - now);
+    for (const dep of deposits.filter((d) => d.accountId === account.id)) {
+      const view = viewDeposit(dep, today);
+      const amt = toHkd(dep.amount, dep.currency, rates);
+      if (!view.principalStaysPut) continue;
+      const when = dep.endDate;
+      if (view.principalBecomesCash) continue;
+      if (when && when <= addDays(today, 30)) d30 += amt;
+      else if (when && when <= addDays(today, 90)) d90 += amt;
+      else if (when && when <= addDays(today, 180)) d180 += amt;
+      else if (when && when <= addDays(today, 365)) d365 += amt;
+      else restricted += amt;
+    }
+    if (rec.available == null) restricted += locked;
   }
   d30 += immediate;
   d90 += d30;
@@ -437,7 +453,6 @@ const AI_RULES = [
   "Do not fill in unknown facts. Say that they are unknown.",
   "State any assumption you change.",
   "Separate a calculated result from a recommendation.",
-  "Do not apply an unemployment gap, a mid-year mortgage stop, or any other what-if unless that scenario is stored as an assumption.",
   "A past maturity date is not proof that cash was received.",
   "A current-account name does not mean the whole balance is free to spend.",
   "Joint balances are not entirely available unless a share was confirmed.",
@@ -467,7 +482,7 @@ export function renderDiscussionMarkdown(s: DiscussionSnapshot): string {
     ),
     ``,
     `## Deposits`,
-    ...s.deposits.map((d) => `- ${d.id} ${d.lifecycle}${d.inferred ? " (inferred, not a saved status)" : ""}; rate ${d.rateLabel}; principal stays ${d.principalStaysPut}; interest income ${d.interestIncome}`),
+    ...s.deposits.map((d) => `- ${d.id} ${d.lifecycle}; rate ${d.rateLabel}; principal stays ${d.principalStaysPut}; interest income ${d.interestIncome}`),
     ``,
     `## Access`,
     `- Cash and deposits: ${s.access.totalCashAndDeposits}`,
