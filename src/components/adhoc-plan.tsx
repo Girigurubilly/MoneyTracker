@@ -271,12 +271,19 @@ function MonthRows({
               <AmountWithHkd amount={-a.amount} currency={a.currency} rates={rates} sign className="shrink-0 text-sm font-semibold text-expense" />
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-            {upcoming ? (
-              <button type="button" className="h-8 shrink-0 rounded-full bg-accent-soft px-3 text-xs font-medium text-accent" onClick={() => onPost(a)}>
-                {t.budget.postAdhoc}
-              </button>
+            {paid ? (
+              <span className="shrink-0 rounded-full bg-success-soft px-2 py-1 text-xs font-medium text-income">
+                {a.paidOn === today ? t.budget.paidToday : t.budget.charged}
+              </span>
             ) : (
-              <span className="shrink-0 rounded-full bg-success-soft px-2 py-1 text-xs font-medium text-income">{paid ? t.budget.paidToday : t.budget.charged}</span>
+              <>
+                {upcoming ? null : (
+                  <span className="shrink-0 rounded-full bg-watch-soft px-2 py-1 text-xs font-medium text-watch">{t.budget.notPosted}</span>
+                )}
+                <button type="button" className="h-8 shrink-0 rounded-full bg-accent-soft px-3 text-xs font-medium text-accent" onClick={() => onPost(a)}>
+                  {t.budget.postAdhoc}
+                </button>
+              </>
             )}
             {upcoming ? (
               <button type="button" className="h-8 shrink-0 rounded-full bg-elevated px-3 text-xs font-medium" onClick={() => onWish(a)}>

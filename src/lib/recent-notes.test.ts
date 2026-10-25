@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { Transaction } from "./types.ts";
-import { recentNoteLabels } from "./recent-notes.ts";
+import type { Category, Transaction } from "./types.ts";
+import { recentLeafCategories, recentNoteLabels } from "./recent-notes.ts";
 
 function tx(partial: Partial<Transaction> & Pick<Transaction, "id" | "date" | "categoryId">): Transaction {
   return {
@@ -30,5 +30,38 @@ describe("recent note labels", () => {
       "food",
     );
     assert.deepEqual(labels, ["市場", "街市", "超市"]);
+  });
+});
+
+function cat(partial: Pick<Category, "id" | "kind"> & Partial<Category>): Category {
+  return {
+    name: partial.id,
+    nameZh: partial.id,
+    theme: "living",
+    icon: "wallet",
+    ...partial,
+  };
+}
+
+describe("recent leaf categories", () => {
+  it("keeps the newest posted leaves and skips parents and plans", () => {
+    const categories = [
+      cat({ id: "food", kind: "expense" }),
+      cat({ id: "lunch", kind: "expense", parentId: "food", nameZh: "午餐" }),
+      cat({ id: "groceries", kind: "expense", parentId: "food" }),
+      cat({ id: "salary", kind: "income" }),
+    ];
+    const rows: Transaction[] = [
+      tx({ id: "old", date: "2026-01-01", categoryId: "groceries" }),
+      tx({ id: "plan", date: "2026-08-01", categoryId: "lunch", planned: true }),
+      tx({ id: "parent", date: "2026-08-02", categoryId: "food" }),
+      tx({ id: "new", date: "2026-08-03", categoryId: "lunch" }),
+      tx({ id: "pay", date: "2026-08-04", type: "income", categoryId: "salary" }),
+    ];
+    const leaves = recentLeafCategories(rows, categories, "expense");
+    assert.deepEqual(
+      leaves.map((c) => c.id),
+      ["lunch", "groceries"],
+    );
   });
 });

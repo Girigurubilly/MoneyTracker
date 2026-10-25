@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, ChevronDown, MapPinned, Plus, Search, Wallet } from "lucide-react";
 import { Hairline, InfoButton, ProgressRing, SectionLabel, TransactionRow } from "@/components/shared";
 import { AmountWithHkd } from "@/components/currency-field";
@@ -14,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { plannerTripUrl, tripCovering } from "@/lib/trip-link";
 import { useT, useUi, readSavedLocale } from "@/store/ui";
-import { useEffect, useState } from "react";
+import { MonthCalendar, WeekStrip, weekDays } from "@/components/today-calendar";
 
 export function TodayScreen() {
   const t = useT();
@@ -143,43 +144,57 @@ function TodayBody() {
   for (const row of schedule) plannedDays.add(row.iso);
   const weekdays = weekdayLabels(locale, firstDay);
   const [showSummary, setShowSummary] = useState(false);
+  const [showMonth, setShowMonth] = useState(false);
+  const week = weekDays(selected, firstDay).map((d, i) => ({ ...d, label: weekdays[i] ?? "" }));
 
   return (
     <div className="pb-10">
-      <div className="mx-4 mb-4 rounded-xl bg-elevated px-2 py-3">
-          <div className="grid grid-cols-7 text-center text-xs text-muted">
-            {weekdays.map((w) => (
-              <div key={w} className="py-1">
-                {w}
-              </div>
-            ))}
-          </div>
-          <div className="mt-1 grid grid-cols-7">
-            {cells.map((c, i) =>
-              c ? (
-                <button
-                  key={c.iso}
-                  type="button"
-                  onClick={() => setSelected(c.iso)}
-                  className={cn(
-                    "relative mx-auto flex size-11 flex-col items-center justify-center rounded-full text-sm",
-                    c.iso === selected && "bg-accent font-semibold text-on-accent",
-                    c.iso === today && c.iso !== selected && "font-semibold text-accent",
-                  )}
-                >
-                  {c.day}
-                  {active.has(c.iso) ? (
-                    <span className={cn("absolute bottom-1 size-1.5 rounded-full", c.iso === selected ? "bg-on-accent" : "bg-accent")} />
-                  ) : plannedDays.has(c.iso) ? (
-                    <span className={cn("absolute bottom-1 size-2 rounded-full border-2", c.iso === selected ? "border-on-accent" : "border-accent")} />
-                  ) : null}
-                </button>
-              ) : (
-                <div key={`e-${i}`} />
-              ),
-            )}
-          </div>
-        </div>
+      {kid ? null : (
+        <Link to="/budget" className="mx-4 mb-3 flex min-h-11 items-center gap-3 rounded-xl bg-elevated px-4 py-3 text-left">
+          <span className="relative">
+            <ProgressRing value={target ? spentNow / target : 0} size={44} stroke={3} tone={ringTone} />
+            <span className={cn("pointer-events-none absolute inset-0 grid place-items-center", ringTone === "expense" ? "text-expense" : ringTone === "watch" ? "text-watch" : "text-income")}>
+              <Wallet className="size-4" />
+            </span>
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium">{t.today.expenseMonth}</span>
+            <span className="text-xs text-muted">
+              {onThisMonth
+                ? `${t.budget.expectedMonth}: ${money(expected, "HKD")}${target > 0 ? ` · ${money(target, "HKD")}` : ""}`
+                : money(stats.flow.net, "HKD", { sign: true })}
+            </span>
+          </span>
+          <span className="text-lg font-semibold tabular-nums">{money(onThisMonth ? spentNow : stats.flow.expense, "HKD")}</span>
+        </Link>
+      )}
+
+      <WeekStrip
+        days={week}
+        selected={selected}
+        today={today}
+        active={active}
+        planned={plannedDays}
+        onSelect={setSelected}
+      />
+      <button
+        type="button"
+        className="mx-4 mb-2 flex min-h-11 w-[calc(100%-2rem)] items-center justify-center text-sm font-medium text-accent"
+        onClick={() => setShowMonth((v) => !v)}
+      >
+        {showMonth ? t.today.hideCalendar : t.today.showCalendar}
+      </button>
+      {showMonth ? (
+        <MonthCalendar
+          weekdays={weekdays}
+          cells={cells}
+          selected={selected}
+          today={today}
+          active={active}
+          planned={plannedDays}
+          onSelect={setSelected}
+        />
+      ) : null}
 
       {kid ? null : (
       <button
@@ -209,33 +224,8 @@ function TodayBody() {
           ) : null}
         </>
       ) : null}
-      {onThisMonth ? (
-        <>
-          <SectionLabel>{t.today.goals}</SectionLabel>
-          <Hairline />
-          <Link to="/budget" className="flex w-full items-center gap-3 px-5 py-3.5 text-left">
-            <span className="relative">
-              <ProgressRing value={target ? spentNow / target : 0} size={40} stroke={3} tone={ringTone} />
-              <span className={cn("pointer-events-none absolute inset-0 grid place-items-center", ringTone === "expense" ? "text-expense" : ringTone === "watch" ? "text-watch" : "text-income")}>
-                <Wallet className="size-3.5" />
-              </span>
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-medium">{t.today.expenseMonth}</span>
-              <span className="text-xs text-muted">
-                {t.budget.expectedMonth}: {money(expected, "HKD")}
-                {target > 0 ? ` · ${t.budget.monthlyTotal} ${money(target, "HKD")}` : ""}
-              </span>
-            </span>
-            <span className="text-right">
-              <span className="block text-lg font-semibold tabular-nums">{money(spentNow, "HKD")}</span>
-            </span>
-          </Link>
-          <Hairline />
-        </>
-      ) : null}
 
-      <div className="flex items-baseline justify-between gap-3 px-5 pb-1 pt-5">
+      <div className="flex items-baseline justify-between gap-3 px-5 pb-1 pt-3">
         <h2 className="text-sm font-medium text-muted">{t.today.dayTx}</h2>
         {paid.length ? (
           <span className={cn("text-sm font-semibold tabular-nums", dayNet > 0 ? "text-income" : dayNet < 0 ? "text-expense" : "text-muted")}>

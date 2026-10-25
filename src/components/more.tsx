@@ -63,17 +63,11 @@ export function MoreScreen() {
         <>
           <SectionLabel>{t.more.money}</SectionLabel>
           <Group>
-            <Row icon={<Wallet className="size-4" />} title={t.more.budgets} to="/budget" chevron />
-            <Hairline />
             <Row icon={<CalendarClock className="size-4" />} title={t.more.adhocPlan} to="/more/adhoc" chevron />
-            <Hairline />
-            <Row icon={<ShoppingBag className="size-4" />} title={t.more.wishlist} to="/more/wishlist" chevron />
             <Hairline />
             <Row icon={<TrendingUp className="size-4" />} title={t.more.holdings} to="/more/holdings" chevron />
             <Hairline />
             <Row icon={<PiggyBank className="size-4" />} title={t.more.retireAccounts} to="/more/retirement-accounts" chevron />
-            <Hairline />
-            <Row icon={<PiggyBank className="size-4" />} title={t.more.deposits} to="/more/deposits" chevron />
             <Hairline />
             <Row icon={<Globe className="size-4" />} title={t.more.fx} to="/more/fx" chevron />
           </Group>
@@ -91,22 +85,20 @@ export function MoreScreen() {
         <Hairline />
         <Row icon={<Palette className="size-4" />} title={t.more.appearance} to="/more/appearance" chevron />
       </Group>
-      {kid ? (
-        <>
-          <SectionLabel>{t.more.money}</SectionLabel>
-          <Group>
-            <Row icon={<Wallet className="size-4" />} title={t.more.budgets} to="/budget" chevron />
-          </Group>
-        </>
-      ) : null}
       <SectionLabel>{t.more.quickFix}</SectionLabel>
       <Group>
         <UndoLastRow />
       </Group>
       {kid ? null : (
         <>
-          <SectionLabel>{t.more.data}</SectionLabel>
+          <SectionLabel>{t.more.settingsData}</SectionLabel>
           <Group>
+            <Row icon={<Wallet className="size-4" />} title={t.more.budgets} to="/budget" chevron />
+            <Hairline />
+            <Row icon={<ShoppingBag className="size-4" />} title={t.more.wishlist} to="/more/wishlist" chevron />
+            <Hairline />
+            <Row icon={<PiggyBank className="size-4" />} title={t.more.deposits} to="/more/deposits" chevron />
+            <Hairline />
             <Row icon={<Archive className="size-4" />} title={t.more.importBackup} to="/more/backup" chevron />
             <Hairline />
             <Row icon={<Settings2 className="size-4" />} title={t.more.other} to="/more/other" chevron />

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Overlay } from "@/components/shared";
 import { CategoryIcon } from "@/components/category-icon";
-import { CategoryPicker, TypeSwitch } from "@/components/category-picker";
+import { CategoryPicker, RecentCategories, TypeSwitch } from "@/components/category-picker";
 import {
   AccountLine,
   ActiveKeypad,
@@ -126,7 +126,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
     () => (type === "expense" ? recentNoteLabels(transactions, categoryId) : []),
     [type, transactions, categoryId],
   );
-  const [pickCat, setPickCat] = useState(initialType !== "miles" && initialType !== "transfer");
+  const [pickCat, setPickCat] = useState(false);
   const pickedCat = useRef(false);
   const [principal, setPrincipal] = useState("");
   const [interest, setInterest] = useState("");
@@ -157,15 +157,11 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
 
   function changeType(next: TxType) {
     setType(next);
-    if (next === "miles" || next === "transfer") {
-      setPickCat(false);
-      if (next === "transfer") {
-        setCategoryId("");
-        setDoSplit(false);
-      }
-      return;
+    setPickCat(false);
+    if (next === "transfer") {
+      setCategoryId("");
+      setDoSplit(false);
     }
-    setPickCat(true);
   }
 
   function onPickCategory(c: Category | null) {
@@ -186,17 +182,17 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
   }
 
   function onPickerClose() {
-    if (pickedCat.current || categoryId) {
-      pickedCat.current = false;
-      setPickCat(false);
-      return;
-    }
-    onClose();
+    pickedCat.current = false;
+    setPickCat(false);
   }
 
   async function save() {
     const amt = resolveAmountInput(amount);
     const parts = splitMortgageAmounts(principal, interest, amount, mortgageKind);
+    if ((type === "expense" || type === "income") && !categoryId && !(canSplit && doSplit)) {
+      toast(t.add.pickCategory);
+      return;
+    }
     if (amt <= 0 && !(canSplit && doSplit && (parts.principal > 0 || parts.interest > 0))) {
       toast(t.add.needAmount);
       return;
@@ -340,9 +336,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
               }}
             />
           </div>
-          <button type="button" className="h-11 min-w-11 px-2 text-sm font-medium text-accent" onClick={() => void save()}>
-            {t.add.save}
-          </button>
+          <span className="inline-block min-w-11" />
         </header>
       }
       keypad={
@@ -365,6 +359,8 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
             setCurrency(c);
             setDestLocked(false);
           }}
+          onSave={() => void save()}
+          saveLabel={t.add.save}
         />
       }
     >
@@ -426,6 +422,9 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
               onFocusAmount={() => setField("amount")}
             />
           )}
+          {type === "expense" || type === "income" ? (
+            <RecentCategories kind={type} selectedId={categoryId} onSelect={onPickCategory} onBrowse={() => setPickCat(true)} />
+          ) : null}
         </>
       )}
       {canSplit && doSplit ? (

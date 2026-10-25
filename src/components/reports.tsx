@@ -21,11 +21,11 @@ import { Disclaimer, Group, Hairline, Row, ScreenHeader, SectionLabel, StatusChi
 import { money, pct, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { monthKeysBack, monthLabel } from "@/lib/derived";
-import { budgetActuals, committedOutflows, monthEndIso, monthFlow } from "@/lib/calc/budget";
+import { budgetActuals, committedOutflows, monthFlow } from "@/lib/calc/budget";
 import { nextTrip, travelSpendYtd, tripCashSpent } from "@/lib/calc/trips";
 import { effectiveRate } from "@/lib/calc/mortgage";
 import { housingStatus, monthlyHousingCost } from "@/lib/calc/housing";
-import { netWorthNow, periodNetWorthPoints } from "@/lib/calc/networth";
+import { netWorthNow } from "@/lib/calc/networth";
 import { retirementStatus } from "@/lib/calc/retirement";
 import { lifePlanMonthlyRoom } from "@/lib/calc/life-plan";
 import { useLifePlanResult, useRetirementModel } from "@/components/reports-retire";
@@ -67,7 +67,7 @@ export function ReportsHub() {
   ].filter((g) => g.items.length);
   return (
     <div className="pb-10">
-      <ScreenHeader title={t.reports.title} large />
+      <ScreenHeader title={t.reports.allReports} backTo="/reports" />
       {groups.map((g) => (
         <div key={g.id}>
           <SectionLabel>{g.title}</SectionLabel>
@@ -137,9 +137,8 @@ export function DashboardPage() {
   const available = cap > 0 ? (monthRow?.remaining ?? cap - spent - hold) : flow.income - spent - hold;
   const next14 = committedOutflows(rec, adhoc, txs, rates, today, 14);
   const nw = netWorthNow(accounts, rates, deposits);
-  const prevEnd = monthEndIso(shiftYm(month, -1));
-  const prevWorth = periodNetWorthPoints(accounts, txs, rates, prevEnd, prevEnd, deposits).at(-1)?.net;
-  const nwDelta = prevWorth == null ? 0 : nw.net - prevWorth;
+  const prevSnap = useApp((s) => s.snapshots).find((s) => s.month === shiftYm(month, -1));
+  const nwDelta = prevSnap ? nw.net - prevSnap.net : null;
   const saveM = flow.income > 0 ? flow.net / flow.income : 0;
   const saveY = ytdFlow.income > 0 ? (ytdFlow.income - ytdFlow.expense) / ytdFlow.income : 0;
   const ledgerLive =
@@ -148,12 +147,27 @@ export function DashboardPage() {
 
   return (
     <div className="pb-10">
-      <ScreenHeader title={t.reports.dashboard} backTo="/reports" />
+      <ScreenHeader
+        title={t.reports.dashboard}
+        large
+        right={
+          <Link to="/reports/all" className="mb-1 text-sm font-medium text-accent">
+            {t.reports.allReports}
+          </Link>
+        }
+      />
       <div className="mx-4 mb-3 rounded-xl bg-elevated px-4 py-3">
         <DashRow label={t.reports.availableSpend} value={money(available, "HKD", { sign: true })} />
         <DashRow label={t.reports.mtdVsBudget} value={cap ? `${money(spent, "HKD")} / ${money(cap, "HKD")}` : money(spent, "HKD")} />
         <DashRow label={t.reports.next14} value={money(next14, "HKD")} />
-        <DashRow label={t.reports.netWorthNow} value={`${money(nw.net, "HKD")} (${t.reports.vsLastMonth} ${money(nwDelta, "HKD", { sign: true })})`} />
+        <DashRow
+          label={t.reports.netWorthNow}
+          value={
+            nwDelta == null
+              ? `${money(nw.net, "HKD")} · ${t.reports.noLastMonth}`
+              : `${money(nw.net, "HKD")} (${t.reports.vsLastMonth} ${money(nwDelta, "HKD", { sign: true })})`
+          }
+        />
         <DashRow label={t.reports.saveRateMonth} value={pct(saveM)} />
         <DashRow label={t.reports.saveRateYtd} value={pct(saveY)} />
       </div>

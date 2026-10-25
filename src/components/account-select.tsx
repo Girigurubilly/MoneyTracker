@@ -1,4 +1,5 @@
 import { Check } from "lucide-react";
+import { useState } from "react";
 import { BALANCE_GROUP_ORDER, moneyAccountsForPicker } from "@/lib/accounts";
 import { pickName } from "@/lib/i18n";
 import type { Account, AccountGroup } from "@/lib/types";
@@ -62,14 +63,19 @@ export function AccountPicker({
   value,
   onClose,
   onSelect,
+  excludeId,
+  everyday = true,
 }: {
   accounts: Account[];
   value: string;
   onClose: () => void;
   onSelect: (id: string) => void;
+  excludeId?: string;
+  everyday?: boolean;
 }) {
   const t = useT();
   const locale = useUi((s) => s.locale);
+  const [showHousing, setShowHousing] = useState(!everyday);
   const labels: Record<AccountGroup, string> = {
     cash: t.assets.cash,
     credit: t.assets.credit,
@@ -77,17 +83,21 @@ export function AccountPicker({
     housing: t.assets.housing,
     loyalty: t.assets.loyalty,
   };
-  const groups = accountGroups(accounts, value);
+  const groups = accountGroups(accounts, value, excludeId).filter((g) => showHousing || g.group !== "housing");
   return (
-    <div className="fixed inset-0 z-[96] flex h-dvh flex-col bg-background">
-      <header className="flex items-center justify-between px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <button type="button" className="h-11 min-w-11 px-2 text-sm text-accent" onClick={onClose}>
-          {t.add.cancel}
-        </button>
-        <div className="text-base font-semibold">{t.add.account}</div>
-        <span className="h-11 min-w-11" />
-      </header>
-      <div className="min-h-0 flex-1 overflow-y-auto pb-8">
+    <div className="fixed inset-0 z-[96] flex items-end bg-black/40" onClick={onClose}>
+      <div
+        className="max-h-[78dvh] w-full overflow-y-auto rounded-t-2xl bg-background pb-[max(1rem,env(safe-area-inset-bottom))]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-line" />
+        <header className="flex items-center justify-between px-3 pt-2">
+          <button type="button" className="h-11 min-w-11 px-2 text-sm text-accent" onClick={onClose}>
+            {t.add.cancel}
+          </button>
+          <div className="text-base font-semibold">{t.add.account}</div>
+          <span className="h-11 min-w-11" />
+        </header>
         {groups.map((g) => (
           <div key={g.group}>
             <div className="px-5 pb-1 pt-4 text-xs font-medium text-muted">{labels[g.group]}</div>
@@ -104,6 +114,11 @@ export function AccountPicker({
             ))}
           </div>
         ))}
+        {showHousing ? null : (
+          <button type="button" className="mx-5 mt-3 h-11 w-[calc(100%-2.5rem)] rounded-xl bg-elevated text-sm font-medium" onClick={() => setShowHousing(true)}>
+            {t.add.moreAccounts}
+          </button>
+        )}
       </div>
     </div>
   );

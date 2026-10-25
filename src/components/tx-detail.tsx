@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { CategoryIcon } from "@/components/category-icon";
-import { CategoryPicker, TypeSwitch } from "@/components/category-picker";
+import { CategoryPicker, RecentCategories, TypeSwitch } from "@/components/category-picker";
 import { Overlay } from "@/components/shared";
 import { asFiat, autoDestAmount } from "@/components/currency-field";
 import {
@@ -302,9 +302,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
             <div className="min-w-0 flex-1 text-center">
               {moneyTx ? <TypeSwitch value={type} onChange={(next) => { if (next !== "bulk") changeType(next); }} /> : <div className="text-base font-semibold">{t.tx.edit}</div>}
             </div>
-            <button type="button" className="h-11 min-w-11 px-2 text-sm font-medium text-accent" onClick={() => void save()}>
-              {t.add.save}
-            </button>
+            <span className="inline-block min-w-11" />
           </header>
         }
         keypad={
@@ -327,6 +325,8 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
               setCurrency(c);
               setDestLocked(false);
             }}
+            onSave={() => void save()}
+            saveLabel={t.add.save}
           />
         }
       >
@@ -382,6 +382,14 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
             ) : (
               <LineRow label={t.add.miles} amount={amount} currency="MILES" active={field === "amount"} onFocusAmount={() => setField("amount")} />
             )}
+            {type === "expense" || type === "income" ? (
+              <RecentCategories
+                kind={type}
+                selectedId={categoryId}
+                onSelect={(c) => onPickCategory(c)}
+                onBrowse={() => setPickCat(true)}
+              />
+            ) : null}
           </>
         )}
         {canSplit && doSplit ? (
