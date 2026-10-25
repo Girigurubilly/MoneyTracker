@@ -377,6 +377,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
             placeholder={t.add.fromAccount}
             role={t.add.fromAccount}
             amount={amount}
+            currency={currency}
             active={field === "amount"}
             onFocusAmount={() => setField("amount")}
           />
@@ -391,6 +392,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
             placeholder={t.add.toAccount}
             role={t.add.toAccount}
             amount={destLocked ? destAmount : String(autoDest || amount || "0")}
+            currency={destCcy}
             active={field === "dest"}
             onFocusAmount={() => setField("dest")}
           />
@@ -410,6 +412,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
               label={cat ? categoryPath(cat, categories, locale) : ""}
               placeholder={t.add.pickCategory}
               amount={canSplit && doSplit ? undefined : amount}
+              currency={currency}
               active={field === "amount"}
               onFocusAmount={canSplit && doSplit ? undefined : () => setField("amount")}
               onPressLabel={() => setPickCat(true)}
@@ -418,6 +421,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
             <LineRow
               label={t.add.miles}
               amount={amount}
+              currency="MILES"
               active={field === "amount"}
               onFocusAmount={() => setField("amount")}
             />
@@ -429,12 +433,14 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
           <LineRow
             label={t.add.principal}
             amount={principal}
+            currency={currency}
             active={field === "principal"}
             onFocusAmount={() => setField("principal")}
           />
           <LineRow
             label={t.add.interest}
             amount={interest}
+            currency={currency}
             active={field === "interest"}
             onFocusAmount={() => setField("interest")}
           />
@@ -456,6 +462,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
         }}
         onTime={setTime}
         onPaid={setPaid}
+        paidLabel={type === "income" ? t.add.received : undefined}
       />
       {kid ? null : (
       <ExtraIconBar

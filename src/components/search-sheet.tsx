@@ -22,14 +22,20 @@ export function SearchFlow() {
       <div className="px-5 pb-2">
         <input value={q} onChange={(e) => setQ(e.target.value)} className="h-11 w-full rounded-lg bg-elevated px-3" placeholder={t.today.search} />
       </div>
-      <TxGroupedList
-        txs={rows}
-        onClick={(tx) => {
-          setTx(tx.id);
-          setOpen(false);
-        }}
-        empty={t.today.noTxDay}
-      />
+      {rows.length === 0 ? (
+        <div className="px-5 py-8 text-center">
+          <p className="text-sm font-medium">{t.today.searchEmpty}</p>
+          <p className="mt-1 text-sm text-muted">{t.today.searchEmptyHint}</p>
+        </div>
+      ) : (
+        <TxGroupedList
+          txs={rows}
+          onClick={(tx) => {
+            setTx(tx.id);
+            setOpen(false);
+          }}
+        />
+      )}
     </Overlay>
   );
 }

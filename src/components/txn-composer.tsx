@@ -1,10 +1,10 @@
 import { type ReactNode, useState } from "react";
-import { Check, Hash, Home, MessageSquare, Plane, Sparkles } from "lucide-react";
+import { Check, ChevronRight, Hash, Home, MessageSquare, Plane, Sparkles } from "lucide-react";
 import { AmountKeypad } from "@/components/amount-keypad";
 import { AccountSelect } from "@/components/account-select";
 import { WhenPicker } from "@/components/when-picker";
 import { Overlay } from "@/components/shared";
-import { clockNow, whenStamp } from "@/lib/format";
+import { clockNow, formatTypingAmount, whenStamp } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { parseMoneyExpr } from "@/lib/money-expr";
 import type { Account, Currency } from "@/lib/types";
@@ -113,6 +113,7 @@ export function LineRow({
   label,
   placeholder,
   amount,
+  currency,
   active,
   onFocusAmount,
   onPressLabel,
@@ -121,6 +122,7 @@ export function LineRow({
   label: string;
   placeholder?: string;
   amount?: string;
+  currency?: string;
   active?: boolean;
   onFocusAmount?: () => void;
   onPressLabel?: () => void;
@@ -137,13 +139,13 @@ export function LineRow({
           type="button"
           onClick={onFocusAmount}
           className={cn(
-            "min-w-[6.5rem] text-right text-2xl font-bold tabular-nums tracking-tight",
+            "max-w-[58%] shrink-0 whitespace-nowrap text-right text-lg font-bold tabular-nums tracking-tight",
             active ? "text-accent" : "text-foreground",
           )}
         >
-          {amount || "0"}
-          {preview != null && /[+\-*/]/.test(amount ?? "") ? (
-            <span className="mt-0.5 block text-[11px] font-normal text-muted">= {preview}</span>
+          {formatTypingAmount(amount, currency)}
+          {preview != null && /[+\-*/]/.test((amount ?? "").replace(/,/g, "").replace(/^-/, "")) ? (
+            <span className="mt-0.5 block text-[11px] font-normal text-muted">= {formatTypingAmount(String(preview), currency)}</span>
           ) : null}
         </button>
       ) : null}
@@ -159,6 +161,7 @@ export function AccountLine({
   placeholder,
   role,
   amount,
+  currency,
   active,
   onFocusAmount,
 }: {
@@ -169,16 +172,22 @@ export function AccountLine({
   placeholder: string;
   role?: string;
   amount?: string;
+  currency?: string;
   active?: boolean;
   onFocusAmount?: () => void;
 }) {
+  const t = useT();
   const locale = useUi((s) => s.locale);
   const acc = accounts.find((a) => a.id === value);
+  const label = role || t.add.accountRow;
   return (
-    <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
+    <div className="flex min-h-12 items-center gap-2 border-b border-line px-4 py-2.5">
       <div className="relative min-w-0 flex-1">
-        {role ? <div className="text-[11px] font-medium text-muted">{role}</div> : null}
-        <div className="pointer-events-none truncate text-sm">{acc ? pickName(locale, acc.name, acc.nameZh) : placeholder}</div>
+        <div className="text-[11px] font-medium text-muted">{label}</div>
+        <div className="pointer-events-none flex items-center gap-1 truncate text-sm font-medium">
+          <span className="truncate">{acc ? pickName(locale, acc.name, acc.nameZh) : placeholder}</span>
+          <ChevronRight className="size-4 shrink-0 text-faint" />
+        </div>
         <AccountSelect
           accounts={accounts}
           value={value}
@@ -191,9 +200,9 @@ export function AccountLine({
         <button
           type="button"
           onClick={onFocusAmount}
-          className={cn("min-w-[5.5rem] shrink-0 text-right text-lg font-semibold tabular-nums", active ? "text-accent" : "")}
+          className={cn("max-w-[46%] shrink-0 whitespace-nowrap text-right text-base font-semibold tabular-nums", active ? "text-accent" : "")}
         >
-          {amount || "0"}
+          {formatTypingAmount(amount, currency)}
         </button>
       ) : null}
     </div>
@@ -204,6 +213,7 @@ export function DatePaidRow({
   date,
   time,
   paid,
+  paidLabel,
   onDate,
   onTime,
   onPaid,
@@ -211,6 +221,7 @@ export function DatePaidRow({
   date: string;
   time?: string;
   paid: boolean;
+  paidLabel?: string;
   onDate: (v: string) => void;
   onTime?: (v: string) => void;
   onPaid: (v: boolean) => void;
@@ -237,7 +248,7 @@ export function DatePaidRow({
             onPaid(!paid);
           }}
         >
-          {t.add.paid}
+          {paidLabel || t.add.paid}
           <span className={cn("grid size-6 place-items-center rounded-full border-2 border-accent", paid ? "" : "opacity-40")}>
             {paid ? <Check className="size-3.5" strokeWidth={3} /> : null}
           </span>

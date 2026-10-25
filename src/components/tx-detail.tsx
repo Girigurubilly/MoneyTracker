@@ -339,6 +339,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
               placeholder={t.add.fromAccount}
               role={t.add.fromAccount}
               amount={amount}
+              currency={currency}
               active={field === "amount"}
               onFocusAmount={() => setField("amount")}
             />
@@ -353,6 +354,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
               placeholder={t.add.toAccount}
               role={t.add.toAccount}
               amount={destLocked ? destAmount : String(autoDest || amount || "0")}
+              currency={destCcy}
               active={field === "dest"}
               onFocusAmount={() => setField("dest")}
             />
@@ -372,23 +374,24 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
                 label={cat ? categoryPath(cat, categories, locale) : ""}
                 placeholder={t.add.pickCategory}
                 amount={canSplit && doSplit ? undefined : amount}
+                currency={currency}
                 active={field === "amount"}
                 onFocusAmount={canSplit && doSplit ? undefined : () => setField("amount")}
                 onPressLabel={() => setPickCat(true)}
               />
             ) : (
-              <LineRow label={t.add.miles} amount={amount} active={field === "amount"} onFocusAmount={() => setField("amount")} />
+              <LineRow label={t.add.miles} amount={amount} currency="MILES" active={field === "amount"} onFocusAmount={() => setField("amount")} />
             )}
           </>
         )}
         {canSplit && doSplit ? (
           <>
-            <LineRow label={t.add.principal} amount={principal} active={field === "principal"} onFocusAmount={() => setField("principal")} />
-            <LineRow label={t.add.interest} amount={interest} active={field === "interest"} onFocusAmount={() => setField("interest")} />
+            <LineRow label={t.add.principal} amount={principal} currency={currency} active={field === "principal"} onFocusAmount={() => setField("principal")} />
+            <LineRow label={t.add.interest} amount={interest} currency={currency} active={field === "interest"} onFocusAmount={() => setField("interest")} />
             <AccountLine accounts={accounts} value={toAccountId} onChange={setToAccountId} placeholder={t.add.mortgageTo} />
           </>
         ) : null}
-        <DatePaidRow date={date} time={time} paid={paid} onDate={setDate} onTime={setTime} onPaid={setPaid} />
+        <DatePaidRow date={date} time={time} paid={paid} paidLabel={type === "income" ? t.add.received : undefined} onDate={setDate} onTime={setTime} onPaid={setPaid} />
         <ExtraIconBar
           extra={extra}
           onExtra={setExtra}

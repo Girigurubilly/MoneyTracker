@@ -46,7 +46,7 @@ export function TodayScreen() {
               className="grid size-11 place-items-center text-sm font-medium text-accent"
               aria-label={t.more.language}
             >
-              {locale === "zh-HK" ? "EN" : "中"}
+              {locale === "zh-HK" ? "繁" : "EN"}
             </button>
             <button type="button" aria-label={t.today.search} onClick={() => setSearch(true)} className="grid size-11 place-items-center">
               <Search className="size-6" strokeWidth={1.7} />
@@ -96,6 +96,7 @@ function TodayBody() {
   const setSelected = useUi((s) => s.setSelectedDate);
   const firstDay = useUi((s) => s.firstDayOfWeek);
   const setTx = useUi((s) => s.setTxDetailId);
+  const openAdd = useUi((s) => s.openAdd);
   const kid = useUi((s) => s.accessMode) === "kid";
   const transactions = useApp((s) => s.transactions);
   const budgets = useApp((s) => s.budgets);
@@ -161,16 +162,16 @@ function TodayBody() {
                   type="button"
                   onClick={() => setSelected(c.iso)}
                   className={cn(
-                    "relative mx-auto flex size-10 flex-col items-center justify-center rounded-full text-sm",
+                    "relative mx-auto flex size-11 flex-col items-center justify-center rounded-full text-sm",
                     c.iso === selected && "bg-accent font-semibold text-on-accent",
                     c.iso === today && c.iso !== selected && "font-semibold text-accent",
                   )}
                 >
                   {c.day}
                   {active.has(c.iso) ? (
-                    <span className={cn("absolute bottom-1 size-1 rounded-full", c.iso === selected ? "bg-on-accent" : "bg-accent")} />
+                    <span className={cn("absolute bottom-1 size-1.5 rounded-full", c.iso === selected ? "bg-on-accent" : "bg-accent")} />
                   ) : plannedDays.has(c.iso) ? (
-                    <span className={cn("absolute bottom-1 size-1.5 rounded-full border", c.iso === selected ? "border-on-accent" : "border-accent")} />
+                    <span className={cn("absolute bottom-1 size-2 rounded-full border-2", c.iso === selected ? "border-on-accent" : "border-accent")} />
                   ) : null}
                 </button>
               ) : (
@@ -183,7 +184,7 @@ function TodayBody() {
       {kid ? null : (
       <button
         type="button"
-        className="mx-4 mb-2 flex w-[calc(100%-2rem)] items-center justify-center gap-1 text-xs font-medium text-accent"
+        className="mx-4 mb-2 flex min-h-11 w-[calc(100%-2rem)] items-center justify-center gap-1 text-sm font-medium text-accent"
         onClick={() => setShowSummary((v) => !v)}
       >
         {showSummary ? t.today.hideSummary : t.today.showSummary}
@@ -255,7 +256,16 @@ function TodayBody() {
         ) : null}
       </p>
       {paid.length === 0 ? (
-        <p className="px-5 py-6 text-sm text-muted">{t.today.noTxDay}</p>
+        <div className="mx-5 my-4 rounded-xl bg-elevated px-4 py-5 text-center">
+          <p className="text-sm text-muted">{t.today.emptyDay}</p>
+          <button
+            type="button"
+            onClick={() => openAdd("expense")}
+            className="mt-3 inline-flex h-11 items-center justify-center rounded-full bg-accent px-5 text-sm font-semibold text-on-accent"
+          >
+            {t.today.addOne}
+          </button>
+        </div>
       ) : (
         <>
           {paid.map((tx, i) => (

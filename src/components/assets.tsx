@@ -548,7 +548,7 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
               })}
           />
         )}
-        <LineRow label={t.assets.balance} amount={bal} active onFocusAmount={() => undefined} />
+        <LineRow label={t.assets.balance} amount={bal} currency={currency} active onFocusAmount={() => undefined} />
         {type === "miles" ? null : (
           <label className="flex min-h-12 items-center justify-between gap-3 border-b border-line px-4">
             <span className="text-sm">{t.assets.include}</span>

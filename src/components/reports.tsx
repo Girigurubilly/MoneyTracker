@@ -142,6 +142,9 @@ export function DashboardPage() {
   const nwDelta = prevWorth == null ? 0 : nw.net - prevWorth;
   const saveM = flow.income > 0 ? flow.net / flow.income : 0;
   const saveY = ytdFlow.income > 0 ? (ytdFlow.income - ytdFlow.expense) / ytdFlow.income : 0;
+  const ledgerLive =
+    txs.some((tx) => !tx.planned) ||
+    accounts.some((a) => a.type !== "miles" && a.currency !== "MILES" && Math.abs(a.balance) > 0.005);
 
   return (
     <div className="pb-10">
@@ -157,7 +160,7 @@ export function DashboardPage() {
       <Link to="/reports/living" className="mx-4 block rounded-xl bg-elevated p-4">
         <div className="flex items-start justify-between gap-2">
           <h2 className="text-base font-semibold">{t.reports.living}</h2>
-          <StatusChip status={houseStatus} />
+          {m ? <StatusChip status={houseStatus} /> : <span className="text-xs font-medium text-muted">{t.reports.notSet}</span>}
         </div>
         <div className="mt-4">
           <div className="text-xs text-muted">{t.reports.housingCost}</div>
@@ -174,7 +177,11 @@ export function DashboardPage() {
       <Link to="/reports/travel" className="mx-4 mt-3 block rounded-xl bg-elevated p-4">
         <div className="flex items-start justify-between gap-2">
           <h2 className="text-base font-semibold">{t.reports.travel}</h2>
-          <BudgetChip over={annual > 0 && ytd > annual} />
+          {ledgerLive && annual > 0 ? (
+            <BudgetChip over={ytd > annual} />
+          ) : (
+            <span className="text-xs font-medium text-muted">{t.reports.notSet}</span>
+          )}
         </div>
         <div className="mt-4 grid grid-cols-2 gap-4">
           <div>
@@ -199,18 +206,28 @@ export function DashboardPage() {
       <Link to="/reports/retirement" className="mx-4 mt-3 block rounded-xl bg-elevated p-4">
         <div className="flex items-start justify-between gap-2">
           <h2 className="text-base font-semibold">{t.reports.retirement}</h2>
-          <StatusChip status={retStatus} />
+          {ledgerLive && (fire.fireNumber > 0 || room.planned > 0) ? (
+            <StatusChip status={retStatus} />
+          ) : (
+            <span className="text-xs font-medium text-muted">{t.reports.notSet}</span>
+          )}
         </div>
-        <div className="mt-4">
-          <div className="text-xs text-muted">{t.reports.fireTitle}</div>
-          <div className="mt-1 text-lg font-semibold tabular-nums">{money(fire.fireNumber, "HKD")}</div>
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-4">
-          <Metric label={t.reports.corpusAtRetire} value={money(corpusAtRetire, "HKD")} />
-          <Metric label={t.reports.surplus} value={money(surplus, "HKD", { sign: true })} />
-          <Metric label={t.reports.sustainable} value={money(room.sustainable, "HKD")} />
-          <Metric label={t.reports.targetMonthly} value={money(room.planned, "HKD")} />
-        </div>
+        {ledgerLive && (fire.fireNumber > 0 || room.planned > 0) ? (
+          <>
+            <div className="mt-4">
+              <div className="text-xs text-muted">{t.reports.fireTitle}</div>
+              <div className="mt-1 text-lg font-semibold tabular-nums">{money(fire.fireNumber, "HKD")}</div>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-4">
+              <Metric label={t.reports.corpusAtRetire} value={money(corpusAtRetire, "HKD")} />
+              <Metric label={t.reports.surplus} value={money(surplus, "HKD", { sign: true })} />
+              <Metric label={t.reports.sustainable} value={money(room.sustainable, "HKD")} />
+              <Metric label={t.reports.targetMonthly} value={money(room.planned, "HKD")} />
+            </div>
+          </>
+        ) : (
+          <p className="mt-3 text-sm text-muted">{t.reports.notSet}</p>
+        )}
         <div className="mt-2 flex justify-end">
           <ChevronRight className="size-4 text-faint" />
         </div>
