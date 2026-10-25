@@ -14,17 +14,19 @@ export function ScreenHeader({
   title,
   large,
   backTo,
+  onBack,
   right,
 }: {
   title: string;
   large?: boolean;
   backTo?: string;
+  onBack?: () => void;
   right?: ReactNode;
 }) {
-  if (backTo) {
+  if (backTo || onBack) {
     return (
       <header className="relative flex items-center justify-between px-2 pb-2 pt-[max(0.4rem,env(safe-area-inset-top))]">
-        <BackControl backTo={backTo} />
+        <BackControl backTo={backTo} onBack={onBack} />
         <h1 className="absolute left-1/2 max-w-[58%] -translate-x-1/2 truncate text-center text-lg font-semibold tracking-tight">
           {title}
         </h1>
@@ -40,7 +42,7 @@ export function ScreenHeader({
   );
 }
 
-function BackControl({ backTo }: { backTo: string }) {
+function BackControl({ backTo, onBack }: { backTo?: string; onBack?: () => void }) {
   const navigate = useNavigate();
   return (
     <button
@@ -48,9 +50,13 @@ function BackControl({ backTo }: { backTo: string }) {
       aria-label="Back"
       className="grid size-11 shrink-0 place-items-center text-accent"
       onClick={() => {
+        if (onBack) {
+          onBack();
+          return;
+        }
         const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
         if (idx > 0) window.history.back();
-        else void navigate({ to: backTo as never });
+        else if (backTo) void navigate({ to: backTo as never });
       }}
     >
       <ChevronLeft className="size-6" />

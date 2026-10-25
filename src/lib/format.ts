@@ -82,6 +82,47 @@ export function money(
   return formatted;
 }
 
+const AMOUNT_UNIT: Record<string, string> = {
+  HKD: "HK$",
+  USD: "US$",
+  CNY: "CN¥",
+  JPY: "JP¥",
+  GBP: "£",
+  EUR: "€",
+  TWD: "NT$",
+  SGD: "S$",
+  AUD: "A$",
+  MOP: "MOP$",
+  THB: "฿",
+  CHF: "CHF",
+  KRW: "₩",
+  CAD: "C$",
+  NZD: "NZ$",
+  INR: "₹",
+};
+
+function groupDigits(raw: string): string {
+  const neg = raw.startsWith("-");
+  const body = neg ? raw.slice(1) : raw;
+  const keepDot = body.endsWith(".");
+  const [int, frac] = body.split(".");
+  const grouped = (int || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const tail = frac ? `.${frac}` : keepDot ? "." : "";
+  return `${neg ? "-" : ""}${grouped}${tail}`;
+}
+
+/** Thousands separators while typing. Plain numbers also show the currency. */
+export function formatTypingAmount(raw: string | undefined, currency = "HKD"): string {
+  const unit = AMOUNT_UNIT[currency] ?? (currency === "MILES" ? "" : currency);
+  const s = (raw ?? "").replace(/,/g, "").trim();
+  const rest = s.startsWith("-") ? s.slice(1) : s;
+  const expr = /[+\-*/]/.test(rest);
+  if (!s || s === "-" || s === "0") return unit ? `0 / ${unit}` : "0";
+  if (expr) return s.replace(/\d*\.?\d+/g, (n) => (n ? groupDigits(n) : n));
+  const shown = groupDigits(s);
+  return unit ? `${shown} / ${unit}` : shown;
+}
+
 export function pct(n: number): string {
   if (!Number.isFinite(n)) return "—";
   return `${Math.round(n * 100)}%`;

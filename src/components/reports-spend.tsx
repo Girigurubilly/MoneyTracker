@@ -95,6 +95,10 @@ export function SpendingPage() {
       : tab === "both"
         ? t.reports.netSurplus
         : t.reports.expense;
+  const donut = (pieRows.length ? pieRows : [{ id: "empty", value: 1, name: "—", nameZh: "—", colorIndex: 0 }]).filter(
+    (r) => Number(r.value) > 0,
+  );
+  const slices = donut.length ? donut : [{ id: "empty", value: 1, name: "—", nameZh: "—", colorIndex: 0 }];
 
   function openBucket(id: string) {
     if (merge && !focusParent) {
@@ -110,8 +114,9 @@ export function SpendingPage() {
   return (
     <div className="pb-10">
       <ScreenHeader
-        title={t.reports.spending}
+        title={focusCat ? pickName(locale, focusCat.name, focusCat.nameZh) : t.reports.spending}
         backTo="/reports"
+        onBack={focusParent ? () => setFocusParent(null) : undefined}
         right={
           kid ? undefined : (
             <SpendBriefButton
@@ -207,35 +212,31 @@ export function SpendingPage() {
           </button>
         )}
       </div>
-      {focusParent ? (
-        <div className="flex items-center justify-between px-5 pt-3">
-          <button type="button" className="text-sm text-accent" onClick={() => setFocusParent(null)}>
-            {t.common.back}
-          </button>
-          <span className="text-sm font-semibold">{focusCat ? pickName(locale, focusCat.name, focusCat.nameZh) : ""}</span>
-          <span className="min-w-8" />
-        </div>
-      ) : null}
-      <div className="relative mx-auto h-56 w-56">
+      <div className="relative mx-auto mt-2 h-56 w-56">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart key={focusParent ?? "all"}>
             <Pie
-              data={pieRows.length ? pieRows : [{ id: "empty", value: 1, name: "—" }]}
+              data={slices}
               dataKey="value"
               nameKey="name"
-              innerRadius="62%"
-              outerRadius="88%"
+              cx="50%"
+              cy="50%"
+              innerRadius={68}
+              outerRadius={96}
+              startAngle={90}
+              endAngle={-270}
               stroke="none"
-              paddingAngle={pieRows.length > 1 ? 1.2 : 0}
+              paddingAngle={slices.length > 1 ? 1.2 : 0}
+              isAnimationActive={false}
               onClick={(_, index) => {
-                const row = pieRows[index];
-                if (row && row.id !== "spend-slice" && row.id !== "save-slice") openBucket(row.id);
+                const row = slices[index];
+                if (row && row.id !== "spend-slice" && row.id !== "save-slice" && row.id !== "empty") openBucket(row.id);
               }}
             >
-              {(pieRows.length ? pieRows : [{ id: "empty", colorIndex: 0 }]).map((r) => (
+              {slices.map((r) => (
                 <Cell
                   key={r.id}
-                  fill={CHART[r.colorIndex]}
+                  fill={r.id === "empty" ? "var(--color-line)" : CHART[r.colorIndex]}
                   className={r.id === "empty" || r.id === "spend-slice" || r.id === "save-slice" ? undefined : "cursor-pointer outline-none"}
                   onClick={() => {
                     if (r.id !== "empty" && r.id !== "spend-slice" && r.id !== "save-slice") openBucket(r.id);

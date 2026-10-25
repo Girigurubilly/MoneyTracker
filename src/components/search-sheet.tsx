@@ -28,7 +28,7 @@ export function SearchFlow() {
           setTx(tx.id);
           setOpen(false);
         }}
-        empty={t.today.noTxDay}
+        empty={t.today.searchEmpty}
       />
     </Overlay>
   );

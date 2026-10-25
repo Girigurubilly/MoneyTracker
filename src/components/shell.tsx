@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Link, Navigate, useRouterState } from "@tanstack/react-router";
-import { BarChart3, Bone, Building2, Cat, Cpu, Fish, Heart, Home, Landmark, Leaf, Moon, MoreHorizontal, PawPrint, PieChart, Sparkles, TreePine, Wallet, WalletCards } from "lucide-react";
+import { BarChart3, Bone, Building2, Cat, Cpu, Fish, Heart, Home, Landmark, Leaf, Moon, MoreHorizontal, PawPrint, PieChart, Plus, Sparkles, TreePine, Wallet, WalletCards } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
@@ -23,6 +23,7 @@ export function AppGate({ children }: { children: ReactNode }) {
   const setOnboarded = useUi((s) => s.setOnboarded);
   const path = useRouterState({ select: (s) => s.location.pathname });
   const theme = useUi((s) => s.theme);
+  const access = useUi((s) => s.accessMode);
 
   useEffect(() => {
     void hydrate();
@@ -48,8 +49,16 @@ export function AppGate({ children }: { children: ReactNode }) {
     return <div className="grid min-h-dvh place-items-center text-sm text-muted">HK Life Money</div>;
   }
   return (
-    <div className="mx-auto min-h-dvh max-w-lg bg-background/80 pb-[4.25rem] lg:max-w-none lg:pb-0">
+    <div
+      className={cn(
+        "mx-auto min-h-dvh max-w-lg bg-background/80 lg:max-w-none lg:pb-0",
+        access === "elderly"
+          ? "pb-[calc(4.5rem+1rem+env(safe-area-inset-bottom))]"
+          : "pb-[calc(4rem+1rem+env(safe-area-inset-bottom))]",
+      )}
+    >
       <div className="lg:ml-56">{children}</div>
+      <AddFab />
       <Nav />
       <AddFlow />
       <SearchFlow />
@@ -153,6 +162,30 @@ function LocalEditMark() {
     };
   }, []);
   return null;
+}
+
+function AddFab() {
+  const t = useT();
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  const access = useUi((s) => s.accessMode);
+  const openAdd = useUi((s) => s.openAdd);
+  const addOpen = useUi((s) => s.addOpen);
+  const searchOpen = useUi((s) => s.searchOpen);
+  const txDetailId = useUi((s) => s.txDetailId);
+  const roots = path === "/" || path === "/assets" || path === "/budget" || path === "/reports" || path === "/more";
+  if (!roots || addOpen || searchOpen || txDetailId) return null;
+  const bar = access === "elderly" ? "4.5rem" : "4rem";
+  return (
+    <button
+      type="button"
+      aria-label={t.add.title}
+      onClick={() => openAdd("expense")}
+      style={{ bottom: `calc(${bar} + 0.7rem + env(safe-area-inset-bottom))` }}
+      className="fixed right-4 z-30 grid size-14 place-items-center rounded-full bg-accent text-on-accent shadow-lg lg:hidden"
+    >
+      <Plus className="size-7" strokeWidth={1.8} />
+    </button>
+  );
 }
 
 function Nav() {

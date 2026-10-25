@@ -154,9 +154,7 @@ export function BudgetScreen() {
               style={{ width: `${Math.min(100, monthRatio * 100)}%` }}
             />
           </div>
-        ) : (
-          <p className="mt-2 text-xs text-faint">{t.budget.soft}</p>
-        )}
+        ) : null}
         <button
           type="button"
           className="mt-3 flex w-full items-center justify-center gap-1 text-xs font-medium text-accent"
@@ -385,9 +383,7 @@ function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recur
         </button>
       </div>
       <p className="px-5 pb-2 text-xs text-faint">{t.budget.regularsHint}</p>
-      {rows.length === 0 ? (
-        <p className="px-5 py-4 text-sm text-muted">{t.budget.addRegular}</p>
-      ) : (
+      {rows.length === 0 ? null : (
         <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
           {rows.map((r) => {
             const day = chargedDayOf(r);
@@ -404,7 +400,13 @@ function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recur
                         {` · ${r.type === "income" ? t.add.income : r.type === "transfer" ? (r.countsAsExpense ? `${t.add.transfer} · ${t.add.principal}` : t.add.transfer) : t.add.expense}`}
                       </span>
                       <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", charged ? "bg-success-soft text-income" : "bg-accent-soft text-accent")}>
-                        {charged ? t.budget.charged : t.budget.upcomingStatus}
+                        {r.type === "income"
+                          ? charged
+                            ? t.add.received
+                            : t.budget.upcomingIncome
+                          : charged
+                            ? t.budget.charged
+                            : t.budget.upcomingStatus}
                       </span>
                     </div>
                   </div>
