@@ -26,8 +26,9 @@ import {
 import { markDailyDriveSync, markLocalEdit, noteNewestDriveFile, readDrivePass, writeDrivePass, encodeDriveBody, decodeDriveBody, syncWithDrive } from "@/lib/drive-sync";
 import { transactionsToCsv } from "@/lib/derived";
 import { convertBtp, isAppSnapshot, isBtpFile } from "@/lib/import-btp";
-import { CURRENCIES, type BudgetTargetMode } from "@/lib/types";
+import { CURRENCIES, MONTH_TOTAL_BUDGET_ID, type BudgetTargetMode } from "@/lib/types";
 import { ageFromBirthday } from "@/lib/calc/retirement";
+import { baselineChecks, buildFcBaseline, renderFcBaselineMarkdown, todayHkt } from "@/lib/calc/fc-baseline";
 import { todayISO } from "@/lib/format";
 import { useApp, type AppSnapshot } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -537,6 +538,38 @@ export function BackupPage() {
       <div className="px-5 space-y-3">
         <button type="button" className="h-11 w-full rounded-xl bg-elevated text-sm" onClick={() => downloadBlob("hk-life-money.json", JSON.stringify(exportSnap(), null, 2))}>
           {t.backup.exportJson}
+        </button>
+        <button
+          type="button"
+          className="h-11 w-full rounded-xl bg-elevated text-sm"
+          onClick={() => {
+            const s = useApp.getState();
+            const asOf = todayHkt();
+            const monthCap = s.budgets.find((b) => b.id === MONTH_TOTAL_BUDGET_ID)?.monthly ?? 0;
+            const checks = baselineChecks(s.accounts, s.holdings);
+            if (checks.length && !window.confirm(`${t.backup.baselineWarn}\n\n${checks.map((c) => c.detail).join("\n")}`)) return;
+            const snap = buildFcBaseline({
+              asOf,
+              accounts: s.accounts,
+              deposits: s.deposits,
+              promo: s.promoSavings,
+              holdings: s.holdings,
+              mortgage: s.mortgage,
+              retirementAccounts: s.retirementAccounts,
+              allowances: s.allowances,
+              adhoc: s.adhocBudgets,
+              rates: s.fxRates,
+              plans: s.yearlyPlans,
+              txs: s.transactions,
+              categories: s.categories,
+              recurring: s.recurring,
+              monthCap,
+            });
+            downloadBlob(`hk-life-fc-baseline-${asOf}.json`, JSON.stringify(snap, null, 2));
+            downloadBlob(`hk-life-fc-baseline-${asOf}.md`, renderFcBaselineMarkdown(snap), "text/markdown");
+          }}
+        >
+          {t.backup.exportBaseline}
         </button>
         <button type="button" className="h-11 w-full rounded-xl bg-elevated text-sm" onClick={() => downloadBlob("hk-life-money.csv", transactionsToCsv(txs), "text/csv")}>
           {t.backup.exportCsv}

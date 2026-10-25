@@ -9,6 +9,8 @@ import type {
   OneOff,
   Recurring,
   TimeSaving,
+  Holding,
+  PromoSaving,
   Transaction,
   Trip,
   WishItem,
@@ -18,18 +20,18 @@ import type { RetirementInputs } from "./calc/retirement";
 import { MONTH_TOTAL_BUDGET_ID } from "./types";
 
 export const accounts: Account[] = [
-  { id: "bochk", name: "BOCHK payroll", nameZh: "中銀出糧戶口", type: "current", currency: "HKD", balance: 128400, includeInNetWorth: true, group: "cash", sortOrder: 0 },
-  { id: "hsb-save", name: "Hang Seng savings", nameZh: "恒生儲蓄", type: "savings", currency: "HKD", balance: 220000, includeInNetWorth: true, group: "cash", sortOrder: 1 },
-  { id: "cash-hkd", name: "Cash", nameZh: "現金", type: "cash", currency: "HKD", balance: 2400, includeInNetWorth: true, group: "cash", sortOrder: 2 },
-  { id: "yen-cash", name: "Yen", nameZh: "Yen", type: "fx", currency: "JPY", balance: 85000, includeInNetWorth: true, group: "cash", sortOrder: 2 },
-  { id: "octopus", name: "Octopus", nameZh: "八達通", type: "ewallet", currency: "HKD", balance: 186, includeInNetWorth: true, group: "cash", sortOrder: 3 },
-  { id: "hsbc-debit", name: "HSBC debit", nameZh: "匯豐扣帳卡", type: "debit", currency: "HKD", balance: 8200, includeInNetWorth: true, group: "cash", sortOrder: 4 },
-  { id: "hsbc-visa", name: "HSBC Visa", nameZh: "匯豐 Visa", type: "credit", currency: "HKD", balance: -2846, includeInNetWorth: true, group: "credit", sortOrder: 0 },
-  { id: "mpf", name: "MPF", nameZh: "強積金", type: "mpf", currency: "HKD", balance: 980000, includeInNetWorth: true, group: "assets", sortOrder: 0 },
-  { id: "broker", name: "Brokerage", nameZh: "證券戶口", type: "investment", currency: "HKD", balance: 640000, includeInNetWorth: true, group: "assets", sortOrder: 1 },
-  { id: "tsuen-wan", name: "Tsuen Wan flat", nameZh: "荃灣單位", type: "property", currency: "HKD", balance: 6800000, includeInNetWorth: true, group: "housing", sortOrder: 0 },
-  { id: "mortgage", name: "Mortgage", nameZh: "按揭", type: "mortgage", currency: "HKD", balance: -2858240, includeInNetWorth: true, group: "housing", sortOrder: 1 },
-  { id: "asia-miles", name: "Asia Miles", nameZh: "亞洲萬里通", type: "miles", currency: "MILES", balance: 86200, includeInNetWorth: false, group: "loyalty", sortOrder: 0 },
+  { id: "bochk", name: "BOCHK payroll", nameZh: "中銀出糧戶口", type: "current", currency: "HKD", balance: 128400, includeInNetWorth: true, group: "cash", sortOrder: 0, institution: "BOCHK", ownership: "sole", balanceBasis: "available_ex_deposits" },
+  { id: "hsb-save", name: "Hang Seng savings", nameZh: "恒生儲蓄", type: "savings", currency: "HKD", balance: 220000, includeInNetWorth: true, group: "cash", sortOrder: 1, institution: "Hang Seng", ownership: "sole", balanceBasis: "bank_total_incl_deposits" },
+  { id: "cash-hkd", name: "Cash", nameZh: "現金", type: "cash", currency: "HKD", balance: 2400, includeInNetWorth: true, group: "cash", sortOrder: 2, ownership: "sole", balanceBasis: "available_ex_deposits" },
+  { id: "yen-cash", name: "Yen", nameZh: "Yen", type: "fx", currency: "JPY", balance: 85000, includeInNetWorth: true, group: "cash", sortOrder: 2, ownership: "sole", balanceBasis: "available_ex_deposits" },
+  { id: "octopus", name: "Octopus", nameZh: "八達通", type: "ewallet", currency: "HKD", balance: 186, includeInNetWorth: true, group: "cash", sortOrder: 3, ownership: "sole", balanceBasis: "available_ex_deposits" },
+  { id: "hsbc-debit", name: "HSBC debit", nameZh: "匯豐扣帳卡", type: "debit", currency: "HKD", balance: 8200, includeInNetWorth: true, group: "cash", sortOrder: 4, institution: "HSBC", ownership: "sole", balanceBasis: "available_ex_deposits" },
+  { id: "hsbc-visa", name: "HSBC Visa", nameZh: "匯豐 Visa", type: "credit", currency: "HKD", balance: -2846, includeInNetWorth: true, group: "credit", sortOrder: 0, institution: "HSBC", ownership: "sole", balanceBasis: "unverified" },
+  { id: "mpf", name: "MPF", nameZh: "強積金", type: "mpf", currency: "HKD", balance: 980000, includeInNetWorth: true, group: "assets", sortOrder: 0, ownership: "sole", balanceBasis: "unverified" },
+  { id: "broker", name: "Brokerage", nameZh: "證券戶口", type: "investment", currency: "HKD", balance: 640000, includeInNetWorth: true, group: "assets", sortOrder: 1, ownership: "sole", balanceBasis: "holdings_derived", holdingSync: true },
+  { id: "tsuen-wan", name: "Tsuen Wan flat", nameZh: "荃灣單位", type: "property", currency: "HKD", balance: 6800000, includeInNetWorth: true, group: "housing", sortOrder: 0, ownership: "sole", balanceBasis: "unverified" },
+  { id: "mortgage", name: "Mortgage", nameZh: "按揭", type: "mortgage", currency: "HKD", balance: -2858240, includeInNetWorth: true, group: "housing", sortOrder: 1, ownership: "sole", balanceBasis: "unverified" },
+  { id: "asia-miles", name: "Asia Miles", nameZh: "亞洲萬里通", type: "miles", currency: "MILES", balance: 86200, includeInNetWorth: false, group: "loyalty", sortOrder: 0, ownership: "sole", balanceBasis: "unverified" },
 ];
 
 export const categories: Category[] = [
@@ -204,6 +206,39 @@ export const deposits: TimeSaving[] = [
     amount: 200000,
     interest: 5726.03,
     accountId: "hsb-save",
+  },
+];
+
+export const promoSavings: PromoSaving[] = [
+  {
+    id: "promo-marathon",
+    accountId: "hsb-save",
+    residualHkd: 20000,
+    rateSchedule: [
+      { from: "2026-01-01", to: "2026-06-30", rate: 4.5 },
+      { from: "2026-07-01", to: "2026-12-31", rate: 1.5 },
+    ],
+    arrangementEnd: "2026-12-31",
+    accessibility: "restricted",
+    distinctFromTd: true,
+    name: "Marathon savings",
+    nameZh: "馬拉松儲蓄",
+  },
+];
+
+export const holdings: Holding[] = [
+  {
+    id: "hold-tracker",
+    symbol: "2800",
+    name: "Tracker Fund",
+    market: "hk",
+    source: "manual",
+    quantity: 3200,
+    currency: "HKD",
+    lastPrice: 200,
+    avgCost: 180,
+    lastPriceAt: "2026-10-25",
+    accountId: "broker",
   },
 ];
 
