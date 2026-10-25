@@ -1,7 +1,7 @@
 import { type ReactNode, useState } from "react";
 import { Check, ChevronRight, Hash, Home, MessageSquare, Plane, Sparkles } from "lucide-react";
-import { AmountKeypad } from "@/components/amount-keypad";
-import { AccountSelect } from "@/components/account-select";
+import { AmountKeypad, CurrencyChips } from "@/components/amount-keypad";
+import { AccountPicker } from "@/components/account-select";
 import { WhenPicker } from "@/components/when-picker";
 import { Overlay } from "@/components/shared";
 import { clockNow, formatTypingAmount, whenStamp } from "@/lib/format";
@@ -178,24 +178,19 @@ export function AccountLine({
 }) {
   const t = useT();
   const locale = useUi((s) => s.locale);
+  const [open, setOpen] = useState(false);
   const acc = accounts.find((a) => a.id === value);
   const label = role || t.add.accountRow;
+  const housing = acc?.group === "housing" || acc?.type === "property" || acc?.type === "mortgage" || acc?.type === "loan";
   return (
     <div className="flex min-h-12 items-center gap-2 border-b border-line px-4 py-2.5">
-      <div className="relative min-w-0 flex-1">
+      <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setOpen(true)}>
         <div className="text-[11px] font-medium text-muted">{label}</div>
-        <div className="pointer-events-none flex items-center gap-1 truncate text-sm font-medium">
+        <div className="flex items-center gap-1 truncate text-sm font-medium">
           <span className="truncate">{acc ? pickName(locale, acc.name, acc.nameZh) : placeholder}</span>
           <ChevronRight className="size-4 shrink-0 text-faint" />
         </div>
-        <AccountSelect
-          accounts={accounts}
-          value={value}
-          onChange={onChange}
-          excludeId={excludeId}
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-        />
-      </div>
+      </button>
       {onFocusAmount ? (
         <button
           type="button"
@@ -204,6 +199,19 @@ export function AccountLine({
         >
           {formatTypingAmount(amount, currency)}
         </button>
+      ) : null}
+      {open ? (
+        <AccountPicker
+          accounts={accounts}
+          value={value}
+          excludeId={excludeId}
+          everyday={!housing}
+          onClose={() => setOpen(false)}
+          onSelect={(id) => {
+            onChange(id);
+            setOpen(false);
+          }}
+        />
       ) : null}
     </div>
   );
@@ -494,6 +502,8 @@ export function ActiveKeypad({
   setInterest,
   currency,
   onCurrency,
+  onSave,
+  saveLabel,
 }: {
   field: AmountField;
   amount: string;
@@ -506,9 +516,23 @@ export function ActiveKeypad({
   setInterest: (v: string) => void;
   currency: Currency;
   onCurrency: (c: Currency) => void;
+  onSave?: () => void;
+  saveLabel?: string;
 }) {
   const value = field === "dest" ? dest : field === "principal" ? principal : field === "interest" ? interest : amount;
   const set =
     field === "dest" ? setDest : field === "principal" ? setPrincipal : field === "interest" ? setInterest : setAmount;
-  return <AmountKeypad value={value} onChange={set} currency={currency} onCurrency={onCurrency} />;
+  return (
+    <div className="bg-background">
+      {field === "dest" ? null : <CurrencyChips currency={currency} onCurrency={onCurrency} />}
+      {onSave ? (
+        <div className="px-3 pb-2">
+          <button type="button" className="h-12 w-full rounded-xl bg-accent text-base font-semibold text-on-accent" onClick={onSave}>
+            {saveLabel}
+          </button>
+        </div>
+      ) : null}
+      <AmountKeypad value={value} onChange={set} />
+    </div>
+  );
 }

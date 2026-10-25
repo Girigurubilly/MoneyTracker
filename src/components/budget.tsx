@@ -19,7 +19,7 @@ import {
   SelectLine,
   TextLine,
 } from "@/components/txn-composer";
-import { asOfForMonth, adhocTotal, budgetActuals, chargedDayOf, forecastTone } from "@/lib/calc/budget";
+import { asOfForMonth, adhocTotal, budgetActuals, chargedDayOf, chargedIso, forecastTone, regularSettledInMonth } from "@/lib/calc/budget";
 import { WhenField } from "@/components/when-picker";
 import { travelSpendYtd, isTripActive } from "@/lib/calc/trips";
 import { monthKey } from "@/lib/calc/ledger";
@@ -369,8 +369,11 @@ function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recur
   const t = useT();
   const locale = useUi((s) => s.locale);
   const recurring = useApp((s) => s.recurring);
+  const txs = useApp((s) => s.transactions);
   const rates = useApp((s) => s.fxRates);
-  const today = Number(todayISO().slice(8, 10));
+  const todayIso = todayISO();
+  const month = todayIso.slice(0, 7);
+  const today = Number(todayIso.slice(8, 10));
   const rows = recurring
     .filter((r) => r.frequency === "monthly" && r.type !== "miles")
     .sort((a, b) => chargedDayOf(a) - chargedDayOf(b) || a.label.localeCompare(b.label));
@@ -387,7 +390,27 @@ function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recur
         <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
           {rows.map((r) => {
             const day = chargedDayOf(r);
-            const charged = day <= today;
+            const spend = r.type === "expense" || Boolean(r.countsAsExpense);
+            const settled = regularSettledInMonth(r, txs, month, chargedIso(month, day));
+            const due = day <= today;
+            const status =
+              r.type === "income"
+                ? settled
+                  ? t.add.received
+                  : due
+                    ? t.budget.notPosted
+                    : t.budget.upcomingIncome
+                : spend
+                  ? settled
+                    ? t.budget.charged
+                    : due
+                      ? t.budget.notPosted
+                      : t.budget.upcomingStatus
+                  : settled
+                    ? t.budget.posted
+                    : due
+                      ? t.budget.notPosted
+                      : t.budget.upcomingStatus;
             const signed = r.type === "income" ? r.amount : r.type === "expense" || r.countsAsExpense ? -r.amount : r.amount;
             return (
               <button key={r.id} type="button" className="w-full border-t border-line px-4 py-3 text-left first:border-0" onClick={() => onEdit(r)}>
@@ -399,14 +422,8 @@ function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recur
                         {dayPart(day, locale)}
                         {` · ${r.type === "income" ? t.add.income : r.type === "transfer" ? (r.countsAsExpense ? `${t.add.transfer} · ${t.add.principal}` : t.add.transfer) : t.add.expense}`}
                       </span>
-                      <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", charged ? "bg-success-soft text-income" : "bg-accent-soft text-accent")}>
-                        {r.type === "income"
-                          ? charged
-                            ? t.add.received
-                            : t.budget.upcomingIncome
-                          : charged
-                            ? t.budget.charged
-                            : t.budget.upcomingStatus}
+                      <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", settled ? "bg-success-soft text-income" : due ? "bg-watch-soft text-watch" : "bg-accent-soft text-accent")}>
+                        {status}
                       </span>
                     </div>
                   </div>
@@ -497,8 +514,15 @@ function AdhocBlock({
                 <AmountWithHkd amount={-a.amount} currency={a.currency} rates={rates} sign className="shrink-0 text-sm font-semibold text-expense" />
                 <ChevronRight className="mt-0.5 size-4 shrink-0 text-faint" />
               </button>
-              {upcoming ? (
-                <div className="mt-2 flex gap-2">
+              {paid ? (
+                <span className="mt-2 inline-flex rounded-full bg-success-soft px-2 py-1 text-xs font-medium text-income">
+                  {a.paidOn === today ? t.budget.paidToday : t.budget.charged}
+                </span>
+              ) : (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {upcoming ? null : (
+                    <span className="inline-flex rounded-full bg-watch-soft px-2 py-1 text-xs font-medium text-watch">{t.budget.notPosted}</span>
+                  )}
                   <button
                     type="button"
                     className="h-8 rounded-full bg-accent-soft px-3 text-xs font-medium text-accent"
@@ -506,20 +530,20 @@ function AdhocBlock({
                   >
                     {t.budget.postAdhocShort}
                   </button>
-                  <button
-                    type="button"
-                    className="h-8 rounded-full bg-background px-3 text-xs font-medium"
-                    onClick={async () => {
-                      await addWish(wishFromAdhoc(a, locale));
-                      await delAdhoc(a.id);
-                      toast(t.budget.toWishlistDone);
-                    }}
-                  >
-                    {t.budget.toWishlistShort}
-                  </button>
+                  {upcoming ? (
+                    <button
+                      type="button"
+                      className="h-8 rounded-full bg-background px-3 text-xs font-medium"
+                      onClick={async () => {
+                        await addWish(wishFromAdhoc(a, locale));
+                        await delAdhoc(a.id);
+                        toast(t.budget.toWishlistDone);
+                      }}
+                    >
+                      {t.budget.toWishlistShort}
+                    </button>
+                  ) : null}
                 </div>
-              ) : (
-                <span className="mt-2 inline-flex rounded-full bg-success-soft px-2 py-1 text-xs font-medium text-income">{t.budget.charged}</span>
               )}
             </div>
             );

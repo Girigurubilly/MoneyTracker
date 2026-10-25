@@ -6,6 +6,7 @@ import { CategoryEditor } from "@/components/category-editor";
 import { Hairline } from "@/components/shared";
 import { pickName } from "@/lib/i18n";
 import { pickerGroups } from "@/lib/categories";
+import { recentLeafCategories } from "@/lib/recent-notes";
 import { cashflowSide, monthKey } from "@/lib/calc/ledger";
 import { toHkd } from "@/lib/calc/fx";
 import type { Category, FxRate, Transaction, TxType } from "@/lib/types";
@@ -56,6 +57,46 @@ export function TypeSwitch({
           ))}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+export function RecentCategories({
+  kind,
+  selectedId,
+  onSelect,
+  onBrowse,
+}: {
+  kind: "expense" | "income";
+  selectedId?: string;
+  onSelect: (c: Category) => void;
+  onBrowse: () => void;
+}) {
+  const t = useT();
+  const locale = useUi((s) => s.locale);
+  const transactions = useApp((s) => s.transactions);
+  const categories = useApp((s) => s.categories);
+  const recent = useMemo(() => recentLeafCategories(transactions, categories, kind), [transactions, categories, kind]);
+  return (
+    <div className="flex gap-2 overflow-x-auto border-b border-line px-4 py-2">
+      <span className="sr-only">{t.add.recentCategories}</span>
+      {recent.map((c) => (
+        <button
+          key={c.id}
+          type="button"
+          onClick={() => onSelect(c)}
+          className={cn(
+            "inline-flex h-8 max-w-[10rem] shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-medium",
+            c.id === selectedId ? "bg-accent text-on-accent" : "bg-elevated",
+          )}
+        >
+          <CategoryIcon name={c.icon} className="size-3.5" />
+          <span className="truncate">{pickName(locale, c.name, c.nameZh)}</span>
+        </button>
+      ))}
+      <button type="button" className="h-8 shrink-0 rounded-full bg-elevated px-3 text-xs font-medium text-accent" onClick={onBrowse}>
+        {t.add.allCategories}
+      </button>
     </div>
   );
 }
