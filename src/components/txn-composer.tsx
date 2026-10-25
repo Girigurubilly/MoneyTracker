@@ -139,7 +139,7 @@ export function LineRow({
           type="button"
           onClick={onFocusAmount}
           className={cn(
-            "max-w-[62%] shrink-0 whitespace-nowrap text-right text-xl font-bold tabular-nums tracking-tight",
+            "max-w-[58%] shrink-0 whitespace-nowrap text-right text-lg font-bold tabular-nums tracking-tight",
             active ? "text-accent" : "text-foreground",
           )}
         >
@@ -200,7 +200,7 @@ export function AccountLine({
         <button
           type="button"
           onClick={onFocusAmount}
-          className={cn("min-w-[5.5rem] shrink-0 text-right text-lg font-semibold tabular-nums", active ? "text-accent" : "")}
+          className={cn("max-w-[46%] shrink-0 whitespace-nowrap text-right text-base font-semibold tabular-nums", active ? "text-accent" : "")}
         >
           {formatTypingAmount(amount, currency)}
         </button>

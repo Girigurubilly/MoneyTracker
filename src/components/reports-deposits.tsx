@@ -277,8 +277,8 @@ function DepositEditor({ open, initial, onClose }: { open: boolean; initial: Tim
           <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
         </div>
         <SelectLine label={t.reports.currency} value={currency} onChange={(v) => setCurrency(v as Currency)} options={CURRENCIES.map((c) => ({ id: c, label: c }))} />
-        <LineRow label={t.reports.depositAmount} amount={amount} active={field === "amount"} onFocusAmount={() => setField("amount")} />
-        <LineRow label={t.reports.interest} amount={interest} active={field === "interest"} onFocusAmount={() => setField("interest")} />
+        <LineRow label={t.reports.depositAmount} amount={amount} currency={currency} active={field === "amount"} onFocusAmount={() => setField("amount")} />
+        <LineRow label={t.reports.interest} amount={interest} currency={currency} active={field === "interest"} onFocusAmount={() => setField("interest")} />
       </ComposerShell>
     </Overlay>
   );

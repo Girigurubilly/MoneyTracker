@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import { ChevronRight } from "lucide-react";
 import { Overlay, ScreenHeader, TxGroupedList } from "@/components/shared";
 import { SpendBriefButton } from "@/components/spend-brief";
@@ -212,41 +211,18 @@ export function SpendingPage() {
           </button>
         )}
       </div>
-      <div className="relative mx-auto mt-2 h-56 w-56">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart key={focusParent ?? "all"}>
-            <Pie
-              data={slices}
-              dataKey="value"
-              nameKey="name"
-              cx="50%"
-              cy="50%"
-              innerRadius={68}
-              outerRadius={96}
-              startAngle={90}
-              endAngle={-270}
-              stroke="none"
-              paddingAngle={slices.length > 1 ? 1.2 : 0}
-              isAnimationActive={false}
-              onClick={(_, index) => {
-                const row = slices[index];
-                if (row && row.id !== "spend-slice" && row.id !== "save-slice" && row.id !== "empty") openBucket(row.id);
-              }}
-            >
-              {slices.map((r) => (
-                <Cell
-                  key={r.id}
-                  fill={r.id === "empty" ? "var(--color-line)" : CHART[r.colorIndex]}
-                  className={r.id === "empty" || r.id === "spend-slice" || r.id === "save-slice" ? undefined : "cursor-pointer outline-none"}
-                  onClick={() => {
-                    if (r.id !== "empty" && r.id !== "spend-slice" && r.id !== "save-slice") openBucket(r.id);
-                  }}
-                />
-              ))}
-            </Pie>
-          </PieChart>
-        </ResponsiveContainer>
-        <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
+      <div className="relative mx-auto mt-3 h-56 w-56">
+        <SpendDonut
+          slices={slices.map((r) => ({
+            id: r.id,
+            value: Number(r.value) || 0,
+            color: r.id === "empty" ? "var(--color-line)" : CHART[r.colorIndex % CHART.length],
+          }))}
+          onPick={(id) => {
+            if (id !== "spend-slice" && id !== "save-slice" && id !== "empty") openBucket(id);
+          }}
+        />
+        <div className="pointer-events-none absolute inset-0 grid place-items-center px-10 text-center">
           <div>
             <div className="text-base font-semibold tabular-nums">{money(center, "HKD")}</div>
             <div className="text-xs text-muted">{centerLabel}</div>
@@ -293,6 +269,73 @@ export function SpendingPage() {
         />
       ) : null}
     </div>
+  );
+}
+
+function SpendDonut({
+  slices,
+  onPick,
+}: {
+  slices: { id: string; value: number; color: string }[];
+  onPick: (id: string) => void;
+}) {
+  const usable = slices.filter((s) => s.value > 0);
+  const total = usable.reduce((s, r) => s + r.value, 0);
+  const cx = 100;
+  const cy = 100;
+  const radius = 78;
+  const width = 30;
+  if (total <= 0 || usable.length === 0) {
+    return (
+      <svg viewBox="0 0 200 200" className="h-full w-full" aria-hidden>
+        <circle cx={cx} cy={cy} r={radius} fill="none" stroke="var(--color-line)" strokeWidth={width} />
+      </svg>
+    );
+  }
+  if (usable.length === 1) {
+    const only = usable[0];
+    return (
+      <svg viewBox="0 0 200 200" className="h-full w-full">
+        <circle
+          cx={cx}
+          cy={cy}
+          r={radius}
+          fill="none"
+          stroke={only.color}
+          strokeWidth={width}
+          className={only.id === "empty" ? undefined : "cursor-pointer"}
+          onClick={() => onPick(only.id)}
+        />
+      </svg>
+    );
+  }
+  let angle = -Math.PI / 2;
+  return (
+    <svg viewBox="0 0 200 200" className="h-full w-full">
+      {usable.map((s) => {
+        const sweep = (s.value / total) * Math.PI * 2;
+        const start = angle;
+        const end = angle + sweep;
+        angle = end;
+        const large = sweep > Math.PI ? 1 : 0;
+        const x1 = cx + radius * Math.cos(start);
+        const y1 = cy + radius * Math.sin(start);
+        const x2 = cx + radius * Math.cos(end);
+        const y2 = cy + radius * Math.sin(end);
+        return (
+          <path
+            key={s.id}
+            d={`M ${x1} ${y1} A ${radius} ${radius} 0 ${large} 1 ${x2} ${y2}`}
+            fill="none"
+            stroke={s.color}
+            strokeWidth={width}
+            strokeLinejoin="round"
+            className="cursor-pointer"
+            onClick={() => onPick(s.id)}
+          />
+        );
+      })}
+    </svg>
   );
 }
 

@@ -48,13 +48,18 @@ export function AppGate({ children }: { children: ReactNode }) {
   if (!ready) {
     return <div className="grid min-h-dvh place-items-center text-sm text-muted">HK Life Money</div>;
   }
+  const onTab = path === "/" || path === "/assets" || path === "/budget" || path === "/reports" || path === "/more";
   return (
     <div
       className={cn(
         "mx-auto min-h-dvh max-w-lg bg-background/80 lg:max-w-none lg:pb-0",
-        access === "elderly"
-          ? "pb-[calc(4.5rem+1rem+env(safe-area-inset-bottom))]"
-          : "pb-[calc(4rem+1rem+env(safe-area-inset-bottom))]",
+        onTab
+          ? access === "elderly"
+            ? "pb-[calc(4.5rem+2.25rem+env(safe-area-inset-bottom))]"
+            : "pb-[calc(4rem+2.25rem+env(safe-area-inset-bottom))]"
+          : access === "elderly"
+            ? "pb-[calc(4.5rem+1rem+env(safe-area-inset-bottom))]"
+            : "pb-[calc(4rem+1rem+env(safe-area-inset-bottom))]",
       )}
     >
       <div className="lg:ml-56">{children}</div>

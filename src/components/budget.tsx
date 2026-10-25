@@ -758,6 +758,7 @@ function AdhocEditorBody({
         label=""
         placeholder={t.add.amount}
         amount={amount}
+        currency={currency}
         active
         onFocusAmount={() => undefined}
       />
@@ -1008,7 +1009,7 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
       <TextLine value={name} onChange={setName} placeholder={t.budget.regularName} />
       {kind === "transfer" ? (
         <>
-          <AccountLine accounts={accounts} value={accountId} onChange={setAccountId} placeholder={t.add.fromAccount} role={t.add.fromAccount} amount={amount} active={field === "amount"} onFocusAmount={() => setField("amount")} />
+          <AccountLine accounts={accounts} value={accountId} onChange={setAccountId} placeholder={t.add.fromAccount} role={t.add.fromAccount} amount={amount} currency={currency} active={field === "amount"} onFocusAmount={() => setField("amount")} />
           <AccountLine
             accounts={accounts}
             value={toAccountId}
@@ -1020,6 +1021,7 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
             placeholder={t.add.toAccount}
             role={t.add.toAccount}
             amount={destLocked ? destAmount : String(autoDest || amount || "0")}
+            currency={destCcy}
             active={field === "dest"}
             onFocusAmount={() => setField("dest")}
           />
@@ -1038,6 +1040,7 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
             label={cat ? categoryPath(cat, categories, locale) : ""}
             placeholder={t.add.pickCategory}
             amount={showSplit && splitMortgage ? undefined : amount}
+            currency={currency}
             active={field === "amount"}
             onFocusAmount={showSplit && splitMortgage ? undefined : () => setField("amount")}
             onPressLabel={() => setPickCat(true)}
@@ -1046,8 +1049,8 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
       )}
       {showSplit && splitMortgage ? (
         <>
-          <LineRow label={t.add.principal} amount={principalAmt} active={field === "principal"} onFocusAmount={() => setField("principal")} />
-          <LineRow label={t.add.interest} amount={interestAmt} active={field === "interest"} onFocusAmount={() => setField("interest")} />
+          <LineRow label={t.add.principal} amount={principalAmt} currency={currency} active={field === "principal"} onFocusAmount={() => setField("principal")} />
+          <LineRow label={t.add.interest} amount={interestAmt} currency={currency} active={field === "interest"} onFocusAmount={() => setField("interest")} />
           <AccountLine accounts={accounts} value={toAccountId} onChange={setToAccountId} placeholder={t.add.mortgageTo} />
         </>
       ) : null}

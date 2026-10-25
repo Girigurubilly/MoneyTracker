@@ -160,7 +160,7 @@ export function DashboardPage() {
       <Link to="/reports/living" className="mx-4 block rounded-xl bg-elevated p-4">
         <div className="flex items-start justify-between gap-2">
           <h2 className="text-base font-semibold">{t.reports.living}</h2>
-          {ledgerLive ? <StatusChip status={houseStatus} /> : <span className="text-xs font-medium text-muted">{t.reports.notSet}</span>}
+          {m ? <StatusChip status={houseStatus} /> : <span className="text-xs font-medium text-muted">{t.reports.notSet}</span>}
         </div>
         <div className="mt-4">
           <div className="text-xs text-muted">{t.reports.housingCost}</div>
@@ -177,7 +177,11 @@ export function DashboardPage() {
       <Link to="/reports/travel" className="mx-4 mt-3 block rounded-xl bg-elevated p-4">
         <div className="flex items-start justify-between gap-2">
           <h2 className="text-base font-semibold">{t.reports.travel}</h2>
-          <BudgetChip over={annual > 0 && ytd > annual} />
+          {ledgerLive && annual > 0 ? (
+            <BudgetChip over={ytd > annual} />
+          ) : (
+            <span className="text-xs font-medium text-muted">{t.reports.notSet}</span>
+          )}
         </div>
         <div className="mt-4 grid grid-cols-2 gap-4">
           <div>
@@ -202,9 +206,13 @@ export function DashboardPage() {
       <Link to="/reports/retirement" className="mx-4 mt-3 block rounded-xl bg-elevated p-4">
         <div className="flex items-start justify-between gap-2">
           <h2 className="text-base font-semibold">{t.reports.retirement}</h2>
-          {ledgerLive ? <StatusChip status={retStatus} /> : <span className="text-xs font-medium text-muted">{t.reports.notSet}</span>}
+          {ledgerLive && (fire.fireNumber > 0 || room.planned > 0) ? (
+            <StatusChip status={retStatus} />
+          ) : (
+            <span className="text-xs font-medium text-muted">{t.reports.notSet}</span>
+          )}
         </div>
-        {ledgerLive ? (
+        {ledgerLive && (fire.fireNumber > 0 || room.planned > 0) ? (
           <>
             <div className="mt-4">
               <div className="text-xs text-muted">{t.reports.fireTitle}</div>
