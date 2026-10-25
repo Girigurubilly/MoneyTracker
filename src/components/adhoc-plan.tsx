@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { AdhocEditor, PostAdhocSheet } from "@/components/budget";
 import { AmountWithHkd } from "@/components/currency-field";
 import { ScreenHeader } from "@/components/shared";
+import { ReportAiButton, ReportAiSheet } from "@/components/report-ai-sheet";
+import { renderAdhocBriefMarkdown } from "@/lib/calc/adhoc-brief";
 import { categoryPath } from "@/lib/categories";
 import { todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
@@ -42,6 +44,8 @@ export function AdhocPlanPage() {
   const rows = useApp((s) => s.adhocBudgets);
   const categories = useApp((s) => s.categories);
   const rates = useApp((s) => s.fxRates);
+  const trips = useApp((s) => s.trips);
+  const accounts = useApp((s) => s.accounts);
   const delAdhoc = useApp((s) => s.deleteAdhocBudget);
   const addWish = useApp((s) => s.addWishItem);
   const today = todayISO();
@@ -49,6 +53,20 @@ export function AdhocPlanPage() {
   const [editing, setEditing] = useState<AdhocBudget | null>(null);
   const [addingMonth, setAddingMonth] = useState<string | null>(null);
   const [posting, setPosting] = useState<AdhocBudget | null>(null);
+  const [ai, setAi] = useState(false);
+  const markdown = useMemo(
+    () =>
+      renderAdhocBriefMarkdown({
+        asOf: today,
+        locale,
+        rows,
+        categories,
+        rates,
+        trips,
+        accounts,
+      }),
+    [today, locale, rows, categories, rates, trips, accounts],
+  );
 
   const groups = useMemo(() => {
     const by = new Map<string, AdhocBudget[]>();
@@ -114,6 +132,16 @@ export function AdhocPlanPage() {
         }
       />
       <p className="px-5 pb-2 text-xs leading-5 text-muted">{t.budget.adhocPlanHint}</p>
+      <ReportAiButton onClick={() => setAi(true)} />
+      {ai ? (
+        <ReportAiSheet
+          title={t.reports.exportBrief}
+          hint={t.budget.adhocAiHint}
+          filename={`hk-life-adhoc-${today}.md`}
+          markdown={markdown}
+          onClose={() => setAi(false)}
+        />
+      ) : null}
       <section className="pt-2">
         <div className="flex items-center justify-between gap-3 px-5 pb-2">
           <h2 className="min-w-0 text-sm font-medium text-muted">
