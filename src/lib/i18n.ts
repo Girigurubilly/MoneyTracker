@@ -200,8 +200,6 @@ export const messages = {
       copied: "Copied",
       copyFailed: "Could not copy. Use Download, or long-press the text.",
       downloadBrief: "Download",
-      discussionPack: "Discussion pack",
-      discussionPackHint: "One markdown and JSON snapshot. Unknowns stay unknown. A proposal is not an approved plan.",
     },
     budget: {
       title: "Budget",
@@ -1310,8 +1308,6 @@ export const messages = {
       copied: "已複製",
       copyFailed: "複製唔到。用下載，或者長按上面文字。",
       downloadBrief: "下載",
-      discussionPack: "財務討論包",
-      discussionPackHint: "同一份 Markdown 同 JSON。未知就保持未知。建議唔等於已批准嘅計劃。",
     },
     budget: {
       title: "預算",

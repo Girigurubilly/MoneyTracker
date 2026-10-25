@@ -259,33 +259,6 @@ function stageSpend(stages: LifePlanSpendingStage[], age: number): { monthly: nu
   return { monthly: hit.monthlyLivingCostInTodayMoney, follows: hit.followsInflation };
 }
 
-export function employedMonthsInYear(year: number, end: string | null, start: string | null = null): number {
-  if (end && end.slice(0, 4) === String(year) && end.endsWith("-12-31")) return 0;
-  if (end && end.slice(0, 4) < String(year)) return 0;
-  let count = 0;
-  for (let month = 1; month <= 12; month++) {
-    const key = `${year}-${String(month).padStart(2, "0")}`;
-    if (start && key < start.slice(0, 7)) continue;
-    if (end && key >= end.slice(0, 7)) continue;
-    count += 1;
-  }
-  return count;
-}
-
-export function unemployedMonthsInYear(year: number, end: string | null, resume: string | null): number {
-  return Math.max(0, 12 - employedMonthsInYear(year, end, null) - (resume ? employedMonthsInYear(year, null, resume) : 0));
-}
-
-/** Payments in a calendar year. Ending on the 1st keeps that month unpaid. */
-export function mortgageMonthsInYear(year: number, end: string | null): number {
-  if (!end) return 12;
-  if (end.slice(0, 4) > String(year)) return 12;
-  if (end.slice(0, 4) < String(year)) return 0;
-  const month = Number(end.slice(5, 7));
-  if (end.slice(8, 10) === "01") return Math.max(0, month - 1);
-  return month;
-}
-
 function phaseFor(path: LifePathId, plan: RetirementLifePlan, yearEnd: string): LifePhase {
   if (path === "stay") {
     const end = plan.currentJob.endDate || plan.retirement.startDate;
@@ -367,20 +340,7 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
     let income = 0;
     let living = 0;
     let livingMonthlyToday = 0;
-    const jobEnd = path === "stay" ? plan.currentJob.endDate : plan.lowerStressJob.endDate || plan.currentJob.endDate;
-    const midYearJob = Boolean(jobEnd && jobEnd.startsWith(String(calendarYear)) && !jobEnd.endsWith("-12-31"));
-    const empMonths = employedMonthsInYear(calendarYear, jobEnd, null);
-    if (i !== 0 && midYearJob) {
-      const net = path === "lower" ? netLower(plan, i) : netCurrent(plan, i);
-      income = net * empMonths;
-      const currentLiving = n(plan.currentJob.actualMonthlySpending) * empMonths;
-      const st = stageSpend(plan.spendingStages, age);
-      const retiredMonths = 12 - empMonths;
-      const retiredMonthly = st?.monthly ?? n(plan.currentJob.actualMonthlySpending);
-      living = currentLiving + retiredMonthly * retiredMonths;
-      livingMonthlyToday = living / 12;
-      if (!st && retiredMonths > 0) notes.push("No retirement spending stage for this age.");
-    } else if (phase === "current") {
+    if (phase === "current") {
       const net = netCurrent(plan, i);
       const netAnnual = net * 12;
       if (plan.currentJob.monthlySavingsOverride != null) {
@@ -411,12 +371,11 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
     let mortgagePay = 0;
     if (plan.mortgage.enabled && plan.mortgage.monthlyPayment) {
       const ended = plan.mortgage.endDate ? yearEnd > plan.mortgage.endDate : false;
-      const included =
-        (phase === "current" && plan.mortgage.paymentIncludedInCurrentSpending) ||
-        (phase === "retired" && plan.mortgage.paymentIncludedInRetirementLivingCost);
-      if (!included) {
-        const payMonths = i === 0 ? (ended ? 0 : 12) : mortgageMonthsInYear(calendarYear, plan.mortgage.endDate);
-        mortgagePay = n(plan.mortgage.monthlyPayment) * payMonths;
+      if (!ended) {
+        const included =
+          (phase === "current" && plan.mortgage.paymentIncludedInCurrentSpending) ||
+          (phase === "retired" && plan.mortgage.paymentIncludedInRetirementLivingCost);
+        if (!included) mortgagePay = n(plan.mortgage.monthlyPayment) * 12;
       }
     }
 
