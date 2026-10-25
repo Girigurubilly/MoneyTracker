@@ -48,12 +48,12 @@ export function AppGate({ children }: { children: ReactNode }) {
   if (!ready) {
     return <div className="grid min-h-dvh place-items-center text-sm text-muted">HK Life Money</div>;
   }
-  const onTab = path === "/" || path === "/assets" || path === "/budget" || path === "/reports" || path === "/more";
+  const onToday = path === "/";
   return (
     <div
       className={cn(
         "mx-auto min-h-dvh max-w-lg bg-background/80 lg:max-w-none lg:pb-0",
-        onTab
+        onToday
           ? access === "elderly"
             ? "pb-[calc(4.5rem+2.25rem+env(safe-area-inset-bottom))]"
             : "pb-[calc(4rem+2.25rem+env(safe-area-inset-bottom))]"
@@ -177,8 +177,7 @@ function AddFab() {
   const addOpen = useUi((s) => s.addOpen);
   const searchOpen = useUi((s) => s.searchOpen);
   const txDetailId = useUi((s) => s.txDetailId);
-  const roots = path === "/" || path === "/assets" || path === "/budget" || path === "/reports" || path === "/more";
-  if (!roots || addOpen || searchOpen || txDetailId) return null;
+  if (path !== "/" || addOpen || searchOpen || txDetailId) return null;
   const bar = access === "elderly" ? "4.5rem" : "4rem";
   return (
     <button
