@@ -96,6 +96,8 @@ export type AppSnapshot = {
   budgetTargetMode?: BudgetTargetMode;
   depositCategoryId?: string;
   lastFxSyncAt?: string;
+  fcConfirmedFacts?: string[];
+  fcOpenGaps?: string[];
   tripLibrary?: import("@/lib/trip-library").TripLibrary;
 };
 
@@ -129,6 +131,8 @@ async function writeMeta(
     lastFxSyncAt: "lastFxSyncAt" in patch ? patch.lastFxSyncAt : prev?.lastFxSyncAt,
     budgetTargetMode: patch.budgetTargetMode ?? prev?.budgetTargetMode ?? "all",
     depositCategoryId: "depositCategoryId" in patch ? patch.depositCategoryId : prev?.depositCategoryId,
+    fcConfirmedFacts: "fcConfirmedFacts" in patch ? patch.fcConfirmedFacts : prev?.fcConfirmedFacts,
+    fcOpenGaps: "fcOpenGaps" in patch ? patch.fcOpenGaps : prev?.fcOpenGaps,
   });
 }
 
@@ -178,6 +182,10 @@ type Dispatchers = {
   addDeposit: (partial: Omit<TimeSaving, "id"> & { id?: string }) => Promise<TimeSaving>;
   updateDeposit: (row: TimeSaving) => Promise<void>;
   deleteDeposit: (id: string) => Promise<void>;
+  upsertPromoSaving: (row: PromoSaving) => Promise<void>;
+  deletePromoSaving: (id: string) => Promise<void>;
+  setFcNotes: (confirmedFacts: string[], openGaps: string[]) => Promise<void>;
+  syncPromoFromDeposits: () => Promise<void>;
   setYearlyCell: (year: number, month0: number, field: "salary" | "other" | "expense", value: number) => Promise<void>;
   addWishItem: (row: WishItem) => Promise<void>;
   updateWishItem: (row: WishItem) => Promise<void>;
@@ -228,6 +236,8 @@ type AppState = {
   budgetTargetMode: BudgetTargetMode;
   depositCategoryId?: string;
   lastFxSyncAt?: string;
+  fcConfirmedFacts: string[];
+  fcOpenGaps: string[];
   hydrate: () => Promise<void>;
 } & Dispatchers;
 
@@ -309,6 +319,8 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     budgetTargetMode: meta?.budgetTargetMode === "regular" ? "regular" : "all",
     depositCategoryId: meta?.depositCategoryId,
     lastFxSyncAt: meta?.lastFxSyncAt,
+    fcConfirmedFacts: meta?.fcConfirmedFacts ?? [],
+    fcOpenGaps: meta?.fcOpenGaps ?? [],
   };
 }
 
@@ -544,7 +556,7 @@ async function migrateBaselineRows(): Promise<void> {
     idb().fxRates.toArray(),
   ]);
   const nextAccounts = migrateBalanceBasis(accounts);
-  const split = extractPromoDeposits(deposits, promo, rates);
+  const split = extractPromoDeposits(deposits, promo, rates, nextAccounts);
   const accountChanged = nextAccounts.some((a, i) => a !== accounts[i]);
   const depositChanged = split.deposits.length !== deposits.length;
   if (!accountChanged && !depositChanged && split.promo.length === promo.length) return;
@@ -798,6 +810,8 @@ export const useApp = create<AppState>((set, get) => ({
   adhocBudgets: [],
   deposits: [],
   promoSavings: [],
+  fcConfirmedFacts: [],
+  fcOpenGaps: [],
   yearlyPlans: [],
   wishlist: [],
   holdings: [],
@@ -1238,6 +1252,31 @@ export const useApp = create<AppState>((set, get) => ({
     set({ deposits: get().deposits.filter((d) => d.id !== id) });
     if (linked?.planned) await get().deleteTransaction(linked.id);
   },
+  upsertPromoSaving: async (row) => {
+    await idb().promoSavings.put(row);
+    set({
+      promoSavings: get().promoSavings.some((p) => p.id === row.id)
+        ? get().promoSavings.map((p) => (p.id === row.id ? row : p))
+        : [...get().promoSavings, row],
+    });
+  },
+  deletePromoSaving: async (id) => {
+    await idb().promoSavings.delete(id);
+    set({ promoSavings: get().promoSavings.filter((p) => p.id !== id) });
+  },
+  setFcNotes: async (confirmedFacts, openGaps) => {
+    await writeMeta({ fcConfirmedFacts: confirmedFacts, fcOpenGaps: openGaps }, get());
+    set({ fcConfirmedFacts: confirmedFacts, fcOpenGaps: openGaps });
+  },
+  syncPromoFromDeposits: async () => {
+    await migrateBaselineRows();
+    const loaded = await loadAll();
+    set({
+      accounts: loaded.accounts,
+      deposits: loaded.deposits,
+      promoSavings: loaded.promoSavings,
+    });
+  },
   setYearlyCell: async (year, month0, field, value) => {
     const id = `${year}-${String(month0 + 1).padStart(2, "0")}`;
     if (field === "expense" && id === todayISO().slice(0, 7)) {
@@ -1382,6 +1421,8 @@ export const useApp = create<AppState>((set, get) => ({
         budgetTargetMode: snap.budgetTargetMode === "regular" ? "regular" : "all",
         depositCategoryId: snap.depositCategoryId,
         lastFxSyncAt: snap.lastFxSyncAt,
+        fcConfirmedFacts: snap.fcConfirmedFacts,
+        fcOpenGaps: snap.fcOpenGaps,
       });
     });
     await migrateAdhocFromPlannedTxs();
@@ -1427,6 +1468,8 @@ export const useApp = create<AppState>((set, get) => ({
       budgetTargetMode: s.budgetTargetMode,
       depositCategoryId: s.depositCategoryId,
       lastFxSyncAt: s.lastFxSyncAt,
+      fcConfirmedFacts: s.fcConfirmedFacts,
+      fcOpenGaps: s.fcOpenGaps,
       tripLibrary: readTripLibrary() ?? undefined,
     };
   },

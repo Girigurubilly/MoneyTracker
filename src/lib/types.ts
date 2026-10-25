@@ -120,6 +120,8 @@ export type Account = {
   /** What the stored balance includes. Missing means not yet confirmed. */
   balanceBasis?: BalanceBasis;
   ownership?: "sole" | "joint";
+  /** How much of this balance to treat as available for household planning. */
+  planningAvailability?: "full_household" | "haircut_50" | "custom";
 };
 
 export type CategoryIconName =
@@ -419,6 +421,8 @@ export type TimeSaving = {
   amount: number;
   interest: number;
   accountId: string;
+  /** Where principal+interest go at maturity (free text). */
+  proceedsDestination?: string | null;
 };
 
 export type PromoAccessibility = "accessible" | "restricted" | "unknown";
@@ -518,6 +522,8 @@ export type Holding = {
   avgCost?: number;
   lastPriceAt?: string;
   accountId?: string;
+  /** Free-text policy for FC, e.g. hold_only / no_add. */
+  policyNote?: string;
 };
 
 export type Goal = {
@@ -548,6 +554,8 @@ export type Mortgage = {
   livingMode?: "own-mortgage" | "own-outright" | "rent" | "other";
   propertyAccountId?: string;
   paymentOverride?: number;
+  /** Optional savings/current account whose balance backs or links to the mortgage rate package. */
+  rateLinkedSavingsAccountId?: string | null;
   /** Manual interest and principal for YYYY-MM, instead of the formula. */
   scheduleEdits?: Record<string, { interest: number; principal: number }>;
 };

@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { Account, FxRate, Holding, TimeSaving } from "../types.ts";
-import { baselineChecks, buildFcBaseline, extractPromoDeposits, migrateBalanceBasis } from "./fc-baseline.ts";
+import type { Account, FxRate, Holding, Mortgage, TimeSaving } from "../types.ts";
+import {
+  baselineChecks,
+  buildFcBaseline,
+  extractPromoDeposits,
+  looksLikePromoDeposit,
+  migrateBalanceBasis,
+  renderFcBaselineMarkdown,
+} from "./fc-baseline.ts";
 
 const rates: FxRate[] = [{ currency: "HKD", perHkd: 1, asOf: "2026-10-25", source: "test" }];
 
@@ -11,7 +18,7 @@ const bank: Account = {
   nameZh: "儲蓄",
   type: "savings",
   currency: "HKD",
-  balance: 220000,
+  balance: 1_020_000,
   includeInNetWorth: true,
   group: "cash",
   balanceBasis: "bank_total_incl_deposits",
@@ -108,6 +115,9 @@ describe("fc baseline", () => {
     assert.equal(snap.deposits.some((d) => d.id === "dep-1"), true);
     assert.equal(snap.promo_savings.some((p) => p.id === "promo-marathon" && p.distinct_from_td === true), true);
     assert.equal(snap.deposits.some((d) => d.id === "promo-marathon"), false);
+    assert.ok(snap.confirmed_facts.length >= 1);
+    assert.ok(Array.isArray(snap.open_gaps));
+    assert.equal(snap.cashflow_period.is_path_a_surplus_cons, false);
     const line = snap.holdings[0];
     assert.equal(line?.ticker, "2800");
     assert.equal(line?.qty, 100);
@@ -117,6 +127,10 @@ describe("fc baseline", () => {
     assert.equal(snap.cashflow_period.label, "MoneyTracker projection");
     assert.equal(snap.cashflow_period.monthly_rows.length, 12);
     assert.match(snap.meta.balance_basis_note, /not the same as accessible cash/);
+    const md = renderFcBaselineMarkdown(snap);
+    assert.match(md, /Promo savings/);
+    assert.match(md, /Confirmed facts/);
+    assert.match(md, /\.json/);
   });
 
   it("moves a marathon deposit into promo savings and leaves a normal deposit", () => {
@@ -127,7 +141,7 @@ describe("fc baseline", () => {
       endDate: "2026-06-30",
       rate: 4,
       currency: "HKD",
-      amount: 1000,
+      amount: 803000,
       interest: 20,
       accountId: "bank",
     };
@@ -135,8 +149,110 @@ describe("fc baseline", () => {
     assert.deepEqual(split.deposits.map((d) => d.id), ["dep-1"]);
     assert.equal(split.promo[0]?.id, "promo-td-marathon");
     assert.equal(split.promo[0]?.distinctFromTd, true);
-    assert.equal(split.promo[0]?.residualHkd, 1000);
+    assert.equal(split.promo[0]?.residualHkd, 803000);
     assert.notEqual(split.promo[0]?.arrangementEnd, deposit.endDate);
+  });
+
+  it("detects marathon via linked account name even when bank label is generic", () => {
+    const acc: Account = { ...bank, id: "scb", name: "SCB Marathon package", nameZh: "馬拉松" };
+    const silent: TimeSaving = {
+      id: "td-silent",
+      bank: "Standard Chartered",
+      startDate: "2026-01-01",
+      endDate: "2027-01-01",
+      rate: 3,
+      currency: "HKD",
+      amount: 803000,
+      interest: 0,
+      accountId: "scb",
+    };
+    assert.equal(looksLikePromoDeposit(silent, [acc]), true);
+    const snap = buildFcBaseline({
+      asOf: "2026-10-25",
+      accounts: [acc],
+      deposits: [silent],
+      promo: [],
+      holdings: [],
+      mortgage: null,
+      retirementAccounts: [],
+      allowances: [],
+      adhoc: [],
+      rates,
+      plans: [],
+      txs: [],
+      categories: [],
+      recurring: [],
+      monthCap: 0,
+    });
+    assert.equal(snap.promo_savings.length, 1);
+    assert.equal(snap.promo_savings[0]?.residual_hkd, 803000);
+    assert.equal(snap.deposits.length, 0);
+    assert.equal(snap.checks.some((c) => c.code === "promo_residual" && c.value === 803000), true);
+  });
+
+  it("emits P0 checks including active TD, promo residual, bank−TD−promo, holdings, liability", () => {
+    const loanAcc: Account = {
+      id: "loan",
+      name: "Mortgage",
+      nameZh: "按揭",
+      type: "loan",
+      currency: "HKD",
+      balance: -500000,
+      includeInNetWorth: true,
+      group: "liabilities",
+      balanceBasis: "unverified",
+    };
+    const mortgage: Mortgage = {
+      id: "m1",
+      name: "Home",
+      nameZh: "樓",
+      accountId: "loan",
+      original: 600000,
+      outstanding: 510000,
+      rate: 0.0375,
+      remainingMonths: 240,
+      paymentDay: 1,
+      type: "p",
+    };
+    const checks = baselineChecks({
+      accounts: [bank, broker, loanAcc],
+      holdings: [holding],
+      deposits: [deposit],
+      promo: [{ id: "p1", accountId: "bank", residualHkd: 80000, rateSchedule: [], arrangementEnd: "2026-12-31", accessibility: "unknown", distinctFromTd: true }],
+      mortgage,
+      rates,
+      asOf: "2026-10-25",
+    });
+    const codes = new Set(checks.map((c) => c.code));
+    for (const code of ["active_td_sum", "promo_residual", "bank_total_minus_td_promo", "holdings_sum_vs_investment", "liability_unexplained_diff"]) {
+      assert.ok(codes.has(code), code);
+    }
+    assert.equal(checks.find((c) => c.code === "active_td_sum")?.value, 200000);
+    assert.equal(checks.find((c) => c.code === "promo_residual")?.value, 80000);
+  });
+
+  it("merges editable confirmed_facts and open_gaps", () => {
+    const snap = buildFcBaseline({
+      asOf: "2026-10-25",
+      accounts: [bank],
+      deposits: [],
+      promo: [],
+      holdings: [],
+      mortgage: null,
+      retirementAccounts: [],
+      allowances: [],
+      adhoc: [],
+      rates,
+      plans: [],
+      txs: [],
+      categories: [],
+      recurring: [],
+      monthCap: 0,
+      confirmedFacts: ["Custom fact A"],
+      openGaps: ["Custom gap B"],
+    });
+    assert.deepEqual(snap.confirmed_facts, ["Custom fact A"]);
+    assert.ok(snap.open_gaps.includes("Custom gap B"));
   });
 
   it("leaves cost empty when average cost was not entered", () => {
