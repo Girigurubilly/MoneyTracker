@@ -45,6 +45,7 @@ import {
   type Account,
   type AccountGroup,
   type AccountType,
+  type BalanceBasis,
   type Currency,
   type MoneyUnit,
 } from "@/lib/types";
@@ -423,6 +424,8 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
     account?.linkedAccountId ?? (account?.type === "mortgage" ? mortgage?.propertyAccountId ?? "" : ""),
   );
   const [stockBook, setStockBook] = useState(account?.stockBook ?? "");
+  const [basis, setBasis] = useState<BalanceBasis>(account?.balanceBasis ?? "unverified");
+  const [ownership, setOwnership] = useState<"sole" | "joint">(account?.ownership ?? "sole");
   const [extra, setExtra] = useState<"note" | null>(null);
 
   async function save() {
@@ -450,7 +453,9 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
       expectedReturn: account?.expectedReturn,
       retireInclude: account?.retireInclude,
       stockBook: type === "investment" && stockBook ? (stockBook as Account["stockBook"]) : undefined,
-      holdingSync: type === "investment" ? stockBook !== "" : undefined,
+      holdingSync: type === "investment" ? stockBook !== "" : account?.holdingSync,
+      balanceBasis: basis,
+      ownership,
     };
     if (account) await update(row);
     else await add(row);
@@ -549,6 +554,27 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
           />
         )}
         <LineRow label={t.assets.balance} amount={bal} currency={currency} active onFocusAmount={() => undefined} />
+        <SelectLine
+          label={t.assets.basis}
+          value={basis}
+          onChange={(v) => setBasis(v as BalanceBasis)}
+          options={[
+            { id: "unverified", label: t.assets.basisUnverified },
+            { id: "available_ex_deposits", label: t.assets.basisAvailable },
+            { id: "bank_total_incl_deposits", label: t.assets.basisBankTotal },
+            { id: "holdings_derived", label: t.assets.basisHoldings },
+          ]}
+        />
+        <p className="px-4 pb-2 text-[11px] leading-4 text-muted">{t.assets.basisHint}</p>
+        <SelectLine
+          label={t.assets.ownership}
+          value={ownership}
+          onChange={(v) => setOwnership(v === "joint" ? "joint" : "sole")}
+          options={[
+            { id: "sole", label: t.assets.ownershipSole },
+            { id: "joint", label: t.assets.ownershipJoint },
+          ]}
+        />
         {type === "miles" ? null : (
           <label className="flex min-h-12 items-center justify-between gap-3 border-b border-line px-4">
             <span className="text-sm">{t.assets.include}</span>

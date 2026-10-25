@@ -250,6 +250,7 @@ export function HoldingsPage() {
                       {` · ${h.currency}`}
                       {" · "}
                       {h.quantity} × {h.lastPrice ? money(h.lastPrice, h.currency) : "—"}
+                      {h.avgCost != null ? ` · ${t.holdings.avgCost} ${money(h.avgCost, h.currency)}` : ""}
                     </div>
                   </button>
                   <div className="shrink-0 text-right">
@@ -349,11 +350,13 @@ function HoldingEditor({ holding, onClose }: { holding: Holding; onClose: () => 
   const [name, setName] = useState(holding.name);
   const [qty, setQty] = useState(String(holding.quantity));
   const [price, setPrice] = useState(holding.lastPrice ? String(holding.lastPrice) : "");
+  const [cost, setCost] = useState(holding.avgCost == null ? "" : String(holding.avgCost));
   const [currency, setCurrency] = useState<Currency>(holding.currency);
 
   function save() {
     const quantity = Number(qty.replace(/,/g, ""));
     const lastPrice = Number(price.replace(/,/g, "")) || 0;
+    const avgCost = cost.trim() === "" ? undefined : Number(cost.replace(/,/g, ""));
     if (!symbol.trim() || !Number.isFinite(quantity) || quantity === 0) {
       toast(t.holdings.needFields);
       return;
@@ -366,6 +369,7 @@ function HoldingEditor({ holding, onClose }: { holding: Holding; onClose: () => 
       name: listing === "hk" ? name.trim() || listed.symbol : listed.symbol,
       quantity,
       lastPrice,
+      avgCost: avgCost != null && Number.isFinite(avgCost) ? avgCost : undefined,
       currency,
       accountId: undefined,
       lastPriceAt: lastPrice ? new Date().toISOString() : holding.lastPriceAt,
@@ -409,6 +413,7 @@ function HoldingEditor({ holding, onClose }: { holding: Holding; onClose: () => 
         </select>
         <input value={qty} onChange={(e) => setQty(e.target.value)} placeholder={t.holdings.qty} inputMode="decimal" className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
         <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder={t.holdings.price} inputMode="decimal" className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
+        <input value={cost} onChange={(e) => setCost(e.target.value)} placeholder={t.holdings.avgCost} inputMode="decimal" className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
         <button type="button" className="h-12 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={save}>
           {t.common.done}
         </button>
