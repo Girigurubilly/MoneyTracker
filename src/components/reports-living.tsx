@@ -309,6 +309,7 @@ function MortgageEditor({ open, onClose }: { open: boolean; onClose: () => void 
   const update = useApp((s) => s.updateMortgage);
   const properties = accounts.filter((a) => a.type === "property");
   const loans = accounts.filter((a) => a.type === "mortgage" || a.type === "loan");
+  const savings = accounts.filter((a) => a.type === "savings" || a.type === "current" || a.group === "cash");
   const [outstanding, setOutstanding] = useState(String(m?.outstanding ?? 0));
   const [original, setOriginal] = useState(String(m?.original ?? m?.outstanding ?? 0));
   const [startDate, setStartDate] = useState(m?.startDate ?? "");
@@ -320,6 +321,7 @@ function MortgageEditor({ open, onClose }: { open: boolean; onClose: () => void 
   const [mode, setMode] = useState<NonNullable<Mortgage["livingMode"]>>(m?.livingMode ?? "own-mortgage");
   const [propertyId, setPropertyId] = useState(m?.propertyAccountId ?? properties[0]?.id ?? "");
   const [accountId, setAccountId] = useState(m?.accountId ?? loans[0]?.id ?? "");
+  const [linkedSavingsId, setLinkedSavingsId] = useState(m?.rateLinkedSavingsAccountId ?? "");
   const [day, setDay] = useState(String(m?.paymentDay ?? 1));
   const [override, setOverride] = useState(m?.paymentOverride ? String(m.paymentOverride) : "");
   const preview = remainingFromStart(
@@ -359,6 +361,18 @@ function MortgageEditor({ open, onClose }: { open: boolean; onClose: () => void 
               </option>
             ))}
           </select>
+        </label>
+        <label className="block py-2 text-xs text-muted">
+          {t.reports.rateLinkedSavings}
+          <select value={linkedSavingsId} onChange={(e) => setLinkedSavingsId(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground">
+            <option value="">{t.common.none}</option>
+            {savings.map((a) => (
+              <option key={a.id} value={a.id}>
+                {pickName(locale, a.name, a.nameZh)}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-[11px] text-muted">{t.reports.rateLinkedSavingsHint}</span>
         </label>
         <label className="block py-2 text-xs text-muted">
           {t.reports.originalLoan}
@@ -443,6 +457,7 @@ function MortgageEditor({ open, onClose }: { open: boolean; onClose: () => void 
               type,
               livingMode: mode,
               propertyAccountId: propertyId || undefined,
+              rateLinkedSavingsAccountId: linkedSavingsId || null,
               paymentOverride: Number(override) > 0 ? Number(override) : undefined,
               scheduleEdits: m?.scheduleEdits,
             };

@@ -351,6 +351,7 @@ function HoldingEditor({ holding, onClose }: { holding: Holding; onClose: () => 
   const [qty, setQty] = useState(String(holding.quantity));
   const [price, setPrice] = useState(holding.lastPrice ? String(holding.lastPrice) : "");
   const [cost, setCost] = useState(holding.avgCost == null ? "" : String(holding.avgCost));
+  const [policyNote, setPolicyNote] = useState(holding.policyNote ?? "");
   const [currency, setCurrency] = useState<Currency>(holding.currency);
 
   function save() {
@@ -370,6 +371,7 @@ function HoldingEditor({ holding, onClose }: { holding: Holding; onClose: () => 
       quantity,
       lastPrice,
       avgCost: avgCost != null && Number.isFinite(avgCost) ? avgCost : undefined,
+      policyNote: policyNote.trim() || undefined,
       currency,
       accountId: undefined,
       lastPriceAt: lastPrice ? new Date().toISOString() : holding.lastPriceAt,
@@ -414,6 +416,8 @@ function HoldingEditor({ holding, onClose }: { holding: Holding; onClose: () => 
         <input value={qty} onChange={(e) => setQty(e.target.value)} placeholder={t.holdings.qty} inputMode="decimal" className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
         <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder={t.holdings.price} inputMode="decimal" className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
         <input value={cost} onChange={(e) => setCost(e.target.value)} placeholder={t.holdings.avgCost} inputMode="decimal" className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
+        <input value={policyNote} onChange={(e) => setPolicyNote(e.target.value)} placeholder={t.holdings.policyNote} className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
+        <p className="text-[11px] leading-4 text-muted">{t.holdings.policyNoteHint}</p>
         <button type="button" className="h-12 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={save}>
           {t.common.done}
         </button>

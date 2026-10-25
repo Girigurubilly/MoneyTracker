@@ -426,6 +426,9 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
   const [stockBook, setStockBook] = useState(account?.stockBook ?? "");
   const [basis, setBasis] = useState<BalanceBasis>(account?.balanceBasis ?? "unverified");
   const [ownership, setOwnership] = useState<"sole" | "joint">(account?.ownership ?? "sole");
+  const [planningAvail, setPlanningAvail] = useState<NonNullable<Account["planningAvailability"]> | "">(
+    account?.planningAvailability ?? "",
+  );
   const [extra, setExtra] = useState<"note" | null>(null);
 
   async function save() {
@@ -456,6 +459,7 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
       holdingSync: type === "investment" ? stockBook !== "" : account?.holdingSync,
       balanceBasis: basis,
       ownership,
+      planningAvailability: planningAvail || undefined,
     };
     if (account) await update(row);
     else await add(row);
@@ -575,6 +579,18 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
             { id: "joint", label: t.assets.ownershipJoint },
           ]}
         />
+        <SelectLine
+          label={t.assets.planningAvail}
+          value={planningAvail}
+          onChange={(v) => setPlanningAvail(v as typeof planningAvail)}
+          options={[
+            { id: "", label: t.common.none },
+            { id: "full_household", label: t.assets.planningAvailFull },
+            { id: "haircut_50", label: t.assets.planningAvailHaircut },
+            { id: "custom", label: t.assets.planningAvailCustom },
+          ]}
+        />
+        <p className="px-4 pb-2 text-[11px] leading-4 text-muted">{t.assets.planningAvailHint}</p>
         {type === "miles" ? null : (
           <label className="flex min-h-12 items-center justify-between gap-3 border-b border-line px-4">
             <span className="text-sm">{t.assets.include}</span>
