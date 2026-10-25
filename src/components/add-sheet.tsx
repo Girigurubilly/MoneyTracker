@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Overlay } from "@/components/shared";
 import { CategoryIcon } from "@/components/category-icon";
@@ -21,6 +21,7 @@ import { canSplitMortgage, categoryPath, mortgageEntryKind, resolvedDefaultAccou
 import { captureFxToHkd } from "@/lib/calc/fx";
 import { isTripActive, tripForDate } from "@/lib/calc/trips";
 import { applyTxRules, infersAdhoc, infersHousing, splitMortgageAmounts } from "@/lib/tx-rules";
+import { recentNoteLabels } from "@/lib/recent-notes";
 import { resolveAmountInput } from "@/lib/money-expr";
 import type { Category, Currency, MoneyUnit, TxType } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
@@ -102,6 +103,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
   const rates = useApp((s) => s.fxRates);
   const defaultCurrency = useApp((s) => s.defaultCurrency);
   const addTransaction = useApp((s) => s.addTransaction);
+  const transactions = useApp((s) => s.transactions);
   const moneyAccounts = moneyAccountsForPicker(accounts, { kid });
   const pickWallet = useUi((s) => s.openOctopus);
   const [type, setType] = useState<TxType>(initialType);
@@ -119,6 +121,11 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
   const [tripId, setTripId] = useState(() => tripForDate(trips, selectedDate || todayISO()) ?? "");
   const tripTouched = useRef(false);
   const [payee, setPayee] = useState("");
+  const noteDismissed = useRef(false);
+  const noteSuggestions = useMemo(
+    () => (type === "expense" ? recentNoteLabels(transactions, categoryId) : []),
+    [type, transactions, categoryId],
+  );
   const [pickCat, setPickCat] = useState(initialType !== "miles" && initialType !== "transfer");
   const pickedCat = useRef(false);
   const [principal, setPrincipal] = useState("");
@@ -142,6 +149,12 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
   const destN = destLocked ? Number(destAmount) || 0 : autoDest;
   const ctx = { categories, accounts };
 
+  useEffect(() => {
+    if (type === "expense" && noteSuggestions.length && !noteDismissed.current) {
+      setExtra((open) => open ?? "note");
+    }
+  }, [type, categoryId, noteSuggestions]);
+
   function changeType(next: TxType) {
     setType(next);
     if (next === "miles" || next === "transfer") {
@@ -157,6 +170,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
 
   function onPickCategory(c: Category | null) {
     pickedCat.current = true;
+    noteDismissed.current = false;
     setCategoryId(c?.id ?? "");
     if (infersHousing(c?.id, categories)) setHousing(true);
     if (!adhocTouched.current) setAdhoc(infersAdhoc(c?.id, categories));
@@ -446,7 +460,10 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
       {kid ? null : (
       <ExtraIconBar
         extra={extra}
-        onExtra={setExtra}
+        onExtra={(next) => {
+          if (extra === "note" && next !== "note") noteDismissed.current = true;
+          setExtra(next);
+        }}
         noteOn={!!payee}
         tripOn={!!tripId}
         housingOn={housing}
@@ -472,6 +489,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
         }}
         noteValue={payee}
         onNoteChange={setPayee}
+        noteSuggestions={type === "expense" ? noteSuggestions : []}
         tripValue={tripId}
         tripOptions={trips.filter((tr) => isTripActive(tr, todayISO())).map((tr) => ({ id: tr.id, label: pickName(locale, tr.name, tr.nameZh) }))}
         onTripChange={(id) => {

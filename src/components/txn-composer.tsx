@@ -267,6 +267,7 @@ export function ExtraIconBar({
   onAdhoc,
   noteValue,
   onNoteChange,
+  noteSuggestions,
   tripValue,
   tripOptions,
   onTripChange,
@@ -287,6 +288,7 @@ export function ExtraIconBar({
   onAdhoc?: () => void;
   noteValue?: string;
   onNoteChange?: (v: string) => void;
+  noteSuggestions?: string[];
   tripValue?: string;
   tripOptions?: { id: string; label: string }[];
   onTripChange?: (id: string) => void;
@@ -343,6 +345,23 @@ export function ExtraIconBar({
         <div className="px-4 pb-3">
           <p className="pb-1.5 text-[11px] text-muted">{t.add.noteHint}</p>
           <input value={noteValue ?? ""} onChange={(e) => onNoteChange(e.target.value)} placeholder={t.add.note} className="h-11 w-full rounded-lg bg-elevated px-3 text-sm outline-none" />
+          {noteSuggestions?.length ? (
+            <div className="mt-2">
+              <p className="pb-1.5 text-[11px] text-muted">{t.add.recentNotes}</p>
+              <div className="flex flex-wrap gap-2">
+                {noteSuggestions.map((label) => (
+                  <button
+                    key={label}
+                    type="button"
+                    className={`max-w-full truncate rounded-full px-3 py-1.5 text-xs ${noteValue === label ? "bg-accent text-on-accent" : "bg-elevated"}`}
+                    onClick={() => onNoteChange(label)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
       {extra === "trip" && onTripChange ? (
