@@ -32,7 +32,6 @@ function AssetBriefSheet({ onClose }: { onClose: () => void }) {
   const deposits = useApp((s) => s.deposits);
   const retirementAccounts = useApp((s) => s.retirementAccounts);
   const mortgage = useApp((s) => s.mortgage);
-  const arrangements = useApp((s) => s.arrangements);
   const recurring = useApp((s) => s.recurring);
   const markdown = useMemo(
     () =>
@@ -60,11 +59,9 @@ function AssetBriefSheet({ onClose }: { onClose: () => void }) {
       holdings,
       retirement: retirementAccounts,
       rates,
-      arrangements,
-      mortgages: mortgage ? [mortgage] : [],
     });
     return { md: renderDiscussionMarkdown(snap), json: renderDiscussionJson(snap) };
-  }, [accounts, deposits, holdings, retirementAccounts, rates, arrangements, mortgage]);
+  }, [accounts, deposits, holdings, retirementAccounts, rates]);
 
   async function copy() {
     if (await copyPlainText(markdown)) {

@@ -4,17 +4,14 @@ import type {
   DepositLifecycle,
   FxRate,
   Holding,
-  Mortgage,
   PlanChange,
   PlanFactStatus,
-  ProductArrangement,
   PurposeAllocation,
   RetirementAccount,
   SpendCoverage,
   TimeSaving,
 } from "../types.ts";
 import { toHkd } from "./fx.ts";
-import { reviewArrangements, type ArrangementView } from "./arrangements.ts";
 
 export const BASELINE_SCHEMA = 1;
 export const CALC_VERSION = "baseline-2026-10-25";
@@ -351,7 +348,6 @@ export type DiscussionSnapshot = {
   allocations: PurposeAllocation[];
   clashes: { refId: string; allocated: number; limit: number }[];
   retirement: ReturnType<typeof retirementOnce>;
-  arrangements: ArrangementView[];
   assumptions: PlanChange[];
   warnings: string[];
   coverage: SpendCoverage;
@@ -370,8 +366,6 @@ export function buildDiscussionSnapshot(input: {
   coverage?: SpendCoverage;
   maskNames?: boolean;
   id?: string;
-  arrangements?: ProductArrangement[];
-  mortgages?: Mortgage[];
 }): DiscussionSnapshot {
   const accounts = input.accounts.map(migrateAccount);
   const deposits = input.deposits.map(migrateDeposit);
@@ -408,13 +402,6 @@ export function buildDiscussionSnapshot(input: {
   for (const [key, value] of Object.entries(coverage)) {
     if (value == null) warnings.push(`spend-coverage-unknown:${key}`);
   }
-  const arrangements = reviewArrangements({
-    arrangements: input.arrangements ?? [],
-    accounts,
-    mortgages: input.mortgages ?? [],
-    asOf: input.asOf,
-  });
-  for (const alert of arrangements.alerts) warnings.push(`arrangement:${alert.code}:${alert.arrangementId}`);
   return {
     schema: BASELINE_SCHEMA,
     calc: CALC_VERSION,
@@ -430,7 +417,6 @@ export function buildDiscussionSnapshot(input: {
       fundsFor(accounts, deposits),
     ),
     retirement: retirementOnce(accounts, (input.retirement ?? []).map(migrateRetirement)),
-    arrangements: arrangements.views,
     assumptions: input.changes ?? [],
     warnings,
     coverage,
@@ -455,8 +441,6 @@ const AI_RULES = [
   "A past maturity date is not proof that cash was received.",
   "A current-account name does not mean the whole balance is free to spend.",
   "Joint balances are not entirely available unless a share was confirmed.",
-  "A promotional or mortgage-linked arrangement is not another asset. Do not add its balance again.",
-  "A rate expiry is not a principal maturity, and an estimate is not a posted interest transaction.",
 ];
 
 export function renderDiscussionMarkdown(s: DiscussionSnapshot): string {
@@ -496,14 +480,6 @@ export function renderDiscussionMarkdown(s: DiscussionSnapshot): string {
     `## Allocations`,
     ...(s.allocations.length ? s.allocations.map((a) => `- ${a.id} ${a.status} ${a.purpose} ${a.amount} ${a.currency} on ${a.refType}:${a.refId} by ${a.availableBy}`) : ["- none"]),
     ...(s.clashes.length ? s.clashes.map((c) => `- OVER ${c.refId}: ${c.allocated} > ${c.limit}`) : []),
-    ``,
-    `## Product arrangements`,
-    ...(s.arrangements.length
-      ? s.arrangements.map(
-          (a) =>
-            `- ${a.id} ${a.kind} ${a.structure}; parent ${a.parentAccountId}; child ${a.childAccountId ?? "none"}; attributed ${a.attributedBalance ?? "unknown"} ${a.currency}; inside parent ${a.countsInParent}; rate ${a.rateLabel}; rate expiry ${a.rateExpiry ?? "unknown"}; post-promo ${a.postPromoStatus === "verified" && a.postPromoRate != null ? a.postPromoRate : "unknown"}; cap ${a.capLabel}; withdrawal ${a.withdrawalStatus}; credits ${a.creditDates.join(", ") || "none"}; terms ${a.termsStatus} at ${a.termsVerifiedAt ?? "unknown"}; review ${a.reviewBy ?? "none"}; extra assets ${a.extraAssets}; interest ${a.interest.quality} ${a.interest.amount ?? "unknown"}`,
-        )
-      : ["- none"]),
     ``,
     `## Retirement links`,
     ...s.retirement.restricted.map((r) => `- ${r.id} access age ${r.accessAge}; already in an account: ${r.included}`),
