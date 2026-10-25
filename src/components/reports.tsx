@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
   ArrowLeftRight,
@@ -67,7 +67,7 @@ export function ReportsHub() {
   ].filter((g) => g.items.length);
   return (
     <div className="pb-10">
-      <ScreenHeader title={t.reports.title} large />
+      <ScreenHeader title={t.reports.title} backTo="/reports" />
       {groups.map((g) => (
         <div key={g.id}>
           <SectionLabel>{g.title}</SectionLabel>
@@ -103,6 +103,8 @@ export function DashboardPage() {
   const { fire, result } = useRetirementModel();
   const life = useLifePlanResult();
   const today = todayISO();
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  const landing = /\/reports\/?$/.test(path);
   const cost = monthlyHousingCost(txs, rec, cats, rates, today);
   const houseStatus = housingStatus(m);
   const travelIds = new Set(cats.filter((c) => c.theme === "travel").map((c) => c.id));
@@ -145,7 +147,15 @@ export function DashboardPage() {
 
   return (
     <div className="pb-10">
-      <ScreenHeader title={t.reports.dashboard} backTo="/reports" />
+      <ScreenHeader
+        title={t.reports.dashboard}
+        backTo={landing ? undefined : "/reports"}
+        right={
+          <Link to="/reports/all" className="text-sm font-medium text-accent">
+            {t.reports.allReports}
+          </Link>
+        }
+      />
       <div className="mx-4 mb-3 rounded-xl bg-elevated px-4 py-3">
         <DashRow label={t.reports.availableSpend} value={money(available, "HKD", { sign: true })} />
         <DashRow label={t.reports.mtdVsBudget} value={cap ? `${money(spent, "HKD")} / ${money(cap, "HKD")}` : money(spent, "HKD")} />

@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Info } from "lucide-react";
@@ -41,11 +41,12 @@ export function ScreenHeader({
 }
 
 function BackControl({ backTo }: { backTo: string }) {
+  const t = useT();
   const navigate = useNavigate();
   return (
     <button
       type="button"
-      aria-label="Back"
+      aria-label={t.common.back}
       className="grid size-11 shrink-0 place-items-center text-accent"
       onClick={() => {
         const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
@@ -160,9 +161,10 @@ export function Segmented<T extends string>({
 }
 
 export function InfoButton({ k }: { k: string }) {
+  const t = useT();
   const set = useUi((s) => s.setInfoKey);
   return (
-    <button type="button" aria-label="info" onClick={() => set(k)} className="grid size-8 place-items-center text-faint">
+    <button type="button" aria-label={t.common.info} onClick={() => set(k)} className="grid size-8 place-items-center text-faint">
       <Info className="size-4" />
     </button>
   );
@@ -184,14 +186,51 @@ export function Overlay({
   layer?: "base" | "stack";
 }) {
   const t = useT();
+  const titleId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     if (!open) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const panel = panelRef.current;
+    function focusable() {
+      if (!panel) return [];
+      return [...panel.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])')].filter(
+        (el) => !el.hasAttribute("disabled"),
+      );
+    }
+    (focusable()[0] ?? panel)?.focus();
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (e.key !== "Tab" || !panel) return;
+      const items = focusable();
+      if (!items.length) {
+        e.preventDefault();
+        panel.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || !panel.contains(active))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
     }
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      previous?.focus();
+    };
+  }, [open]);
   if (!open) return null;
   const page = variant === "page";
   const zClass = page
@@ -207,6 +246,11 @@ export function Overlay({
         <button type="button" className="absolute inset-0 scrim" aria-label={t.common.close} onClick={onClose} />
       )}
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title ? titleId : undefined}
+        tabIndex={-1}
         className={cn(
           "relative z-[81] w-full overflow-y-auto bg-background",
           page
@@ -216,7 +260,7 @@ export function Overlay({
       >
         {title ? (
           <div className="flex items-center justify-between px-5 pb-2 pt-3">
-            <h2 className="text-base font-semibold">{title}</h2>
+            <h2 id={titleId} className="text-base font-semibold">{title}</h2>
             <button type="button" onClick={onClose} className="text-sm text-accent">
               {t.common.close}
             </button>
