@@ -272,8 +272,8 @@ function InfoDialog() {
       zh: "以現行實際利率作固定利率攤還。並非銀行報價。",
     },
     retirement: {
-      en: "Current monthly income and spend are averages of the last 12 months. After retirement there is no salary.",
-      zh: "現時每月收入與開支取近 12 個月平均。退休後不再有薪金。",
+      en: "Income and spend-now use a figure you typed when set, otherwise the last-12-month ledger average. After retirement there is no salary. The sticky bar is the official path verdict.",
+      zh: "收入同而家開支：有人手填就用你填嘅數，否則用近 12 個月帳本平均。退休後冇薪金。頂部黏住條係官方路徑結論。",
     },
     trip: {
       en: "Annual travel is travel-category and trip-linked spending this year ÷ the annual travel budget you set.",
@@ -283,7 +283,9 @@ function InfoDialog() {
   const body = key ? copy[key] : null;
   return (
     <Overlay open={!!key} onClose={() => setInfoKey(null)} title={t.common.info}>
-      <p className="px-5 pb-8 text-sm leading-relaxed text-muted">{body ? (locale === "zh-HK" ? body.zh : body.en) : ""}</p>
+      <div className="rt-sheet-in">
+        <p className="px-5 pb-8 text-sm leading-relaxed text-muted">{body ? (locale === "zh-HK" ? body.zh : body.en) : ""}</p>
+      </div>
     </Overlay>
   );
 }
