@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-import { Area, AreaChart, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis } from "recharts";
-import { Hairline, InfoButton, ProgressRing, ScreenHeader, SectionLabel, StatusChip } from "@/components/shared";
+import { Area, AreaChart, ReferenceDot, ResponsiveContainer, Tooltip, XAxis } from "recharts";
+import { Hairline, InfoButton, ScreenHeader, SectionLabel } from "@/components/shared";
 import { LifeYearList } from "@/components/life-year-list";
 import { LifePlanSetup } from "@/components/life-plan-setup";
 import { money, todayISO } from "@/lib/format";
@@ -16,17 +16,16 @@ import {
   compareRetirementAges,
   firePlan,
   retirementSleeves,
-  retirementStatus,
   reverseMortgageMonthly,
   runRetirement,
   savingsLast12Months,
   sustainableMonthly,
   ageFromBirthday,
   type RetirementInputs,
-  type RetirementReadinessStatus,
 } from "@/lib/calc/retirement";
 import { monthKey } from "@/lib/calc/ledger";
 import { emptyLifePlan, inheritanceAnnuityAccount, INHERIT_ANNUITY_ID, lifePlanMonthlyRoom, resolveLifePlan, runLifePlan } from "@/lib/calc/life-plan";
+import { accessBreakdown, enoughStory, goalsReady, mortgageStory, pickedFigure, pickedTarget } from "@/lib/calc/retire-view";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -47,14 +46,16 @@ export function useRetirementModel() {
   const holdings = useApp((s) => s.holdings);
   const avg = savingsLast12Months(txs, rates, monthKey(todayISO()));
   const born = ret?.birthday;
-  const derivedAge = born ? ageFromBirthday(born, todayISO()) : ret?.currentAge ?? 40;
+  const derivedAge = born ? ageFromBirthday(born, todayISO()) : ret?.currentAge ?? 0;
+  const income = pickedFigure(ret?.monthlyIncomeNow, avg.monthlyIncome);
+  const spend = pickedFigure(ret?.monthlySpendNow, avg.monthlySpend);
   const base: RetirementInputs = {
     currentAge: derivedAge,
     retireAge: ret?.retireAge ?? 65,
     deathAge: ret?.deathAge ?? 90,
-    monthlyIncomeNow: ret?.monthlyIncomeNow || avg.monthlyIncome,
-    monthlySpendNow: ret?.monthlySpendNow || avg.monthlySpend,
-    targetMonthly: ret?.targetMonthly ?? avg.monthlySpend,
+    monthlyIncomeNow: income.amount,
+    monthlySpendNow: spend.amount,
+    targetMonthly: pickedTarget(ret?.targetMonthly),
     preReturn: ret?.preReturn ?? 0.05,
     postReturn: ret?.postReturn ?? 0.035,
     inflation: ret?.inflation ?? 0.025,
@@ -157,7 +158,29 @@ export function useRetirementModel() {
   function persist(patch: Partial<RetirementInputs>) {
     void update({ ...base, ...patch, id: ret?.id ?? "base" });
   }
-  return { accounts, holdings, rates, avg, base, ctx, pack, result, sustain, fire, persist, rmMonthly, mortgage, updateAccount: useApp.getState().updateAccount };
+  const saveSource = income.source === "ledger" && spend.source === "ledger" ? "ledger" : "manual";
+  const ready = goalsReady({ birthday: base.birthday, currentAge: base.currentAge, targetMonthly: base.targetMonthly });
+  return {
+    accounts,
+    holdings,
+    rates,
+    avg,
+    base,
+    ctx,
+    pack,
+    result,
+    sustain,
+    fire,
+    persist,
+    rmMonthly,
+    mortgage,
+    incomeSource: income.source,
+    spendSource: spend.source,
+    saveMonthly: income.amount - spend.amount,
+    saveSource,
+    ready,
+    updateAccount: useApp.getState().updateAccount,
+  };
 }
 
 export function useLifePlanResult() {
@@ -229,6 +252,39 @@ export function useLifePlanResult() {
   return { plan, resolved, result, inflows };
 }
 
+export function useRetirementHeadline() {
+  const model = useRetirementModel();
+  const life = useLifePlanResult();
+  const room = useMemo(() => lifePlanMonthlyRoom(life.resolved, todayISO(), life.inflows), [life.resolved, life.inflows]);
+  const planEndAge = life.result.stay?.years[life.result.stay.years.length - 1]?.age ?? model.base.deathAge;
+  const story = enoughStory({
+    ready: model.ready,
+    hasPath: Boolean(life.result.stay),
+    depletes: Boolean(life.result.stay?.depletes),
+    plannedMonthly: model.base.targetMonthly,
+    surplusMonthly: room.surplus,
+    planEndAge,
+  });
+  const yearsToRetire = Math.max(0, model.base.retireAge - model.base.currentAge);
+  const mort = mortgageStory({
+    outstanding: model.mortgage?.outstanding ?? 0,
+    remainingMonths: model.mortgage?.remainingMonths ?? 0,
+    yearsToRetire,
+    payOffAtRetire: Boolean(model.base.payOffMortgageAtRetire),
+  });
+  return {
+    ...model,
+    life,
+    room,
+    story,
+    mort,
+    planEndAge,
+    corpusAtRetire: life.result.stay?.assetsAtRetire ?? null,
+    investable: model.ctx.investableNow,
+    access: accessBreakdown(model.result.plan.corpusAtRetire, model.result.plan.lockedAtRetire),
+  };
+}
+
 function addMonths(iso: string, months: number): string {
   const d = new Date(`${iso}T12:00:00`);
   d.setMonth(d.getMonth() + Math.max(0, Math.round(months)));
@@ -257,15 +313,7 @@ export function SharedRetirementStrip() {
   );
 }
 
-function SetupGuide({
-  base,
-  persist,
-  onClose,
-}: {
-  base: RetirementInputs;
-  persist: (p: Partial<RetirementInputs>) => void;
-  onClose: () => void;
-}) {
+function SetupGuide({ onClose }: { onClose: () => void }) {
   const t = useT();
   const [step, setStep] = useState(0);
   const total = 4;
@@ -280,79 +328,11 @@ function SetupGuide({
           {t.reports.guideHide}
         </button>
       </div>
+      <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.guideNoDup}</p>
       <div className="mt-1 text-[11px] text-muted">
         {last ? t.reports.guideDoneBody : t.reports.guideOf.replace("{n}", String(step + 1)).replace("{total}", String(total))}
       </div>
       {last ? null : <p className="mt-2 text-xs leading-5 text-muted">{bodies[step]}</p>}
-      {last ? (
-        <div className="mt-3 space-y-2">
-          <Link to="/reports/retirement/projection" className="block rounded-xl bg-background px-3 py-3 text-sm">
-            <div className="font-medium">{t.reports.annualProjection}</div>
-            <div className="mt-0.5 text-xs text-muted">{t.reports.guideYearly}</div>
-          </Link>
-          <Link to="/more/retirement-accounts" className="block rounded-xl bg-background px-3 py-3 text-sm">
-            <div className="font-medium">{t.reports.manageRa}</div>
-            <div className="mt-0.5 text-xs text-muted">{t.reports.guideAccounts}</div>
-          </Link>
-          <Link to="/reports/retirement/plan" className="block rounded-xl bg-background px-3 py-3 text-sm">
-            <div className="font-medium">{t.reports.firePlan}</div>
-            <div className="mt-0.5 text-xs text-muted">{t.reports.guideFire}</div>
-          </Link>
-          <Link to="/reports/retirement/early-retirement" className="block rounded-xl bg-background px-3 py-3 text-sm">
-            <div className="font-medium">{t.reports.lpTitle}</div>
-            <div className="mt-0.5 text-xs text-muted">{t.reports.guideEarly}</div>
-          </Link>
-        </div>
-      ) : (
-        <div className="mt-3 overflow-hidden rounded-xl bg-background">
-          {step === 0 ? (
-            <>
-              <label className="flex min-h-11 items-center justify-between gap-3 px-3">
-                <span className="text-sm">{t.reports.birthday}</span>
-                <input
-                  type="date"
-                  value={base.birthday ?? ""}
-                  onChange={(e) => {
-                    const birthday = e.target.value || undefined;
-                    persist({ birthday, currentAge: birthday ? ageFromBirthday(birthday, todayISO()) : base.currentAge });
-                  }}
-                  className="h-11 max-w-[11rem] bg-transparent text-right text-sm outline-none"
-                />
-              </label>
-              <Hairline />
-              {base.birthday ? (
-                <div className="flex min-h-11 items-center justify-between px-3">
-                  <span className="text-sm">{t.reports.currentAge}</span>
-                  <span className="text-sm tabular-nums text-muted">{base.currentAge}</span>
-                </div>
-              ) : (
-                <NumRow label={t.reports.currentAge} value={base.currentAge} onCommit={(n) => persist({ currentAge: n })} />
-              )}
-              <Hairline />
-              <NumRow label={t.reports.retireAge} value={base.retireAge} onCommit={(n) => persist({ retireAge: n })} />
-              <Hairline />
-              <NumRow label={t.reports.deathAge} value={base.deathAge} onCommit={(n) => persist({ deathAge: n })} />
-            </>
-          ) : null}
-          {step === 1 ? (
-            <>
-              <NumRow label={t.reports.salaryNow} value={base.monthlyIncomeNow} money onCommit={(n) => persist({ monthlyIncomeNow: n })} />
-              <Hairline />
-              <NumRow label={t.reports.spendNow} value={base.monthlySpendNow} money onCommit={(n) => persist({ monthlySpendNow: n })} />
-            </>
-          ) : null}
-          {step === 2 ? <NumRow label={t.reports.spendRetired} value={base.targetMonthly} money onCommit={(n) => persist({ targetMonthly: n })} /> : null}
-          {step === 3 ? (
-            <>
-              <NumRow label={`${t.reports.inflation} (%)`} value={+(base.inflation * 100).toFixed(2)} onCommit={(n) => persist({ inflation: n / 100 })} />
-              <Hairline />
-              <NumRow label={`${t.reports.preReturn} (%)`} value={+(base.preReturn * 100).toFixed(2)} onCommit={(n) => persist({ preReturn: n / 100 })} />
-              <Hairline />
-              <NumRow label={`${t.reports.postReturn} (%)`} value={+(base.postReturn * 100).toFixed(2)} onCommit={(n) => persist({ postReturn: n / 100 })} />
-            </>
-          ) : null}
-        </div>
-      )}
       <div className="mt-3 flex gap-2">
         {step > 0 ? (
           <button type="button" className="h-11 flex-1 rounded-xl bg-background text-sm font-medium" onClick={() => setStep((n) => Math.max(0, n - 1))}>
@@ -378,24 +358,29 @@ function SetupGuide({
 export function RetirementPage() {
   const t = useT();
   const locale = useUi((s) => s.locale);
-  const { accounts, holdings, rates, avg, base, ctx, pack, result, fire, persist, rmMonthly, mortgage } = useRetirementModel();
-  const life = useLifePlanResult();
+  const head = useRetirementHeadline();
+  const { accounts, holdings, rates, base, ctx, pack, result, fire, persist, rmMonthly, mortgage, life, story, mort, planEndAge, investable } = head;
   const years = life.result.stay?.years ?? [];
   const chartData = years.map((y) => ({ age: y.age, corpus: y.closingFinancial, kept: y.inheritKept }));
   const saleYear = years.find((y) => y.inheritKept > 0);
-  const room = useMemo(() => lifePlanMonthlyRoom(life.resolved, todayISO(), life.inflows), [life.resolved, life.inflows]);
   const updateAccount = useApp((s) => s.updateAccount);
-  const surplus = room.surplus;
-  const corpusAtRetire = life.result.stay?.assetsAtRetire ?? result.corpusAtRetire;
-  const status = retirementStatus(
-    life.result.stay?.depletes ?? result.depletes,
-    room.sustainable,
-    room.planned,
-    years.map((y) => ({ corpus: y.closingFinancial })),
-  );
+  const corpusAtRetire = head.corpusAtRetire ?? 0;
   const [chartPoint, setChartPoint] = useState<{ age: number; corpus: number } | null>(null);
   const [showSetup, setShowSetup] = useState(false);
-  const [guideOpen, setGuideOpen] = useState(!base.birthday);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const swrLabel = `${((base.fireSwr ?? 0.04) * 100).toFixed(1)}%`;
+  const verdict =
+    story.kind === "enough" ? t.reports.verdictEnough : story.kind === "short" ? t.reports.verdictShort : t.reports.verdictSetup;
+  const sentence =
+    story.kind === "enough"
+      ? t.reports.enoughLine.replace("{plan}", money(story.planned, "HKD")).replace("{age}", String(planEndAge))
+      : story.kind === "short"
+        ? t.reports.shortLine
+            .replace("{plan}", money(story.planned, "HKD"))
+            .replace("{gap}", money(Math.abs(story.gap), "HKD"))
+            .replace("{age}", String(planEndAge))
+        : t.reports.setupLine;
 
   function exportBrief() {
     const acctName = (id?: string) => {
@@ -418,20 +403,25 @@ export function RetirementPage() {
       `- Expected return after retire: ${(base.postReturn * 100).toFixed(2)}%`,
       `- FIRE withdrawal rate: ${((base.fireSwr ?? 0.04) * 100).toFixed(2)}%`,
       `- Reverse mortgage LTV: ${((base.reverseMortgageLtv ?? 0) * 100).toFixed(1)}%`,
+      `- Income basis: ${head.incomeSource}`,
+      `- Spend-now basis: ${head.spendSource}`,
+      `- Saving now (HKD / month): ${Math.round(head.saveMonthly)} (${head.saveSource})`,
       "",
-      "## FIRE snapshot",
-      `- FIRE number (HKD): ${Math.round(fire.fireNumber)}`,
-      `- Investable now (HKD): ${Math.round(fire.current)}`,
-      `- Property equity (HKD): ${Math.round(fire.property)}`,
-      `- Gap (HKD): ${Math.round(Math.max(0, fire.fireNumber - fire.current))}`,
-      `- Progress: ${(fire.progress * 100).toFixed(1)}%`,
-      `- Earliest FIRE age: ${fire.reachable ? fire.fireAge : "not within horizon"}`,
-      `- Corpus at retire age (HKD): ${Math.round(corpusAtRetire)}`,
-      `- Planned retirement living, today’s HKD / month: ${Math.round(room.planned)}`,
-      `- Sustainable monthly (HKD): ${Math.round(room.sustainable)}`,
-      `- Monthly gap / surplus (HKD): ${Math.round(surplus)}`,
-      `- Status: ${status}`,
-      `- Depletes: ${life.result.stay?.depletes ? `yes${life.result.stay.depletionAge ? ` at ${life.result.stay.depletionAge}` : ""}` : "no"}`,
+      "## Official result",
+      `- Verdict: ${story.kind}`,
+      `- Typed retirement spend (HKD / month): ${Math.round(base.targetMonthly)}`,
+      `- Retire spend gap (HKD / month, today’s dollars): ${Math.round(story.gap)}`,
+      `- Investable now (HKD): ${Math.round(investable)}`,
+      `- Property, not invested (HKD): ${Math.round(pack.property)}`,
+      `- Plan through age: ${planEndAge}`,
+      `- Assets on the path at retire age (HKD): ${story.kind === "setup" ? "n/a" : Math.round(corpusAtRetire)}`,
+      `- Depletes before plan end: ${life.result.stay?.depletes ? `yes${life.result.stay.depletionAge ? ` at ${life.result.stay.depletionAge}` : ""}` : story.kind === "setup" ? "n/a" : "no"}`,
+      "",
+      "## Reference only (not the official yes/no)",
+      `- ${swrLabel} withdrawal number (HKD): ${Math.round(fire.fireNumber)}`,
+      `- Account-projection accessible at retire (HKD): ${Math.round(head.access.accessible)}`,
+      `- Account-projection locked at retire (HKD): ${Math.round(head.access.locked)}`,
+      `- Account-projection total (HKD): ${Math.round(head.access.total)}`,
       "",
       "## Holdings (marked to market)",
       "market,symbol,name,quantity,price,currency,value_hkd,account",
@@ -478,182 +468,217 @@ export function RetirementPage() {
           </div>
         }
       />
+      <section className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
+        <div className="px-4 pt-3 text-sm font-medium">{t.reports.goalsTitle}</div>
+        <label className="flex min-h-11 items-center justify-between gap-3 px-4">
+          <span className="text-sm">{t.reports.birthday}</span>
+          <input
+            type="date"
+            value={base.birthday ?? ""}
+            onChange={(e) => {
+              const birthday = e.target.value || undefined;
+              persist({ birthday, currentAge: birthday ? ageFromBirthday(birthday, todayISO()) : base.currentAge });
+            }}
+            className="h-11 max-w-[11.5rem] bg-transparent text-right text-sm text-accent outline-none"
+          />
+        </label>
+        <Hairline />
+        {base.birthday ? (
+          <div className="flex min-h-11 items-center justify-between px-4">
+            <span className="text-sm">{t.reports.currentAge}</span>
+            <span className="text-sm tabular-nums text-muted">{base.currentAge}</span>
+          </div>
+        ) : (
+          <NumRow label={t.reports.currentAge} value={base.currentAge} onCommit={(n) => persist({ currentAge: n })} />
+        )}
+        <Hairline />
+        <div className="grid grid-cols-2 divide-x divide-line">
+          <NumRow label={t.reports.retireAge} value={base.retireAge} onCommit={(n) => persist({ retireAge: n })} />
+          <NumRow label={t.reports.deathAge} value={base.deathAge} onCommit={(n) => persist({ deathAge: n })} />
+        </div>
+        <Hairline />
+        <NumRow label={t.reports.spendRetired} value={base.targetMonthly} money blankZero onCommit={(n) => persist({ targetMonthly: n })} />
+        <p className="px-4 pb-3 text-[11px] leading-4 text-muted">{t.reports.goalsSpendHint}</p>
+        <Hairline />
+        <div className="grid grid-cols-2 gap-2 p-3">
+          <button
+            type="button"
+            className={cn("h-11 rounded-xl text-xs font-medium", !base.payOffMortgageAtRetire ? "bg-accent text-on-accent" : "bg-background")}
+            onClick={() => persist({ payOffMortgageAtRetire: false })}
+          >
+            {t.reports.mortgageModePay}
+          </button>
+          <button
+            type="button"
+            className={cn("h-11 rounded-xl text-xs font-medium", base.payOffMortgageAtRetire ? "bg-accent text-on-accent" : "bg-background")}
+            onClick={() => persist({ payOffMortgageAtRetire: true })}
+          >
+            {t.reports.mortgageModeLump}
+          </button>
+        </div>
+        <p className="px-4 pb-3 text-[11px] leading-4 text-muted">
+          {mort.kind === "none"
+            ? t.reports.mortgageNone
+            : mort.kind === "clears-before"
+              ? t.reports.mortgageClears.replace("{amount}", money(mort.owingNow, "HKD"))
+              : mort.kind === "assumed-payoff"
+                ? t.reports.mortgageAssume.replace("{amount}", money(mort.owingNow, "HKD"))
+                : t.reports.mortgageOwing.replace("{amount}", money(mort.owingNow, "HKD"))}
+        </p>
+      </section>
       {guideOpen ? (
-        <SetupGuide base={base} persist={persist} onClose={() => setGuideOpen(false)} />
+        <SetupGuide onClose={() => setGuideOpen(false)} />
       ) : (
         <button type="button" className="mx-4 mb-3 flex h-11 w-[calc(100%-2rem)] items-center justify-center rounded-xl bg-elevated text-sm font-medium text-accent" onClick={() => setGuideOpen(true)}>
           {t.reports.guideOpen}
         </button>
       )}
-      <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-xs font-medium text-accent">{t.reports.fireTitle}</div>
-            <div className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{money(fire.fireNumber, "HKD")}</div>
-            <div className="mt-1 text-xs text-muted">
-              {t.reports.fireAge}: {fire.reachable ? fire.fireAge : "—"}
-              {base.birthday ? ` · ${t.reports.currentAge} ${base.currentAge}` : ""}
+      <section className="mx-4 mb-3 rounded-2xl bg-elevated p-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-sm font-medium">{t.reports.resultTitle}</div>
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 text-xs font-medium",
+              story.kind === "enough" && "bg-success-soft text-income",
+              story.kind === "short" && "bg-expense-soft text-expense",
+              story.kind === "setup" && "bg-background text-muted",
+            )}
+          >
+            {verdict}
+          </span>
+        </div>
+        <p className="mt-2 text-sm leading-5">{sentence}</p>
+        {story.kind === "setup" ? null : (
+          <>
+            <div className="mt-3 text-[11px] text-muted">{t.reports.surplus}</div>
+            <div className={cn("text-2xl font-semibold tabular-nums", story.gap < 0 ? "text-expense" : "text-income")}>
+              {money(story.gap, "HKD", { sign: true })}
             </div>
-          </div>
-          <div className="relative shrink-0">
-            <ProgressRing value={fire.progress} size={64} stroke={5} tone={fire.progress >= 1 ? "income" : fire.progress >= 0.6 ? "watch" : "expense"} />
-            <span className="pointer-events-none absolute inset-0 grid place-items-center text-[11px] font-semibold tabular-nums">
-              {Math.round(Math.min(999, fire.progress * 100))}%
-            </span>
-          </div>
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <div className="rounded-xl bg-accent-soft px-3 py-2">
-            <div className="text-[11px] text-accent">{t.reports.fireNow}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(fire.current, "HKD")}</div>
-          </div>
-          <div className="rounded-xl bg-expense-soft px-3 py-2">
-            <div className="text-[11px] text-expense">{t.reports.fireGap}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(Math.max(0, fire.fireNumber - fire.current), "HKD")}</div>
-          </div>
-          <div className="rounded-xl bg-background px-3 py-2">
-            <div className="text-[11px] text-muted">{t.reports.corpusAtRetire}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(corpusAtRetire, "HKD")}</div>
-          </div>
-          <div className="rounded-xl bg-background px-3 py-2">
-            <div className="text-[11px] text-muted">{t.reports.surplus}</div>
-            <div className={cn("mt-0.5 text-sm font-semibold tabular-nums", surplus >= 0 ? "text-income" : "text-expense")}>{money(surplus, "HKD", { sign: true })}</div>
-          </div>
-        </div>
-        <p className="mt-2 text-[11px] leading-4 text-muted">
-          {t.reports.surplusHint.replace("{plan}", money(room.planned, "HKD")).replace("{ok}", money(room.sustainable, "HKD"))}
-        </p>
-        <div className="mt-2 flex items-center justify-between text-xs text-muted">
-          <span>{t.reports.avgSave12}: {money(avg.monthlySave, "HKD")}</span>
-          <StatusChip status={status} />
-        </div>
-        {!fire.reachable ? <p className="mt-2 text-xs text-muted">{t.reports.fireUnreachable}</p> : null}
-        {holdings.length ? (
-          <p className="mt-2 text-xs text-muted">
-            {t.prices.heldCount.replace("{n}", String(holdings.length))} · {money(pack.invest, "HKD")}
-          </p>
-        ) : null}
-      </div>
-
-      <SummaryStrip
-        base={base}
-        plan={result.plan}
-        mortgage={mortgage}
-        persist={persist}
-      />
-      <AgeCompare base={base} ctx={ctx} persist={persist} />
-      <AccessCard plan={result.plan} cash={pack.cash} invest={pack.invest} reserve={base.emergencyReserve ?? 0} />
-      <HousingCard plan={result.plan} mortgage={mortgage} housing={ctx.housingAfterPayoff} persist={persist} payOff={base.payOffMortgageAtRetire ?? false} />
-      <div className="px-4 pb-3 space-y-2">
-        <Link to="/reports/retirement/plan" className="flex h-11 items-center justify-center rounded-xl bg-accent text-sm font-semibold text-on-accent">
-          {t.reports.firePlan}
+            <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.surplusHint}</p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="rounded-xl bg-background px-3 py-2">
+                <div className="text-[11px] text-muted">{t.reports.spendRetired}</div>
+                <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(base.targetMonthly, "HKD")}</div>
+              </div>
+              <div className="rounded-xl bg-background px-3 py-2">
+                <div className="text-[11px] text-muted">{t.reports.investableNow}</div>
+                <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(investable, "HKD")}</div>
+              </div>
+            </div>
+            <p className="mt-2 text-[11px] leading-4 text-muted">{t.reports.investableHint}</p>
+            <div className="mt-2 text-[11px] text-muted">
+              {t.reports.corpusOnPath}: {money(corpusAtRetire, "HKD")}
+            </div>
+            <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.corpusOnPathHint}</p>
+            {pack.property > 0 ? (
+              <div className="mt-2 text-[11px] text-muted">
+                {t.reports.propertyAside}: {money(pack.property, "HKD")}
+              </div>
+            ) : null}
+            <div className="mt-3 rounded-xl bg-background px-3 py-2">
+              <div className="text-[11px] text-muted">{t.reports.fireReference.replace("{swr}", swrLabel)}</div>
+              <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(fire.fireNumber, "HKD")}</div>
+              <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.fireReferenceHint}</p>
+            </div>
+          </>
+        )}
+      </section>
+      <SectionLabel>{t.reports.scenarios}</SectionLabel>
+      <div className="mx-4 mb-3 grid grid-cols-1 gap-2">
+        <Link to="/reports/retirement/plan" className="rounded-2xl bg-elevated px-4 py-3 text-sm">
+          <div className="font-medium">{t.reports.scenarioFire}</div>
+          <div className="mt-0.5 text-[11px] text-muted">{t.reports.firePlan}</div>
         </Link>
-        <Link to="/reports/retirement/early-retirement" className="flex h-11 items-center justify-center rounded-xl bg-elevated text-sm font-medium">
-          {t.reports.lpTitle}
+        <Link to="/reports/retirement/early-retirement" className="rounded-2xl bg-elevated px-4 py-3 text-sm">
+          <div className="font-medium">{t.reports.scenarioEarly}</div>
+          <div className="mt-0.5 text-[11px] text-muted">{t.reports.lpTitle}</div>
         </Link>
         <div className="grid grid-cols-2 gap-2">
-          <Link to="/reports/retirement/projection" className="flex h-11 items-center justify-center rounded-xl bg-elevated px-2 text-center text-sm font-medium">
-            {t.reports.annualProjection}
+          <Link to="/reports/retirement/projection" className="flex min-h-11 items-center justify-center rounded-2xl bg-elevated px-2 text-center text-sm font-medium">
+            {t.reports.scenarioYears}
           </Link>
-          <Link to="/more/retirement-accounts" className="flex h-11 items-center justify-center rounded-xl bg-elevated px-2 text-center text-sm font-medium">
+          <Link to="/more/retirement-accounts" className="flex min-h-11 items-center justify-center rounded-2xl bg-elevated px-2 text-center text-sm font-medium">
             {t.reports.manageRa}
           </Link>
         </div>
       </div>
-
-      <SectionLabel>{t.reports.assetsByAge}</SectionLabel>
-      <div className="mx-4 mb-1 overflow-hidden rounded-2xl bg-elevated pt-2">
-        <div className="h-52">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart
-              data={chartData}
-              margin={{ top: 8, right: 12, left: 8, bottom: 0 }}
-              onMouseMove={(state) => {
-                const p = state?.activePayload?.[0]?.payload as { age?: number; corpus?: number } | undefined;
-                if (p && typeof p.age === "number") setChartPoint({ age: p.age, corpus: p.corpus ?? 0 });
-              }}
-              onMouseLeave={() => setChartPoint(null)}
-            >
-              <XAxis dataKey="age" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-              {fire.fireNumber > 0 ? (
-                <ReferenceLine y={fire.fireNumber} stroke="var(--color-muted)" strokeDasharray="4 4" ifOverflow="extendDomain" />
-              ) : null}
-              {saleYear ? <ReferenceDot x={saleYear.age} y={saleYear.closingFinancial} r={4} fill="var(--color-accent)" stroke="none" /> : null}
-              <Tooltip
-                cursor={{ stroke: "var(--color-accent)", strokeWidth: 1 }}
-                formatter={(value, _name, item) => {
-                  const key = String((item as { dataKey?: unknown } | undefined)?.dataKey ?? "");
-                  return [money(Number(value) || 0, "HKD"), key === "corpus" ? t.reports.lpAssetsLine : String(_name ?? "")];
-                }}
-                labelFormatter={(age) => `${t.reports.atAge} ${age}`}
-                contentStyle={{
-                  borderRadius: 12,
-                  border: "1px solid var(--color-line)",
-                  background: "var(--color-elevated)",
-                  fontSize: 12,
-                }}
-              />
-              <Area type="monotone" dataKey="corpus" name={t.reports.lpAssetsLine} stroke="var(--color-accent)" fill="var(--color-accent-soft)" strokeWidth={2} dot={false} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-        <p className="px-4 pb-3 text-center text-xs text-muted">
-          {fire.fireNumber > 0 ? <span className="mb-1 block">{t.reports.fireChartLine} {money(fire.fireNumber, "HKD")}</span> : null}
-          {chartPoint
-            ? `${t.reports.atAge} ${chartPoint.age} · ${money(chartPoint.corpus, "HKD")}`
-            : saleYear
-              ? `${saleYear.calendarYear} · ${t.reports.lpInheritKept} ${money(saleYear.inheritKept, "HKD")}`
-              : t.reports.chartTapHint}
-        </p>
-      </div>
-
+      <button
+        type="button"
+        className="mx-4 mb-3 flex h-11 items-center justify-center gap-1 rounded-xl bg-elevated text-sm font-medium"
+        onClick={() => setDetailsOpen((v) => !v)}
+      >
+        {detailsOpen ? t.reports.detailsHide : t.reports.detailsOpen}
+        <ChevronDown className={cn("size-4 transition", detailsOpen && "rotate-180")} />
+      </button>
+      {detailsOpen ? (
+        <>
+          <SectionLabel>{t.reports.assetsByAge}</SectionLabel>
+          <div className="mx-4 mb-1 overflow-hidden rounded-2xl bg-elevated pt-2">
+            <div className="h-52">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={chartData}
+                  margin={{ top: 8, right: 12, left: 8, bottom: 0 }}
+                  onMouseMove={(state) => {
+                    const p = state?.activePayload?.[0]?.payload as { age?: number; corpus?: number } | undefined;
+                    if (p && typeof p.age === "number") setChartPoint({ age: p.age, corpus: p.corpus ?? 0 });
+                  }}
+                  onMouseLeave={() => setChartPoint(null)}
+                >
+                  <XAxis dataKey="age" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                  {saleYear ? <ReferenceDot x={saleYear.age} y={saleYear.closingFinancial} r={4} fill="var(--color-accent)" stroke="none" /> : null}
+                  <Tooltip
+                    cursor={{ stroke: "var(--color-accent)", strokeWidth: 1 }}
+                    formatter={(value, _name, item) => {
+                      const key = String((item as { dataKey?: unknown } | undefined)?.dataKey ?? "");
+                      return [money(Number(value) || 0, "HKD"), key === "corpus" ? t.reports.lpAssetsLine : String(_name ?? "")];
+                    }}
+                    labelFormatter={(age) => `${t.reports.atAge} ${age}`}
+                    contentStyle={{
+                      borderRadius: 12,
+                      border: "1px solid var(--color-line)",
+                      background: "var(--color-elevated)",
+                      fontSize: 12,
+                    }}
+                  />
+                  <Area type="monotone" dataKey="corpus" name={t.reports.lpAssetsLine} stroke="var(--color-accent)" fill="var(--color-accent-soft)" strokeWidth={2} dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="px-4 pb-3 text-center text-xs text-muted">
+              {chartPoint
+                ? `${t.reports.atAge} ${chartPoint.age} · ${money(chartPoint.corpus, "HKD")}`
+                : saleYear
+                  ? `${saleYear.calendarYear} · ${t.reports.lpInheritKept} ${money(saleYear.inheritKept, "HKD")}`
+                  : t.reports.chartTapHint}
+            </p>
+          </div>
+          <AccessCard access={head.access} />
+          <HousingCard plan={result.plan} mortgage={mortgage} housing={ctx.housingAfterPayoff} persist={persist} story={mort} payOff={Boolean(base.payOffMortgageAtRetire)} />
+          <AgeCompare base={base} ctx={ctx} persist={persist} />
+        </>
+      ) : null}
       <button
         type="button"
         className="mx-4 mb-3 flex h-11 items-center justify-center gap-1 rounded-xl bg-elevated text-sm font-medium"
         onClick={() => setShowSetup((v) => !v)}
       >
-        {showSetup ? t.reports.hideAssumptions : t.reports.showAssumptions}
+        {showSetup ? t.reports.hideAssumptions : t.reports.assumptionsOneLine}
         <ChevronDown className={cn("size-4 transition", showSetup && "rotate-180")} />
       </button>
-
       {showSetup ? (
         <>
-          <SectionLabel>{t.reports.timeline}</SectionLabel>
-          <div className="mx-4 overflow-hidden rounded-2xl bg-elevated">
-            <div className="flex min-h-11 items-center justify-between gap-3 px-4">
-              <span className="text-sm">{t.reports.birthday}</span>
-              <input
-                type="date"
-                value={base.birthday ?? ""}
-                onChange={(e) => {
-                  const birthday = e.target.value || undefined;
-                  persist({ birthday, currentAge: birthday ? ageFromBirthday(birthday, todayISO()) : base.currentAge });
-                }}
-                className="h-11 max-w-[11.5rem] bg-transparent text-right text-sm text-accent outline-none"
-              />
-            </div>
-            <Hairline />
-            {base.birthday ? (
-              <div className="flex min-h-11 items-center justify-between px-4">
-                <span className="text-sm">{t.reports.currentAge}</span>
-                <span className="text-sm tabular-nums text-muted">{base.currentAge}</span>
-              </div>
-            ) : (
-              <NumRow label={t.reports.currentAge} value={base.currentAge} onCommit={(n) => persist({ currentAge: n })} />
-            )}
-            <Hairline />
-            <div className="grid grid-cols-2 divide-x divide-line">
-              <NumRow label={t.reports.retireAge} value={base.retireAge} onCommit={(n) => persist({ retireAge: n })} />
-              <NumRow label={t.reports.deathAge} value={base.deathAge} onCommit={(n) => persist({ deathAge: n })} />
-            </div>
-            <Hairline />
+          <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
             <NumRow label={t.reports.salaryNow} value={base.monthlyIncomeNow} money onCommit={(n) => persist({ monthlyIncomeNow: n })} />
             <Hairline />
             <NumRow label={t.reports.spendNow} value={base.monthlySpendNow} money onCommit={(n) => persist({ monthlySpendNow: n })} />
-            <Hairline />
-            <NumRow label={t.reports.spendRetired} value={base.targetMonthly} money onCommit={(n) => persist({ targetMonthly: n })} />
+            <p className="px-4 pb-3 text-[11px] leading-4 text-muted">
+              {t.reports.saveBasis
+                .replace("{amount}", money(head.saveMonthly, "HKD"))
+                .replace("{basis}", head.saveSource === "manual" ? t.reports.basisManual : t.reports.basisLedger)}
+            </p>
           </div>
-          <p className="px-5 py-2 text-[11px] leading-4 text-muted">{t.reports.setupEnough}</p>
+          <p className="px-5 pb-2 text-[11px] leading-4 text-muted">{t.reports.setupEnough}</p>
 
           <FoldBlock title={t.reports.assumptions}>
             <NumRow label={`${t.reports.inflation} (%)`} value={+(base.inflation * 100).toFixed(2)} onCommit={(n) => persist({ inflation: n / 100 })} />
@@ -775,53 +800,6 @@ function Row({ k, n }: { k: string; n: number }) {
   );
 }
 
-function statusLabel(status: RetirementReadinessStatus, t: ReturnType<typeof useT>) {
-  if (status === "funded") return t.reports.funded;
-  if (status === "funded_with_low_buffer") return t.reports.fundedLow;
-  if (status === "bridge_risk") return t.reports.statusBridge;
-  if (status === "shortfall_projected") return t.reports.statusShort;
-  return t.reports.statusData;
-}
-
-function SummaryStrip({
-  base,
-  plan,
-  mortgage,
-  persist,
-}: {
-  base: RetirementInputs;
-  plan: NonNullable<ReturnType<typeof runRetirement>["plan"]>;
-  mortgage: ReturnType<typeof useApp.getState>["mortgage"];
-  persist: (p: Partial<RetirementInputs>) => void;
-}) {
-  const t = useT();
-  const retireYear = new Date().getFullYear() + Math.max(0, base.retireAge - base.currentAge);
-  const left = mortgage ? remainingFromStart(mortgage, todayISO()) : null;
-  const mFree = plan.mortgageFreeAge;
-  const bridgeTone = plan.status === "bridge_risk" ? t.reports.bridgeRisk : plan.minBridgeAccessible < (base.liquidityFloor || 1) ? t.reports.bridgeLow : t.reports.bridgeHealthy;
-  const cards = [
-    { id: "age", k: t.reports.retireAgeCard, v: String(base.retireAge), s: `${retireYear} · ${t.reports.compareAges}` },
-    { id: "access", k: t.reports.accessibleAtRetire, v: money(plan.corpusAtRetire, "HKD"), s: t.reports.lessReserve },
-    { id: "lock", k: t.reports.lockedAtRetire, v: money(plan.lockedAtRetire, "HKD"), s: t.reports.lockedUntil.replace("{age}", String(plan.earliestAccessAge)) },
-    { id: "bridge", k: t.reports.earlyBridge, v: `${plan.bridgeYears}y`, s: `${bridgeTone} · ${money(plan.minBridgeAccessible, "HKD")}` },
-    { id: "mort", k: t.reports.mortgageStatus, v: mFree && mFree <= base.retireAge ? t.reports.mortgageFree : t.reports.mortgageActive, s: t.reports.mortgageEnds.replace("{age}", String(mFree ?? "—")) },
-    { id: "stat", k: t.reports.retireStatus, v: statusLabel(plan.status, t), s: plan.statusWhy },
-  ];
-  return (
-    <div className="mx-4 mb-3 grid grid-cols-2 gap-2">
-      {cards.map((c) => (
-        <a key={c.id} href={`#retire-${c.id === "age" ? "compare" : c.id === "mort" ? "house" : c.id === "access" || c.id === "lock" ? "access" : c.id === "bridge" ? "compare" : "years"}`} className="rounded-2xl bg-elevated px-3 py-2.5">
-          <div className="text-[11px] text-muted">{c.k}</div>
-          <div className="mt-0.5 text-sm font-semibold tabular-nums">{c.v}</div>
-          <div className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-muted">{c.s}</div>
-        </a>
-      ))}
-      <button type="button" className="col-span-2 hidden" onClick={() => persist({ retireAge: base.retireAge })} />
-      {left ? <span className="hidden">{left.remainingMonths}</span> : null}
-    </div>
-  );
-}
-
 function AgeCompare({
   base,
   ctx,
@@ -832,21 +810,24 @@ function AgeCompare({
   persist: (p: Partial<RetirementInputs>) => void;
 }) {
   const t = useT();
+  const [preview, setPreview] = useState<number | null>(null);
   const rows = useMemo(() => compareRetirementAges(base, ctx), [base, ctx]);
+  const shown = preview ?? base.retireAge;
   return (
     <div id="retire-compare" className="mb-3">
       <SectionLabel>{t.reports.readinessByAge}</SectionLabel>
+      <p className="px-5 pb-2 text-[11px] leading-4 text-muted">{t.reports.ageCompareHint}</p>
       <div className="mx-4 space-y-2">
         {rows.map((r) => (
           <button
             key={r.retireAge}
             type="button"
-            onClick={() => persist({ retireAge: r.retireAge })}
-            className={cn("w-full rounded-2xl p-3 text-left", r.retireAge === base.retireAge ? "bg-accent-soft" : "bg-elevated")}
+            onClick={() => setPreview(r.retireAge)}
+            className={cn("w-full rounded-2xl p-3 text-left", r.retireAge === shown ? "bg-accent-soft" : "bg-elevated")}
           >
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm font-semibold">{t.reports.retireAge} {r.retireAge}</span>
-              <span className="text-[11px] text-muted">{statusLabel(r.status, t)}</span>
+              {r.retireAge === base.retireAge ? <span className="text-[11px] text-muted">{t.reports.goalsTitle}</span> : null}
             </div>
             <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-muted">
               <span>{t.reports.workYears} {r.workYears}</span>
@@ -856,35 +837,34 @@ function AgeCompare({
             </div>
           </button>
         ))}
+        {preview != null && preview !== base.retireAge ? (
+          <button
+            type="button"
+            className="h-11 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent"
+            onClick={() => {
+              persist({ retireAge: preview });
+              setPreview(null);
+            }}
+          >
+            {t.reports.applyRetireAge} · {preview}
+          </button>
+        ) : null}
+        {preview != null && preview !== base.retireAge ? <p className="text-center text-[11px] text-muted">{t.reports.agePreview}</p> : null}
       </div>
     </div>
   );
 }
 
-function AccessCard({
-  plan,
-  cash,
-  invest,
-  reserve,
-}: {
-  plan: NonNullable<ReturnType<typeof runRetirement>["plan"]>;
-  cash: number;
-  invest: number;
-  reserve: number;
-}) {
+function AccessCard({ access }: { access: { accessible: number; locked: number; total: number } }) {
   const t = useT();
   return (
     <div id="retire-access" className="mb-3">
       <SectionLabel>{t.reports.accessibility}</SectionLabel>
       <div className="mx-4 rounded-2xl bg-elevated p-4">
-        <div className="text-xs font-medium">{t.reports.accessSpend}</div>
-        <RowAmt label={t.reports.cashDeposits} value={cash} />
-        <RowAmt label={t.reports.liquidStocks} value={invest} />
-        <RowAmt label={t.reports.lessReserve} value={-reserve} />
-        <RowAmt label={t.reports.accessibleAtRetire} value={plan.corpusAtRetire} bold />
-        <div className="mt-3 text-xs font-medium">{t.reports.lockedLater}</div>
-        <RowAmt label={t.reports.lockedUntil.replace("{age}", String(plan.earliestAccessAge))} value={plan.lockedAtRetire} />
-        <p className="mt-2 text-[11px] leading-4 text-muted">{plan.statusWhy}</p>
+        <RowAmt label={t.reports.accessibleAtRetire} value={access.accessible} />
+        <RowAmt label={t.reports.lockedAtRetire} value={access.locked} />
+        <RowAmt label={t.reports.accessTotal} value={access.total} bold />
+        <p className="mt-2 text-[11px] leading-4 text-muted">{t.reports.accessModelNote}</p>
       </div>
     </div>
   );
@@ -904,38 +884,40 @@ function HousingCard({
   mortgage,
   housing,
   persist,
+  story,
   payOff,
 }: {
   plan: NonNullable<ReturnType<typeof runRetirement>["plan"]>;
   mortgage: ReturnType<typeof useApp.getState>["mortgage"];
   housing: number;
   persist: (p: Partial<RetirementInputs>) => void;
+  story: ReturnType<typeof mortgageStory>;
   payOff: boolean;
 }) {
   const t = useT();
-  const atRetire = plan.years.find((y) => y.age === plan.years.find((x) => x.milestones.some((m) => m.startsWith("Retirement")))?.age) ?? plan.years.find((y) => y.flags.isEarlyRetirement || !y.flags.isPreRetirement);
   const retireRow = plan.years.find((y) => !y.flags.isPreRetirement);
+  const projectedLeft = story.kind === "assumed-payoff" || story.kind === "none" ? null : (retireRow?.openingMortgage ?? 0);
+  const note =
+    story.kind === "none"
+      ? t.reports.mortgageNone
+      : story.kind === "clears-before"
+        ? t.reports.mortgageClears.replace("{amount}", money(story.owingNow, "HKD"))
+        : story.kind === "assumed-payoff"
+          ? t.reports.mortgageAssume.replace("{amount}", money(story.owingNow, "HKD"))
+          : t.reports.mortgageOwing.replace("{amount}", money(story.owingNow, "HKD"));
   return (
     <div id="retire-house" className="mb-3">
       <SectionLabel>{t.reports.housingTimeline}</SectionLabel>
       <div className="mx-4 rounded-2xl bg-elevated p-4">
-        <RowAmt label={t.reports.mortgageAtRetire} value={retireRow?.openingMortgage ?? 0} />
-        <RowAmt label={t.reports.mortgagePayAtRetire} value={(retireRow?.mortgagePayment ?? 0) / 12} />
+        <p className="text-[11px] leading-4 text-muted">{note}</p>
+        <RowAmt label={t.reports.outstanding} value={story.owingNow} bold />
+        {projectedLeft != null ? <RowAmt label={t.reports.mortgageAtRetire} value={projectedLeft} /> : null}
         <RowAmt label={t.reports.housingAfter} value={housing} />
         <label className="mt-3 flex min-h-11 items-center justify-between text-sm">
           {t.reports.payOffAtRetire}
           <input type="checkbox" checked={payOff} onChange={(e) => persist({ payOffMortgageAtRetire: e.target.checked })} />
         </label>
-        <div className="mt-3 space-y-1">
-          {plan.years.filter((y) => !y.flags.isPreRetirement).slice(0, 8).map((y) => (
-            <div key={y.age} className="flex justify-between text-[11px] text-muted">
-              <span>{t.reports.atAge} {y.age}</span>
-              <span className="tabular-nums">{money(y.mortgagePayment, "HKD")}</span>
-            </div>
-          ))}
-        </div>
         {mortgage ? <p className="mt-2 text-[11px] text-muted">{mortgage.nameZh || mortgage.name}</p> : null}
-        {atRetire ? null : null}
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ import {
   projectRetirementAccountYear,
   scheduledPayoutAnnual,
 } from "@/lib/calc/mpf";
+import { annuityClash, suggestMpfFromRecurring } from "@/lib/calc/retire-view";
 import type { Allowance, RetirementAccount, RetirementAccountType, RetirementWithdrawalStrategy } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -23,11 +24,21 @@ const YEAR_CHIPS = [5, 10, 15, 20];
 export function RetirementAccountsPage() {
   const t = useT();
   const rows = useApp((s) => s.retirementAccounts);
+  const allowances = useApp((s) => s.allowances);
+  const rec = useApp((s) => s.recurring);
+  const cats = useApp((s) => s.categories);
+  const upsert = useApp((s) => s.upsertRetirementAccount);
   const retire = useApp((s) => s.retirement);
   const [editing, setEditing] = useState<RetirementAccount | "new" | null>(null);
   const retireAge = retire?.retireAge ?? 65;
-  const currentAge = retire?.currentAge ?? 40;
+  const currentAge = retire?.currentAge && retire.currentAge > 0 ? retire.currentAge : 0;
   const yearsToRetire = Math.max(0, retireAge - currentAge);
+  const mpfSuggestion = suggestMpfFromRecurring({
+    recurring: rec,
+    categories: cats,
+    hasRetirementAccount: rows.some((a) => a.type === "MPF" || a.type === "ORSO"),
+  });
+  const dupAnnuity = annuityClash(rows, allowances);
 
   const totals = rows.reduce(
     (s, a) => {
@@ -66,6 +77,22 @@ export function RetirementAccountsPage() {
       <p className="px-5 pb-1 text-xs leading-5 text-muted">{t.more.raStartNote}</p>
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.more.retireAccountsHint}</p>
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.raOnce}</p>
+      {dupAnnuity ? <p className="mx-4 mb-3 rounded-2xl bg-expense-soft px-4 py-3 text-sm text-expense">{t.reports.annuityDup}</p> : null}
+      {mpfSuggestion ? (
+        <div className="mx-4 mb-3 rounded-2xl bg-elevated p-4">
+          <p className="text-sm leading-5">{t.reports.mpfSuggest.replace("{amount}", money(mpfSuggestion.monthly, "HKD"))}</p>
+          <button
+            type="button"
+            className="mt-3 h-11 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent"
+            onClick={() => {
+              const row = blankRetirementAccount("MPF");
+              void upsert({ ...row, name: "MPF", employeeContributionAmount: mpfSuggestion.monthly });
+            }}
+          >
+            {t.reports.mpfSuggestAdd}
+          </button>
+        </div>
+      ) : null}
       <div className="mx-4 mb-3 grid grid-cols-2 gap-2">
         <Stat label={t.reports.raBalance} value={totals.balance} />
         <Stat label={t.reports.raMonthly} value={totals.monthly} />
@@ -457,6 +484,7 @@ function HkIncomeSection() {
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium">{kindLabel(a.kind, t)}</div>
                   <div className="mt-0.5 text-xs tabular-nums text-muted">{allowanceLine(a, t, locale)}</div>
+                  {a.kind === "oaa" ? <div className="mt-1 text-[11px] text-muted">{t.reports.sampleAmount}</div> : null}
                 </div>
                 <Pencil className="mt-1 size-4 shrink-0 text-muted" />
               </button>

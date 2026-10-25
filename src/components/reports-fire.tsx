@@ -2,15 +2,17 @@ import { useMemo, useState } from "react";
 import { Check, ChevronDown, TriangleAlert, X } from "lucide-react";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { ScreenHeader, SectionLabel } from "@/components/shared";
-import { SharedRetirementStrip, useLifePlanResult, useRetirementModel } from "@/components/reports-retire";
+import { SharedRetirementStrip, useRetirementHeadline } from "@/components/reports-retire";
 import { money, pct, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { monthKey } from "@/lib/calc/ledger";
 import { runLifePlan, type LifePlanShock } from "@/lib/calc/life-plan";
 import {
+  allocateTypedSpend,
+} from "@/lib/calc/retire-view";
+import {
   fireBuckets,
   fireGates,
-  fireInvestable,
   fireSpendLevels,
   fireTargets,
   largestHoldingShare,
@@ -37,7 +39,8 @@ export function FirePlanPage() {
   const deposits = useApp((s) => s.deposits);
   const holdings = useApp((s) => s.holdings);
   const retirementAccounts = useApp((s) => s.retirementAccounts);
-  const { base, persist, mortgage } = useRetirementModel();
+  const head = useRetirementHeadline();
+  const { base, persist, mortgage } = head;
   const currentAge = base.currentAge;
   const retireAge = base.retireAge;
   const deathAge = base.deathAge;
@@ -45,21 +48,16 @@ export function FirePlanPage() {
   const parentYears = base.parentSupportYears;
   const parentMode = base.parentSupportMode === "reserve" ? "reserve" : "include";
   const jobAfter = base.postRetireJobMonthly ?? 0;
-  const monthlySave = base.monthlyIncomeNow - base.monthlySpendNow;
   const acceptedFlexCut = Boolean(base.acceptedFlexCut);
 
   const rows = useMemo(
     () => monthlySpendByCategory(txs, categories, rec, rates, monthKey(todayISO())),
     [txs, categories, rec, rates],
   );
-  const levels = fireSpendLevels(
-    rows,
-    parentMonthly,
-    parentMode,
-    parentMode === "include" && (parentYears ?? 0) > 0 && currentAge + (parentYears ?? 0) > retireAge ? parentYears : 0,
-  );
+  const rawLevels = fireSpendLevels(rows);
+  const levels = allocateTypedSpend(rawLevels, base.targetMonthly);
   const targets = fireTargets(levels);
-  const investable = fireInvestable(accounts, rates, retirementAccounts);
+  const investable = head.investable;
   const buckets = fireBuckets({
     accounts,
     rates,
@@ -72,7 +70,7 @@ export function FirePlanPage() {
   });
   const familyTotal = parentLiability(parentMonthly, parentYears ?? 0);
   const liq = buckets.find((b) => b.id === "liquidity")?.amount ?? 0;
-  const { resolved, result, inflows } = useLifePlanResult();
+  const { resolved, result, inflows } = head.life;
   const [stressOn, setStressOn] = useState<FireStressId | null>(null);
   const [showTags, setShowTags] = useState(false);
   const shock: LifePlanShock | undefined =
@@ -97,6 +95,7 @@ export function FirePlanPage() {
   const annualDraw = retireRow ? ((retireRow.living + retireRow.mortgage) * 12) / drawMonths : 0;
   const firstYearSwr = corpusAtRetire > 0 ? annualDraw / corpusAtRetire : 0;
   const at80 = years.find((y) => y.age >= 80)?.closingFinancial ?? years[years.length - 1]?.closingFinancial ?? 0;
+  const endAge = years[years.length - 1]?.age ?? deathAge;
   const stress = useMemo(() => {
     const specs: { id: FireStressId; shock: LifePlanShock }[] = [
       { id: "bear", shock: { shockAtRetire: -0.3 } },
@@ -127,7 +126,7 @@ export function FirePlanPage() {
     concentration: conc,
     acceptedFlexCut,
     stress,
-  });
+  }).map((g) => (g.id === "mortgage" ? { ...g, status: head.mort.gate } : g));
 
   function setKind(id: string, kind: FireSpendKind) {
     const cat = categories.find((c) => c.id === id);
@@ -138,9 +137,34 @@ export function FirePlanPage() {
   return (
     <div className="pb-10">
       <ScreenHeader title={t.reports.firePlan} backTo="/reports/retirement" />
-      <p className="px-5 pb-1 text-xs leading-5 text-muted">{t.reports.fireStartNote}</p>
-      <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.firePlanHint}</p>
+      <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.officialOnly}</p>
       <SharedRetirementStrip />
+      <section className="mx-4 mb-3 rounded-2xl bg-elevated p-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-sm font-medium">{t.reports.resultTitle}</div>
+          <span className="text-xs font-medium text-muted">
+            {head.story.kind === "enough" ? t.reports.verdictEnough : head.story.kind === "short" ? t.reports.verdictShort : t.reports.verdictSetup}
+          </span>
+        </div>
+        <p className="mt-2 text-sm leading-5">
+          {head.story.kind === "enough"
+            ? t.reports.enoughLine.replace("{plan}", money(head.story.planned, "HKD")).replace("{age}", String(head.planEndAge))
+            : head.story.kind === "short"
+              ? t.reports.shortLine
+                  .replace("{plan}", money(head.story.planned, "HKD"))
+                  .replace("{gap}", money(Math.abs(head.story.gap), "HKD"))
+                  .replace("{age}", String(head.planEndAge))
+              : t.reports.setupLine}
+        </p>
+        {head.story.kind === "setup" ? null : (
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <MiniStat label={t.reports.spendRetired} value={base.targetMonthly} accent />
+            <MiniStat label={t.reports.surplus} value={head.story.gap} danger={head.story.gap < 0} />
+            <MiniStat label={t.reports.investableNow} value={investable} />
+          </div>
+        )}
+      </section>
+      <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.tagsAllocate.replace("{amount}", money(base.targetMonthly, "HKD"))}</p>
 
       <SectionLabel>{t.reports.fireSpendEngine}</SectionLabel>
       <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
@@ -185,6 +209,7 @@ export function FirePlanPage() {
       </div>
 
       <SectionLabel>{t.reports.fireThree}</SectionLabel>
+      <p className="px-5 pb-2 text-[11px] leading-4 text-muted">{t.reports.fireReferenceHint}</p>
       <div className="mx-4 mb-3 grid grid-cols-1 gap-2">
         <TargetCard title={t.reports.fireTargetFloor} swr="3.5%" amount={targets.floor} now={investable} t={t} />
         <TargetCard title={t.reports.fireTargetBase} swr="3.5%" amount={targets.base} now={investable} t={t} highlight />
@@ -252,22 +277,22 @@ export function FirePlanPage() {
         <div className="grid grid-cols-2 gap-x-3">
           <div className="flex min-h-11 items-center justify-between gap-2 py-2">
             <span className="min-w-0 truncate text-xs text-muted">{t.reports.fireSaveNow}</span>
-            <span className="text-sm font-medium tabular-nums">{money(monthlySave, "HKD")}</span>
+            <span className="text-sm font-medium tabular-nums">{money(head.saveMonthly, "HKD")}</span>
           </div>
           <FireNum label={t.reports.fireJobAfter} value={jobAfter} money onCommit={(n) => persist({ postRetireJobMonthly: n })} />
         </div>
-        <p className="text-[11px] leading-4 text-muted">{t.reports.fireSaveHint}</p>
+        <p className="text-[11px] leading-4 text-muted">{head.saveSource === "manual" ? t.reports.basisManual : t.reports.basisLedger}</p>
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <MiniStat label={t.reports.fireCorpusRetire} value={corpusAtRetire} />
+          <MiniStat label={t.reports.corpusOnPath} value={corpusAtRetire} />
           <div className="rounded-xl bg-background px-3 py-2">
             <div className="text-[11px] text-muted">{t.reports.fireFirstSwr}</div>
             <div className="mt-0.5 text-sm font-semibold tabular-nums">{pct(firstYearSwr)}</div>
           </div>
-          <MiniStat label={t.reports.fireAt80} value={at80} />
+          <MiniStat label={endAge > 80 ? t.reports.atAgeOnPlan.replace("{age}", "80").replace("{end}", String(endAge)) : t.reports.fireAt80} value={at80} />
           <div className="rounded-xl bg-background px-3 py-2">
             <div className="text-[11px] text-muted">{t.reports.fireDepleteYear}</div>
             <div className={cn("mt-0.5 text-sm font-semibold", shown.stay?.depletes ? "text-expense" : "text-income")}>
-              {shown.stay?.depletes ? shown.stay.depletionAge : t.reports.fireNeverDeplete}
+              {shown.stay?.depletes ? shown.stay.depletionAge : t.reports.lastsUntil.replace("{age}", String(endAge))}
             </div>
           </div>
         </div>
@@ -311,21 +336,30 @@ export function FirePlanPage() {
             >
               <div className="text-xs font-medium">{label}</div>
               <div className={cn("mt-1 text-sm font-semibold", on ? "" : s.depletes ? "text-expense" : "text-income")}>
-                {s.depletes ? `${t.reports.fireStressFail} · ${s.depletionAge}` : t.reports.fireStressOk}
+                {s.depletes ? `${t.reports.refMiss} · ${s.depletionAge}` : t.reports.refMet}
               </div>
             </button>
           );
         })}
       </div>
 
-      <SectionLabel>{t.reports.fireGates}</SectionLabel>
+      <SectionLabel>{t.reports.refCheck}</SectionLabel>
       <div className="mx-4 overflow-hidden rounded-2xl bg-elevated">
         {gates.map((g, i) => (
           <div key={g.id} className={cn("flex items-start gap-3 px-4 py-3", i > 0 ? "border-t border-line" : "")}>
             <GateIcon status={g.status} />
             <div className="min-w-0 flex-1">
               <div className="text-sm leading-5">{gateLabel(g.id, t)}</div>
-              <div className="mt-0.5 text-[11px] text-muted">{g.status === "pass" ? t.reports.fireGatePass : g.status === "fail" ? t.reports.fireGateFail : t.reports.fireGateNeed}</div>
+              {g.id === "mortgage" && head.mort.owingNow > 0 ? (
+                <p className="mt-1 text-[11px] leading-4 text-muted">
+                  {head.mort.kind === "assumed-payoff"
+                    ? t.reports.mortgageAssume.replace("{amount}", money(head.mort.owingNow, "HKD"))
+                    : head.mort.kind === "clears-before"
+                      ? t.reports.mortgageClears.replace("{amount}", money(head.mort.owingNow, "HKD"))
+                      : t.reports.mortgageOwing.replace("{amount}", money(head.mort.owingNow, "HKD"))}
+                </p>
+              ) : null}
+              <div className="mt-0.5 text-[11px] text-muted">{g.status === "pass" ? t.reports.refMet : g.status === "fail" ? t.reports.refMiss : t.reports.refNeed}</div>
             </div>
           </div>
         ))}

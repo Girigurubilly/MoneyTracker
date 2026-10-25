@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { Disclaimer, ScreenHeader, SectionLabel } from "@/components/shared";
-import { LifeYearList } from "@/components/life-year-list";
 import { LifePlanJobs } from "@/components/life-plan-setup";
 import { SharedRetirementStrip, useLifePlanResult } from "@/components/reports-retire";
 import { money } from "@/lib/format";
@@ -17,7 +16,6 @@ export function EarlyRetirementPlanPage() {
   const plan = stored ?? emptyLifePlan();
   const { result } = useLifePlanResult();
   const [path, setPath] = useState<LifePathId>("stay");
-  const active = path === "switch" ? result.switch : result.stay;
   const chart = mergeSeries(result.stay, result.switch);
 
   return (
@@ -64,7 +62,10 @@ export function EarlyRetirementPlanPage() {
               </button>
             </div>
           ) : null}
-          {active ? <LifeYearList years={active.years} /> : null}
+          <p className="px-5 pb-2 text-xs leading-5 text-muted">{t.reports.oneYearList}</p>
+          <Link to="/reports/retirement/projection" className="mx-4 mb-3 flex min-h-11 items-center rounded-2xl bg-elevated px-4 text-sm">
+            {t.reports.scenarioYears}
+          </Link>
         </>
       ) : (
         <p className="mx-4 mb-3 rounded-2xl bg-elevated px-4 py-3 text-sm text-muted">{t.reports.lpNeedData}</p>
@@ -94,7 +95,7 @@ function PathCard({
         <Mini k={t.reports.lpRetireAge} v={row.retireAge == null ? "—" : String(row.retireAge)} />
         <Mini k={t.reports.lpAtRetire} v={money(row.assetsAtRetire, "HKD")} />
         <Mini k={t.reports.lpTerminal} v={money(row.terminalAssets, "HKD")} />
-        <Mini k={t.reports.lpDeplete} v={row.depletes ? `${t.reports.lpDeplete} ${row.depletionAge}` : t.reports.lpNever} danger={row.depletes} />
+        <Mini k={t.reports.lpDeplete} v={row.depletes ? `${row.depletionAge ?? ""}` : t.reports.lastsUntil.replace("{age}", String(row.years[row.years.length - 1]?.age ?? ""))} danger={row.depletes} />
         <Mini k={t.reports.lpMin} v={money(row.minFinancial, "HKD")} />
         {gap != null ? <Mini k={t.reports.lpDwzGap} v={`${gap >= 0 ? t.reports.lpOver : t.reports.lpUnder} ${money(Math.abs(gap), "HKD")}`} danger={gap < 0} /> : null}
       </div>

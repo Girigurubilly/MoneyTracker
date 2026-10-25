@@ -1,4 +1,3 @@
-import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
@@ -26,9 +25,7 @@ import { nextTrip, travelSpendYtd, tripCashSpent } from "@/lib/calc/trips";
 import { effectiveRate } from "@/lib/calc/mortgage";
 import { housingStatus, monthlyHousingCost } from "@/lib/calc/housing";
 import { netWorthNow, periodNetWorthPoints } from "@/lib/calc/networth";
-import { retirementStatus } from "@/lib/calc/retirement";
-import { lifePlanMonthlyRoom } from "@/lib/calc/life-plan";
-import { useLifePlanResult, useRetirementModel } from "@/components/reports-retire";
+import { useRetirementHeadline } from "@/components/reports-retire";
 import { periodCashflowPoints, periodRange, type PeriodPreset } from "@/lib/calc/period";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
 import { monthKey } from "@/lib/calc/ledger";
@@ -100,24 +97,13 @@ export function DashboardPage() {
   const m = useApp((s) => s.mortgage);
   const trips = useApp((s) => s.trips);
   const annual = useApp((s) => s.annualTravelBudget);
-  const { fire, result } = useRetirementModel();
-  const life = useLifePlanResult();
+  const head = useRetirementHeadline();
   const today = todayISO();
   const cost = monthlyHousingCost(txs, rec, cats, rates, today);
   const houseStatus = housingStatus(m);
   const travelIds = new Set(cats.filter((c) => c.theme === "travel").map((c) => c.id));
   const ytd = travelSpendYtd(txs, Number(today.slice(0, 4)), travelIds, rates);
   const nxt = nextTrip(trips, today);
-  const room = useMemo(() => lifePlanMonthlyRoom(life.resolved, today, life.inflows), [life.resolved, life.inflows, today]);
-  const years = life.result.stay?.years ?? [];
-  const corpusAtRetire = life.result.stay?.assetsAtRetire ?? result.corpusAtRetire;
-  const surplus = room.surplus;
-  const retStatus = retirementStatus(
-    life.result.stay?.depletes ?? result.depletes,
-    room.sustainable,
-    room.planned,
-    years.map((y) => ({ corpus: y.closingFinancial })),
-  );
   const nxtSpent = nxt ? tripCashSpent(txs, nxt.id, rates, adhoc) : 0;
   const month = monthKey(today);
   const flow = monthFlow(txs, month, rates);
@@ -206,27 +192,22 @@ export function DashboardPage() {
       <Link to="/reports/retirement" className="mx-4 mt-3 block rounded-xl bg-elevated p-4">
         <div className="flex items-start justify-between gap-2">
           <h2 className="text-base font-semibold">{t.reports.retirement}</h2>
-          {ledgerLive && (fire.fireNumber > 0 || room.planned > 0) ? (
-            <StatusChip status={retStatus} />
+          {ledgerLive && head.story.kind !== "setup" ? (
+            <span className="text-xs font-medium text-muted">
+              {head.story.kind === "enough" ? t.reports.verdictEnough : t.reports.verdictShort}
+            </span>
           ) : (
-            <span className="text-xs font-medium text-muted">{t.reports.notSet}</span>
+            <span className="text-xs font-medium text-muted">{t.reports.verdictSetup}</span>
           )}
         </div>
-        {ledgerLive && (fire.fireNumber > 0 || room.planned > 0) ? (
-          <>
-            <div className="mt-4">
-              <div className="text-xs text-muted">{t.reports.fireTitle}</div>
-              <div className="mt-1 text-lg font-semibold tabular-nums">{money(fire.fireNumber, "HKD")}</div>
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-4">
-              <Metric label={t.reports.corpusAtRetire} value={money(corpusAtRetire, "HKD")} />
-              <Metric label={t.reports.surplus} value={money(surplus, "HKD", { sign: true })} />
-              <Metric label={t.reports.sustainable} value={money(room.sustainable, "HKD")} />
-              <Metric label={t.reports.targetMonthly} value={money(room.planned, "HKD")} />
-            </div>
-          </>
+        {ledgerLive && head.story.kind !== "setup" ? (
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            <Metric label={t.reports.spendRetired} value={money(head.base.targetMonthly, "HKD")} />
+            <Metric label={t.reports.surplus} value={money(head.story.gap, "HKD", { sign: true })} />
+            <Metric label={t.reports.investableNow} value={money(head.investable, "HKD")} />
+          </div>
         ) : (
-          <p className="mt-3 text-sm text-muted">{t.reports.notSet}</p>
+          <p className="mt-3 text-sm text-muted">{t.reports.setupLine}</p>
         )}
         <div className="mt-2 flex justify-end">
           <ChevronRight className="size-4 text-faint" />
