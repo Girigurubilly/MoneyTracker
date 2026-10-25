@@ -182,7 +182,18 @@ export type FcBaseline = {
     linked_account_id: string | null;
     in_headline: boolean;
   }[];
-  annuities: { id: string; name: string; monthly_hkd: number; start_age: number; kind: string }[];
+  annuities: {
+    id: string;
+    name: string;
+    /** prepaid = premium/balance asset; income = monthly payout stream. */
+    role: "prepaid" | "income";
+    prepaid_balance_hkd: number | null;
+    monthly_hkd: number | null;
+    start_age: number | null;
+    years: number | null;
+    source: "allowance" | "retirement_account";
+    kind: string;
+  }[];
   cashflow_period: {
     label: "MoneyTracker projection";
     note: string;
@@ -385,9 +396,55 @@ export function buildFcBaseline(input: {
         ]
       : [],
     retirement_restricted,
-    annuities: input.allowances
-      .filter((a) => a.kind === "annuity")
-      .map((a) => ({ id: a.id, name: a.labelZh || a.label, monthly_hkd: a.monthly, start_age: a.startAge, kind: a.kind })),
+    annuities: [
+      ...input.retirementAccounts
+        .filter((r) => r.type === "ANNUITY" || r.type === "PENSION" || r.type === "QDAP")
+        .flatMap((r) => {
+          const rows: FcBaseline["annuities"] = [];
+          const bal = round(toHkd(r.currentBalance, r.currency, input.rates));
+          if (bal > 0) {
+            rows.push({
+              id: `${r.id}-prepaid`,
+              name: r.name,
+              role: "prepaid",
+              prepaid_balance_hkd: bal,
+              monthly_hkd: null,
+              start_age: r.accessibleAge ?? null,
+              years: r.scheduledIncomeYears ?? null,
+              source: "retirement_account",
+              kind: r.type,
+            });
+          }
+          const monthly = r.scheduledMonthlyIncome ?? (r.scheduledAnnualIncome ? r.scheduledAnnualIncome / 12 : 0);
+          if (monthly > 0) {
+            rows.push({
+              id: `${r.id}-income`,
+              name: r.name,
+              role: "income",
+              prepaid_balance_hkd: null,
+              monthly_hkd: round(toHkd(monthly, r.currency, input.rates)),
+              start_age: r.scheduledIncomeStartAge ?? r.accessibleAge ?? null,
+              years: r.scheduledIncomeYears ?? null,
+              source: "retirement_account",
+              kind: r.type,
+            });
+          }
+          return rows;
+        }),
+      ...input.allowances
+        .filter((a) => a.kind === "annuity")
+        .map((a) => ({
+          id: a.id,
+          name: a.labelZh || a.label,
+          role: "income" as const,
+          prepaid_balance_hkd: null,
+          monthly_hkd: a.monthly,
+          start_age: a.startAge,
+          years: a.payoutYears ?? (a.endAge != null ? a.endAge - a.startAge : null),
+          source: "allowance" as const,
+          kind: a.kind,
+        })),
+    ],
     cashflow_period: {
       label: "MoneyTracker projection",
       note: "left is income minus expense for this calendar year. Past months use posted transactions. The current and later months are the yearly projection. This is not Path A surplus_cons.",
@@ -625,7 +682,43 @@ export function renderFcBaselineMarkdown(snap: FcBaseline): string {
   if (snap.liabilities.length) {
     lines.push(`## Liabilities`, ``);
     for (const l of snap.liabilities) {
-      lines.push(`- ${l.name}: outstanding ${l.outstanding_hkd} HKD, monthly ${l.monthly_payment ?? "—"}, rate ${l.rate_pa}`);
+      lines.push(
+        `- ${l.name}: outstanding ${l.outstanding_hkd} HKD, monthly ${l.monthly_payment ?? "—"}, rate ${l.rate_pa}` +
+          (l.rate_linked_savings_account_id ? `, rate-linked savings ${l.rate_linked_savings_account_id}` : ""),
+      );
+    }
+    lines.push(``);
+  }
+
+  if (snap.annuities.length) {
+    lines.push(`## Annuities (prepaid vs income)`, ``);
+    for (const a of snap.annuities) {
+      if (a.role === "prepaid") {
+        lines.push(`- [prepaid] ${a.name}: balance ${a.prepaid_balance_hkd} HKD (${a.kind})`);
+      } else {
+        lines.push(`- [income] ${a.name}: ${a.monthly_hkd} HKD/mo from age ${a.start_age ?? "—"} (${a.kind})`);
+      }
+    }
+    lines.push(``);
+  }
+
+  if (snap.cashflow_period.monthly_rows.length) {
+    lines.push(
+      `## Cashflow months (${snap.cashflow_period.label}; is_path_a_surplus_cons=${snap.cashflow_period.is_path_a_surplus_cons})`,
+      ``,
+      `| month | income | expense | left | status |`,
+      `| --- | ---: | ---: | ---: | --- |`,
+    );
+    for (const r of snap.cashflow_period.monthly_rows) {
+      lines.push(`| ${r.month} | ${r.income} | ${r.expense} | ${r.left} | ${r.status} |`);
+    }
+    lines.push(``);
+  }
+
+  if (snap.adhoc_payments.length) {
+    lines.push(`## Adhoc`, ``, `| date | amount | paid_on | label | in_projection |`, `| --- | ---: | --- | --- | --- |`);
+    for (const a of snap.adhoc_payments) {
+      lines.push(`| ${a.date} | ${a.amount} ${a.currency} | ${a.paid_on ?? "—"} | ${a.label} | ${a.included_in_projection} |`);
     }
     lines.push(``);
   }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { Account, FxRate, Holding, Mortgage, TimeSaving } from "../types.ts";
+import type { Account, FxRate, Holding, Mortgage, RetirementAccount, TimeSaving } from "../types.ts";
 import {
   baselineChecks,
   buildFcBaseline,
@@ -275,6 +275,122 @@ describe("fc baseline", () => {
     });
     assert.equal(snap.holdings[0]?.cost_hkd, null);
     assert.equal(snap.holdings[0]?.ticker, "2800");
+  });
+
+  it("exports mortgage rate_linked_savings_account_id and rate", () => {
+    const loanAcc: Account = {
+      id: "loan",
+      name: "Mortgage",
+      nameZh: "按揭",
+      type: "loan",
+      currency: "HKD",
+      balance: -500000,
+      includeInNetWorth: true,
+      group: "liabilities",
+    };
+    const savings: Account = {
+      id: "boc-sav",
+      name: "BOC savings",
+      nameZh: "中銀儲蓄",
+      type: "savings",
+      currency: "HKD",
+      balance: 360000,
+      includeInNetWorth: true,
+      group: "cash",
+      planningAvailability: "full_household",
+    };
+    const mortgage: Mortgage = {
+      id: "m1",
+      name: "Home",
+      nameZh: "樓",
+      accountId: "loan",
+      original: 600000,
+      outstanding: 500000,
+      rate: 0.0215,
+      remainingMonths: 240,
+      paymentDay: 1,
+      type: "p",
+      rateLinkedSavingsAccountId: "boc-sav",
+    };
+    const snap = buildFcBaseline({
+      asOf: "2026-10-25",
+      accounts: [bank, loanAcc, savings],
+      deposits: [],
+      promo: [],
+      holdings: [],
+      mortgage,
+      retirementAccounts: [],
+      allowances: [],
+      adhoc: [],
+      rates,
+      plans: [],
+      txs: [],
+      categories: [],
+      recurring: [],
+      monthCap: 0,
+    });
+    assert.equal(snap.liabilities[0]?.rate_linked_savings_account_id, "boc-sav");
+    assert.equal(snap.liabilities[0]?.rate_pa, 0.0215);
+    assert.equal(snap.accounts.find((a) => a.id === "boc-sav")?.planning_availability, "full_household");
+    assert.equal(snap.cashflow_period.is_path_a_surplus_cons, false);
+  });
+
+  it("splits annuity prepaid balance from income stream", () => {
+    const ra = {
+      id: "ra-ann",
+      name: "HK Annuity",
+      type: "ANNUITY",
+      currency: "HKD",
+      currentBalance: 1_000_000,
+      balanceAsOf: "2026-10-25",
+      status: "withdrawal_phase",
+      accessibleAge: 65,
+      accessRule: "scheduled_income",
+      contributionFrequency: "one_off",
+      employeeContributionAmount: 0,
+      employerContributionAmount: 0,
+      voluntaryContributionAmount: 0,
+      employeeContributionGrowthRate: 0,
+      employerContributionGrowthRate: 0,
+      voluntaryContributionGrowthRate: 0,
+      expectedAnnualReturnRate: 0,
+      withdrawalStrategy: "scheduled_income",
+      scheduledMonthlyIncome: 5000,
+      scheduledIncomeStartAge: 65,
+      scheduledIncomeYears: 10,
+      includeInRetirementProjection: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    } as RetirementAccount;
+    const snap = buildFcBaseline({
+      asOf: "2026-10-25",
+      accounts: [bank],
+      deposits: [],
+      promo: [],
+      holdings: [{ ...holding, policyNote: "hold_only" }],
+      mortgage: null,
+      retirementAccounts: [ra],
+      allowances: [{ id: "a1", label: "Extra", labelZh: "額外", monthly: 2000, startAge: 70, kind: "annuity", inflationAdjusted: false }],
+      adhoc: [{ id: "ad1", month: "2026-11", date: "2026-11-15", amount: 8000, currency: "HKD", label: "Gift", labelZh: "禮物" }],
+      rates,
+      plans: [],
+      txs: [],
+      categories: [],
+      recurring: [],
+      monthCap: 0,
+    });
+    const prepaid = snap.annuities.find((a) => a.role === "prepaid");
+    const incomeRa = snap.annuities.find((a) => a.role === "income" && a.source === "retirement_account");
+    const incomeAll = snap.annuities.find((a) => a.source === "allowance");
+    assert.equal(prepaid?.prepaid_balance_hkd, 1_000_000);
+    assert.equal(incomeRa?.monthly_hkd, 5000);
+    assert.equal(incomeAll?.monthly_hkd, 2000);
+    assert.equal(snap.holdings[0]?.policy_note, "hold_only");
+    assert.equal(snap.adhoc_payments.length, 1);
+    assert.equal(snap.adhoc_payments[0]?.included_in_projection, true);
+    const md = renderFcBaselineMarkdown(snap);
+    assert.match(md, /\[prepaid\]/);
+    assert.match(md, /\[income\]/);
   });
 
   it("does not invent an accessible basis, and warns when derived holdings are missing", () => {
