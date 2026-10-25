@@ -15,6 +15,7 @@ import type {
   OneOff,
   Recurring,
   TimeSaving,
+  PromoSaving,
   Transaction,
   Trip,
   WishItem,
@@ -42,6 +43,8 @@ import {
   transactions as seedTx,
   trips as seedTrips,
   deposits as seedDeposits,
+  promoSavings as seedPromo,
+  holdings as seedHoldings,
   yearlyPlans as seedYearly,
   wishlist as seedWishlist,
   annualTravelBudget as seedTravelBudget,
@@ -52,6 +55,7 @@ import { readTripEditedAt, readTripLibrary, writeTripLibrary } from "@/lib/trip-
 import { netWorthNow } from "@/lib/calc/networth";
 import { fetchLiveFx } from "@/lib/calc/fx";
 import { applyHoldingBalances, assignHoldingBook, mergeHoldings, parseHoldingsFile } from "@/lib/holdings";
+import { extractPromoDeposits, migrateBalanceBasis } from "@/lib/calc/fc-baseline";
 import { clearHoldingMoveCache, fetchHoldingQuotes, inferredQuoteCurrency, quoteKey, quoteToCurrency } from "@/lib/quotes";
 import { chargedDayOf, chargedIso, inferLivingRegular, isExpenseRegular } from "@/lib/calc/budget";
 import { emptyYearlyPlan, linkedMonthSpendCap } from "@/lib/calc/deposits";
@@ -81,6 +85,7 @@ export type AppSnapshot = {
   annualTravelBudget: number;
   adhocBudgets?: AdhocBudget[];
   deposits?: TimeSaving[];
+  promoSavings?: PromoSaving[];
   yearlyPlans?: YearlyPlan[];
   wishlist?: WishItem[];
   holdings?: Holding[];
@@ -208,6 +213,7 @@ type AppState = {
   oneOffs: OneOff[];
   adhocBudgets: AdhocBudget[];
   deposits: TimeSaving[];
+  promoSavings: PromoSaving[];
   yearlyPlans: YearlyPlan[];
   wishlist: WishItem[];
   holdings: Holding[];
@@ -240,6 +246,7 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     oneOffs,
     adhocBudgets,
     deposits,
+    promoSavings,
     yearlyPlans,
     wishlist,
     fxRates,
@@ -263,6 +270,7 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     idb().oneOffs.toArray(),
     idb().adhocBudgets.toArray(),
     idb().deposits.toArray(),
+    idb().promoSavings.toArray().catch(() => []),
     idb().yearlyPlans.toArray(),
     idb().wishlist.toArray(),
     idb().fxRates.toArray(),
@@ -287,6 +295,7 @@ async function loadAll(): Promise<Omit<AppState, keyof Dispatchers | "hydrate" |
     oneOffs,
     adhocBudgets,
     deposits,
+    promoSavings: promoSavings ?? [],
     yearlyPlans,
     wishlist,
     holdings,
@@ -336,6 +345,7 @@ const defaultCash: Account = {
   balance: 0,
   includeInNetWorth: true,
   group: "cash",
+  balanceBasis: "unverified",
 };
 
 async function seedDb() {
@@ -354,6 +364,8 @@ async function seedDb() {
     await idb().allowances.bulkAdd(seedAllowances);
     await idb().oneOffs.bulkAdd(seedOneOffs);
     await idb().deposits.bulkAdd(seedDeposits);
+    await idb().promoSavings.bulkAdd(seedPromo);
+    await idb().holdings.bulkAdd(seedHoldings);
     await idb().yearlyPlans.bulkAdd(seedYearly);
     await idb().wishlist.bulkAdd(seedWishlist);
     await idb().fxRates.bulkAdd(seedFx);
@@ -520,6 +532,33 @@ async function migrateAnnuityAllowances() {
         hasPayout = true;
       }
       await idb().allowances.delete(a.id);
+    }
+  });
+}
+
+async function migrateBaselineRows(): Promise<void> {
+  const [accounts, deposits, promo, rates] = await Promise.all([
+    idb().accounts.toArray(),
+    idb().deposits.toArray(),
+    idb().promoSavings.toArray().catch(() => [] as PromoSaving[]),
+    idb().fxRates.toArray(),
+  ]);
+  const nextAccounts = migrateBalanceBasis(accounts);
+  const split = extractPromoDeposits(deposits, promo, rates);
+  const accountChanged = nextAccounts.some((a, i) => a !== accounts[i]);
+  const depositChanged = split.deposits.length !== deposits.length;
+  if (!accountChanged && !depositChanged && split.promo.length === promo.length) return;
+  await idb().transaction("rw", [idb().accounts, idb().deposits, idb().promoSavings], async () => {
+    if (accountChanged) {
+      for (const a of nextAccounts) await idb().accounts.put(a);
+    }
+    if (depositChanged) {
+      await idb().deposits.clear();
+      if (split.deposits.length) await idb().deposits.bulkAdd(split.deposits);
+    }
+    if (split.promo.length !== promo.length) {
+      await idb().promoSavings.clear();
+      if (split.promo.length) await idb().promoSavings.bulkAdd(split.promo);
     }
   });
 }
@@ -758,6 +797,7 @@ export const useApp = create<AppState>((set, get) => ({
   oneOffs: [],
   adhocBudgets: [],
   deposits: [],
+  promoSavings: [],
   yearlyPlans: [],
   wishlist: [],
   holdings: [],
@@ -800,6 +840,7 @@ export const useApp = create<AppState>((set, get) => ({
           await ensureMortgageCategories();
           await ensureRegularLiving();
           await migrateAdhocFromPlannedTxs();
+          await migrateBaselineRows();
           await migrateAnnuityAllowances();
           await postDuePlanned();
           await syncRegularSchedules();
@@ -1323,6 +1364,7 @@ export const useApp = create<AppState>((set, get) => ({
       await bulkChunk((rows) => idb().oneOffs.bulkAdd(rows), snap.oneOffs ?? []);
       await bulkChunk((rows) => idb().adhocBudgets.bulkAdd(rows), snap.adhocBudgets ?? []);
       await bulkChunk((rows) => idb().deposits.bulkAdd(rows), snap.deposits ?? []);
+      await bulkChunk((rows) => idb().promoSavings.bulkAdd(rows), snap.promoSavings ?? []);
       await bulkChunk((rows) => idb().yearlyPlans.bulkAdd(rows), snap.yearlyPlans ?? []);
       await bulkChunk((rows) => idb().wishlist.bulkAdd(rows), snap.wishlist ?? []);
       await bulkChunk((rows) => idb().holdings.bulkAdd(rows), snap.holdings ?? []);
@@ -1344,6 +1386,7 @@ export const useApp = create<AppState>((set, get) => ({
     });
     await migrateAdhocFromPlannedTxs();
     await migrateAnnuityAllowances();
+    await migrateBaselineRows();
     if (snap.tripLibrary) {
       const localAt = readTripEditedAt();
       const remoteAt = snap.tripLibrary.exportedAt || "";
@@ -1373,6 +1416,7 @@ export const useApp = create<AppState>((set, get) => ({
       annualTravelBudget: s.annualTravelBudget,
       adhocBudgets: s.adhocBudgets,
       deposits: s.deposits,
+      promoSavings: s.promoSavings,
       yearlyPlans: s.yearlyPlans,
       wishlist: s.wishlist,
       holdings: s.holdings,

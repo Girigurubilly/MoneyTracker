@@ -13,6 +13,7 @@ import type {
   OneOff,
   Recurring,
   TimeSaving,
+  PromoSaving,
   Transaction,
   Trip,
   WishItem,
@@ -53,6 +54,7 @@ export class HKLifeDB extends Dexie {
   oneOffs!: EntityTable<OneOff, "id">;
   adhocBudgets!: EntityTable<AdhocBudget, "id">;
   deposits!: EntityTable<TimeSaving, "id">;
+  promoSavings!: EntityTable<PromoSaving, "id">;
   yearlyPlans!: EntityTable<YearlyPlan, "id">;
   wishlist!: EntityTable<WishItem, "id">;
   holdings!: EntityTable<Holding, "id">;
@@ -100,6 +102,9 @@ export class HKLifeDB extends Dexie {
     });
     this.version(7).stores({
       lifePlans: "id",
+    });
+    this.version(8).stores({
+      promoSavings: "id, accountId",
     });
   }
 }

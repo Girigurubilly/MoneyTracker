@@ -95,6 +95,8 @@ export function typesInGroup(group: AccountGroup): AccountType[] {
   return ACCOUNT_TYPE_OPTIONS.map((o) => o.id).filter((id) => groupForType(id) === group);
 }
 
+export type BalanceBasis = "bank_total_incl_deposits" | "available_ex_deposits" | "holdings_derived" | "unverified";
+
 export type Account = {
   id: string;
   name: string;
@@ -115,6 +117,9 @@ export type Account = {
   /** When set, this investment account’s balance follows matching holdings. */
   stockBook?: "hk" | "us" | "all";
   holdingSync?: boolean;
+  /** What the stored balance includes. Missing means not yet confirmed. */
+  balanceBasis?: BalanceBasis;
+  ownership?: "sole" | "joint";
 };
 
 export type CategoryIconName =
@@ -414,6 +419,20 @@ export type TimeSaving = {
   amount: number;
   interest: number;
   accountId: string;
+};
+
+export type PromoAccessibility = "accessible" | "restricted" | "unknown";
+
+export type PromoSaving = {
+  id: string;
+  accountId: string;
+  residualHkd: number;
+  rateSchedule: { from: string; to: string; rate: number }[];
+  arrangementEnd: string;
+  accessibility: PromoAccessibility;
+  distinctFromTd: true;
+  name?: string;
+  nameZh?: string;
 };
 
 export type YearlyPlan = {
