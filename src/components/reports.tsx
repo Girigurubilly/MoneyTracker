@@ -26,7 +26,7 @@ import { budgetActuals, committedOutflows, monthEndIso, monthFlow } from "@/lib/
 import { nextTrip, travelSpendYtd, tripCashSpent } from "@/lib/calc/trips";
 import { effectiveRate } from "@/lib/calc/mortgage";
 import { housingStatus, monthlyHousingCost } from "@/lib/calc/housing";
-import { netWorthNow, periodNetWorthPoints, plainTransferOffsetHkd } from "@/lib/calc/networth";
+import { netWorthNow, periodNetWorthPoints } from "@/lib/calc/networth";
 import { useRetirementHeadline } from "@/components/reports-retire";
 import { periodCashflowPoints, periodRange, type PeriodPreset } from "@/lib/calc/period";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
@@ -139,10 +139,9 @@ export function DashboardPage() {
   const next14 = committedOutflows(rec, adhoc, txs, rates, today, 14);
   const afterCommit = available - next14;
   const nw = netWorthNow(accounts, rates, deposits);
-  const nwShown = nw.net + plainTransferOffsetHkd(accounts, txs, rates, today);
   const prevEnd = monthEndIso(shiftYm(month, -1));
   const prevWorth = periodNetWorthPoints(accounts, txs, rates, prevEnd, prevEnd, deposits).at(-1)?.net;
-  const nwDelta = prevWorth == null ? 0 : nwShown - prevWorth;
+  const nwDelta = prevWorth == null ? 0 : nw.net - prevWorth;
   const saveM = flow.income > 0 ? flow.net / flow.income : 0;
   const saveY = ytdFlow.income > 0 ? (ytdFlow.income - ytdFlow.expense) / ytdFlow.income : 0;
   const incomeZero = flow.income <= 0.005;
@@ -192,7 +191,7 @@ export function DashboardPage() {
           <div className="mt-3 border-t border-line pt-1">
             <DashRow label={t.reports.mtdVsBudget} value={cap ? `${money(spent, "HKD")} / ${money(cap, "HKD")}` : money(spent, "HKD")} />
             <DashRow label={t.reports.next14} value={money(next14, "HKD")} />
-            <DashRow label={t.reports.netWorthNow} value={money(nwShown, "HKD")} />
+            <DashRow label={t.reports.netWorthNow} value={money(nw.net, "HKD")} />
             <DashRow label={t.reports.nwDeltaLine} value={money(nwDelta, "HKD", { sign: true })} />
             <button type="button" className="tr-press flex w-full items-start justify-between gap-3 border-b border-line py-2.5 text-left" onClick={() => setExplain("saveMonth")}>
               <span className="text-xs text-muted">{t.reports.saveRateMonth}</span>
