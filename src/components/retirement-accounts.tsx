@@ -77,12 +77,14 @@ export function RetirementAccountsPage() {
   return (
     <div className="pb-10">
       <ScreenHeader title={t.more.retireAccounts} backTo="/more" />
-      <p className="px-5 pb-1 text-xs leading-5 text-muted">{t.more.raStartNote}</p>
-      <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.more.retireAccountsHint}</p>
-      <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.raOnce}</p>
-      {dupAnnuity ? <p className="mx-4 mb-3 rounded-2xl bg-expense-soft px-4 py-3 text-sm text-expense">{t.reports.annuityDup}</p> : null}
+      <div className="rt-enter px-5 pb-3 space-y-1">
+        <p className="text-xs leading-5 text-muted">{t.more.raStartNote}</p>
+        <p className="text-xs leading-5 text-muted">{t.more.retireAccountsHint}</p>
+        <p className="text-xs leading-5 text-muted">{t.reports.raOnce}</p>
+      </div>
+      {dupAnnuity ? <p className="rt-enter mx-4 mb-3 rounded-2xl bg-expense-soft px-4 py-3 text-sm text-expense">{t.reports.annuityDup}</p> : null}
       {mpfFromAssets ? (
-        <div className="mx-4 mb-3 rounded-2xl bg-elevated p-4">
+        <div className="rt-enter mx-4 mb-3 rounded-2xl bg-elevated p-4">
           <p className="text-sm leading-5">
             {t.reports.mpfSuggestAssets
               .replace("{name}", mpfFromAssets.name)
@@ -90,7 +92,7 @@ export function RetirementAccountsPage() {
           </p>
           <button
             type="button"
-            className="mt-3 h-11 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent"
+            className="tr-press mt-3 flex h-11 min-h-11 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-on-accent"
             onClick={() => {
               const row = blankRetirementAccount("MPF");
               void upsert({
@@ -105,11 +107,11 @@ export function RetirementAccountsPage() {
           </button>
         </div>
       ) : mpfSuggestion ? (
-        <div className="mx-4 mb-3 rounded-2xl bg-elevated p-4">
+        <div className="rt-enter mx-4 mb-3 rounded-2xl bg-elevated p-4">
           <p className="text-sm leading-5">{t.reports.mpfSuggest.replace("{amount}", money(mpfSuggestion.monthly, "HKD"))}</p>
           <button
             type="button"
-            className="h-11 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent mt-3"
+            className="tr-press mt-3 flex h-11 min-h-11 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-on-accent"
             onClick={() => {
               const row = blankRetirementAccount("MPF");
               void upsert({ ...row, name: "MPF", employeeContributionAmount: mpfSuggestion.monthly });
@@ -119,16 +121,16 @@ export function RetirementAccountsPage() {
           </button>
         </div>
       ) : null}
-      <div className="mx-4 mb-3 grid grid-cols-2 gap-2">
+      <div className="rt-enter mx-4 mb-3 grid grid-cols-2 gap-2">
         <Stat label={t.reports.raBalance} value={totals.balance} />
         <Stat label={t.reports.raMonthly} value={totals.monthly} />
         <Stat label={t.reports.raLockedAtRetire} value={totals.atRetire} />
         <Stat label={t.reports.raIncome} value={totals.income} />
       </div>
-      <div className="px-4 pb-3">
+      <div className="rt-enter px-4 pb-3">
         <button
           type="button"
-          className="flex h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-accent text-sm font-semibold text-on-accent"
+          className="tr-press flex h-11 min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-accent text-sm font-semibold text-on-accent"
           onClick={() => setEditing("new")}
         >
           <Plus className="size-4" />
@@ -136,25 +138,36 @@ export function RetirementAccountsPage() {
         </button>
       </div>
       {rows.length ? (
-        <Group>
-          {rows.map((a, i) => (
-            <div key={a.id}>
-              {i > 0 ? <Hairline /> : null}
-              <button type="button" className="flex w-full items-start gap-2 px-4 py-3 text-left" onClick={() => setEditing(a)}>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{a.name}</span>
-                    <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent">{typeLabel(a.type, t)}</span>
+        <div className="rt-enter-delay">
+          <Group>
+            {rows.map((a, i) => (
+              <div key={a.id}>
+                {i > 0 ? <Hairline /> : null}
+                <button
+                  type="button"
+                  className="tr-press flex min-h-11 w-full items-start gap-2 px-4 py-3 text-left"
+                  onClick={() => setEditing(a)}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">{a.name}</span>
+                      <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent">{typeLabel(a.type, t)}</span>
+                    </div>
+                    <div className="mt-1 text-xs tabular-nums text-muted">{accountLine(a, t)}</div>
                   </div>
-                  <div className="mt-1 text-xs tabular-nums text-muted">{accountLine(a, t)}</div>
-                </div>
-                <Pencil className="mt-1 size-4 shrink-0 text-muted" />
-              </button>
-            </div>
-          ))}
-        </Group>
+                  <span className="grid size-11 shrink-0 place-items-center text-muted" aria-hidden>
+                    <Pencil className="size-4" />
+                  </span>
+                </button>
+              </div>
+            ))}
+          </Group>
+        </div>
       ) : (
-        <p className="px-5 py-6 text-sm text-muted">{t.reports.raEmpty}</p>
+        <div className="rt-enter-delay mx-4 mb-2 rounded-2xl bg-elevated px-4 py-6 text-center">
+          <p className="text-sm font-medium">{t.reports.raEmpty}</p>
+          <p className="mt-1 text-xs leading-5 text-muted">{t.reports.raEmptyHint}</p>
+        </div>
       )}
       {editing ? (
         <AccountEditor
@@ -282,7 +295,7 @@ function AccountEditor({ initial, isNew, onClose }: { initial: RetirementAccount
               type="button"
               onClick={() => changeType(type)}
               className={cn(
-                "h-8 rounded-full px-3 text-xs font-medium",
+                "rt-chip-pill tr-press min-h-11 rounded-full px-3 text-xs font-medium",
                 row.type === type ? "bg-accent text-on-accent" : "bg-elevated text-muted",
               )}
             >
@@ -313,7 +326,7 @@ function AccountEditor({ initial, isNew, onClose }: { initial: RetirementAccount
             <NumLine label={`${t.reports.expectedReturn} %`} value={+(row.expectedAnnualReturnRate * 100).toFixed(2)} onChange={(n) => patch({ expectedAnnualReturnRate: n / 100 })} />
           </>
         )}
-        <button type="button" className="h-11 w-full text-sm text-accent" onClick={() => setMore((v) => !v)}>
+        <button type="button" className="tr-press flex h-11 min-h-11 w-full items-center justify-center text-sm text-accent" onClick={() => setMore((v) => !v)}>
           {more ? t.reports.raHideMore : t.reports.raMore}
         </button>
         {more ? (
@@ -353,7 +366,7 @@ function AccountEditor({ initial, isNew, onClose }: { initial: RetirementAccount
         {isNew ? null : (
           <button
             type="button"
-            className="flex h-11 w-full items-center justify-center gap-1.5 text-sm text-expense"
+            className="tr-press flex h-11 min-h-11 w-full items-center justify-center gap-1.5 text-sm text-expense"
             onClick={() => {
               void remove(row.id);
               onClose();
@@ -387,7 +400,7 @@ function StepperRow({
       <div className="flex items-center gap-1">
         <button
           type="button"
-          className="grid size-11 place-items-center rounded-full bg-elevated text-lg"
+          className="tr-press grid size-11 place-items-center rounded-full bg-elevated text-lg"
           onClick={() => onChange(Math.max(min, value - 1))}
         >
           −
@@ -395,7 +408,7 @@ function StepperRow({
         <span className="w-10 text-center text-base font-semibold tabular-nums">{value}</span>
         <button
           type="button"
-          className="grid size-11 place-items-center rounded-full bg-elevated text-lg"
+          className="tr-press grid size-11 place-items-center rounded-full bg-elevated text-lg"
           onClick={() => onChange(Math.min(max, value + 1))}
         >
           +
@@ -425,7 +438,7 @@ function YearChips({
             key={n}
             type="button"
             onClick={() => onChange(n)}
-            className={cn("h-10 min-w-12 rounded-full px-3 text-sm font-medium", years === n ? "bg-accent text-on-accent" : "bg-elevated")}
+            className={cn("rt-chip-pill tr-press min-h-11 min-w-12 rounded-full px-3 text-sm font-medium", years === n ? "bg-accent text-on-accent" : "bg-elevated")}
           >
             {n}
           </button>
@@ -433,7 +446,7 @@ function YearChips({
         <button
           type="button"
           onClick={() => onChange(0)}
-          className={cn("h-10 rounded-full px-3 text-sm font-medium", years === 0 ? "bg-accent text-on-accent" : "bg-elevated")}
+          className={cn("rt-chip-pill tr-press min-h-11 rounded-full px-3 text-sm font-medium", years === 0 ? "bg-accent text-on-accent" : "bg-elevated")}
         >
           {lifetimeLabel}
         </button>
@@ -498,35 +511,39 @@ function HkIncomeSection() {
   }
 
   return (
-    <div className="pt-6">
+    <div className="rt-enter pt-6">
       <h2 className="px-5 pb-1 text-sm font-medium text-muted">{t.reports.hkIncome}</h2>
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.hkIncomeHint}</p>
       {rows.length ? (
-        <Group>
-          {rows.map((a, i) => (
-            <div key={a.id}>
-              {i > 0 ? <Hairline /> : null}
-              <button type="button" className="flex w-full items-start gap-2 px-4 py-3 text-left" onClick={() => setEditing(a)}>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium">{kindLabel(a.kind, t)}</div>
-                  <div className="mt-0.5 text-xs tabular-nums text-muted">{allowanceLine(a, t, locale)}</div>
-                  {a.kind === "oaa" ? <div className="mt-1 text-[11px] text-muted">{t.reports.sampleAmount}</div> : null}
-                </div>
-                <Pencil className="mt-1 size-4 shrink-0 text-muted" />
-              </button>
-            </div>
-          ))}
-        </Group>
+        <div className="rt-enter">
+          <Group>
+            {rows.map((a, i) => (
+              <div key={a.id}>
+                {i > 0 ? <Hairline /> : null}
+                <button type="button" className="tr-press flex min-h-11 w-full items-start gap-2 px-4 py-3 text-left" onClick={() => setEditing(a)}>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium">{kindLabel(a.kind, t)}</div>
+                    <div className="mt-0.5 text-xs tabular-nums text-muted">{allowanceLine(a, t, locale)}</div>
+                    {a.kind === "oaa" ? <div className="mt-1 text-[11px] text-muted">{t.reports.sampleAmount}</div> : null}
+                  </div>
+                  <span className="grid size-11 shrink-0 place-items-center text-muted" aria-hidden>
+                    <Pencil className="size-4" />
+                  </span>
+                </button>
+              </div>
+            ))}
+          </Group>
+        </div>
       ) : (
-        <p className="px-5 pb-2 text-sm text-muted">{t.reports.raEmpty}</p>
+        <p className="rt-enter px-5 pb-2 text-sm text-muted">{t.reports.raEmpty}</p>
       )}
-      <div className="mx-4 mt-3 flex flex-col gap-2">
+      <div className="rt-enter-delay mx-4 mt-3 flex flex-col gap-2">
         {!hasOaa ? (
-          <button type="button" className="h-11 rounded-xl bg-elevated text-sm font-medium" onClick={() => setEditing("oaa")}>
+          <button type="button" className="tr-press flex h-11 min-h-11 items-center justify-center rounded-xl bg-elevated text-sm font-medium" onClick={() => setEditing("oaa")}>
             {t.reports.addOaa}
           </button>
         ) : null}
-        <button type="button" className="h-11 rounded-xl bg-elevated text-sm" onClick={() => setEditing("other")}>
+        <button type="button" className="tr-press flex h-11 min-h-11 items-center justify-center rounded-xl bg-elevated text-sm" onClick={() => setEditing("other")}>
           {t.reports.addAllowance}
         </button>
       </div>
@@ -624,7 +641,7 @@ function IncomeEditor({
           {t.reports.inflationAdj}
         </label>
         {isNew || !onDelete ? null : (
-          <button type="button" className="flex h-11 w-full items-center justify-center gap-1.5 text-sm text-expense" onClick={onDelete}>
+          <button type="button" className="tr-press flex h-11 min-h-11 w-full items-center justify-center gap-1.5 text-sm text-expense" onClick={onDelete}>
             <Trash2 className="size-4" />
             {t.common.delete}
           </button>

@@ -30,7 +30,7 @@ export function WishlistPage() {
   return (
     <div className="pb-10">
       <ScreenHeader title={t.wish.title} backTo="/more" />
-      <p className="px-5 pb-3 text-xs text-muted">{t.wish.hint}</p>
+      <p className="rt-enter px-5 pb-3 text-xs leading-5 text-muted">{t.wish.hint}</p>
       <WishlistBlock />
     </div>
   );
@@ -43,6 +43,7 @@ export function WishlistBlock({ compact }: { compact?: boolean }) {
   const rates = useApp((s) => s.fxRates);
   const defaultCurrency = useApp((s) => s.defaultCurrency);
   const add = useApp((s) => s.addWishItem);
+  const update = useApp((s) => s.updateWishItem);
   const remove = useApp((s) => s.deleteWishItem);
   const [editing, setEditing] = useState<WishItem | null | "new">(null);
   const [board, setBoard] = useState<WishItem | null>(null);
@@ -53,54 +54,69 @@ export function WishlistBlock({ compact }: { compact?: boolean }) {
       {!compact ? null : (
         <div className="flex items-center justify-between px-5 pb-1 pt-6">
           <h2 className="text-sm font-medium text-muted">{t.wish.title}</h2>
-          <button type="button" className="text-sm font-medium text-accent" onClick={() => setEditing("new")}>
+          <button type="button" className="tr-press inline-flex min-h-11 items-center text-sm font-medium text-accent" onClick={() => setEditing("new")}>
             {t.wish.add}
           </button>
         </div>
       )}
       {items.length === 0 ? (
-        <p className="px-5 py-4 text-sm text-muted">{t.wish.empty}</p>
+        <div className="rt-enter mx-4 rounded-2xl bg-elevated px-4 py-6 text-center">
+          <p className="text-sm font-medium">{t.wish.empty}</p>
+          <p className="mt-1 text-xs leading-5 text-muted">{t.wish.emptyHint}</p>
+          {!compact ? (
+            <button
+              type="button"
+              className="tr-press mx-auto mt-3 flex h-11 min-h-11 items-center justify-center gap-1.5 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent"
+              onClick={() => setEditing("new")}
+            >
+              <Plus className="size-4" />
+              {t.wish.add}
+            </button>
+          ) : null}
+        </div>
       ) : (
-        <Group>
-          {items.map((it, i) => {
-            const notes = (it.priceCards?.length ?? 0) + (it.valueCards?.length ?? 0);
-            return (
-              <div key={it.id}>
-                {i > 0 ? <Hairline /> : null}
-                <div className="flex items-center gap-2 px-4 py-3">
-                  <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setBoard(it)}>
-                    <div className="truncate text-sm font-medium">{it.name}</div>
-                    <div className="mt-0.5 text-xs tabular-nums text-muted">
-                      {money(it.price, it.currency)}
-                      {notes ? (locale === "zh-HK" ? ` · ${notes} 張卡` : ` · ${notes} cards`) : ""}
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    className="h-9 shrink-0 rounded-full bg-accent-soft px-3 text-xs font-medium text-accent"
-                    onClick={() => setConverting(it)}
-                  >
-                    {t.wish.convert}
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={t.wish.remove}
-                    className="grid size-9 place-items-center text-expense"
-                    onClick={() => void remove(it.id)}
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
+        <div className="rt-enter">
+          <Group>
+            {items.map((it, i) => {
+              const notes = (it.priceCards?.length ?? 0) + (it.valueCards?.length ?? 0);
+              return (
+                <div key={it.id}>
+                  {i > 0 ? <Hairline /> : null}
+                  <div className="flex min-h-11 items-center gap-2 px-4 py-2.5">
+                    <button type="button" className="tr-press min-w-0 flex-1 text-left" onClick={() => setBoard(it)}>
+                      <div className="truncate text-sm font-medium">{it.name}</div>
+                      <div className="mt-0.5 text-xs tabular-nums text-muted">
+                        {money(it.price, it.currency)}
+                        {notes ? (locale === "zh-HK" ? ` · ${notes} 張卡` : ` · ${notes} cards`) : ""}
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      className="tr-press inline-flex h-11 min-h-11 shrink-0 items-center rounded-full bg-accent-soft px-3 text-xs font-medium text-accent"
+                      onClick={() => setConverting(it)}
+                    >
+                      {t.wish.convert}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={t.wish.remove}
+                      className="tr-press grid size-11 shrink-0 place-items-center text-expense"
+                      onClick={() => void remove(it.id)}
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </Group>
+              );
+            })}
+          </Group>
+        </div>
       )}
-      {!compact ? (
-        <div className="px-5 pt-4">
+      {!compact && items.length ? (
+        <div className="rt-enter-delay px-5 pt-4">
           <button
             type="button"
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent text-sm font-semibold text-on-accent"
+            className="tr-press flex h-12 min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent text-sm font-semibold text-on-accent"
             onClick={() => setEditing("new")}
           >
             <Plus className="size-4" />
@@ -116,7 +132,8 @@ export function WishlistBlock({ compact }: { compact?: boolean }) {
         rates={rates}
         onClose={() => setEditing(null)}
         onSave={(row) => {
-          void add(row);
+          if (editing === "new" || !editing) void add(row);
+          else void update(row);
           setEditing(null);
           setBoard(row);
         }}
@@ -124,6 +141,10 @@ export function WishlistBlock({ compact }: { compact?: boolean }) {
       <WishBoard
         item={board ? items.find((x) => x.id === board.id) ?? board : null}
         onClose={() => setBoard(null)}
+        onEdit={(it) => {
+          setBoard(null);
+          setEditing(it);
+        }}
         onConvert={(it) => {
           setBoard(null);
           setConverting(it);
@@ -134,7 +155,17 @@ export function WishlistBlock({ compact }: { compact?: boolean }) {
   );
 }
 
-function WishBoard({ item, onClose, onConvert }: { item: WishItem | null; onClose: () => void; onConvert: (it: WishItem) => void }) {
+function WishBoard({
+  item,
+  onClose,
+  onEdit,
+  onConvert,
+}: {
+  item: WishItem | null;
+  onClose: () => void;
+  onEdit: (it: WishItem) => void;
+  onConvert: (it: WishItem) => void;
+}) {
   const t = useT();
   const update = useApp((s) => s.updateWishItem);
   if (!item) return null;
@@ -146,22 +177,32 @@ function WishBoard({ item, onClose, onConvert }: { item: WishItem | null; onClos
   return (
     <Overlay open onClose={onClose} variant="page">
       <header className="flex items-center justify-between px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <button type="button" className="h-11 px-2 text-sm text-accent" onClick={onClose}>
+        <button type="button" className="tr-press inline-flex min-h-11 items-center px-2 text-sm text-accent" onClick={onClose}>
           {t.common.done}
         </button>
         <h1 className="min-w-0 flex-1 truncate text-center text-base font-semibold">{item.name}</h1>
-        <button type="button" className="h-11 px-2 text-sm font-medium text-accent" onClick={() => onConvert(item)}>
-          {t.wish.convert}
+        <button type="button" className="tr-press inline-flex min-h-11 items-center px-2 text-sm font-medium text-accent" onClick={() => onEdit(item)}>
+          {t.wish.edit}
         </button>
       </header>
-      <p className="px-5 pb-1 pt-1 text-sm font-semibold tabular-nums">{money(item.price, item.currency)}</p>
-      <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.wish.boardHint}</p>
+      <div className="rt-enter px-5 pb-1 pt-1">
+        <p className="text-sm font-semibold tabular-nums">{money(item.price, item.currency)}</p>
+        <p className="pb-2 pt-1 text-xs leading-5 text-muted">{t.wish.boardHint}</p>
+        <button
+          type="button"
+          className="tr-press mb-3 inline-flex h-11 min-h-11 items-center rounded-full bg-accent-soft px-4 text-xs font-medium text-accent"
+          onClick={() => onConvert(item)}
+        >
+          {t.wish.convert}
+        </button>
+      </div>
       <div className="grid grid-cols-2 gap-2 px-3 pb-10">
         <WishColumn
           title={t.wish.priceCol}
           cards={item.priceCards ?? []}
           addLabel={t.wish.addCard}
           placeholder={t.wish.cardPlaceholder}
+          removeLabel={t.wish.remove}
           onChange={(priceCards) => patch({ priceCards })}
         />
         <WishColumn
@@ -169,6 +210,7 @@ function WishBoard({ item, onClose, onConvert }: { item: WishItem | null; onClos
           cards={item.valueCards ?? []}
           addLabel={t.wish.addCard}
           placeholder={t.wish.cardPlaceholder}
+          removeLabel={t.wish.remove}
           onChange={(valueCards) => patch({ valueCards })}
         />
       </div>
@@ -181,12 +223,14 @@ function WishColumn({
   cards,
   addLabel,
   placeholder,
+  removeLabel,
   onChange,
 }: {
   title: string;
   cards: WishCard[];
   addLabel: string;
   placeholder: string;
+  removeLabel: string;
   onChange: (cards: WishCard[]) => void;
 }) {
   const [draft, setDraft] = useState("");
@@ -197,7 +241,7 @@ function WishColumn({
     setDraft("");
   }
   return (
-    <section className="min-h-[16rem] rounded-2xl bg-elevated px-2 py-2">
+    <section className="rt-enter min-h-[16rem] rounded-2xl bg-elevated px-2 py-2">
       <h2 className="px-1 pb-2 text-xs font-semibold text-muted">{title}</h2>
       <div className="space-y-2">
         {cards.map((card) => (
@@ -205,10 +249,11 @@ function WishColumn({
             <p className="whitespace-pre-wrap text-sm leading-5">{card.text}</p>
             <button
               type="button"
-              className="mt-1 text-[11px] text-expense"
+              aria-label={removeLabel}
+              className="tr-press mt-1 inline-flex min-h-11 items-center text-xs text-expense"
               onClick={() => onChange(cards.filter((c) => c.id !== card.id))}
             >
-              ×
+              {removeLabel}
             </button>
           </div>
         ))}
@@ -220,7 +265,7 @@ function WishColumn({
         rows={2}
         className="mt-2 w-full resize-none rounded-xl bg-background px-2.5 py-2 text-sm outline-none"
       />
-      <button type="button" className="mt-1 h-8 w-full rounded-lg text-xs font-medium text-accent" onClick={add}>
+      <button type="button" className="tr-press mt-1 flex h-11 min-h-11 w-full items-center justify-center rounded-lg text-xs font-medium text-accent" onClick={add}>
         + {addLabel}
       </button>
     </section>
@@ -340,6 +385,7 @@ function ConvertSheet({ item, onClose }: { item: WishItem; onClose: () => void }
       date: iso,
       time,
       categoryId: categoryId || undefined,
+      accountId: accountId || undefined,
       priceCards: item.priceCards,
       valueCards: item.valueCards,
     });
@@ -373,10 +419,10 @@ function ConvertSheet({ item, onClose }: { item: WishItem; onClose: () => void }
           <div className="text-base font-semibold">{item.name}</div>
           <div className="mt-0.5 text-sm tabular-nums text-muted">{money(item.price, item.currency)}</div>
         </div>
-        <div className="mx-4 mt-2 space-y-2 pb-10">
+        <div className="rt-enter mx-4 mt-2 space-y-2 pb-10">
           <button
             type="button"
-            className="flex h-12 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-on-accent"
+            className="tr-press flex h-12 min-h-12 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-on-accent"
             onClick={() => {
               setDest("expense");
               setPickCat(true);
@@ -386,7 +432,7 @@ function ConvertSheet({ item, onClose }: { item: WishItem; onClose: () => void }
           </button>
           <button
             type="button"
-            className="flex h-12 w-full items-center justify-center rounded-xl bg-elevated text-sm font-medium"
+            className="tr-press flex h-12 min-h-12 w-full items-center justify-center rounded-xl bg-elevated text-sm font-medium"
             onClick={() => setDest("hold")}
           >
             {t.wish.toAdhoc}
@@ -423,6 +469,8 @@ function ConvertSheet({ item, onClose }: { item: WishItem; onClose: () => void }
             placeholder={t.add.pickCategory}
             onPressLabel={() => setPickCat(true)}
           />
+          <AccountLine accounts={accounts} value={accountId} onChange={setAccountId} placeholder={t.budget.expectedAccount} />
+          <p className="px-4 pt-1 text-xs leading-5 text-muted">{t.budget.expectedAccountHint}</p>
           <WhenField date={date} time={time} locale={locale} min={today} onDate={setDate} onTime={setTime} />
           <p className="px-4 py-3 text-xs leading-5 text-muted">{t.wish.holdDateHint}</p>
         </ComposerShell>

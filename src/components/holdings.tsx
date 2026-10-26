@@ -67,7 +67,7 @@ export function HoldingsPage() {
         right={
           <button
             type="button"
-            className="flex items-center gap-1 px-2 text-xs font-medium text-accent"
+            className="tr-press inline-flex min-h-11 items-center gap-1 px-2 text-xs font-medium text-accent"
             onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
           >
             {sortDir === "asc" ? <ArrowDownAZ className="size-4" /> : <ArrowUpAZ className="size-4" />}
@@ -76,26 +76,31 @@ export function HoldingsPage() {
         }
       />
 
-      <div className="flex gap-2 overflow-x-auto px-5 pb-3">
+      <p className="rt-enter px-5 pb-3 text-xs leading-5 text-muted">{t.holdings.hint}</p>
+
+      <div className="rt-enter flex gap-2 overflow-x-auto px-5 pb-3">
         {(["both", "hk", "us"] as BookFilter[]).map((id) => (
           <button
             key={id}
             type="button"
             onClick={() => setFilter(id)}
-            className={cn("h-8 shrink-0 rounded-full px-3.5 text-xs font-medium", filter === id ? "bg-accent text-on-accent" : "bg-elevated text-muted")}
+            className={cn(
+              "rt-chip-pill tr-press inline-flex min-h-11 shrink-0 items-center rounded-full px-3.5 text-xs font-medium",
+              filter === id ? "bg-accent text-on-accent" : "bg-elevated text-muted",
+            )}
           >
             {id === "both" ? t.prices.both : id === "hk" ? t.holdings.hk : t.holdings.us}
           </button>
         ))}
       </div>
 
-      <div className="mx-4 mb-3 rounded-2xl bg-elevated px-4 py-3">
+      <div className="rt-enter mx-4 mb-3 rounded-2xl bg-elevated px-4 py-3">
         <div className="text-[11px] text-muted">{t.holdings.bookValue}</div>
         <div className="mt-0.5 text-2xl font-semibold tabular-nums tracking-tight">{money(totalHkd, "HKD")}</div>
         <div className="mt-0.5 text-xs text-muted">{t.prices.heldCount.replace("{n}", String(visible.length))}</div>
       </div>
 
-      <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
+      <div className="rt-enter-delay mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
         <BookAccountRow
           label={t.holdings.bookHk}
           value={bookAccountId(accounts, "hk")}
@@ -115,7 +120,7 @@ export function HoldingsPage() {
         <button
           type="button"
           disabled={busy}
-          className="flex h-11 items-center justify-center gap-1.5 rounded-xl bg-accent text-sm font-semibold text-on-accent disabled:opacity-60"
+          className="tr-press flex h-11 min-h-11 items-center justify-center gap-1.5 rounded-xl bg-accent text-sm font-semibold text-on-accent disabled:opacity-60"
           onClick={() => fileRef.current?.click()}
         >
           <Upload className="size-4" />
@@ -134,7 +139,7 @@ export function HoldingsPage() {
         <button
           type="button"
           disabled={busy || !holdings.length}
-          className="flex h-11 items-center justify-center gap-1.5 rounded-xl bg-elevated text-sm disabled:opacity-50"
+          className="tr-press flex h-11 min-h-11 items-center justify-center gap-1.5 rounded-xl bg-elevated text-sm disabled:opacity-50"
           onClick={async () => {
             setBusy(true);
             try {
@@ -154,7 +159,7 @@ export function HoldingsPage() {
 
       <button
         type="button"
-        className="mx-4 mt-2 flex h-11 w-[calc(100%-2rem)] items-center justify-center rounded-xl bg-elevated text-sm font-medium"
+        className="tr-press mx-4 mt-2 flex h-11 min-h-11 w-[calc(100%-2rem)] items-center justify-center rounded-xl bg-elevated text-sm font-medium"
         onClick={() => setAi(true)}
       >
         {t.reports.exportBrief}
@@ -163,14 +168,14 @@ export function HoldingsPage() {
 
       <button
         type="button"
-        className="mx-4 mt-3 flex h-11 w-[calc(100%-2rem)] items-center justify-center gap-1.5 rounded-xl bg-elevated text-sm"
+        className="tr-press mx-4 mt-3 flex h-11 min-h-11 w-[calc(100%-2rem)] items-center justify-center gap-1.5 rounded-xl bg-elevated text-sm"
         onClick={() => setShowAdd((v) => !v)}
       >
         <Plus className="size-4" />
         {t.holdings.manual}
       </button>
       {showAdd ? (
-        <div className="mx-4 mt-2 space-y-2">
+        <div className="rt-enter mx-4 mt-2 space-y-2">
           <div className="flex gap-2">
             {(["hk", "us", "lse"] as HoldingListing[]).map((id) => (
               <button
@@ -180,7 +185,7 @@ export function HoldingsPage() {
                   setAddMarket(id);
                   setAddCcy(defaultListingCurrency(id));
                 }}
-                className={cn("h-10 flex-1 rounded-xl text-sm font-medium", addMarket === id ? "bg-accent text-on-accent" : "bg-elevated")}
+                className={cn("rt-chip-pill tr-press flex h-11 min-h-11 flex-1 items-center justify-center rounded-xl text-sm font-medium", addMarket === id ? "bg-accent text-on-accent" : "bg-elevated")}
               >
                 {id === "hk" ? t.holdings.hk : id === "lse" ? t.holdings.lse : t.holdings.us}
               </button>
@@ -205,7 +210,7 @@ export function HoldingsPage() {
             </select>
             <button
               type="button"
-              className="h-11 shrink-0 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent"
+              className="tr-press h-11 min-h-11 shrink-0 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent"
               onClick={() => {
                 const q = Number(qty.replace(/,/g, ""));
                 const s = symbol.trim().toUpperCase();
@@ -234,16 +239,27 @@ export function HoldingsPage() {
         </div>
       ) : null}
 
-      <div className="pt-4">
+      <div className="rt-enter-delay pt-4">
         {!visible.length ? (
-          <p className="px-5 py-6 text-sm text-muted">{t.holdings.empty}</p>
+          <div className="mx-4 rounded-2xl bg-elevated px-4 py-6 text-center">
+            <p className="text-sm font-medium">{t.holdings.empty}</p>
+            <p className="mt-1 text-xs leading-5 text-muted">{t.holdings.emptyHint}</p>
+            <button
+              type="button"
+              className="tr-press mx-auto mt-3 flex h-11 min-h-11 items-center justify-center gap-1.5 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent"
+              onClick={() => setShowAdd(true)}
+            >
+              <Plus className="size-4" />
+              {t.holdings.manual}
+            </button>
+          </div>
         ) : (
           <Group>
             {visible.map((h, i) => (
               <div key={h.id}>
                 {i > 0 ? <Hairline /> : null}
-                <div className="flex items-center gap-1 px-3 py-2.5">
-                  <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setEditing(h)}>
+                <div className="flex min-h-11 items-center gap-1 px-3 py-2.5">
+                  <button type="button" className="tr-press min-w-0 flex-1 text-left" onClick={() => setEditing(h)}>
                     <div className="truncate text-sm font-medium">{listingOf(h) === "us" ? h.symbol : holdingTitle(h)}</div>
                     <div className="mt-0.5 text-[11px] tabular-nums text-muted">
                       {listingOf(h) === "lse" ? t.holdings.lse : h.market === "us" ? t.holdings.us : h.symbol}
@@ -256,7 +272,7 @@ export function HoldingsPage() {
                   <div className="shrink-0 text-right">
                     <div className="text-sm font-semibold tabular-nums">{money(h.quantity * (h.lastPrice || 0), h.currency)}</div>
                   </div>
-                  <button type="button" className="grid size-9 shrink-0 place-items-center text-muted" onClick={() => setEditing(h)} aria-label={t.common.edit}>
+                  <button type="button" className="tr-press grid size-11 shrink-0 place-items-center text-muted" onClick={() => setEditing(h)} aria-label={t.common.edit}>
                     <Pencil className="size-4" />
                   </button>
                 </div>
@@ -292,12 +308,12 @@ function HoldingsBriefSheet({ onClose }: { onClose: () => void }) {
     <Overlay open onClose={onClose} title={t.reports.exportBrief} variant="page">
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.holdings.exportAiHint}</p>
       <div className="mx-4 mb-3 grid grid-cols-2 gap-2">
-        <button type="button" className="h-11 rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={() => void copy()}>
+        <button type="button" className="tr-press h-11 min-h-11 rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={() => void copy()}>
           {t.assets.copyBrief}
         </button>
         <button
           type="button"
-          className="h-11 rounded-xl bg-elevated text-sm font-medium"
+          className="tr-press h-11 min-h-11 rounded-xl bg-elevated text-sm font-medium"
           onClick={() => downloadBlob(`hk-life-holdings-${todayISO()}.md`, markdown, "text/markdown")}
         >
           {t.assets.downloadBrief}
@@ -381,7 +397,7 @@ function HoldingEditor({ holding, onClose }: { holding: Holding; onClose: () => 
 
   return (
     <Overlay open onClose={onClose} variant="page" title={t.holdings.edit}>
-      <div className="space-y-3 px-5 pt-4">
+      <div className="rt-enter space-y-3 px-5 pt-4 pb-10">
         <div className="flex gap-2">
           {(["hk", "us", "lse"] as HoldingListing[]).map((id) => (
             <button
@@ -391,20 +407,25 @@ function HoldingEditor({ holding, onClose }: { holding: Holding; onClose: () => 
                 setListing(id);
                 setCurrency(defaultListingCurrency(id));
               }}
-              className={cn("h-10 flex-1 rounded-xl text-sm font-medium", listing === id ? "bg-accent text-on-accent" : "bg-elevated")}
+              className={cn("rt-chip-pill tr-press flex h-11 min-h-11 flex-1 items-center justify-center rounded-xl text-sm font-medium", listing === id ? "bg-accent text-on-accent" : "bg-elevated")}
             >
               {id === "hk" ? t.holdings.hk : id === "lse" ? t.holdings.lse : t.holdings.us}
             </button>
           ))}
         </div>
-        <input value={symbol} onChange={(e) => setSymbol(e.target.value)} placeholder={listing === "lse" ? "VXUS" : t.holdings.symbol} className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
+        <label className="block text-[11px] text-muted">{t.holdings.symbol}</label>
+        <input value={symbol} onChange={(e) => setSymbol(e.target.value)} placeholder={listing === "lse" ? "VXUS" : t.holdings.symbol} className="h-11 min-h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
         {listing === "hk" ? (
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.holdings.stockName} className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
+          <>
+            <label className="block text-[11px] text-muted">{t.holdings.stockName}</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.holdings.stockName} className="h-11 min-h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
+          </>
         ) : null}
+        <label className="block text-[11px] text-muted">{t.holdings.currency}</label>
         <select
           value={currency}
           onChange={(e) => setCurrency(e.target.value as Currency)}
-          className="h-11 w-full rounded-xl bg-elevated px-3 text-sm"
+          className="h-11 min-h-11 w-full rounded-xl bg-elevated px-3 text-sm"
           aria-label={t.holdings.currency}
         >
           {holdingCurrencies(currency).map((c) => (
@@ -413,17 +434,21 @@ function HoldingEditor({ holding, onClose }: { holding: Holding; onClose: () => 
             </option>
           ))}
         </select>
-        <input value={qty} onChange={(e) => setQty(e.target.value)} placeholder={t.holdings.qty} inputMode="decimal" className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
-        <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder={t.holdings.price} inputMode="decimal" className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
-        <input value={cost} onChange={(e) => setCost(e.target.value)} placeholder={t.holdings.avgCost} inputMode="decimal" className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
-        <input value={policyNote} onChange={(e) => setPolicyNote(e.target.value)} placeholder={t.holdings.policyNote} className="h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
+        <label className="block text-[11px] text-muted">{t.holdings.qty}</label>
+        <input value={qty} onChange={(e) => setQty(e.target.value)} placeholder={t.holdings.qty} inputMode="decimal" className="h-11 min-h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
+        <label className="block text-[11px] text-muted">{t.holdings.price}</label>
+        <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder={t.holdings.price} inputMode="decimal" className="h-11 min-h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
+        <label className="block text-[11px] text-muted">{t.holdings.avgCost}</label>
+        <input value={cost} onChange={(e) => setCost(e.target.value)} placeholder={t.holdings.avgCost} inputMode="decimal" className="h-11 min-h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
+        <label className="block text-[11px] text-muted">{t.holdings.policyNote}</label>
+        <input value={policyNote} onChange={(e) => setPolicyNote(e.target.value)} placeholder={t.holdings.policyNote} className="h-11 min-h-11 w-full rounded-xl bg-elevated px-3 text-sm" />
         <p className="text-[11px] leading-4 text-muted">{t.holdings.policyNoteHint}</p>
-        <button type="button" className="h-12 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={save}>
+        <button type="button" className="tr-press h-12 min-h-12 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={save}>
           {t.common.done}
         </button>
         <button
           type="button"
-          className="flex h-11 w-full items-center justify-center gap-1.5 rounded-xl text-sm text-expense"
+          className="tr-press flex h-11 min-h-11 w-full items-center justify-center gap-1.5 rounded-xl text-sm text-expense"
           onClick={() => {
             void remove(holding.id);
             onClose();
