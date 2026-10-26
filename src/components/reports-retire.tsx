@@ -1,19 +1,28 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-import { Area, AreaChart, ReferenceDot, ResponsiveContainer, Tooltip, XAxis } from "recharts";
+import { Area, AreaChart, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Hairline, InfoButton, ScreenHeader, SectionLabel } from "@/components/shared";
 import { LifeYearList } from "@/components/life-year-list";
 import { LifePlanSetup } from "@/components/life-plan-setup";
+import { ReportAiSheet } from "@/components/report-ai-sheet";
+import {
+  ChartScrubLabel,
+  Enter,
+  formatAxisWan,
+  RetireAgeSlider,
+  ScenarioChips,
+  StickyConclusionBar,
+  type ScenarioId,
+  useCountUp,
+} from "@/components/retire-ux";
 import { money, todayISO } from "@/lib/format";
-import { downloadBlob } from "@/lib/backup";
 import { toHkd } from "@/lib/calc/fx";
 import { pickName } from "@/lib/i18n";
 import { livingEssentials } from "@/lib/calc/budget";
 import { isMortgageInterestCategory, isMortgagePrincipalCategory } from "@/lib/categories";
 import { monthlyPayment, effectiveRate, remainingFromStart } from "@/lib/calc/mortgage";
 import {
-  compareRetirementAges,
   firePlan,
   retirementSleeves,
   reverseMortgageMonthly,
@@ -25,7 +34,16 @@ import {
 } from "@/lib/calc/retirement";
 import { monthKey } from "@/lib/calc/ledger";
 import { emptyLifePlan, inheritanceAnnuityAccount, INHERIT_ANNUITY_ID, lifePlanMonthlyRoom, resolveLifePlan, runLifePlan } from "@/lib/calc/life-plan";
-import { accessBreakdown, enoughStory, goalsReady, mortgageStory, pickedFigure, pickedTarget } from "@/lib/calc/retire-view";
+import {
+  accessBreakdown,
+  corpusAgeLabels,
+  enoughStory,
+  goalsReady,
+  inflatedMonthly,
+  mortgageStory,
+  pickedFigure,
+  pickedTarget,
+} from "@/lib/calc/retire-view";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -293,13 +311,30 @@ function addMonths(iso: string, months: number): string {
 
 export function SharedRetirementStrip() {
   const t = useT();
-  const { base } = useRetirementModel();
+  const head = useRetirementHeadline();
+  const { base, story } = head;
+  const verdict =
+    story.kind === "enough" ? t.reports.verdictEnough : story.kind === "short" ? t.reports.verdictShort : t.reports.verdictSetup;
   return (
     <Link to="/reports/retirement" className="mx-4 mb-3 flex items-center gap-3 rounded-2xl bg-elevated p-3">
       <div className="min-w-0 flex-1">
         <div className="text-[11px] font-medium text-accent">{t.reports.sharedProfile}</div>
         <div className="mt-1 truncate text-sm">
-          {base.currentAge} · {t.reports.retireAge} {base.retireAge} · {t.reports.deathAge} {base.deathAge}
+          {story.kind === "setup" ? (
+            <>
+              {base.currentAge} · {t.reports.retireAge} {base.retireAge} · {t.reports.deathAge} {base.deathAge}
+            </>
+          ) : (
+            <>
+              <span className={story.kind === "enough" ? "text-income" : "text-expense"}>{verdict}</span>
+              {" · "}
+              <span className={cn("tabular-nums", story.gap < 0 ? "text-expense" : "text-income")}>
+                {money(story.gap, "HKD", { sign: true })}
+              </span>
+              {" · "}
+              {t.reports.retireAge} {base.retireAge}
+            </>
+          )}
         </div>
         <div className="mt-0.5 truncate text-[11px] leading-4 text-muted">
           {money(base.targetMonthly, "HKD")} · {(base.inflation * 100).toFixed(1)}% · {(base.preReturn * 100).toFixed(1)}% / {(base.postReturn * 100).toFixed(1)}%
@@ -369,6 +404,10 @@ export function RetirementPage() {
   const [showSetup, setShowSetup] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [draftAge, setDraftAge] = useState(base.retireAge);
+  const [dragging, setDragging] = useState(false);
+  const [scenario, setScenario] = useState<ScenarioId | null>(null);
+  const [exportMd, setExportMd] = useState<string | null>(null);
   const swrLabel = `${((base.fireSwr ?? 0.04) * 100).toFixed(1)}%`;
   const verdict =
     story.kind === "enough" ? t.reports.verdictEnough : story.kind === "short" ? t.reports.verdictShort : t.reports.verdictSetup;
@@ -381,8 +420,18 @@ export function RetirementPage() {
             .replace("{gap}", money(Math.abs(story.gap), "HKD"))
             .replace("{age}", String(planEndAge))
         : t.reports.setupLine;
+  const ages = corpusAgeLabels(draftAge);
+  const yearsToRetire = Math.max(0, draftAge - base.currentAge);
+  const spendThen = inflatedMonthly(base.targetMonthly, yearsToRetire, base.inflation);
+  const monthsLeft = Math.max(1, 12 - Number(todayISO().slice(5, 7)) + 1);
+  const partTimeReady = (base.postRetireJobMonthly ?? 0) > 0;
+  const shownGap = useCountUp(story.gap, dragging, 320);
 
-  function exportBrief() {
+  useEffect(() => {
+    if (!dragging && scenario == null) setDraftAge(base.retireAge);
+  }, [base.retireAge, dragging, scenario]);
+
+  function buildExport(): string {
     const acctName = (id?: string) => {
       const a = accounts.find((x) => x.id === id);
       return a ? pickName(locale, a.name, a.nameZh) : "—";
@@ -419,6 +468,7 @@ export function RetirementPage() {
       "",
       "## Reference only (not the official yes/no)",
       `- ${swrLabel} withdrawal number (HKD): ${Math.round(fire.fireNumber)}`,
+      `- Annual travel budget in FIRE number (HKD): ${Math.round(base.travelInRetirement || 0)}`,
       `- Account-projection accessible at retire (HKD): ${Math.round(head.access.accessible)}`,
       `- Account-projection locked at retire (HKD): ${Math.round(head.access.locked)}`,
       `- Account-projection total (HKD): ${Math.round(head.access.total)}`,
@@ -451,8 +501,43 @@ export function RetirementPage() {
       "",
       "Use this brief to comment on FIRE feasibility, concentration risk in holdings, return assumptions, and whether the monthly target is sustainable.",
     ];
-    downloadBlob(`hk-life-retirement-${todayISO()}.md`, lines.join("\n"), "text/markdown");
+    return lines.join("\n");
   }
+
+  function applyDraftAge() {
+    persist({ retireAge: draftAge });
+    setScenario(null);
+  }
+
+  function cancelDraft() {
+    setDraftAge(base.retireAge);
+    setScenario(null);
+  }
+
+  function pickScenario(id: ScenarioId) {
+    setScenario(id);
+    if (id === "keep65") setDraftAge(65);
+    else if (id === "retire55") setDraftAge(55);
+    else if (id === "part60") setDraftAge(60);
+  }
+
+  function applyScenario() {
+    if (scenario === "part60" && !partTimeReady) return;
+    persist({ retireAge: draftAge });
+    setScenario(null);
+  }
+
+  const scrubLabel = chartPoint
+    ? ChartScrubLabel({
+        age: chartPoint.age,
+        retireAge: draftAge,
+        corpus: chartPoint.corpus,
+        locale,
+        workingLabel: t.reports.chartPhaseWorking,
+        retiredLabel: t.reports.chartPhaseRetired,
+        ageEndLabel: t.reports.chartAgeEnd,
+      })
+    : null;
 
   return (
     <div className="pb-10">
@@ -461,71 +546,107 @@ export function RetirementPage() {
         backTo="/reports"
         right={
           <div className="flex items-center gap-1">
-            <button type="button" className="px-2 text-sm font-medium text-accent" onClick={exportBrief}>
+            <button type="button" className="px-2 text-sm font-medium text-accent" onClick={() => setExportMd(buildExport())}>
               {t.reports.exportBrief}
             </button>
             <InfoButton k="retirement" />
           </div>
         }
       />
-      <section className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
-        <div className="px-4 pt-3 text-sm font-medium">{t.reports.goalsTitle}</div>
-        <label className="flex min-h-11 items-center justify-between gap-3 px-4">
-          <span className="text-sm">{t.reports.birthday}</span>
-          <input
-            type="date"
-            value={base.birthday ?? ""}
-            onChange={(e) => {
-              const birthday = e.target.value || undefined;
-              persist({ birthday, currentAge: birthday ? ageFromBirthday(birthday, todayISO()) : base.currentAge });
-            }}
-            className="h-11 max-w-[11.5rem] bg-transparent text-right text-sm text-accent outline-none"
-          />
-        </label>
-        <Hairline />
-        {base.birthday ? (
-          <div className="flex min-h-11 items-center justify-between px-4">
-            <span className="text-sm">{t.reports.currentAge}</span>
-            <span className="text-sm tabular-nums text-muted">{base.currentAge}</span>
-          </div>
-        ) : (
-          <NumRow label={t.reports.currentAge} value={base.currentAge} onCommit={(n) => persist({ currentAge: n })} />
-        )}
-        <Hairline />
-        <div className="grid grid-cols-2 divide-x divide-line">
-          <NumRow label={t.reports.retireAge} value={base.retireAge} onCommit={(n) => persist({ retireAge: n })} />
+      <StickyConclusionBar
+        kind={story.kind}
+        verdict={verdict}
+        retireAge={draftAge}
+        gap={story.kind === "setup" ? 0 : story.gap}
+        planEndAge={planEndAge}
+        dragging={dragging}
+      />
+      <Enter>
+        <section className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
+          <div className="px-4 pt-3 text-sm font-medium">{t.reports.goalsTitle}</div>
+          <label className="flex min-h-11 items-center justify-between gap-3 px-4">
+            <span className="text-sm">{t.reports.birthday}</span>
+            <input
+              type="date"
+              value={base.birthday ?? ""}
+              onChange={(e) => {
+                const birthday = e.target.value || undefined;
+                persist({ birthday, currentAge: birthday ? ageFromBirthday(birthday, todayISO()) : base.currentAge });
+              }}
+              className="h-11 max-w-[11.5rem] bg-transparent text-right text-sm text-accent outline-none"
+            />
+          </label>
+          {!base.birthday ? (
+            <p className="px-4 pb-2 text-[11px] leading-4 text-muted">
+              {t.reports.birthdayYearEndHint.replace("{n}", String(monthsLeft))}
+            </p>
+          ) : null}
+          <Hairline />
+          {base.birthday ? (
+            <div className="flex min-h-11 items-center justify-between px-4">
+              <span className="text-sm">{t.reports.currentAge}</span>
+              <span className="text-sm tabular-nums text-muted">{base.currentAge}</span>
+            </div>
+          ) : (
+            <NumRow label={t.reports.currentAge} value={base.currentAge} onCommit={(n) => persist({ currentAge: n })} />
+          )}
+          <Hairline />
           <NumRow label={t.reports.deathAge} value={base.deathAge} onCommit={(n) => persist({ deathAge: n })} />
-        </div>
-        <Hairline />
-        <NumRow label={t.reports.spendRetired} value={base.targetMonthly} money blankZero onCommit={(n) => persist({ targetMonthly: n })} />
-        <p className="px-4 pb-3 text-[11px] leading-4 text-muted">{t.reports.goalsSpendHint}</p>
-        <Hairline />
-        <div className="grid grid-cols-2 gap-2 p-3">
-          <button
-            type="button"
-            className={cn("h-11 rounded-xl text-xs font-medium", !base.payOffMortgageAtRetire ? "bg-accent text-on-accent" : "bg-background")}
-            onClick={() => persist({ payOffMortgageAtRetire: false })}
-          >
-            {t.reports.mortgageModePay}
-          </button>
-          <button
-            type="button"
-            className={cn("h-11 rounded-xl text-xs font-medium", base.payOffMortgageAtRetire ? "bg-accent text-on-accent" : "bg-background")}
-            onClick={() => persist({ payOffMortgageAtRetire: true })}
-          >
-            {t.reports.mortgageModeLump}
-          </button>
-        </div>
-        <p className="px-4 pb-3 text-[11px] leading-4 text-muted">
-          {mort.kind === "none"
-            ? t.reports.mortgageNone
-            : mort.kind === "clears-before"
-              ? t.reports.mortgageClears.replace("{amount}", money(mort.owingNow, "HKD"))
-              : mort.kind === "assumed-payoff"
-                ? t.reports.mortgageAssume.replace("{amount}", money(mort.owingNow, "HKD"))
-                : t.reports.mortgageOwing.replace("{amount}", money(mort.owingNow, "HKD"))}
-        </p>
-      </section>
+          <Hairline />
+          <NumRow label={t.reports.spendRetired} value={base.targetMonthly} money blankZero onCommit={(n) => persist({ targetMonthly: n })} />
+          <p className="px-4 pb-1 text-[11px] leading-4 text-muted">{t.reports.goalsSpendHint}</p>
+          {story.kind !== "setup" && base.targetMonthly > 0 ? (
+            <p className="px-4 pb-3 text-[11px] leading-4 text-muted">
+              {t.reports.spendThenMoney.replace("{amount}", money(spendThen, "HKD"))}
+            </p>
+          ) : (
+            <div className="pb-2" />
+          )}
+          <Hairline />
+          <div className="grid grid-cols-2 gap-2 p-3">
+            <button
+              type="button"
+              className={cn("h-11 rounded-xl text-xs font-medium", !base.payOffMortgageAtRetire ? "bg-accent text-on-accent" : "bg-background")}
+              onClick={() => persist({ payOffMortgageAtRetire: false })}
+            >
+              {t.reports.mortgageModePay}
+            </button>
+            <button
+              type="button"
+              className={cn("h-11 rounded-xl text-xs font-medium", base.payOffMortgageAtRetire ? "bg-accent text-on-accent" : "bg-background")}
+              onClick={() => persist({ payOffMortgageAtRetire: true })}
+            >
+              {t.reports.mortgageModeLump}
+            </button>
+          </div>
+          <p className="px-4 pb-3 text-[11px] leading-4 text-muted">
+            {mort.kind === "none"
+              ? t.reports.mortgageNone
+              : mort.kind === "clears-before"
+                ? t.reports.mortgageClears.replace("{amount}", money(mort.owingNow, "HKD"))
+                : mort.kind === "assumed-payoff"
+                  ? t.reports.mortgageAssume.replace("{amount}", money(mort.owingNow, "HKD"))
+                  : t.reports.mortgageOwing.replace("{amount}", money(mort.owingNow, "HKD"))}
+          </p>
+        </section>
+      </Enter>
+      <SectionLabel>{t.reports.readinessByAge}</SectionLabel>
+      <p className="px-5 pb-2 text-[11px] leading-4 text-muted">{t.reports.ageSliderHint}</p>
+      <RetireAgeSlider
+        value={draftAge}
+        committed={base.retireAge}
+        onDraft={setDraftAge}
+        onDragChange={setDragging}
+        onApply={applyDraftAge}
+        onCancel={cancelDraft}
+      />
+      <ScenarioChips
+        active={scenario}
+        partTimeReady={partTimeReady}
+        onPick={pickScenario}
+        onApply={applyScenario}
+        onCancel={cancelDraft}
+      />
       {guideOpen ? (
         <SetupGuide onClose={() => setGuideOpen(false)} />
       ) : (
@@ -533,56 +654,109 @@ export function RetirementPage() {
           {t.reports.guideOpen}
         </button>
       )}
-      <section className="mx-4 mb-3 rounded-2xl bg-elevated p-4">
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-sm font-medium">{t.reports.resultTitle}</div>
-          <span
-            className={cn(
-              "rounded-full px-2 py-0.5 text-xs font-medium",
-              story.kind === "enough" && "bg-success-soft text-income",
-              story.kind === "short" && "bg-expense-soft text-expense",
-              story.kind === "setup" && "bg-background text-muted",
-            )}
-          >
-            {verdict}
-          </span>
-        </div>
-        <p className="mt-2 text-sm leading-5">{sentence}</p>
-        {story.kind === "setup" ? null : (
-          <>
-            <div className="mt-3 text-[11px] text-muted">{t.reports.surplus}</div>
-            <div className={cn("text-2xl font-semibold tabular-nums", story.gap < 0 ? "text-expense" : "text-income")}>
-              {money(story.gap, "HKD", { sign: true })}
-            </div>
-            <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.surplusHint}</p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <div className="rounded-xl bg-background px-3 py-2">
-                <div className="text-[11px] text-muted">{t.reports.spendRetired}</div>
-                <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(base.targetMonthly, "HKD")}</div>
+      <Enter delay>
+        <section className="mx-4 mb-3 rounded-2xl bg-elevated p-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-sm font-medium">{t.reports.resultTitle}</div>
+            <span
+              className={cn(
+                "rounded-full px-2 py-0.5 text-xs font-medium",
+                story.kind === "enough" && "bg-success-soft text-income",
+                story.kind === "short" && "bg-expense-soft text-expense",
+                story.kind === "setup" && "bg-background text-muted",
+              )}
+            >
+              {verdict}
+            </span>
+          </div>
+          <p className="mt-2 text-sm leading-5">{sentence}</p>
+          {story.kind === "setup" ? null : (
+            <>
+              <div className="mt-3 text-[11px] text-muted">{t.reports.surplus}</div>
+              <div className={cn("text-2xl font-semibold tabular-nums", shownGap < 0 ? "text-expense" : "text-income")}>
+                {money(shownGap, "HKD", { sign: true })}
               </div>
-              <div className="rounded-xl bg-background px-3 py-2">
-                <div className="text-[11px] text-muted">{t.reports.investableNow}</div>
-                <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(investable, "HKD")}</div>
+              <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.surplusHint}</p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="rounded-xl bg-background px-3 py-2">
+                  <div className="text-[11px] text-muted">{t.reports.spendRetired}</div>
+                  <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(base.targetMonthly, "HKD")}</div>
+                </div>
+                <div className="rounded-xl bg-background px-3 py-2">
+                  <div className="text-[11px] text-muted">{t.reports.investableNow}</div>
+                  <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(investable, "HKD")}</div>
+                </div>
               </div>
-            </div>
-            <p className="mt-2 text-[11px] leading-4 text-muted">{t.reports.investableHint}</p>
-            <div className="mt-2 text-[11px] text-muted">
-              {t.reports.corpusOnPath}: {money(corpusAtRetire, "HKD")}
-            </div>
-            <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.corpusOnPathHint}</p>
-            {pack.property > 0 ? (
+              <p className="mt-2 text-[11px] leading-4 text-muted">{t.reports.investableHint}</p>
               <div className="mt-2 text-[11px] text-muted">
-                {t.reports.propertyAside}: {money(pack.property, "HKD")}
+                {t.reports.corpusAtRetireAge
+                  .replace("{end}", String(ages.endWorkingAge))
+                  .replace("{start}", String(ages.startRetireAge))}
+                : {money(corpusAtRetire, "HKD")}
               </div>
-            ) : null}
-            <div className="mt-3 rounded-xl bg-background px-3 py-2">
-              <div className="text-[11px] text-muted">{t.reports.fireReference.replace("{swr}", swrLabel)}</div>
-              <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(fire.fireNumber, "HKD")}</div>
-              <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.fireReferenceHint}</p>
-            </div>
-          </>
-        )}
-      </section>
+              <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.corpusOnPathHintChart}</p>
+              {pack.property > 0 ? (
+                <div className="mt-2 text-[11px] text-muted">
+                  {t.reports.propertyAside}: {money(pack.property, "HKD")}
+                </div>
+              ) : null}
+              {chartData.length ? (
+                <div className="rt-chart-draw mt-3 h-40 overflow-hidden rounded-xl bg-background pt-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
+                      data={chartData}
+                      margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                      onMouseMove={(state) => {
+                        const p = state?.activePayload?.[0]?.payload as { age?: number; corpus?: number } | undefined;
+                        if (p && typeof p.age === "number") setChartPoint({ age: p.age, corpus: p.corpus ?? 0 });
+                      }}
+                      onMouseLeave={() => setChartPoint(null)}
+                    >
+                      <XAxis
+                        dataKey="age"
+                        tick={{ fontSize: 10, fill: "var(--color-muted)" }}
+                        axisLine={false}
+                        tickLine={false}
+                        interval="preserveStartEnd"
+                        minTickGap={28}
+                      />
+                      <YAxis
+                        width={36}
+                        tick={{ fontSize: 9, fill: "var(--color-muted)" }}
+                        axisLine={false}
+                        tickLine={false}
+                        tickFormatter={(v) => formatAxisWan(Number(v), locale)}
+                      />
+                      <ReferenceLine
+                        x={draftAge}
+                        stroke="var(--color-accent)"
+                        strokeDasharray="4 3"
+                        className="rt-ref-line"
+                      />
+                      {saleYear ? <ReferenceDot x={saleYear.age} y={saleYear.closingFinancial} r={3} fill="var(--color-accent)" stroke="none" /> : null}
+                      <Tooltip content={() => null} cursor={{ stroke: "var(--color-accent)", strokeWidth: 1 }} />
+                      <Area type="monotone" dataKey="corpus" stroke="var(--color-accent)" fill="var(--color-accent-soft)" strokeWidth={2} dot={false} isAnimationActive animationDuration={500} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : null}
+              <p className="mt-1 text-center text-[11px] text-muted">
+                {scrubLabel ?? t.reports.chartTapHint}
+              </p>
+              <div className="mt-3 rounded-xl bg-background px-3 py-2">
+                <div className="text-[11px] text-muted">{t.reports.fireReference.replace("{swr}", swrLabel)}</div>
+                <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(fire.fireNumber, "HKD")}</div>
+                <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.fireReferenceHint}</p>
+                {(base.travelInRetirement || 0) > 0 ? (
+                  <p className="mt-1 text-[11px] leading-4 text-muted">
+                    {t.reports.fireReferenceTravel.replace("{travel}", money(base.travelInRetirement, "HKD"))}
+                  </p>
+                ) : null}
+              </div>
+            </>
+          )}
+        </section>
+      </Enter>
       <SectionLabel>{t.reports.scenarios}</SectionLabel>
       <div className="mx-4 mb-3 grid grid-cols-1 gap-2">
         <Link to="/reports/retirement/plan" className="rounded-2xl bg-elevated px-4 py-3 text-sm">
@@ -614,48 +788,32 @@ export function RetirementPage() {
         <>
           <SectionLabel>{t.reports.assetsByAge}</SectionLabel>
           <div className="mx-4 mb-1 overflow-hidden rounded-2xl bg-elevated pt-2">
-            <div className="h-52">
+            <div className="rt-chart-draw h-52">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
                   data={chartData}
-                  margin={{ top: 8, right: 12, left: 8, bottom: 0 }}
+                  margin={{ top: 8, right: 12, left: 4, bottom: 0 }}
                   onMouseMove={(state) => {
                     const p = state?.activePayload?.[0]?.payload as { age?: number; corpus?: number } | undefined;
                     if (p && typeof p.age === "number") setChartPoint({ age: p.age, corpus: p.corpus ?? 0 });
                   }}
                   onMouseLeave={() => setChartPoint(null)}
                 >
-                  <XAxis dataKey="age" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                  <XAxis dataKey="age" tick={{ fontSize: 10, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={28} />
+                  <YAxis width={40} tick={{ fontSize: 9, fill: "var(--color-muted)" }} axisLine={false} tickLine={false} tickFormatter={(v) => formatAxisWan(Number(v), locale)} />
+                  <ReferenceLine x={draftAge} stroke="var(--color-accent)" strokeDasharray="4 3" className="rt-ref-line" />
                   {saleYear ? <ReferenceDot x={saleYear.age} y={saleYear.closingFinancial} r={4} fill="var(--color-accent)" stroke="none" /> : null}
-                  <Tooltip
-                    cursor={{ stroke: "var(--color-accent)", strokeWidth: 1 }}
-                    formatter={(value, _name, item) => {
-                      const key = String((item as { dataKey?: unknown } | undefined)?.dataKey ?? "");
-                      return [money(Number(value) || 0, "HKD"), key === "corpus" ? t.reports.lpAssetsLine : String(_name ?? "")];
-                    }}
-                    labelFormatter={(age) => `${t.reports.atAge} ${age}`}
-                    contentStyle={{
-                      borderRadius: 12,
-                      border: "1px solid var(--color-line)",
-                      background: "var(--color-elevated)",
-                      fontSize: 12,
-                    }}
-                  />
-                  <Area type="monotone" dataKey="corpus" name={t.reports.lpAssetsLine} stroke="var(--color-accent)" fill="var(--color-accent-soft)" strokeWidth={2} dot={false} />
+                  <Tooltip content={() => null} cursor={{ stroke: "var(--color-accent)", strokeWidth: 1 }} />
+                  <Area type="monotone" dataKey="corpus" name={t.reports.lpAssetsLine} stroke="var(--color-accent)" fill="var(--color-accent-soft)" strokeWidth={2} dot={false} isAnimationActive animationDuration={500} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
             <p className="px-4 pb-3 text-center text-xs text-muted">
-              {chartPoint
-                ? `${t.reports.atAge} ${chartPoint.age} · ${money(chartPoint.corpus, "HKD")}`
-                : saleYear
-                  ? `${saleYear.calendarYear} · ${t.reports.lpInheritKept} ${money(saleYear.inheritKept, "HKD")}`
-                  : t.reports.chartTapHint}
+              {scrubLabel ?? (saleYear ? `${saleYear.calendarYear} · ${t.reports.lpInheritKept} ${money(saleYear.inheritKept, "HKD")}` : t.reports.chartTapHint)}
             </p>
           </div>
           <AccessCard access={head.access} />
-          <HousingCard plan={result.plan} mortgage={mortgage} housing={ctx.housingAfterPayoff} persist={persist} story={mort} payOff={Boolean(base.payOffMortgageAtRetire)} />
-          <AgeCompare base={base} ctx={ctx} persist={persist} />
+          <HousingCard plan={result.plan} mortgage={mortgage} housing={ctx.housingAfterPayoff} story={mort} />
         </>
       ) : null}
       <button
@@ -671,7 +829,11 @@ export function RetirementPage() {
           <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
             <NumRow label={t.reports.salaryNow} value={base.monthlyIncomeNow} money onCommit={(n) => persist({ monthlyIncomeNow: n })} />
             <Hairline />
-            <NumRow label={t.reports.spendNow} value={base.monthlySpendNow} money onCommit={(n) => persist({ monthlySpendNow: n })} />
+            <SpendSlider
+              label={t.reports.spendNow}
+              value={base.monthlySpendNow}
+              onCommit={(n) => persist({ monthlySpendNow: n })}
+            />
             <p className="px-4 pb-3 text-[11px] leading-4 text-muted">
               {t.reports.saveBasis
                 .replace("{amount}", money(head.saveMonthly, "HKD"))
@@ -681,11 +843,12 @@ export function RetirementPage() {
           <p className="px-5 pb-2 text-[11px] leading-4 text-muted">{t.reports.setupEnough}</p>
 
           <FoldBlock title={t.reports.assumptions}>
-            <NumRow label={`${t.reports.inflation} (%)`} value={+(base.inflation * 100).toFixed(2)} onCommit={(n) => persist({ inflation: n / 100 })} />
+            <StepPct label={t.reports.inflation} value={base.inflation} onCommit={(n) => persist({ inflation: n })} />
             <Hairline />
-            <NumRow label={`${t.reports.preReturn} (%)`} value={+(base.preReturn * 100).toFixed(2)} onCommit={(n) => persist({ preReturn: n / 100 })} />
+            <StepPct label={t.reports.preReturn} value={base.preReturn} onCommit={(n) => persist({ preReturn: n })} />
             <Hairline />
-            <NumRow label={`${t.reports.postReturn} (%)`} value={+(base.postReturn * 100).toFixed(2)} onCommit={(n) => persist({ postReturn: n / 100 })} />
+            <StepPct label={t.reports.postReturn} value={base.postReturn} onCommit={(n) => persist({ postReturn: n })} />
+            <p className="px-4 pb-3 text-[11px] leading-4 text-muted">{t.reports.leaveDefaultsHint}</p>
           </FoldBlock>
 
           <FoldBlock title={t.reports.retireAdvanced}>
@@ -756,6 +919,15 @@ export function RetirementPage() {
       ) : null}
 
       <p className="px-5 py-4 text-xs leading-relaxed text-faint">{t.reports.disclaimer}</p>
+      {exportMd ? (
+        <ReportAiSheet
+          title={t.reports.exportPreview}
+          hint={t.reports.exportBrief}
+          filename={`hk-life-retirement-${todayISO()}.md`}
+          markdown={exportMd}
+          onClose={() => setExportMd(null)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -763,6 +935,7 @@ export function RetirementPage() {
 export function RetirementProjectionPage() {
   const t = useT();
   const { result } = useLifePlanResult();
+  const { base } = useRetirementModel();
   const years = result.stay?.years ?? [];
   const sale = years.find((y) => y.inheritProceeds > 0);
   return (
@@ -786,7 +959,11 @@ export function RetirementProjectionPage() {
           </p>
         </div>
       ) : null}
-      {result.ready && years.length ? <LifeYearList years={years} /> : <p className="mx-4 rounded-2xl bg-elevated px-4 py-3 text-sm text-muted">{t.reports.lpNeedData}</p>}
+      {result.ready && years.length ? (
+        <LifeYearList years={years} focusAge={base.retireAge} />
+      ) : (
+        <p className="mx-4 rounded-2xl bg-elevated px-4 py-3 text-sm text-muted">{t.reports.lpNeedData}</p>
+      )}
     </div>
   );
 }
@@ -796,61 +973,6 @@ function Row({ k, n }: { k: string; n: number }) {
     <div className="flex justify-between gap-3">
       <span className="text-muted">{k}</span>
       <span className="tabular-nums">{money(n, "HKD")}</span>
-    </div>
-  );
-}
-
-function AgeCompare({
-  base,
-  ctx,
-  persist,
-}: {
-  base: RetirementInputs;
-  ctx: Parameters<typeof compareRetirementAges>[1];
-  persist: (p: Partial<RetirementInputs>) => void;
-}) {
-  const t = useT();
-  const [preview, setPreview] = useState<number | null>(null);
-  const rows = useMemo(() => compareRetirementAges(base, ctx), [base, ctx]);
-  const shown = preview ?? base.retireAge;
-  return (
-    <div id="retire-compare" className="mb-3">
-      <SectionLabel>{t.reports.readinessByAge}</SectionLabel>
-      <p className="px-5 pb-2 text-[11px] leading-4 text-muted">{t.reports.ageCompareHint}</p>
-      <div className="mx-4 space-y-2">
-        {rows.map((r) => (
-          <button
-            key={r.retireAge}
-            type="button"
-            onClick={() => setPreview(r.retireAge)}
-            className={cn("w-full rounded-2xl p-3 text-left", r.retireAge === shown ? "bg-accent-soft" : "bg-elevated")}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-semibold">{t.reports.retireAge} {r.retireAge}</span>
-              {r.retireAge === base.retireAge ? <span className="text-[11px] text-muted">{t.reports.goalsTitle}</span> : null}
-            </div>
-            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-muted">
-              <span>{t.reports.workYears} {r.workYears}</span>
-              <span>{t.reports.bridgeYears} {r.bridgeYears}</span>
-              <span className="tabular-nums">{t.reports.accessibleAtRetire} {money(r.accessibleAtRetire, "HKD")}</span>
-              <span className="tabular-nums">{t.reports.assetsAtEnd} {money(r.endTotal, "HKD")}</span>
-            </div>
-          </button>
-        ))}
-        {preview != null && preview !== base.retireAge ? (
-          <button
-            type="button"
-            className="h-11 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent"
-            onClick={() => {
-              persist({ retireAge: preview });
-              setPreview(null);
-            }}
-          >
-            {t.reports.applyRetireAge} · {preview}
-          </button>
-        ) : null}
-        {preview != null && preview !== base.retireAge ? <p className="text-center text-[11px] text-muted">{t.reports.agePreview}</p> : null}
-      </div>
     </div>
   );
 }
@@ -883,16 +1005,12 @@ function HousingCard({
   plan,
   mortgage,
   housing,
-  persist,
   story,
-  payOff,
 }: {
   plan: NonNullable<ReturnType<typeof runRetirement>["plan"]>;
   mortgage: ReturnType<typeof useApp.getState>["mortgage"];
   housing: number;
-  persist: (p: Partial<RetirementInputs>) => void;
   story: ReturnType<typeof mortgageStory>;
-  payOff: boolean;
 }) {
   const t = useT();
   const retireRow = plan.years.find((y) => !y.flags.isPreRetirement);
@@ -910,14 +1028,50 @@ function HousingCard({
       <SectionLabel>{t.reports.housingTimeline}</SectionLabel>
       <div className="mx-4 rounded-2xl bg-elevated p-4">
         <p className="text-[11px] leading-4 text-muted">{note}</p>
+        <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.mortgageModePay} / {t.reports.mortgageModeLump}</p>
         <RowAmt label={t.reports.outstanding} value={story.owingNow} bold />
         {projectedLeft != null ? <RowAmt label={t.reports.mortgageAtRetire} value={projectedLeft} /> : null}
         <RowAmt label={t.reports.housingAfter} value={housing} />
-        <label className="mt-3 flex min-h-11 items-center justify-between text-sm">
-          {t.reports.payOffAtRetire}
-          <input type="checkbox" checked={payOff} onChange={(e) => persist({ payOffMortgageAtRetire: e.target.checked })} />
-        </label>
         {mortgage ? <p className="mt-2 text-[11px] text-muted">{mortgage.nameZh || mortgage.name}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+function SpendSlider({ label, value, onCommit }: { label: string; value: number; onCommit: (n: number) => void }) {
+  const stepped = Math.round(value / 1000) * 1000;
+  return (
+    <div className="px-3 py-2.5">
+      <div className="flex min-h-11 items-center justify-between gap-2">
+        <span className="text-sm">{label}</span>
+        <span className="text-sm tabular-nums text-muted">{money(value, "HKD")}</span>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={Math.max(80_000, stepped + 20_000)}
+        step={1000}
+        value={Math.min(Math.max(0, stepped), Math.max(80_000, stepped + 20_000))}
+        className="mt-1 w-full accent-[var(--color-accent)]"
+        onChange={(e) => onCommit(Number(e.target.value))}
+      />
+    </div>
+  );
+}
+
+function StepPct({ label, value, onCommit }: { label: string; value: number; onCommit: (n: number) => void }) {
+  const pct = +(value * 100).toFixed(2);
+  return (
+    <div className="flex min-h-11 items-center justify-between gap-2 px-3 py-2.5">
+      <span className="text-sm">{label} (%)</span>
+      <div className="flex items-center gap-1">
+        <button type="button" className="grid size-9 place-items-center rounded-lg bg-background text-sm font-medium" onClick={() => onCommit(Math.max(0, +(value - 0.005).toFixed(4)))}>
+          −
+        </button>
+        <span className="min-w-[3.5rem] text-center text-sm tabular-nums">{pct}</span>
+        <button type="button" className="grid size-9 place-items-center rounded-lg bg-background text-sm font-medium" onClick={() => onCommit(+(value + 0.005).toFixed(4))}>
+          +
+        </button>
       </div>
     </div>
   );

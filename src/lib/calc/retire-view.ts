@@ -168,3 +168,41 @@ export function annuityClash(
   if (fromAllowance && (payout.length > 0 || inherit)) return true;
   return payout.length > 1;
 }
+
+/** Inflate today's HKD monthly figure to then-money after `years`. */
+export function inflatedMonthly(todayMonthly: number, years: number, inflation: number): number {
+  const y = Number.isFinite(years) ? Math.max(0, years) : 0;
+  const r = Number.isFinite(inflation) ? inflation : 0;
+  const base = Number.isFinite(todayMonthly) ? Math.max(0, todayMonthly) : 0;
+  return base * Math.pow(1 + r, y);
+}
+
+/**
+ * Detect an assets-page MPF/ORSO balance when no retirement-account row exists yet.
+ * Prefer contributing a balance into the plan over forcing an all-zero empty state.
+ */
+export function suggestMpfFromAssets(opts: {
+  accounts: { type: string; balance: number; name?: string; nameZh?: string }[];
+  hasRetirementAccount: boolean;
+}): { balance: number; name: string } | null {
+  if (opts.hasRetirementAccount) return null;
+  let balance = 0;
+  let name = "MPF";
+  for (const a of opts.accounts) {
+    const blob = `${a.type} ${a.name ?? ""} ${a.nameZh ?? ""}`.toLowerCase();
+    if (a.type === "mpf" || /mpf|強積金|orso/.test(blob)) {
+      if (a.balance > balance) {
+        balance = a.balance;
+        name = a.nameZh || a.name || "MPF";
+      }
+    }
+  }
+  if (!(balance > 0)) return null;
+  return { balance, name };
+}
+
+/** Age labels for the path corpus: end of (retireAge-1) / start of retireAge. */
+export function corpusAgeLabels(retireAge: number): { endWorkingAge: number; startRetireAge: number } {
+  const start = Number.isFinite(retireAge) ? Math.round(retireAge) : 65;
+  return { endWorkingAge: Math.max(0, start - 1), startRetireAge: start };
+}
