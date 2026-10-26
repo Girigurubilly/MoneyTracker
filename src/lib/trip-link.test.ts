@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { decodeProposal, encodeProposal, linkFromHash, plannerTripUrl, proposalFromHash, tripCovering, carriedTrip } from "./trip-link.ts";
+import { decodeProposal, encodeProposal, linkFromHash, plannerTripUrl, proposalFromHash, tripCovering, carriedTrip, categoryFromSpendHint } from "./trip-link.ts";
 import type { Trip } from "./types.ts";
 
 describe("trip link", () => {
@@ -65,5 +65,22 @@ describe("trip link", () => {
     assert.equal(carriedTrip(trips, { trip: "大阪散步", tripId: "", bookId: "book-osaka", items })?.id, "money-osaka");
     assert.equal(carriedTrip(trips, { trip: "大阪散步", tripId: "", items })?.id, "money-osaka");
     assert.equal(carriedTrip(trips, { trip: "", tripId: "", items })?.id, "money-osaka");
+  });
+});
+
+describe("proposal category and time", () => {
+  it("keeps planner category hint and clock time", () => {
+    const token = encodeProposal({
+      v: 1,
+      trip: "大阪",
+      tripId: "money-1",
+      bookId: "book-1",
+      items: [{ date: "2026-04-02", label: "晚餐", amount: 1200, currency: "JPY", category: "meal", time: "19:00" }],
+    });
+    const decoded = decodeProposal(token);
+    assert.equal(decoded?.items[0]?.category, "meal");
+    assert.equal(decoded?.items[0]?.time, "19:00");
+    assert.equal(categoryFromSpendHint("meal", [{ id: "dining", kind: "expense", name: "Dining", nameZh: "飲食" }], "flights"), "dining");
+    assert.equal(categoryFromSpendHint("ride", [{ id: "mtr", kind: "expense", name: "MTR", nameZh: "鐵路" }], "flights"), "mtr");
   });
 });

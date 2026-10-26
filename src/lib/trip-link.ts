@@ -9,6 +9,10 @@ export type TripSpendItem = {
   label: string;
   amount: number;
   currency: string;
+  /** Planner hint: meal | ride | hotel | sight | other — not a Money category id. */
+  category?: string;
+  /** Optional HH:mm from the meal/event; sheet should not use wall-clock now. */
+  time?: string;
 };
 
 export type TripSpendProposal = {
@@ -113,7 +117,17 @@ export function decodeProposal(token: string): TripSpendProposal | null {
       const amount = Number(row.amount);
       const currency = String(row.currency || "HKD");
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !label || !Number.isFinite(amount) || amount < 0) continue;
-      items.push({ date, label, amount, currency });
+      const category = String((row as { category?: string }).category || "").trim().slice(0, 24);
+      const timeRaw = String((row as { time?: string }).time || "").trim();
+      const time = /^\d{2}:\d{2}$/.test(timeRaw) ? timeRaw : "";
+      items.push({
+        date,
+        label,
+        amount,
+        currency,
+        ...(category ? { category } : {}),
+        ...(time ? { time } : {}),
+      });
       if (items.length >= 20) break;
     }
     if (!items.length) return null;
@@ -160,6 +174,28 @@ function decodeToken(token: string): string {
   const bin = atob(pad + "===".slice((pad.length + 3) % 4));
   const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
   return new TextDecoder().decode(bytes);
+}
+
+
+/** Map planner spend hints to a Money expense category id when possible. */
+export function categoryFromSpendHint(hint: string | undefined, categories: { id: string; kind: string; name: string; nameZh: string; theme?: string }[], fallback = ""): string {
+  if (!hint) return fallback;
+  const expense = categories.filter((c) => c.kind === "expense");
+  const byId = (id: string) => expense.find((c) => c.id === id)?.id || "";
+  const byRe = (...needles: RegExp[]) =>
+    expense.find((c) => needles.some((re) => re.test(`${c.name} ${c.nameZh} ${c.id}`)))?.id || "";
+  switch (hint) {
+    case "meal":
+      return byId("dining") || byRe(/dining|飲食|就餐|餐飲|food/i) || fallback;
+    case "ride":
+      return byId("mtr") || byRe(/transit|交通|鐵路|地鐵|mtr|巴士|公車/i) || fallback;
+    case "hotel":
+      return byId("hotels") || byRe(/hotel|住宿|酒店/i) || fallback;
+    case "sight":
+      return byId("souvenirs") || byRe(/景點|門票|souvenir|觀光/i) || fallback;
+    default:
+      return fallback;
+  }
 }
 
 export function asMoneyCurrency(code: string): MoneyUnit {

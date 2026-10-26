@@ -8,7 +8,7 @@ import { clockNow } from "@/lib/format";
 import { WhenField } from "@/components/when-picker";
 import { categoryPath, resolvedDefaultAccountId } from "@/lib/categories";
 import { pickName } from "@/lib/i18n";
-import { asMoneyCurrency, carriedTrip, linkFromHash, plannerTripUrl, proposalFromHash, type TripSpendItem } from "@/lib/trip-link";
+import { asMoneyCurrency, carriedTrip, categoryFromSpendHint, linkFromHash, plannerTripUrl, proposalFromHash, type TripSpendItem } from "@/lib/trip-link";
 import { CURRENCIES, type Category, type MoneyUnit } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { newId, useApp } from "@/store/app";
@@ -69,7 +69,7 @@ export function TripProposal() {
     setBookId(parsed.bookId || "");
     setTripPick(null);
     const accountId = remembered(ACCOUNT_KEY);
-    const categoryId =
+    const fallbackCategory =
       remembered(CATEGORY_KEY) || categories.find((c) => c.kind === "expense" && c.theme === "travel")?.id || "";
     setRows(
       parsed.items.map((item) => ({
@@ -77,9 +77,9 @@ export function TripProposal() {
         id: newId(),
         currency: asMoneyCurrency(item.currency),
         on: true,
-        categoryId,
+        categoryId: categoryFromSpendHint(item.category, categories, fallbackCategory) || fallbackCategory,
         accountId,
-        time: clockNow(),
+        time: item.time && /^\d{2}:\d{2}$/.test(item.time) ? item.time : clockNow(),
       })),
     );
     setDone(false);
@@ -106,13 +106,17 @@ export function TripProposal() {
       accounts.find((a) => a.type === "cash" || a.type === "current" || a.type === "savings")?.id ||
       accounts.find((a) => a.currency !== "MILES")?.id ||
       "";
-    const categoryId =
+    const fallbackCategory =
       remembered(CATEGORY_KEY) || categories.find((c) => c.kind === "expense" && c.theme === "travel")?.id || "";
     setRows((list) =>
       list.map((row) => ({
         ...row,
         accountId: row.accountId || accountId,
-        categoryId: row.categoryId || categoryId,
+        categoryId:
+          row.categoryId ||
+          categoryFromSpendHint(row.category, categories, fallbackCategory) ||
+          fallbackCategory,
+        time: row.time && /^\d{2}:\d{2}$/.test(row.time) ? row.time : row.time || clockNow(),
       })),
     );
   }, [open, accounts, categories]);
