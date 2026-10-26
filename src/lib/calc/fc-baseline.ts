@@ -41,6 +41,10 @@ function round(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+function promoInHkd(p: PromoSaving, rates: FxRate[]): number {
+  return toHkd(p.residualHkd || 0, p.currency ?? "HKD", rates);
+}
+
 export function migrateBalanceBasis(accounts: Account[]): Account[] {
   return accounts.map((a) => {
     if (a.balanceBasis) return a;
@@ -356,7 +360,7 @@ export function buildFcBaseline(input: {
     promo_savings: promo.map((p) => ({
       id: p.id,
       account_id: p.accountId,
-      residual_hkd: p.residualHkd,
+      residual_hkd: p.currency && p.currency !== "HKD" ? round(promoInHkd(p, input.rates)) : p.residualHkd,
       rate_schedule: p.rateSchedule.map((s) => ({ from: s.from, to: s.to, rate: s.rate })),
       rate_unit: "percent_per_annum" as const,
       arrangement_end: p.arrangementEnd,
@@ -549,7 +553,7 @@ export function baselineChecks(
     value: activeTdSum,
   });
 
-  const promoResidual = round(promo.reduce((s, p) => s + (p.residualHkd || 0), 0));
+  const promoResidual = round(promo.reduce((s, p) => s + promoInHkd(p, rates), 0));
   checks.push({
     code: "promo_residual",
     detail: `Promo savings residual sum: ${promoResidual} HKD (${promo.length} rows).`,
@@ -566,7 +570,7 @@ export function baselineChecks(
     if (a.balanceBasis !== "bank_total_incl_deposits") continue;
     const bal = toHkd(a.balance, a.currency, rates);
     const td = activeTd.filter((d) => d.accountId === a.id).reduce((s, d) => s + toHkd(d.amount, d.currency, rates), 0);
-    const pr = promo.filter((p) => p.accountId === a.id).reduce((s, p) => s + (p.residualHkd || 0), 0);
+    const pr = promo.filter((p) => p.accountId === a.id).reduce((s, p) => s + promoInHkd(p, rates), 0);
     const approx = round(bal - td - pr);
     checks.push({
       code: "bank_total_minus_td_promo",

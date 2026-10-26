@@ -7,6 +7,8 @@ import { downloadBlob } from "@/lib/backup";
 import { MONTHS_S, depositYearTotals, suggestedInterest, summarizeDeposits } from "@/lib/calc/deposits";
 import { buildDepositBrief, renderDepositBriefMarkdown } from "@/lib/calc/deposit-brief";
 import { looksLikePromoDeposit } from "@/lib/calc/fc-baseline";
+import { toHkd } from "@/lib/calc/fx";
+import { inclusiveDays, marathonInterest, scbMarathonTiers, type MarathonTier } from "@/lib/calc/marathon";
 import { copyPlainText, sharePlainText } from "@/lib/copy-text";
 import { money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
@@ -65,7 +67,10 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
     }
     return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [deposits]);
-  const promoTotal = useMemo(() => promoSavings.reduce((s, p) => s + (p.residualHkd || 0), 0), [promoSavings]);
+  const promoTotal = useMemo(
+    () => promoSavings.reduce((s, p) => s + toHkd(p.residualHkd || 0, p.currency ?? "HKD", rates), 0),
+    [promoSavings, rates],
+  );
 
   async function fetchFx() {
     setBusy(true);
@@ -145,20 +150,25 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
 
       <div className="mb-2 flex items-center justify-between px-5">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">{t.reports.promoSavings}</h2>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="text-xs font-medium text-accent"
-            onClick={() => void syncPromoFromDeposits().then(() => toast(t.reports.syncPromo))}
-          >
-            {t.reports.syncPromo}
-          </button>
-          <button type="button" className="grid size-9 place-items-center text-accent" aria-label={t.reports.addPromo} onClick={() => setEditingPromo("new")}>
-            <Plus className="size-5" />
-          </button>
-        </div>
+        <button
+          type="button"
+          className="text-xs font-medium text-accent"
+          onClick={() => void syncPromoFromDeposits().then(() => toast(t.reports.syncPromo))}
+        >
+          {t.reports.syncPromo}
+        </button>
       </div>
-      <p className="px-5 pb-2 text-[11px] leading-4 text-muted">{t.reports.promoHint}</p>
+      <p className="px-5 pb-3 text-[11px] leading-4 text-muted">{t.reports.promoHint}</p>
+      <div className="px-4 pb-3">
+        <button
+          type="button"
+          className="flex h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-accent text-sm font-semibold text-on-accent"
+          onClick={() => setEditingPromo("new")}
+        >
+          <Plus className="size-4" />
+          {t.reports.addMarathon}
+        </button>
+      </div>
       {promoSavings.length === 0 ? (
         <p className="px-5 pb-4 text-sm text-muted">{t.reports.noPromos}</p>
       ) : (
@@ -167,23 +177,29 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
             <span className="text-xs text-muted">{t.reports.promoResidual}</span>
             <span className="text-sm font-semibold tabular-nums">{money(promoTotal, "HKD")}</span>
           </div>
-          {promoSavings.map((p, i) => {
+          {promoSavings.map((p) => {
             const acc = accounts.find((a) => a.id === p.accountId);
             const title = p.nameZh || p.name || (acc ? pickName(locale, acc.name, acc.nameZh) : p.id);
-            const rate = p.rateSchedule[p.rateSchedule.length - 1]?.rate;
+            const ccy = p.currency === "USD" ? "USD" : "HKD";
+            const tiers = p.rateSchedule.map((step, index) => ({ id: `saved-${index}`, ...step }));
+            const est = marathonInterest(p.residualHkd, tiers);
+            const from = [...p.rateSchedule].map((step) => step.from).filter(Boolean).sort()[0] ?? "—";
+            const to = [...p.rateSchedule].map((step) => step.to).filter(Boolean).sort().at(-1) ?? "—";
             return (
               <div key={p.id}>
-                {i > 0 ? <Hairline /> : null}
+                <Hairline />
                 <div className="flex items-start gap-3 px-4 py-3">
                   <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setEditingPromo(p)}>
                     <div className="flex items-center justify-between gap-2">
                       <span className="truncate text-sm font-semibold">{title}</span>
-                      <span className="text-xs text-muted">{p.arrangementEnd || "—"}</span>
+                      <span className="text-xs text-muted">{ccy}</span>
                     </div>
                     <div className="mt-1 text-xs text-muted">
-                      {money(p.residualHkd, "HKD")}
-                      {rate != null ? ` · ${rate}%` : ""}
-                      {` · ${p.accessibility}`}
+                      {acc ? pickName(locale, acc.name, acc.nameZh) : t.reports.bank} · {from} → {to}
+                    </div>
+                    <div className="mt-1 flex justify-between text-sm tabular-nums">
+                      <span>{money(p.residualHkd, ccy)}</span>
+                      <span className="text-income">+{money(est.total, ccy)}</span>
                     </div>
                   </button>
                   <button type="button" className="mt-1 text-expense" onClick={() => void deletePromoSaving(p.id)} aria-label={locale === "zh-HK" ? "刪除" : "Delete"}>
@@ -423,34 +439,77 @@ function DepositEditor({ open, initial, onClose }: { open: boolean; initial: Tim
   );
 }
 
+function dayAfter(iso: string): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return iso;
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 function PromoEditor({ open, initial, onClose }: { open: boolean; initial: PromoSaving | null; onClose: () => void }) {
   const t = useT();
+  const locale = useUi((s) => s.locale);
   const accounts = useApp((s) => s.accounts);
   const upsertPromoSaving = useApp((s) => s.upsertPromoSaving);
   const picker = moneyAccountsForPicker(accounts);
-  const today = todayISO();
-  const last = initial?.rateSchedule[initial.rateSchedule.length - 1];
-  const [accountId, setAccountId] = useState(initial?.accountId ?? picker[0]?.id ?? "");
-  const [name, setName] = useState(initial?.nameZh || initial?.name || "Marathon");
-  const [residual, setResidual] = useState(initial ? String(initial.residualHkd) : "");
-  const [end, setEnd] = useState(initial?.arrangementEnd ?? "");
-  const [rate, setRate] = useState(last ? String(last.rate) : "");
-  const [from, setFrom] = useState(last?.from ?? today);
+  const defaultName = locale === "zh-HK" ? "渣打馬拉松" : "SCB Marathon";
+  const seeded = initial
+    ? initial.rateSchedule.map((step, index) => ({ id: `tier-${index + 1}`, from: step.from, to: step.to, rate: step.rate }))
+    : scbMarathonTiers("HKD");
+  const [accountId, setAccountId] = useState(initial?.accountId || picker[0]?.id || "");
+  const [name, setName] = useState(initial?.nameZh || initial?.name || defaultName);
+  const [amount, setAmount] = useState(initial ? String(initial.residualHkd) : "");
+  const [currency, setCurrency] = useState<"HKD" | "USD">(initial?.currency === "USD" ? "USD" : "HKD");
   const [access, setAccess] = useState<PromoAccessibility>(initial?.accessibility ?? "unknown");
+  const [tiers, setTiers] = useState<MarathonTier[]>(seeded.length ? seeded : scbMarathonTiers("HKD"));
+  const [rateText, setRateText] = useState<Record<string, string>>(() =>
+    Object.fromEntries((seeded.length ? seeded : scbMarathonTiers("HKD")).map((tier) => [tier.id, String(tier.rate)])),
+  );
+  const priced = tiers.map((tier) => {
+    const n = Number(rateText[tier.id]);
+    return { ...tier, rate: Number.isFinite(n) ? n : 0 };
+  });
+  const est = marathonInterest(resolveAmountInput(amount), priced);
+
+  function changeCurrency(next: "HKD" | "USD") {
+    setCurrency(next);
+    const published = scbMarathonTiers(next);
+    setTiers((prev) =>
+      prev.map((tier) => {
+        const match = published.find((row) => row.from === tier.from && row.to === tier.to);
+        return match ? { ...tier, rate: match.rate } : tier;
+      }),
+    );
+    setRateText((prev) => {
+      const nextText = { ...prev };
+      for (const tier of tiers) {
+        const match = published.find((row) => row.from === tier.from && row.to === tier.to);
+        if (match) nextText[tier.id] = String(match.rate);
+      }
+      return nextText;
+    });
+  }
+
+  function patchTier(id: string, patch: Partial<MarathonTier>) {
+    setTiers((prev) => prev.map((tier) => (tier.id === id ? { ...tier, ...patch } : tier)));
+  }
 
   async function save() {
-    const residualHkd = resolveAmountInput(residual);
-    if (!accountId || residualHkd <= 0 || !end) return;
+    const residualHkd = resolveAmountInput(amount);
+    const usable = priced.filter((tier) => inclusiveDays(tier.from, tier.to) > 0 && tier.rate > 0);
+    if (!accountId || residualHkd <= 0 || usable.length === 0) return;
+    const ends = priced.map((tier) => tier.to).filter(Boolean).sort();
     const row: PromoSaving = {
       id: initial?.id ?? `promo-${newId()}`,
       accountId,
       residualHkd,
-      rateSchedule: [{ from: from || today, to: end, rate: parseFloat(rate) || 0 }],
-      arrangementEnd: end,
+      currency,
+      rateSchedule: priced.map(({ from, to, rate }) => ({ from, to, rate })),
+      arrangementEnd: ends.at(-1) || initial?.arrangementEnd || "",
       accessibility: access,
       distinctFromTd: true,
-      name: name.trim() || "Promo",
-      nameZh: name.trim() || "推廣儲蓄",
+      name: name.trim() || defaultName,
+      nameZh: name.trim() || defaultName,
     };
     await upsertPromoSaving(row);
     onClose();
@@ -458,41 +517,115 @@ function PromoEditor({ open, initial, onClose }: { open: boolean; initial: Promo
 
   return (
     <Overlay open={open} onClose={onClose} variant="page">
-      <div className="flex h-full flex-col bg-background">
-        <ComposerHeader onClose={onClose} onSave={() => void save()} title={initial ? t.reports.editPromo : t.reports.addPromo} />
-        <div className="flex-1 overflow-auto pb-10">
-          <AccountLine accounts={picker} value={accountId} onChange={setAccountId} placeholder={t.reports.bank} role={t.reports.bank} />
-          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-            <span className="text-sm text-muted">{t.reports.promoName}</span>
-            <input value={name} onChange={(e) => setName(e.target.value)} className="h-10 w-[55%] bg-transparent text-right text-sm text-accent outline-none" />
-          </div>
-          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-            <span className="text-sm text-muted">{t.reports.promoResidual}</span>
-            <input value={residual} onChange={(e) => setResidual(e.target.value)} inputMode="decimal" className="h-10 w-36 bg-transparent text-right text-sm text-accent outline-none" />
-          </div>
-          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-            <span className="text-sm text-muted">{t.reports.promoRate}</span>
-            <input value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" className="h-10 w-24 bg-transparent text-right text-sm text-accent outline-none" />
-          </div>
-          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-            <span className="text-sm text-muted">{t.reports.startDate}</span>
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
-          </div>
-          <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-            <span className="text-sm text-muted">{t.reports.promoEnd}</span>
-            <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
-          </div>
-          <SelectLine
-            label={t.reports.promoAccess}
-            value={access}
-            onChange={(v) => setAccess(v as PromoAccessibility)}
-            options={[
-              { id: "unknown", label: "unknown" },
-              { id: "accessible", label: "accessible" },
-              { id: "restricted", label: "restricted" },
-            ]}
+      <div className="flex min-h-dvh flex-col bg-background pb-8">
+        <ComposerHeader onClose={onClose} onSave={() => void save()} title={initial ? t.reports.editPromo : t.reports.addMarathon} />
+        <p className="px-5 pb-2 text-[11px] leading-4 text-muted">{t.reports.marathonSeedNote}</p>
+        <label className="flex min-h-11 items-center justify-between gap-3 border-b border-line px-4">
+          <span className="text-sm text-muted">{t.reports.promoName}</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} className="h-11 min-w-0 flex-1 bg-transparent text-right text-sm outline-none" />
+        </label>
+        <AccountLine accounts={picker} value={accountId} onChange={setAccountId} placeholder={t.reports.bank} role={t.reports.bank} />
+        <SelectLine
+          label={t.reports.currency}
+          value={currency}
+          onChange={(v) => changeCurrency(v === "USD" ? "USD" : "HKD")}
+          options={[{ id: "HKD", label: "HKD" }, { id: "USD", label: "USD" }]}
+        />
+        <label className="flex min-h-11 items-center justify-between gap-3 border-b border-line px-4">
+          <span className="text-sm text-muted">{t.reports.depositAmount}</span>
+          <input
+            inputMode="decimal"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="h-11 w-40 bg-transparent text-right text-sm tabular-nums outline-none"
           />
+        </label>
+        <div className="px-5 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-muted">{t.reports.marathonTiers}</div>
+        <div className="mx-4 overflow-hidden rounded-2xl bg-elevated">
+          {tiers.map((tier, i) => {
+            const row = est.rows.find((item) => item.id === tier.id);
+            return (
+              <div key={tier.id} className={i > 0 ? "border-t border-line" : ""}>
+                <div className="flex items-center justify-between px-4 pt-1">
+                  <span className="text-xs font-medium text-muted">{i + 1}</span>
+                  <button
+                    type="button"
+                    className="grid size-11 place-items-center text-expense"
+                    aria-label={t.reports.marathonRemove}
+                    onClick={() => setTiers((prev) => prev.filter((item) => item.id !== tier.id))}
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
+                <label className="flex min-h-11 items-center justify-between gap-3 px-4">
+                  <span className="text-sm text-muted">{t.reports.startDate}</span>
+                  <input
+                    type="date"
+                    value={tier.from}
+                    onChange={(e) => patchTier(tier.id, { from: e.target.value })}
+                    className="h-11 max-w-[11.5rem] bg-transparent text-right text-sm text-accent outline-none"
+                  />
+                </label>
+                <label className="flex min-h-11 items-center justify-between gap-3 px-4">
+                  <span className="text-sm text-muted">{t.reports.endDate}</span>
+                  <input
+                    type="date"
+                    value={tier.to}
+                    onChange={(e) => patchTier(tier.id, { to: e.target.value })}
+                    className="h-11 max-w-[11.5rem] bg-transparent text-right text-sm text-accent outline-none"
+                  />
+                </label>
+                <div className="flex min-h-11 items-center justify-between gap-3 px-4 pb-3">
+                  <label className="flex items-center gap-2 text-sm">
+                    <span className="text-muted">{t.reports.promoRate}</span>
+                    <input
+                      inputMode="decimal"
+                      value={rateText[tier.id] ?? String(tier.rate)}
+                      onChange={(e) => setRateText((prev) => ({ ...prev, [tier.id]: e.target.value }))}
+                      className="h-11 w-20 rounded-lg bg-background px-2 text-right text-sm tabular-nums outline-none"
+                    />
+                    <span className="text-muted">%</span>
+                  </label>
+                  <div className="text-right">
+                    <div className="text-[11px] text-muted">{t.reports.marathonDays.replace("{n}", String(row?.days ?? 0))}</div>
+                    <div className="text-sm font-medium tabular-nums text-income">+{money(row?.interest ?? 0, currency)}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
+        <div className="px-4 pt-3">
+          <button
+            type="button"
+            className="flex h-11 w-full items-center justify-center rounded-xl bg-elevated text-sm font-medium"
+            onClick={() => {
+              const last = tiers[tiers.length - 1];
+              const from = last?.to ? dayAfter(last.to) : todayISO();
+              const id = newId();
+              setTiers((prev) => [...prev, { id, from, to: from, rate: last?.rate ?? 0 }]);
+              setRateText((prev) => ({ ...prev, [id]: last ? (rateText[last.id] ?? String(last.rate)) : "0" }));
+            }}
+          >
+            {t.reports.marathonAddTier}
+          </button>
+        </div>
+        {est.overlap ? <p className="px-5 pt-3 text-xs text-expense">{t.reports.marathonOverlap}</p> : null}
+        <div className="mx-4 mt-3 flex items-center justify-between rounded-2xl bg-elevated px-4 py-3">
+          <span className="text-sm">{t.reports.marathonEstimate}</span>
+          <span className="text-base font-semibold tabular-nums text-income">+{money(est.total, currency)}</span>
+        </div>
+        <SelectLine
+          label={t.reports.promoAccess}
+          value={access}
+          onChange={(v) => setAccess(v as PromoAccessibility)}
+          options={[
+            { id: "unknown", label: "unknown" },
+            { id: "accessible", label: "accessible" },
+            { id: "restricted", label: "restricted" },
+          ]}
+        />
+        <p className="px-5 pt-3 text-[11px] leading-4 text-muted">{t.reports.promoHint}</p>
       </div>
     </Overlay>
   );

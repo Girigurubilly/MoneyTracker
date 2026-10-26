@@ -430,7 +430,9 @@ export type PromoAccessibility = "accessible" | "restricted" | "unknown";
 export type PromoSaving = {
   id: string;
   accountId: string;
+  /** Principal in `currency` (default HKD). It stays on the linked account — not a second asset. */
   residualHkd: number;
+  currency?: Currency;
   rateSchedule: { from: string; to: string; rate: number }[];
   arrangementEnd: string;
   accessibility: PromoAccessibility;
