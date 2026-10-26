@@ -12,7 +12,7 @@ import {
   yearProjectionCompare,
   yearMonthKey,
 } from "./deposits.ts";
-import type { Account, Category, FxRate, Recurring, TimeSaving, Transaction } from "../types.ts";
+import type { Account, Category, FxRate, PromoSaving, Recurring, TimeSaving, Transaction } from "../types.ts";
 
 const rates: FxRate[] = [
   { currency: "USD", perHkd: 7.8, asOf: "2026-09-01", source: "test" },
@@ -127,6 +127,40 @@ describe("deposits", () => {
     assert.equal(y.yearIncome, 10200);
     assert.equal(y.asOfIncome, 10200);
     assert.equal(y.asOfExpense, 4000);
+  });
+
+  it("puts marathon interest into the yearly projection on the 1st of the next month", () => {
+    const promo: PromoSaving = {
+      id: "promo-1",
+      accountId: "cash",
+      residualHkd: 100_000,
+      currency: "HKD",
+      rateSchedule: [{ from: "2026-10-02", to: "2026-10-31", rate: 2.8 }],
+      arrangementEnd: "2026-10-31",
+      accessibility: "unknown",
+      distinctFromTd: true,
+    };
+    const october = Math.round(100_000 * 0.028 * (30 / 365) * 100) / 100;
+    const future = yearlyProjection([], [], rates, 2026, 9, [], cats, 0, [], "2026-10-26", [promo]);
+    assert.equal(future.rows[9].depInt, 0);
+    assert.equal(future.rows[10].depInt, october);
+    const posted: Transaction = {
+      id: "posted",
+      type: "income",
+      amount: october,
+      currency: "HKD",
+      accountId: "cash",
+      categoryId: "interest-inc",
+      date: "2026-11-01",
+      payee: "interest",
+      depositId: "promo-1:2026-10",
+      promoId: "promo-1",
+    };
+    const current = yearlyProjection([], [], rates, 2026, 10, [posted], cats, 0, [], "2026-11-02", [promo]);
+    assert.equal(current.rows[10].depInt, october);
+    const adjusted: PromoSaving = { ...promo, interestAdjustments: [{ month: "2026-10", amount: 250 }] };
+    const custom = yearlyProjection([], [], rates, 2026, 9, [], cats, 0, [], "2026-10-26", [adjusted]);
+    assert.equal(custom.rows[10].depInt, 250);
   });
 
   it("uses the budget month cap for the current month expected expense", () => {

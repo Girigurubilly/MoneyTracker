@@ -16,6 +16,7 @@ export function YearlyPage() {
   const locale = useUi((s) => s.locale);
   const plans = useApp((s) => s.yearlyPlans);
   const deposits = useApp((s) => s.deposits);
+  const promos = useApp((s) => s.promoSavings);
   const rates = useApp((s) => s.fxRates);
   const txs = useApp((s) => s.transactions);
   const cats = useApp((s) => s.categories);
@@ -48,6 +49,7 @@ export function YearlyPage() {
     monthCap,
     recurring,
     isNextYear ? "" : today,
+    promos,
   );
   const months = locale === "zh-HK" ? MONTHS_ZH : MONTHS_EN;
   const markdown = useMemo(

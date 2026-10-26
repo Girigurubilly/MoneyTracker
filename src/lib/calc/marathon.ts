@@ -48,7 +48,7 @@ export type MarathonTierInterest = { id: string; days: number; interest: number 
 
 export type MarathonMonthInterest = {
   month: string;
-  /** Last accrual day in that month. This is the planned-income date. */
+  /** Planned-income date: the 1st of the month after the accrual month. */
   date: string;
   days: number;
   interest: number;
@@ -68,12 +68,21 @@ function utcMonthEnd(iso: string): string {
   return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(last).padStart(2, "0")}`;
 }
 
-/** Split each tier across calendar months. Actual/365, inclusive days, rounded per slice then summed in the month. */
+function utcNextMonthFirst(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  if (!y || !m) return month;
+  const d = new Date(Date.UTC(y, m, 1));
+  return d.toISOString().slice(0, 10);
+}
+
+/** Split each tier across calendar months. Actual/365, inclusive days, rounded per slice.
+ *  Interest is paid on the 1st of the following month, same as a scheduled income date.
+ */
 export function marathonMonthlyInterest(
   amount: number,
   tiers: { from: string; to: string; rate: number }[],
 ): MarathonMonthInterest[] {
-  const buckets = new Map<string, { days: number; interest: number; date: string }>();
+  const buckets = new Map<string, { days: number; interest: number }>();
   for (const tier of tiers) {
     if (!tier.from || !tier.to || tier.to < tier.from || !(tier.rate > 0) || !(amount > 0)) continue;
     let cursor = tier.from;
@@ -85,14 +94,8 @@ export function marathonMonthlyInterest(
       const month = cursor.slice(0, 7);
       const interest = days > 0 ? roundMoney(amount * (tier.rate / 100) * (days / 365)) : 0;
       const prev = buckets.get(month);
-      if (!prev) buckets.set(month, { days, interest, date: sliceTo });
-      else {
-        buckets.set(month, {
-          days: prev.days + days,
-          interest: roundMoney(prev.interest + interest),
-          date: sliceTo > prev.date ? sliceTo : prev.date,
-        });
-      }
+      if (!prev) buckets.set(month, { days, interest });
+      else buckets.set(month, { days: prev.days + days, interest: roundMoney(prev.interest + interest) });
       const next = utcDayAfter(sliceTo);
       if (next <= cursor) break;
       cursor = next;
@@ -100,7 +103,7 @@ export function marathonMonthlyInterest(
   }
   return [...buckets.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([month, row]) => ({ month, date: row.date, days: row.days, interest: row.interest }));
+    .map(([month, row]) => ({ month, date: utcNextMonthFirst(month), days: row.days, interest: row.interest }));
 }
 
 /** Actual/365 on the stated balance. Each tier is inclusive. This does not post a transaction. */

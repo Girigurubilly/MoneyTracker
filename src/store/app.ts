@@ -472,8 +472,8 @@ async function syncPromoInterest(get: () => AppState, row: PromoSaving) {
   for (const month of months) {
     const amount = adjustments.has(month.month) ? Number(adjustments.get(month.month)) : month.interest;
     const existing =
-      get().transactions.find((t) => t.promoId === row.id && t.date.slice(0, 7) === month.month) ??
-      get().transactions.find((t) => t.depositId === `${row.id}:${month.month}`);
+      get().transactions.find((t) => t.depositId === `${row.id}:${month.month}`) ??
+      get().transactions.find((t) => t.promoId === row.id && t.date.slice(0, 7) === month.month);
     if (!(amount > 0)) {
       if (existing?.planned) await get().deleteTransaction(existing.id);
       continue;
@@ -486,7 +486,7 @@ async function syncPromoInterest(get: () => AppState, row: PromoSaving) {
       currency,
       accountId: row.accountId,
       categoryId: categoryId || existing?.categoryId || "interest-inc",
-      date: month.date,
+      date: existing && !existing.planned ? existing.date : month.date,
       payee: `${name} interest`,
       payeeZh: `${name} 利息`,
       planned: existing && !existing.planned ? false : month.date > today,
@@ -497,7 +497,8 @@ async function syncPromoInterest(get: () => AppState, row: PromoSaving) {
     else await get().addTransaction(next);
   }
   for (const old of get().transactions.filter((t) => t.promoId === row.id)) {
-    if (wanted.has(old.date.slice(0, 7))) continue;
+    const accrual = old.depositId?.startsWith(`${row.id}:`) ? old.depositId.slice(row.id.length + 1) : old.date.slice(0, 7);
+    if (wanted.has(accrual)) continue;
     if (old.planned) await get().deleteTransaction(old.id);
   }
 }
