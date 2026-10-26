@@ -26,7 +26,7 @@ function table(rows: YearCompareRow[]): string[] {
 
 export function renderYearCompareMarkdown(input: {
   asOf: string;
-  mode: "same-stage" | "full-last-year";
+  mode: "same-stage" | "full-last-year" | "projected-year";
   kind: PeriodTab;
   groupedByParent: boolean;
   focus?: string;
@@ -46,7 +46,7 @@ export function renderYearCompareMarkdown(input: {
     `- As of: ${input.asOf}`,
     `- Currency: HKD`,
     `- Kind: ${input.kind}`,
-    `- Comparison: ${input.mode === "same-stage" ? "same dates last year" : "all of last year"}`,
+    `- Comparison: ${input.mode === "same-stage" ? "same dates last year" : input.mode === "full-last-year" ? "all of last year" : "full-year projection vs last year"}`,
     `- Grouping: ${input.focus ? `subcategories of ${input.focus}` : input.groupedByParent ? "parent categories" : "categories as posted"}`,
     `- This period: ${input.thisFrom} to ${input.thisTo}`,
     `- Last period: ${input.lastFrom} to ${input.lastTo}`,
@@ -54,7 +54,9 @@ export function renderYearCompareMarkdown(input: {
     `- Last period total: ${hkd(input.lastTotal)}`,
     `- Change: ${hkd(change)}`,
     ``,
-    `Posted transactions only. Planned rows are excluded. A positive change means this period is higher than the last period. Subcategory tables are the parts of a parent, not an extra total.`,
+    input.mode === "projected-year"
+      ? `This side uses the Yearly projection (posted months + planned salary, schedule other income, deposit interest, expected spend). Last year is posted only. A positive change means the projected year is higher than last year.`
+      : `Posted transactions only. Planned rows are excluded. A positive change means this period is higher than the last period. Subcategory tables are the parts of a parent, not an extra total.`,
     ``,
     ...table(input.rows),
     ``,

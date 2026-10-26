@@ -199,6 +199,7 @@ export type YearlyMonthRow = {
   isCurrent: boolean;
   fromLedger: boolean;
   incomeLocked: boolean;
+  otherLocked: boolean;
 };
 
 function regularIsSalary(r: Recurring, cat: Category | undefined): boolean {
@@ -290,6 +291,35 @@ export function upcomingIncomeSplit(
   return { salary, other };
 }
 
+/** Future / planned months: other income from monthly regulars + planned income txs (not salary, not TD interest). */
+export function plannedMonthOtherIncome(
+  recurring: Recurring[],
+  txs: Transaction[],
+  categories: Category[],
+  rates: FxRate[],
+  year: number,
+  month0: number,
+): number {
+  const month = yearMonthKey(year, month0);
+  let other = 0;
+  for (const r of monthlyIncomeRegulars(recurring)) {
+    if (regularIsDepositInterest(r, categories)) continue;
+    const cat = categories.find((c) => c.id === r.categoryId);
+    if (regularIsSalary(r, cat)) continue;
+    other += hkdOfRegular(r, rates);
+  }
+  for (const tx of txs) {
+    if (!tx.planned || tx.type !== "income" || !tx.date.startsWith(month)) continue;
+    const cat =
+      categories.find((c) => c.id === tx.categoryId) ??
+      categories.find((c) => c.name === tx.categoryId || c.nameZh === tx.categoryId);
+    if (isSalaryCategory(cat)) continue;
+    if (isDepositInterestIncome(tx, cat, categories)) continue;
+    other += Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
+  }
+  return other;
+}
+
 export function yearlyProjection(
   plans: YearlyPlan[],
   deposits: TimeSaving[],
@@ -325,7 +355,9 @@ export function yearlyProjection(
     const actual = actuals.get(plan.id);
     const upcoming = useActivity && isCurrent ? upcomingIncomeSplit(recurring, txs, categories, rates, plan.id, today) : { salary: 0, other: 0 };
     const salary = useActivity ? (actual?.salary ?? 0) + upcoming.salary : plan.salary || 0;
-    const other = useActivity ? (actual?.other ?? 0) + upcoming.other : plan.other || 0;
+    const other = useActivity
+      ? (actual?.other ?? 0) + upcoming.other
+      : plannedMonthOtherIncome(recurring, txs, categories, rates, year, month0);
     const plannedExpense =
       month0 === month0Now ? linkedMonthSpendCap(currentMonthCap, plan.expense || 0) : plan.expense || 0;
     const expense = fromLedger ? (actual?.expense ?? 0) : plannedExpense;
@@ -356,9 +388,125 @@ export function yearlyProjection(
       isCurrent,
       fromLedger,
       incomeLocked: useActivity,
+      otherLocked: true,
     };
   });
   return { rows, yearIncome, yearExpense, yearSaving, asOfIncome, asOfExpense, asOfSaving };
+}
+
+
+/** Full-year projection vs last calendar year posted totals (for 今年對去年 projected tab). */
+export function yearProjectionCompare(
+  plans: YearlyPlan[],
+  deposits: TimeSaving[],
+  rates: FxRate[],
+  txs: Transaction[],
+  categories: Category[],
+  recurring: Recurring[],
+  today: string,
+  currentMonthCap = 0,
+): {
+  year: number;
+  lastYear: number;
+  thisIncome: number;
+  thisExpense: number;
+  thisSaving: number;
+  lastIncome: number;
+  lastExpense: number;
+  lastSaving: number;
+  thisSalary: number;
+  thisOther: number;
+  thisDepInt: number;
+  lastSalary: number;
+  lastOther: number;
+  lastInterest: number;
+  rows: {
+    id: string;
+    name: string;
+    nameZh: string;
+    thisYear: number;
+    lastYear: number;
+    delta: number;
+    pct: number | null;
+  }[];
+} {
+  const year = Number(today.slice(0, 4));
+  const month0 = Number(today.slice(5, 7)) - 1;
+  const proj = yearlyProjection(
+    plans,
+    deposits,
+    rates,
+    year,
+    month0,
+    txs,
+    categories,
+    currentMonthCap,
+    recurring,
+    today,
+  );
+  const lastActuals = monthActualsFromTxs(txs, categories, rates, year - 1);
+  let lastSalary = 0;
+  let lastOther = 0;
+  let lastInterest = 0;
+  let lastExpense = 0;
+  for (const row of lastActuals.values()) {
+    lastSalary += row.salary;
+    lastOther += row.other;
+    lastInterest += row.interest;
+    lastExpense += row.expense;
+  }
+  const thisSalary = proj.rows.reduce((s, r) => s + r.salary, 0);
+  const thisOther = proj.rows.reduce((s, r) => s + r.other, 0);
+  const thisDepInt = proj.rows.reduce((s, r) => s + r.depInt, 0);
+  const thisIncome = proj.yearIncome;
+  const thisExpense = proj.yearExpense;
+  const thisSaving = proj.yearSaving;
+  const lastIncome = lastSalary + lastOther + lastInterest;
+  const lastSaving = lastIncome - lastExpense;
+
+  function row(
+    id: string,
+    name: string,
+    nameZh: string,
+    thisY: number,
+    lastY: number,
+  ) {
+    return {
+      id,
+      name,
+      nameZh,
+      thisYear: thisY,
+      lastYear: lastY,
+      delta: thisY - lastY,
+      pct: lastY > 0 ? (thisY - lastY) / lastY : thisY > 0 ? null : 0,
+    };
+  }
+
+  const rows = [
+    row("salary", "Salary", "薪金", thisSalary, lastSalary),
+    row("other", "Other income", "其他收入", thisOther, lastOther),
+    row("dep-int", "Deposit interest", "存款利息", thisDepInt, lastInterest),
+    row("expense", "Expected expense", "預期開支", thisExpense, lastExpense),
+    row("saving", "Saving", "儲蓄", thisSaving, lastSaving),
+  ];
+
+  return {
+    year,
+    lastYear: year - 1,
+    thisIncome,
+    thisExpense,
+    thisSaving,
+    lastIncome,
+    lastExpense,
+    lastSaving,
+    thisSalary,
+    thisOther,
+    thisDepInt,
+    lastSalary,
+    lastOther,
+    lastInterest,
+    rows,
+  };
 }
 
 export function isFiatCurrency(value: string): value is Currency {

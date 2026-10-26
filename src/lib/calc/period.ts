@@ -195,12 +195,22 @@ export function periodCategoryTxs(
   return rows;
 }
 
+export type YearCompareMode = "same-stage" | "full-last-year" | "projected-year";
+
 export function yearCompareRanges(
   today: string,
-  mode: "same-stage" | "full-last-year",
+  mode: YearCompareMode,
 ): { thisFrom: string; thisTo: string; lastFrom: string; lastTo: string } {
   const y = Number(today.slice(0, 4));
   const rest = today.slice(4);
+  if (mode === "projected-year") {
+    return {
+      thisFrom: `${y}-01-01`,
+      thisTo: `${y}-12-31`,
+      lastFrom: `${y - 1}-01-01`,
+      lastTo: `${y - 1}-12-31`,
+    };
+  }
   if (mode === "full-last-year") {
     return {
       thisFrom: `${y}-01-01`,
@@ -245,7 +255,7 @@ export function yearCategoryCompare(
   categories: Category[],
   rates: FxRate[],
   today: string,
-  mode: "same-stage" | "full-last-year",
+  mode: YearCompareMode,
   tab: PeriodTab,
   mergeParents: boolean,
   parentId?: string,

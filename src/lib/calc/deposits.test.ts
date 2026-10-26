@@ -9,6 +9,7 @@ import {
   suggestedInterest,
   summarizeDeposits,
   yearlyProjection,
+  yearProjectionCompare,
   yearMonthKey,
 } from "./deposits.ts";
 import type { Account, Category, FxRate, Recurring, TimeSaving, Transaction } from "../types.ts";
@@ -118,11 +119,13 @@ describe("deposits", () => {
     assert.equal(y.rows[0].fromLedger, true);
     assert.equal(y.rows[0].salary, 0);
     assert.equal(y.rows[8].fromLedger, false);
-    assert.equal(y.rows[8].income, 10700);
-    assert.equal(y.rows[8].saving, 6700);
+    assert.equal(y.rows[8].other, 0);
+    assert.equal(y.rows[8].otherLocked, true);
+    assert.equal(y.rows[8].income, 10200);
+    assert.equal(y.rows[8].saving, 6200);
     assert.equal(y.rows[8].isCurrent, true);
-    assert.equal(y.yearIncome, 10700);
-    assert.equal(y.asOfIncome, 10700);
+    assert.equal(y.yearIncome, 10200);
+    assert.equal(y.asOfIncome, 10200);
     assert.equal(y.asOfExpense, 4000);
   });
 
@@ -189,6 +192,35 @@ describe("deposits", () => {
     assert.equal(y.rows[1].other, 0);
   });
 
+  it("plannedMonthOtherIncome fills future other from regulars and planned txs", () => {
+    const recurring: Recurring[] = [
+      { id: "r-pay", type: "income", label: "Salary", labelZh: "薪金", amount: 72000, currency: "HKD", accountId: "cash", categoryId: "salary", frequency: "monthly", nextDate: "2026-11-28", chargedDay: 28 },
+      { id: "r-gift", type: "income", label: "Family", labelZh: "家用", amount: 2000, currency: "HKD", accountId: "cash", categoryId: "gift", frequency: "monthly", nextDate: "2026-11-15", chargedDay: 15 },
+    ];
+    const txs = [
+      tx({ id: "adhoc", type: "income", amount: 300, date: "2026-11-20", categoryId: "gift", planned: true }),
+    ];
+    const y = yearlyProjection(
+      [{ id: "2026-11", salary: 50000, other: 99999, expense: 10000 }],
+      [dep({ id: "d", endDate: "2026-11-10", interest: 80 })],
+      rates,
+      2026,
+      8,
+      txs,
+      cats,
+      0,
+      recurring,
+      "",
+    );
+    const nov = y.rows[10];
+    assert.equal(nov.fromLedger, false);
+    assert.equal(nov.otherLocked, true);
+    assert.equal(nov.salary, 50000);
+    assert.equal(nov.other, 2000 + 300);
+    assert.equal(nov.depInt, 80);
+    assert.equal(nov.income, 50000 + 2300 + 80);
+  });
+
   it("fills the current month from posted income plus regulars still ahead, without repeating deposit interest", () => {
     const plans = [{ id: "2026-10", salary: 99999, other: 88888, expense: 4000 }];
     const txs = [
@@ -223,4 +255,24 @@ describe("deposits", () => {
     assert.equal(oct.depInt, 200 + 80 + 150);
     assert.equal(oct.income, 30000 + 72000 + 500 + 1000 + 200 + 80 + 150);
   });
+
+  it("yearProjectionCompare stacks projection against last-year posted totals", () => {
+    const plans = [
+      { id: "2026-11", salary: 10000, other: 0, expense: 4000 },
+      { id: "2026-12", salary: 10000, other: 0, expense: 4000 },
+    ];
+    const txs = [
+      tx({ id: "s", type: "income", amount: 9000, date: "2025-03-01", categoryId: "salary" }),
+      tx({ id: "e", type: "expense", amount: 3000, date: "2025-04-01", categoryId: "dining" }),
+      tx({ id: "i", type: "income", amount: 100, date: "2025-05-01", categoryId: "interest-inc", depositId: "d" }),
+    ];
+    const c = yearProjectionCompare(plans, [], rates, txs, cats, [], "2026-10-01", 0);
+    assert.equal(c.lastSalary, 9000);
+    assert.equal(c.lastExpense, 3000);
+    assert.equal(c.lastInterest, 100);
+    assert.equal(c.thisSalary, 20000);
+    assert.equal(c.thisExpense, 8000);
+    assert.ok(c.rows.some((r) => r.id === "salary" && r.thisYear === 20000 && r.lastYear === 9000));
+  });
+
 });
