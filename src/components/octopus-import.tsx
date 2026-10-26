@@ -196,16 +196,16 @@ export function OctopusImport({ onClose }: { onClose: () => void }) {
   return (
     <Overlay open onClose={onClose} variant="page">
       <header className="flex items-center justify-between px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <button type="button" className="h-11 px-2 text-sm text-accent" onClick={onClose}>
+        <button type="button" className="tr-press h-11 px-2 text-sm text-accent" onClick={onClose}>
           {t.add.cancel}
         </button>
         <h1 className="text-base font-semibold">{t.add.octopus}</h1>
-        <button type="button" className="h-11 px-2 text-sm font-medium text-accent" disabled={busy} onClick={() => void importRows()}>
+        <button type="button" className="tr-press h-11 px-2 text-sm font-medium text-accent" disabled={busy} onClick={() => void importRows()}>
           {t.add.save}
         </button>
       </header>
-      <p className="px-5 pb-3 pt-2 text-xs leading-5 text-muted">{t.add.octopusHint}</p>
-      <div className="mx-4 mb-3 space-y-2 rounded-2xl bg-elevated px-4 py-3">
+      <p className="rt-enter px-5 pb-3 pt-2 text-xs leading-5 text-muted">{t.add.octopusHint}</p>
+      <div className="rt-enter mx-4 mb-3 space-y-2 rounded-2xl bg-elevated px-4 py-3">
         <label className="flex items-center justify-between gap-3 py-1">
           <span className="text-sm">{t.add.octopusAccount}</span>
           <AccountSelect accounts={picker} value={accountId} onChange={setAccountId} className="max-w-[11rem] text-right text-sm" />
@@ -216,7 +216,7 @@ export function OctopusImport({ onClose }: { onClose: () => void }) {
         </label>
       </div>
       <div className="px-4 pb-3">
-        <label className="inline-flex h-11 items-center rounded-xl bg-accent px-4 text-sm font-medium text-on-accent">
+        <label className="tr-press inline-flex h-11 items-center rounded-xl bg-accent px-4 text-sm font-medium text-on-accent">
           {busy ? t.add.octopusReading : t.add.octopusPick}
           <input
             type="file"
@@ -235,11 +235,11 @@ export function OctopusImport({ onClose }: { onClose: () => void }) {
           />
         </label>
         {note ? <p className="mt-2 text-xs text-muted">{note}</p> : null}
-        <button type="button" className="mt-2 text-xs text-accent" onClick={() => setShowRaw((v) => !v)}>
+        <button type="button" className="tr-press mt-2 text-xs text-accent" onClick={() => setShowRaw((v) => !v)}>
           {t.add.octopusPaste}
         </button>
         {showRaw ? (
-          <div className="mt-2">
+          <div className="rt-fold mt-2"><div className="rt-fold-inner">
             <textarea
               value={rawText}
               onChange={(e) => setRawText(e.target.value)}
@@ -249,20 +249,20 @@ export function OctopusImport({ onClose }: { onClose: () => void }) {
             />
             <button
               type="button"
-              className="mt-2 h-9 rounded-lg bg-elevated px-3 text-xs font-medium"
+              className="tr-press mt-2 h-9 rounded-lg bg-elevated px-3 text-xs font-medium"
               onClick={() => applyText(rawText)}
             >
               {t.add.octopusParse}
             </button>
-          </div>
+          </div></div>
         ) : null}
       </div>
-      <div className="px-4 pb-10">
+      <div className="rt-enter-delay px-4 pb-10">
         {rows.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted">{t.add.octopusEmpty}</p>
         ) : (
           rows.map((r) => (
-            <div key={r.id} className="mb-2 rounded-xl bg-elevated px-3 py-2">
+            <div key={r.id} className="tr-press mb-2 rounded-xl bg-elevated px-3 py-2">
               <div className="flex items-start gap-2">
                 <input type="checkbox" checked={!r.skip} onChange={() => setRows((prev) => prev.map((x) => (x.id === r.id ? { ...x, skip: !x.skip } : x)))} className="mt-1" />
                 <div className="min-w-0 flex-1">

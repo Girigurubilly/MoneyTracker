@@ -500,6 +500,7 @@ export function BackupPage() {
   return (
     <div className="pb-10">
       <ScreenHeader title={t.more.importBackup} backTo="/more" />
+      <div className="rt-enter">
       <h2 className="px-5 pb-2 text-sm font-medium text-muted">{t.backup.drive}</h2>
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.backup.driveHint}</p>
       <div className="px-5 space-y-3">
@@ -515,7 +516,7 @@ export function BackupPage() {
         <button
           type="button"
           disabled={busy}
-          className="h-11 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent disabled:opacity-60"
+          className="tr-press h-11 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent disabled:opacity-60"
           onClick={() => beginDrive("sync")}
         >
           {t.backup.driveSync}
@@ -523,7 +524,7 @@ export function BackupPage() {
         <button
           type="button"
           disabled={busy}
-          className="h-11 w-full rounded-xl bg-elevated text-sm disabled:opacity-60"
+          className="tr-press h-11 w-full rounded-xl bg-elevated text-sm disabled:opacity-60"
           onClick={() => beginDrive("save")}
         >
           {t.backup.driveSave}
@@ -531,7 +532,7 @@ export function BackupPage() {
         <button
           type="button"
           disabled={busy}
-          className="h-11 w-full rounded-xl bg-elevated text-sm disabled:opacity-60"
+          className="tr-press h-11 w-full rounded-xl bg-elevated text-sm disabled:opacity-60"
           onClick={() => {
             rememberDrivePick("");
             void beginDrive("restore");
@@ -542,7 +543,7 @@ export function BackupPage() {
         <button
           type="button"
           disabled={busy}
-          className="h-11 w-full rounded-xl bg-elevated text-sm disabled:opacity-60"
+          className="tr-press h-11 w-full rounded-xl bg-elevated text-sm disabled:opacity-60"
           onClick={() => beginDrive("list")}
         >
           {t.backup.driveList}
@@ -562,7 +563,7 @@ export function BackupPage() {
                       <button
                         type="button"
                         disabled={busy}
-                        className="h-9 shrink-0 rounded-lg bg-background px-3 text-xs font-medium disabled:opacity-60"
+                        className="tr-press h-9 shrink-0 rounded-lg bg-background px-3 text-xs font-medium disabled:opacity-60"
                         onClick={() => {
                           if (!window.confirm(t.backup.driveConfirm.replace("{time}", when))) return;
                           rememberDrivePick(file.id);
@@ -581,9 +582,11 @@ export function BackupPage() {
           </div>
         ) : null}
       </div>
+      </div>
+      <div className="rt-enter-delay">
       <h2 className="px-5 pb-2 pt-6 text-sm font-medium text-muted">{locale === "zh-HK" ? "本機檔案" : "This device"}</h2>
       <div className="px-5 space-y-3">
-        <button type="button" className="h-11 w-full rounded-xl bg-elevated text-sm" onClick={() => downloadBlob("hk-life-money.json", JSON.stringify(exportSnap(), null, 2))}>
+        <button type="button" className="tr-press h-11 w-full rounded-xl bg-elevated text-sm" onClick={() => downloadBlob("hk-life-money.json", JSON.stringify(exportSnap(), null, 2))}>
           {t.backup.exportJson}
         </button>
         <div className="rounded-2xl bg-elevated p-3 space-y-2">
@@ -608,7 +611,7 @@ export function BackupPage() {
         </div>
         <button
           type="button"
-          className="h-11 w-full rounded-xl bg-elevated text-sm"
+          className="tr-press h-11 w-full rounded-xl bg-elevated text-sm"
           onClick={() => {
             void (async () => {
               const out = await makeFcBaseline();
@@ -623,7 +626,7 @@ export function BackupPage() {
         </button>
         <button
           type="button"
-          className="h-11 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent"
+          className="tr-press h-11 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent"
           onClick={() => {
             void (async () => {
               const out = await makeFcBaseline();
@@ -636,13 +639,13 @@ export function BackupPage() {
         >
           {t.backup.copyBaselineJson}
         </button>
-        <button type="button" className="h-11 w-full rounded-xl bg-elevated text-sm" onClick={() => downloadBlob("hk-life-money.csv", transactionsToCsv(txs), "text/csv")}>
+        <button type="button" className="tr-press h-11 w-full rounded-xl bg-elevated text-sm" onClick={() => downloadBlob("hk-life-money.csv", transactionsToCsv(txs), "text/csv")}>
           {t.backup.exportCsv}
         </button>
         <input value={password} onChange={(e) => setPass(e.target.value)} type="password" autoComplete="off" className="h-11 w-full rounded-lg bg-elevated px-3" placeholder={t.backup.password} />
         <button
           type="button"
-          className="h-11 w-full rounded-xl bg-elevated text-sm"
+          className="tr-press h-11 w-full rounded-xl bg-elevated text-sm"
           onClick={async () => {
             if (!password) {
               toast(t.backup.needPassword);
@@ -654,7 +657,7 @@ export function BackupPage() {
         >
           {locale === "zh-HK" ? "加密匯出" : "Encrypted export"}
         </button>
-        <button type="button" className="h-11 w-full rounded-xl bg-elevated text-sm" onClick={() => fileRef.current?.click()}>
+        <button type="button" className="tr-press h-11 w-full rounded-xl bg-elevated text-sm" onClick={() => fileRef.current?.click()}>
           {t.backup.restore}
         </button>
         <input
@@ -676,9 +679,11 @@ export function BackupPage() {
           }}
         />
       </div>
+      </div>
+      <div className="rt-enter-delay">
       <h2 className="px-5 pb-2 pt-6 text-sm font-medium text-muted">{t.import.title}</h2>
       <div className="px-5">
-        <button type="button" className="h-11 w-full rounded-xl bg-elevated text-sm" onClick={() => importRef.current?.click()}>
+        <button type="button" className="tr-press h-11 w-full rounded-xl bg-elevated text-sm" onClick={() => importRef.current?.click()}>
           {t.import.btp}
         </button>
         <input
@@ -706,6 +711,7 @@ export function BackupPage() {
         />
       </div>
       <Disclaimer>{t.backup.aes}</Disclaimer>
+      </div>
     </div>
   );
 }

@@ -60,18 +60,18 @@ function AddTypePicker({ onPick, onWallet, onClose }: { onPick: (t: TxType) => v
     <Overlay open onClose={onClose} variant="page">
       <div className="px-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <div className="flex items-center justify-between">
-          <button type="button" className="h-11 px-2 text-sm text-accent" onClick={onClose}>
+          <button type="button" className="tr-press h-11 px-2 text-sm text-accent" onClick={onClose}>
             {t.add.cancel}
           </button>
           <h1 className="text-base font-semibold">{t.add.chooseType}</h1>
           <span className="inline-block min-w-11" />
         </div>
-        <div className="mt-6 grid grid-cols-2 gap-3">
+        <div className="rt-enter mt-6 grid grid-cols-2 gap-3">
           {opts.map((k) => (
             <button
               key={k.id}
               type="button"
-              className={`flex min-h-28 flex-col items-center justify-center rounded-2xl text-base font-semibold ${k.tone}`}
+              className={`tr-press flex min-h-28 flex-col items-center justify-center rounded-2xl text-base font-semibold ${k.tone}`}
               onClick={() => onPick(k.id)}
             >
               {t.add[k.id]}
@@ -80,7 +80,7 @@ function AddTypePicker({ onPick, onWallet, onClose }: { onPick: (t: TxType) => v
           {kid ? null : (
           <button
             type="button"
-            className="flex min-h-28 flex-col items-center justify-center rounded-2xl bg-watch-soft text-base font-semibold text-watch"
+            className="tr-press flex min-h-28 flex-col items-center justify-center rounded-2xl bg-watch-soft text-base font-semibold text-watch"
             onClick={onWallet}
           >
             {t.add.applePay}

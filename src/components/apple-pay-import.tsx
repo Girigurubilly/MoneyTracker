@@ -172,17 +172,17 @@ export function ApplePayImport({ onClose }: { onClose: () => void }) {
   return (
     <Overlay open onClose={onClose} variant="page">
       <header className="flex items-center justify-between px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <button type="button" className="h-11 px-2 text-sm text-accent" onClick={onClose}>
+        <button type="button" className="tr-press h-11 px-2 text-sm text-accent" onClick={onClose}>
           {t.add.cancel}
         </button>
         <h1 className="text-base font-semibold">{t.add.applePay}</h1>
-        <button type="button" className="h-11 px-2 text-sm font-medium text-accent" disabled={busy || !rows.length} onClick={() => void save()}>
+        <button type="button" className="tr-press h-11 px-2 text-sm font-medium text-accent" disabled={busy || !rows.length} onClick={() => void save()}>
           {t.add.save}
         </button>
       </header>
-      <p className="px-5 pb-3 pt-2 text-xs leading-5 text-muted">{t.add.appleHint}</p>
+      <p className="rt-enter px-5 pb-3 pt-2 text-xs leading-5 text-muted">{t.add.appleHint}</p>
       <div className="px-4 pb-3">
-        <label className="inline-flex h-11 items-center rounded-xl bg-accent px-4 text-sm font-medium text-on-accent">
+        <label className="tr-press inline-flex h-11 items-center rounded-xl bg-accent px-4 text-sm font-medium text-on-accent">
           {busy ? t.add.appleReading : t.add.applePick}
           <input
             type="file"
@@ -199,11 +199,11 @@ export function ApplePayImport({ onClose }: { onClose: () => void }) {
         </label>
         {note ? <p className="mt-2 text-xs text-muted">{note}</p> : null}
       </div>
-      <div className="px-4 pb-10">
+      <div className="rt-enter px-4 pb-10">
         {rows.map((r) => {
           const cat = categories.find((c) => c.id === r.categoryId);
           return (
-            <div key={r.id} className={`mb-3 rounded-2xl bg-elevated px-3 py-3 ${r.skip ? "opacity-50" : ""}`}>
+            <div key={r.id} className={`tr-press mb-3 rounded-2xl bg-elevated px-3 py-3 ${r.skip ? "opacity-50" : ""}`}>
               <div className="mb-2 flex items-center gap-2">
                 <input type="checkbox" checked={!r.skip} onChange={() => patch(r.id, { skip: !r.skip })} />
                 <input
@@ -227,7 +227,7 @@ export function ApplePayImport({ onClose }: { onClose: () => void }) {
                 <span className="text-xs text-muted">{t.add.account}</span>
                 <AccountSelect accounts={picker} value={r.accountId ?? ""} onChange={(id) => patch(r.id, { accountId: id })} className="max-w-[12rem] text-right text-sm" />
               </div>
-              <button type="button" className="mt-1 flex w-full items-center gap-2 py-2 text-left" onClick={() => setPickCatId(r.id)}>
+              <button type="button" className="tr-press mt-1 flex w-full items-center gap-2 py-2 text-left" onClick={() => setPickCatId(r.id)}>
                 {cat ? (
                   <span className="grid size-8 place-items-center rounded-full bg-background">
                     <CategoryIcon name={cat.icon} />
