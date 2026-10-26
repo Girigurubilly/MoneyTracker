@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Overlay } from "@/components/shared";
+import { AmountWithHkd } from "@/components/currency-field";
 import { CategoryIcon } from "@/components/category-icon";
 import { CategoryPicker } from "@/components/category-picker";
 import { AccountPicker } from "@/components/account-select";
-import { clockNow } from "@/lib/format";
+import { clockNow, dateRangeLabel, todayISO } from "@/lib/format";
 import { WhenField } from "@/components/when-picker";
 import { categoryPath, resolvedDefaultAccountId } from "@/lib/categories";
 import { pickName } from "@/lib/i18n";
@@ -49,6 +50,7 @@ export function TripProposal() {
   const accounts = useApp((s) => s.accounts);
   const categories = useApp((s) => s.categories);
   const trips = useApp((s) => s.trips);
+  const rates = useApp((s) => s.fxRates);
   const locale = useUi((s) => s.locale);
   const [open, setOpen] = useState(false);
   const [pickCat, setPickCat] = useState("");
@@ -245,11 +247,20 @@ export function TripProposal() {
               <option value="">{t.reports.noneTrip}</option>
               {trips
                 .filter((trip) => trip.status !== "cancelled")
-                .map((trip) => (
-                  <option key={trip.id} value={trip.id}>
-                    {pickName(locale, trip.name, trip.nameZh)}
-                  </option>
-                ))}
+                .map((trip) => {
+                  const today = todayISO();
+                  const status =
+                    trip.start <= today && today <= trip.end
+                      ? t.reports.onTrip
+                      : trip.end < today
+                        ? t.reports.tripEnded
+                        : t.reports.tripUpcoming;
+                  return (
+                    <option key={trip.id} value={trip.id}>
+                      {pickName(locale, trip.name, trip.nameZh)} · {dateRangeLabel(trip.start, trip.end, locale)} · {status}
+                    </option>
+                  );
+                })}
             </select>
           </label>
         ) : null}
@@ -279,6 +290,11 @@ export function TripProposal() {
                   onChange={(e) => patch(row.id, { amount: Number(e.target.value) || 0 })}
                   className="h-10 w-full rounded-lg bg-background px-2 text-sm tabular-nums"
                 />
+                {row.amount > 0 && row.currency !== "HKD" ? (
+                  <div className="mt-1 text-xs text-muted">
+                    <AmountWithHkd amount={row.amount} currency={row.currency} rates={rates} className="text-xs text-muted" />
+                  </div>
+                ) : null}
               </div>
               <div className="flex gap-2 overflow-x-auto px-4 py-2">
                 {CURRENCIES.map((code) => (

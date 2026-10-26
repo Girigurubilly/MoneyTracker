@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight, ChevronDown, MapPinned, Plus, Search, Wallet } from "lucide-react";
 import { Hairline, InfoButton, ProgressRing, SectionLabel, TransactionRow } from "@/components/shared";
 import { AmountWithHkd } from "@/components/currency-field";
-import { longDate, money, monthGrid, monthTitle, shiftMonth, todayISO, weekdayLabels } from "@/lib/format";
+import { dateRangeLabel, longDate, money, monthGrid, monthTitle, shiftMonth, todayISO, weekdayLabels } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { Link } from "@tanstack/react-router";
 import { activityDates, plannedIso, monthStats } from "@/lib/derived";
@@ -51,17 +51,6 @@ export function TodayScreen() {
             <button type="button" aria-label={t.today.search} onClick={() => setSearch(true)} className="grid size-11 place-items-center">
               <Search className="size-6" strokeWidth={1.7} />
             </button>
-            {covering ? (
-              <a
-                href={plannerTripUrl(covering, { day: selected })}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={t.today.openPlan}
-                className="grid size-11 place-items-center text-accent"
-              >
-                <MapPinned className="size-6" strokeWidth={1.7} />
-              </a>
-            ) : null}
             <button type="button" aria-label={t.add.title} onClick={() => openAdd("expense")} className="grid size-11 place-items-center">
               <Plus className="size-7" strokeWidth={1.7} />
             </button>
@@ -84,6 +73,34 @@ export function TodayScreen() {
           </button>
         </div>
       </header>
+      {covering ? (
+        <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
+          <Link
+            to="/reports/travel/$id"
+            params={{ id: covering.id }}
+            className="flex min-h-11 items-center justify-between gap-3 px-4 py-3"
+          >
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold">
+                {t.today.onTripToday.replace("{name}", pickName(locale, covering.name, covering.nameZh))}
+              </div>
+              <div className="text-xs text-muted">{dateRangeLabel(covering.start, covering.end, locale)}</div>
+            </div>
+            <span className="shrink-0 text-xs font-medium text-accent">{t.reports.openTripDetail}</span>
+          </Link>
+          <div className="border-t border-line px-4 py-2">
+            <a
+              href={plannerTripUrl(covering, { day: selected })}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-11 items-center gap-2 text-sm text-muted"
+            >
+              <MapPinned className="size-4 text-accent" strokeWidth={1.7} />
+              {t.today.openPlan}
+            </a>
+          </div>
+        </div>
+      ) : null}
       <TodayBody />
     </div>
   );
@@ -162,7 +179,7 @@ function TodayBody() {
                   type="button"
                   onClick={() => setSelected(c.iso)}
                   className={cn(
-                    "relative mx-auto flex size-11 flex-col items-center justify-center rounded-full text-sm",
+                    "relative mx-auto flex size-12 flex-col items-center justify-center rounded-full text-sm",
                     c.iso === selected && "bg-accent font-semibold text-on-accent",
                     c.iso === today && c.iso !== selected && "font-semibold text-accent",
                   )}

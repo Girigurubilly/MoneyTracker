@@ -14,12 +14,12 @@ import {
   type ExtraPanel,
 } from "@/components/txn-composer";
 import { asFiat, autoDestAmount } from "@/components/currency-field";
-import { todayISO, clockNow } from "@/lib/format";
+import { todayISO, clockNow, dateRangeLabel } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { defaultMortgageAccountId, moneyAccountsForPicker } from "@/lib/accounts";
 import { canSplitMortgage, categoryPath, mortgageEntryKind, resolvedDefaultAccountId } from "@/lib/categories";
 import { captureFxToHkd } from "@/lib/calc/fx";
-import { isTripActive, tripForDate } from "@/lib/calc/trips";
+import { isTripActive, tripCoversDate, tripForDate } from "@/lib/calc/trips";
 import { applyTxRules, infersAdhoc, infersHousing, splitMortgageAmounts } from "@/lib/tx-rules";
 import { recentNoteLabels } from "@/lib/recent-notes";
 import { resolveAmountInput } from "@/lib/money-expr";
@@ -498,7 +498,20 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
         onNoteChange={setPayee}
         noteSuggestions={type === "expense" ? noteSuggestions : []}
         tripValue={tripId}
-        tripOptions={trips.filter((tr) => isTripActive(tr, todayISO())).map((tr) => ({ id: tr.id, label: pickName(locale, tr.name, tr.nameZh) }))}
+        tripOptions={trips
+          .filter((tr) => tr.status !== "cancelled" && (isTripActive(tr, todayISO()) || tripCoversDate(tr, selectedDate || todayISO())))
+          .map((tr) => {
+          const today = todayISO();
+          const name = pickName(locale, tr.name, tr.nameZh);
+          const range = dateRangeLabel(tr.start, tr.end, locale);
+          const status =
+            tr.start <= today && today <= tr.end
+              ? t.reports.onTrip
+              : tr.end < today
+                ? t.reports.tripEnded
+                : t.reports.tripUpcoming;
+          return { id: tr.id, label: `${name} · ${range} · ${status}` };
+        })}
         onTripChange={(id) => {
           tripTouched.current = true;
           setTripId(id);
