@@ -8,6 +8,8 @@ import { LifePlanSetup } from "@/components/life-plan-setup";
 import { ReportAiSheet } from "@/components/report-ai-sheet";
 import {
   ChartScrubLabel,
+  ConfigFold,
+  ConfigNumRow,
   Enter,
   formatAxisWan,
   RetireAgeSlider,
@@ -588,12 +590,12 @@ export function RetirementPage() {
               <span className="text-sm tabular-nums text-muted">{base.currentAge}</span>
             </div>
           ) : (
-            <NumRow label={t.reports.currentAge} value={base.currentAge} onCommit={(n) => persist({ currentAge: n })} />
+            <ConfigNumRow label={t.reports.currentAge} value={base.currentAge} onCommit={(n) => persist({ currentAge: n })} />
           )}
           <Hairline />
-          <NumRow label={t.reports.deathAge} value={base.deathAge} onCommit={(n) => persist({ deathAge: n })} />
+          <ConfigNumRow label={t.reports.deathAge} value={base.deathAge} onCommit={(n) => persist({ deathAge: n })} />
           <Hairline />
-          <NumRow label={t.reports.spendRetired} value={base.targetMonthly} money blankZero onCommit={(n) => persist({ targetMonthly: n })} />
+          <ConfigNumRow label={t.reports.spendRetired} value={base.targetMonthly} money blankZero onCommit={(n) => persist({ targetMonthly: n })} />
           <p className="px-4 pb-1 text-[11px] leading-4 text-muted">{t.reports.goalsSpendHint}</p>
           {story.kind !== "setup" && base.targetMonthly > 0 ? (
             <p className="px-4 pb-3 text-[11px] leading-4 text-muted">
@@ -759,26 +761,26 @@ export function RetirementPage() {
       </Enter>
       <SectionLabel>{t.reports.scenarios}</SectionLabel>
       <div className="mx-4 mb-3 grid grid-cols-1 gap-2">
-        <Link to="/reports/retirement/plan" className="rounded-2xl bg-elevated px-4 py-3 text-sm">
+        <Link to="/reports/retirement/plan" className="tr-press rounded-2xl bg-elevated px-4 py-3 text-sm">
           <div className="font-medium">{t.reports.scenarioFire}</div>
           <div className="mt-0.5 text-[11px] text-muted">{t.reports.firePlan}</div>
         </Link>
-        <Link to="/reports/retirement/early-retirement" className="rounded-2xl bg-elevated px-4 py-3 text-sm">
+        <Link to="/reports/retirement/early-retirement" className="tr-press rounded-2xl bg-elevated px-4 py-3 text-sm">
           <div className="font-medium">{t.reports.scenarioEarly}</div>
           <div className="mt-0.5 text-[11px] text-muted">{t.reports.lpTitle}</div>
         </Link>
         <div className="grid grid-cols-2 gap-2">
-          <Link to="/reports/retirement/projection" className="flex min-h-11 items-center justify-center rounded-2xl bg-elevated px-2 text-center text-sm font-medium">
+          <Link to="/reports/retirement/projection" className="tr-press flex min-h-11 items-center justify-center rounded-2xl bg-elevated px-2 text-center text-sm font-medium">
             {t.reports.scenarioYears}
           </Link>
-          <Link to="/more/retirement-accounts" className="flex min-h-11 items-center justify-center rounded-2xl bg-elevated px-2 text-center text-sm font-medium">
+          <Link to="/more/retirement-accounts" className="tr-press flex min-h-11 items-center justify-center rounded-2xl bg-elevated px-2 text-center text-sm font-medium">
             {t.reports.manageRa}
           </Link>
         </div>
       </div>
       <button
         type="button"
-        className="mx-4 mb-3 flex h-11 items-center justify-center gap-1 rounded-xl bg-elevated text-sm font-medium"
+        className="tr-press mx-4 mb-3 flex h-11 items-center justify-center gap-1 rounded-xl bg-elevated text-sm font-medium"
         onClick={() => setDetailsOpen((v) => !v)}
       >
         {detailsOpen ? t.reports.detailsHide : t.reports.detailsOpen}
@@ -818,7 +820,7 @@ export function RetirementPage() {
       ) : null}
       <button
         type="button"
-        className="mx-4 mb-3 flex h-11 items-center justify-center gap-1 rounded-xl bg-elevated text-sm font-medium"
+        className="tr-press mx-4 mb-3 flex h-11 items-center justify-center gap-1 rounded-xl bg-elevated text-sm font-medium"
         onClick={() => setShowSetup((v) => !v)}
       >
         {showSetup ? t.reports.hideAssumptions : t.reports.assumptionsOneLine}
@@ -827,7 +829,7 @@ export function RetirementPage() {
       {showSetup ? (
         <>
           <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
-            <NumRow label={t.reports.salaryNow} value={base.monthlyIncomeNow} money onCommit={(n) => persist({ monthlyIncomeNow: n })} />
+            <ConfigNumRow label={t.reports.salaryNow} value={base.monthlyIncomeNow} money onCommit={(n) => persist({ monthlyIncomeNow: n })} />
             <Hairline />
             <SpendSlider
               label={t.reports.spendNow}
@@ -842,30 +844,30 @@ export function RetirementPage() {
           </div>
           <p className="px-5 pb-2 text-[11px] leading-4 text-muted">{t.reports.setupEnough}</p>
 
-          <FoldBlock title={t.reports.assumptions}>
+          <ConfigFold title={t.reports.assumptions}>
             <StepPct label={t.reports.inflation} value={base.inflation} onCommit={(n) => persist({ inflation: n })} />
             <Hairline />
             <StepPct label={t.reports.preReturn} value={base.preReturn} onCommit={(n) => persist({ preReturn: n })} />
             <Hairline />
             <StepPct label={t.reports.postReturn} value={base.postReturn} onCommit={(n) => persist({ postReturn: n })} />
             <p className="px-4 pb-3 text-[11px] leading-4 text-muted">{t.reports.leaveDefaultsHint}</p>
-          </FoldBlock>
+          </ConfigFold>
 
-          <FoldBlock title={t.reports.retireAdvanced}>
-            <NumRow label={t.reports.travelRetired} value={base.travelInRetirement} money onCommit={(n) => persist({ travelInRetirement: n })} />
+          <ConfigFold title={t.reports.retireAdvanced}>
+            <ConfigNumRow label={t.reports.travelRetired} value={base.travelInRetirement} money onCommit={(n) => persist({ travelInRetirement: n })} />
             <Hairline />
-            <NumRow label={`${t.reports.fireSwr} (%)`} value={+((base.fireSwr ?? 0.04) * 100).toFixed(2)} onCommit={(n) => persist({ fireSwr: n / 100 })} />
+            <ConfigNumRow label={`${t.reports.fireSwr} (%)`} value={+((base.fireSwr ?? 0.04) * 100).toFixed(2)} onCommit={(n) => persist({ fireSwr: n / 100 })} />
             <Hairline />
-            <NumRow label={`${t.reports.reverseLtv} (%)`} value={+((base.reverseMortgageLtv ?? 0) * 100).toFixed(2)} onCommit={(n) => persist({ reverseMortgageLtv: n / 100 })} />
+            <ConfigNumRow label={`${t.reports.reverseLtv} (%)`} value={+((base.reverseMortgageLtv ?? 0) * 100).toFixed(2)} onCommit={(n) => persist({ reverseMortgageLtv: n / 100 })} />
             <Hairline />
-            <NumRow label={t.reports.emergencyReserve} value={base.emergencyReserve ?? 0} money onCommit={(n) => persist({ emergencyReserve: n })} />
+            <ConfigNumRow label={t.reports.emergencyReserve} value={base.emergencyReserve ?? 0} money onCommit={(n) => persist({ emergencyReserve: n })} />
             <Hairline />
-            <NumRow label={t.reports.liquidityFloor} value={base.liquidityFloor ?? 0} money onCommit={(n) => persist({ liquidityFloor: n })} />
+            <ConfigNumRow label={t.reports.liquidityFloor} value={base.liquidityFloor ?? 0} money onCommit={(n) => persist({ liquidityFloor: n })} />
             <Hairline />
-            <NumRow label={t.reports.desiredBuffer} value={base.desiredEndBuffer ?? 0} money onCommit={(n) => persist({ desiredEndBuffer: n })} />
+            <ConfigNumRow label={t.reports.desiredBuffer} value={base.desiredEndBuffer ?? 0} money onCommit={(n) => persist({ desiredEndBuffer: n })} />
             <Hairline />
-            <NumRow label={t.reports.laterLifeAge} value={base.laterLifeAge ?? 75} onCommit={(n) => persist({ laterLifeAge: n })} />
-          </FoldBlock>
+            <ConfigNumRow label={t.reports.laterLifeAge} value={base.laterLifeAge ?? 75} onCommit={(n) => persist({ laterLifeAge: n })} />
+          </ConfigFold>
 
           <LifePlanSetup />
 
@@ -943,6 +945,7 @@ export function RetirementProjectionPage() {
       <ScreenHeader title={t.reports.annualProjection} backTo="/reports/retirement" />
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.lpProjectionHint}</p>
       {sale ? (
+        <Enter>
         <div className="mx-4 mb-3 rounded-2xl bg-elevated p-4 text-sm">
           <div className="font-medium">
             {sale.calendarYear} · {t.reports.atAge} {sale.age}
@@ -958,9 +961,12 @@ export function RetirementProjectionPage() {
             {t.reports.lpWithoutInherit} {money(sale.closingFinancial - sale.inheritKept, "HKD")}
           </p>
         </div>
+        </Enter>
       ) : null}
       {result.ready && years.length ? (
+        <Enter delay>
         <LifeYearList years={years} focusAge={base.retireAge} />
+        </Enter>
       ) : (
         <p className="mx-4 rounded-2xl bg-elevated px-4 py-3 text-sm text-muted">{t.reports.lpNeedData}</p>
       )}
@@ -1065,11 +1071,11 @@ function StepPct({ label, value, onCommit }: { label: string; value: number; onC
     <div className="flex min-h-11 items-center justify-between gap-2 px-3 py-2.5">
       <span className="text-sm">{label} (%)</span>
       <div className="flex items-center gap-1">
-        <button type="button" className="grid size-9 place-items-center rounded-lg bg-background text-sm font-medium" onClick={() => onCommit(Math.max(0, +(value - 0.005).toFixed(4)))}>
+        <button type="button" className="tr-press grid size-9 place-items-center rounded-lg bg-background text-sm font-medium" onClick={() => onCommit(Math.max(0, +(value - 0.005).toFixed(4)))}>
           −
         </button>
         <span className="min-w-[3.5rem] text-center text-sm tabular-nums">{pct}</span>
-        <button type="button" className="grid size-9 place-items-center rounded-lg bg-background text-sm font-medium" onClick={() => onCommit(+(value + 0.005).toFixed(4))}>
+        <button type="button" className="tr-press grid size-9 place-items-center rounded-lg bg-background text-sm font-medium" onClick={() => onCommit(+(value + 0.005).toFixed(4))}>
           +
         </button>
       </div>
@@ -1077,66 +1083,6 @@ function StepPct({ label, value, onCommit }: { label: string; value: number; onC
   );
 }
 
-function NumRow({
-  label,
-  value,
-  onCommit,
-  money: asMoney,
-  blankZero,
-}: {
-  label: string;
-  value: number;
-  onCommit: (n: number) => void;
-  money?: boolean;
-  blankZero?: boolean;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [raw, setRaw] = useState(String(value));
-  return (
-    <button
-      type="button"
-      className="flex min-h-11 w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
-      onClick={() => {
-        setRaw(String(value));
-        setEditing(true);
-      }}
-    >
-      <span className="text-sm">{label}</span>
-      {editing ? (
-        <input
-          autoFocus
-          inputMode="decimal"
-          value={raw}
-          className="h-8 w-32 rounded-md bg-background px-2 text-right text-sm tabular-nums outline-none"
-          onChange={(e) => setRaw(e.target.value)}
-          onBlur={() => {
-            setEditing(false);
-            const n = Number(raw);
-            if (Number.isFinite(n)) onCommit(n);
-          }}
-          onClick={(e) => e.stopPropagation()}
-        />
-      ) : (
-        <span className="text-sm tabular-nums text-muted">
-          {blankZero && !value ? "—" : asMoney ? money(value, "HKD") : value}
-        </span>
-      )}
-    </button>
-  );
-}
-
-function FoldBlock({ title, children }: { title: string; children: ReactNode }) {
-  const [on, setOn] = useState(false);
-  return (
-    <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
-      <button type="button" className="flex min-h-11 w-full items-center justify-between px-4 text-left" onClick={() => setOn(!on)}>
-        <span className="text-sm font-medium">{title}</span>
-        <ChevronDown className={cn("size-4 text-muted transition", on && "rotate-180")} />
-      </button>
-      {on ? <div className="border-t border-line">{children}</div> : null}
-    </div>
-  );
-}
 
 function SleeveReturns({
   title,
@@ -1153,15 +1099,15 @@ function SleeveReturns({
   const [on, setOn] = useState(false);
   return (
     <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
-      <button type="button" className="flex min-h-11 w-full items-center justify-between px-4 text-left" onClick={() => setOn(!on)}>
+      <button type="button" className="tr-press flex min-h-11 w-full items-center justify-between px-4 text-left" onClick={() => setOn(!on)}>
         <span className="text-sm font-medium">{title}</span>
         <ChevronDown className={cn("size-4 text-muted transition", on && "rotate-180")} />
       </button>
       {on ? (
         rows.length === 0 ? (
-          <p className="border-t border-line px-4 py-3 text-xs text-muted">{t.common.none}</p>
+          <div className="rt-fold border-t border-line"><p className="rt-fold-inner px-4 py-3 text-xs text-muted">{t.common.none}</p></div>
         ) : (
-          <div className="border-t border-line">
+          <div className="rt-fold border-t border-line"><div className="rt-fold-inner">
             {rows.map((s, i) => (
               <div key={s.id} className={s.included ? "" : "opacity-50"}>
                 {i > 0 ? <Hairline /> : null}
@@ -1176,7 +1122,7 @@ function SleeveReturns({
                       {t.reports.includeInPlan}
                     </label>
                   </div>
-                  <NumRow
+                  <ConfigNumRow
                     label={`${t.reports.expectedReturn} (%)`}
                     value={+(s.annualReturn * 100).toFixed(2)}
                     onCommit={(n) => onSave(s.id, n / 100)}
@@ -1184,7 +1130,7 @@ function SleeveReturns({
                 </div>
               </div>
             ))}
-          </div>
+          </div></div>
         )
       ) : null}
     </div>

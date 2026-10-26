@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { ChevronDown, Plus, Trash2 } from "lucide-react";
-import { money } from "@/lib/format";
+import { ConfigNullNum } from "@/components/retire-ux";
 import { emptyLifePlan, mergeLifePlan } from "@/lib/calc/life-plan";
 import type { LifePlanSpendingStage, RetirementLifePlan } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -52,7 +52,7 @@ function Setup({
   return (
     <div className="mt-3 space-y-2">
       <Fold title={t.reports.lpPersonal} hint={t.reports.lpHintPersonal}>
-        <NullNum label={t.reports.lpDwz} value={plan.personal.targetTerminalFinancialAssets} money onCommit={(n) => patch({ personal: { ...plan.personal, targetTerminalFinancialAssets: n } })} />
+        <ConfigNullNum label={t.reports.lpDwz} value={plan.personal.targetTerminalFinancialAssets} money onCommit={(n) => patch({ personal: { ...plan.personal, targetTerminalFinancialAssets: n } })} />
       </Fold>
       <Fold title={t.reports.lpStages}>
         <p className="px-4 pb-2 text-[11px] leading-4 text-muted">{t.reports.lpStageHint}</p>
@@ -60,19 +60,19 @@ function Setup({
           <div key={s.id} className="border-t border-line">
             <div className="flex min-h-11 items-center justify-between px-4">
               <span className="text-xs text-muted">{i + 1}</span>
-              <button type="button" className="grid size-11 place-items-center text-muted" onClick={() => persist({ ...plan, spendingStages: plan.spendingStages.filter((x) => x.id !== s.id) })}>
+              <button type="button" className="tr-press grid size-11 place-items-center text-muted" onClick={() => persist({ ...plan, spendingStages: plan.spendingStages.filter((x) => x.id !== s.id) })}>
                 <Trash2 className="size-4" />
               </button>
             </div>
             <TextRow label={t.reports.lpStageLabel} value={s.label} onChange={(label) => persist({ ...plan, spendingStages: plan.spendingStages.map((x) => (x.id === s.id ? { ...x, label } : x)) })} />
-            <NullNum label={t.reports.lpStageStart} value={s.startAge} onCommit={(n) => persist({ ...plan, spendingStages: plan.spendingStages.map((x) => (x.id === s.id ? { ...x, startAge: n } : x)) })} />
-            <NullNum label={t.reports.lpStageEnd} value={s.endAge} onCommit={(n) => persist({ ...plan, spendingStages: plan.spendingStages.map((x) => (x.id === s.id ? { ...x, endAge: n } : x)) })} />
-            <NullNum label={t.reports.lpStageCost} value={s.monthlyLivingCostInTodayMoney} money onCommit={(n) => persist({ ...plan, spendingStages: plan.spendingStages.map((x) => (x.id === s.id ? { ...x, monthlyLivingCostInTodayMoney: n } : x)) })} />
+            <ConfigNullNum label={t.reports.lpStageStart} value={s.startAge} onCommit={(n) => persist({ ...plan, spendingStages: plan.spendingStages.map((x) => (x.id === s.id ? { ...x, startAge: n } : x)) })} />
+            <ConfigNullNum label={t.reports.lpStageEnd} value={s.endAge} onCommit={(n) => persist({ ...plan, spendingStages: plan.spendingStages.map((x) => (x.id === s.id ? { ...x, endAge: n } : x)) })} />
+            <ConfigNullNum label={t.reports.lpStageCost} value={s.monthlyLivingCostInTodayMoney} money onCommit={(n) => persist({ ...plan, spendingStages: plan.spendingStages.map((x) => (x.id === s.id ? { ...x, monthlyLivingCostInTodayMoney: n } : x)) })} />
           </div>
         ))}
         <button
           type="button"
-          className="m-4 flex h-11 w-[calc(100%-2rem)] items-center justify-center gap-1 rounded-xl bg-background text-sm font-medium"
+          className="tr-press m-4 flex h-11 w-[calc(100%-2rem)] items-center justify-center gap-1 rounded-xl bg-background text-sm font-medium"
           onClick={() => persist({ ...plan, spendingStages: [...plan.spendingStages.filter((s) => !isPlaceholderStage(s)), blankStage()] })}
         >
           <Plus className="size-4" />
@@ -85,7 +85,7 @@ function Setup({
       </Fold>
       <Fold title={t.reports.lpInherit} hint={t.reports.lpHintInherit}>
         <Toggle label={t.reports.lpEnabled} on={plan.inheritedProperty.enabled} onChange={(on) => patch({ inheritedProperty: { ...plan.inheritedProperty, enabled: on } })} />
-        <NullNum label={t.reports.lpInheritValue} value={plan.inheritedProperty.expectedValue} money onCommit={(n) => patch({ inheritedProperty: { ...plan.inheritedProperty, expectedValue: n } })} />
+        <ConfigNullNum label={t.reports.lpInheritValue} value={plan.inheritedProperty.expectedValue} money onCommit={(n) => patch({ inheritedProperty: { ...plan.inheritedProperty, expectedValue: n } })} />
         <DateRow label={t.reports.lpInheritDate} value={plan.inheritedProperty.expectedDate} onChange={(v) => patch({ inheritedProperty: { ...plan.inheritedProperty, expectedDate: v } })} />
         <Toggle label={t.reports.lpSell} on={plan.inheritedProperty.sell} onChange={(on) => patch({ inheritedProperty: { ...plan.inheritedProperty, sell: on } })} />
         <DateRow label={t.reports.lpSellDate} value={plan.inheritedProperty.sellDate} onChange={(v) => patch({ inheritedProperty: { ...plan.inheritedProperty, sellDate: v } })} />
@@ -119,15 +119,15 @@ function Setup({
       </Fold>
       <Fold title={t.reports.lpAnnuity} hint={t.reports.lpHintAnnuity}>
         <Toggle label={t.reports.lpEnabled} on={plan.publicAnnuity.enabled} onChange={(on) => patch({ publicAnnuity: { ...plan.publicAnnuity, enabled: on } })} />
-        <NullNum label={t.reports.lpAnnuityAmt} value={plan.publicAnnuity.purchaseAmount} money onCommit={(n) => patch({ publicAnnuity: { ...plan.publicAnnuity, purchaseAmount: n } })} />
+        <ConfigNullNum label={t.reports.lpAnnuityAmt} value={plan.publicAnnuity.purchaseAmount} money onCommit={(n) => patch({ publicAnnuity: { ...plan.publicAnnuity, purchaseAmount: n } })} />
         <Toggle label={t.reports.lpAnnuityFromSale} on={plan.publicAnnuity.useInheritedSaleProceeds} onChange={(on) => patch({ publicAnnuity: { ...plan.publicAnnuity, useInheritedSaleProceeds: on } })} />
-        <NullNum label={t.reports.lpAnnuityPay} value={plan.publicAnnuity.monthlyPayout} money onCommit={(n) => patch({ publicAnnuity: { ...plan.publicAnnuity, monthlyPayout: n } })} />
-        <NullNum label={t.reports.lpAnnuityStart} value={plan.publicAnnuity.payoutStartAge} onCommit={(n) => patch({ publicAnnuity: { ...plan.publicAnnuity, payoutStartAge: n } })} />
+        <ConfigNullNum label={t.reports.lpAnnuityPay} value={plan.publicAnnuity.monthlyPayout} money onCommit={(n) => patch({ publicAnnuity: { ...plan.publicAnnuity, monthlyPayout: n } })} />
+        <ConfigNullNum label={t.reports.lpAnnuityStart} value={plan.publicAnnuity.payoutStartAge} onCommit={(n) => patch({ publicAnnuity: { ...plan.publicAnnuity, payoutStartAge: n } })} />
       </Fold>
       <Fold title={t.reports.lpReverse} hint={t.reports.lpHintReverse}>
         <Toggle label={t.reports.lpEnabled} on={plan.reverseMortgage.enabled} onChange={(on) => patch({ reverseMortgage: { ...plan.reverseMortgage, enabled: on } })} />
-        <NullNum label={t.reports.lpReverseAge} value={plan.reverseMortgage.startAge} onCommit={(n) => patch({ reverseMortgage: { ...plan.reverseMortgage, startAge: n } })} />
-        <NullNum label={t.reports.lpReversePay} value={plan.reverseMortgage.monthlyPayout} money onCommit={(n) => patch({ reverseMortgage: { ...plan.reverseMortgage, monthlyPayout: n } })} />
+        <ConfigNullNum label={t.reports.lpReverseAge} value={plan.reverseMortgage.startAge} onCommit={(n) => patch({ reverseMortgage: { ...plan.reverseMortgage, startAge: n } })} />
+        <ConfigNullNum label={t.reports.lpReversePay} value={plan.reverseMortgage.monthlyPayout} money onCommit={(n) => patch({ reverseMortgage: { ...plan.reverseMortgage, monthlyPayout: n } })} />
       </Fold>
     </div>
   );
@@ -153,9 +153,9 @@ function JobFolds({
         <Toggle label={t.reports.lpEnabled} on={plan.lowerStressJob.enabled} onChange={(on) => patch({ lowerStressJob: { ...plan.lowerStressJob, enabled: on } })} />
         <DateRow label={t.reports.lpLowerStart} value={plan.lowerStressJob.startDate} onChange={(v) => patch({ lowerStressJob: { ...plan.lowerStressJob, startDate: v } })} />
         <DateRow label={t.reports.lpLowerEnd} value={plan.lowerStressJob.endDate} onChange={(v) => patch({ lowerStressJob: { ...plan.lowerStressJob, endDate: v } })} />
-        <NullNum label={t.reports.lpGross} value={plan.lowerStressJob.grossMonthlyIncome} money onCommit={(n) => patch({ lowerStressJob: { ...plan.lowerStressJob, grossMonthlyIncome: n } })} />
-        <NullNum label={t.reports.lpNetOverride} value={plan.lowerStressJob.estimatedNetMonthlyIncomeOverride} money onCommit={(n) => patch({ lowerStressJob: { ...plan.lowerStressJob, estimatedNetMonthlyIncomeOverride: n } })} />
-        <NullNum label={t.reports.lpLowerLive} value={plan.lowerStressJob.monthlyLivingCost} money onCommit={(n) => patch({ lowerStressJob: { ...plan.lowerStressJob, monthlyLivingCost: n } })} />
+        <ConfigNullNum label={t.reports.lpGross} value={plan.lowerStressJob.grossMonthlyIncome} money onCommit={(n) => patch({ lowerStressJob: { ...plan.lowerStressJob, grossMonthlyIncome: n } })} />
+        <ConfigNullNum label={t.reports.lpNetOverride} value={plan.lowerStressJob.estimatedNetMonthlyIncomeOverride} money onCommit={(n) => patch({ lowerStressJob: { ...plan.lowerStressJob, estimatedNetMonthlyIncomeOverride: n } })} />
+        <ConfigNullNum label={t.reports.lpLowerLive} value={plan.lowerStressJob.monthlyLivingCost} money onCommit={(n) => patch({ lowerStressJob: { ...plan.lowerStressJob, monthlyLivingCost: n } })} />
       </Fold>
     </>
   );
@@ -173,14 +173,18 @@ function Fold({ title, hint, children, open = false }: { title: string; hint?: s
   const [on, setOn] = useState(open);
   return (
     <div className="mx-4 overflow-hidden rounded-2xl bg-elevated">
-      <button type="button" className="flex min-h-11 w-full items-center justify-between gap-3 px-4 py-2 text-left" onClick={() => setOn(!on)}>
+      <button type="button" className="tr-press flex min-h-11 w-full items-center justify-between gap-3 px-4 py-2 text-left" onClick={() => setOn(!on)}>
         <span className="min-w-0">
           <span className="block text-sm font-medium">{title}</span>
           {hint ? <span className="mt-0.5 block text-[11px] font-normal leading-4 text-muted">{hint}</span> : null}
         </span>
         <ChevronDown className={cn("size-4 shrink-0 text-muted transition", on && "rotate-180")} />
       </button>
-      {on ? <div className="border-t border-line">{children}</div> : null}
+      {on ? (
+        <div className="rt-fold border-t border-line">
+          <div className="rt-fold-inner">{children}</div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -212,55 +216,3 @@ function TextRow({ label, value, onChange }: { label: string; value: string; onC
   );
 }
 
-function NullNum({
-  label,
-  value,
-  onCommit,
-  money: asMoney,
-}: {
-  label: string;
-  value: number | null;
-  onCommit: (n: number | null) => void;
-  money?: boolean;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [raw, setRaw] = useState(value == null ? "" : String(value));
-  function commit(text: string) {
-    setEditing(false);
-    const t = text.trim();
-    if (!t) onCommit(null);
-    else {
-      const n = Number(t);
-      if (Number.isFinite(n)) onCommit(n);
-    }
-  }
-  return (
-    <div className="flex min-h-11 w-full items-center justify-between gap-3 px-4">
-      <span className="text-sm">{label}</span>
-      {editing ? (
-        <input
-          autoFocus
-          inputMode="decimal"
-          value={raw}
-          className="h-8 w-32 rounded-md bg-background px-2 text-right text-sm tabular-nums outline-none"
-          onChange={(e) => setRaw(e.target.value)}
-          onBlur={() => commit(raw)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-          }}
-        />
-      ) : (
-        <button
-          type="button"
-          className="h-8 min-w-16 rounded-md px-2 text-right text-sm tabular-nums text-muted"
-          onClick={() => {
-            setRaw(value == null ? "" : String(value));
-            setEditing(true);
-          }}
-        >
-          {value == null ? "—" : asMoney ? money(value, "HKD") : value}
-        </button>
-      )}
-    </div>
-  );
-}

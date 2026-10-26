@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Check, ChevronDown, TriangleAlert, X } from "lucide-react";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { ScreenHeader, SectionLabel } from "@/components/shared";
+import { ConfigNumRow, Enter } from "@/components/retire-ux";
 import { SharedRetirementStrip, useRetirementHeadline } from "@/components/reports-retire";
 import { money, pct, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
@@ -139,6 +140,7 @@ export function FirePlanPage() {
       <ScreenHeader title={t.reports.firePlan} backTo="/reports/retirement" />
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.officialOnly}</p>
       <SharedRetirementStrip />
+      <Enter>
       <section className="mx-4 mb-3 rounded-2xl bg-elevated p-4">
         <div className="flex items-center justify-between gap-2">
           <div className="text-sm font-medium">{t.reports.resultTitle}</div>
@@ -164,6 +166,7 @@ export function FirePlanPage() {
           </div>
         )}
       </section>
+      </Enter>
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.tagsAllocate.replace("{amount}", money(base.targetMonthly, "HKD"))}</p>
 
       <SectionLabel>{t.reports.fireSpendEngine}</SectionLabel>
@@ -176,13 +179,15 @@ export function FirePlanPage() {
           <MiniStat label={t.reports.fireKindIrregular} value={levels.irregular} muted />
         </div>
         <p className="px-3 pb-2 text-[11px] leading-4 text-muted">{t.reports.fireKindIrregularHint}</p>
-        <button type="button" className="flex min-h-11 w-full items-center justify-between px-4 text-sm" onClick={() => setShowTags(!showTags)}>
+        <button type="button" className="tr-press flex min-h-11 w-full items-center justify-between px-4 text-sm" onClick={() => setShowTags(!showTags)}>
           {t.reports.fireSpendEngine}
           <ChevronDown className={cn("size-4 text-muted transition", showTags && "rotate-180")} />
         </button>
-        {showTags
-          ? rows.map((r) => (
-          <div key={r.id} className="border-t border-line px-4 py-3">
+        {showTags ? (
+          <div className="rt-fold border-t border-line">
+          <div className="rt-fold-inner">
+          {rows.map((r) => (
+          <div key={r.id} className="border-t border-line px-4 py-3 first:border-t-0">
             <div className="flex items-baseline justify-between gap-2">
               <span className="truncate text-sm">{pickName(locale, r.name, r.nameZh)}</span>
               <span className="shrink-0 text-sm font-semibold tabular-nums">{money(r.monthly, "HKD")}</span>
@@ -195,7 +200,7 @@ export function FirePlanPage() {
                   disabled={!categories.some((c) => c.id === r.id)}
                   onClick={() => setKind(r.id, k)}
                   className={cn(
-                    "h-8 rounded-full px-2.5 text-[11px] font-medium",
+                    "tr-press h-8 rounded-full px-2.5 text-[11px] font-medium",
                     r.kind === k ? "bg-accent text-on-accent" : "bg-background text-muted",
                   )}
                 >
@@ -204,8 +209,10 @@ export function FirePlanPage() {
               ))}
             </div>
           </div>
-        ))
-          : null}
+          ))}
+          </div>
+          </div>
+        ) : null}
       </div>
 
       <SectionLabel>{t.reports.fireThree}</SectionLabel>
@@ -248,8 +255,8 @@ export function FirePlanPage() {
 
       <SectionLabel>{t.reports.fireFamily}</SectionLabel>
       <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
-        <FireNum label={t.reports.fireParentMonthly} value={parentMonthly} money onCommit={(n) => persist({ parentSupportMonthly: n, parentSupportYears: parentYears ?? 0 })} />
-        <FireNum label={t.reports.fireParentYears} value={parentYears ?? 0} onCommit={(n) => persist({ parentSupportYears: n, parentSupportMonthly: parentMonthly })} />
+        <ConfigNumRow label={t.reports.fireParentMonthly} value={parentMonthly} money onCommit={(n) => persist({ parentSupportMonthly: n, parentSupportYears: parentYears ?? 0 })} />
+        <ConfigNumRow label={t.reports.fireParentYears} value={parentYears ?? 0} onCommit={(n) => persist({ parentSupportYears: n, parentSupportMonthly: parentMonthly })} />
         <div className="mt-2 flex items-center justify-between text-sm">
           <span className="text-muted">{t.reports.fireParentTotal}</span>
           <span className="font-semibold tabular-nums">{money(familyTotal, "HKD")}</span>
@@ -279,7 +286,7 @@ export function FirePlanPage() {
             <span className="min-w-0 truncate text-xs text-muted">{t.reports.fireSaveNow}</span>
             <span className="text-sm font-medium tabular-nums">{money(head.saveMonthly, "HKD")}</span>
           </div>
-          <FireNum label={t.reports.fireJobAfter} value={jobAfter} money onCommit={(n) => persist({ postRetireJobMonthly: n })} />
+          <ConfigNumRow label={t.reports.fireJobAfter} value={jobAfter} money onCommit={(n) => persist({ postRetireJobMonthly: n })} />
         </div>
         <p className="text-[11px] leading-4 text-muted">{head.saveSource === "manual" ? t.reports.basisManual : t.reports.basisLedger}</p>
         <div className="mt-3 grid grid-cols-2 gap-2">
@@ -332,7 +339,7 @@ export function FirePlanPage() {
               key={s.id}
               type="button"
               onClick={() => setStressOn(on ? null : s.id)}
-              className={cn("rounded-2xl p-3 text-left", on ? "bg-accent text-on-accent" : "bg-elevated")}
+              className={cn("tr-press rounded-2xl p-3 text-left", on ? "bg-accent text-on-accent" : "bg-elevated")}
             >
               <div className="text-xs font-medium">{label}</div>
               <div className={cn("mt-1 text-sm font-semibold", on ? "" : s.depletes ? "text-expense" : "text-income")}>
@@ -454,46 +461,3 @@ function TargetCard({
   );
 }
 
-function FireNum({
-  label,
-  value,
-  onCommit,
-  money: asMoney,
-}: {
-  label: string;
-  value: number;
-  onCommit: (n: number) => void;
-  money?: boolean;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [raw, setRaw] = useState(String(value));
-  return (
-    <button
-      type="button"
-      className="flex min-h-11 w-full items-center justify-between gap-2 py-2 text-left"
-      onClick={() => {
-        setRaw(String(value));
-        setEditing(true);
-      }}
-    >
-      <span className="min-w-0 truncate text-xs text-muted">{label}</span>
-      {editing ? (
-        <input
-          autoFocus
-          inputMode="decimal"
-          value={raw}
-          className="h-8 w-24 rounded-md bg-background px-2 text-right text-sm tabular-nums outline-none"
-          onChange={(e) => setRaw(e.target.value)}
-          onBlur={() => {
-            setEditing(false);
-            const n = Number(raw);
-            if (Number.isFinite(n)) onCommit(n);
-          }}
-          onClick={(e) => e.stopPropagation()}
-        />
-      ) : (
-        <span className="text-sm font-medium tabular-nums">{asMoney ? money(value, "HKD") : value}</span>
-      )}
-    </button>
-  );
-}
