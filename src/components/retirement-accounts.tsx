@@ -12,7 +12,7 @@ import {
   projectRetirementAccountYear,
   scheduledPayoutAnnual,
 } from "@/lib/calc/mpf";
-import { annuityClash, suggestMpfFromRecurring } from "@/lib/calc/retire-view";
+import { annuityClash, suggestMpfFromAssets, suggestMpfFromRecurring } from "@/lib/calc/retire-view";
 import type { Allowance, RetirementAccount, RetirementAccountType, RetirementWithdrawalStrategy } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -27,17 +27,20 @@ export function RetirementAccountsPage() {
   const allowances = useApp((s) => s.allowances);
   const rec = useApp((s) => s.recurring);
   const cats = useApp((s) => s.categories);
+  const accounts = useApp((s) => s.accounts);
   const upsert = useApp((s) => s.upsertRetirementAccount);
   const retire = useApp((s) => s.retirement);
   const [editing, setEditing] = useState<RetirementAccount | "new" | null>(null);
   const retireAge = retire?.retireAge ?? 65;
   const currentAge = retire?.currentAge && retire.currentAge > 0 ? retire.currentAge : 0;
   const yearsToRetire = Math.max(0, retireAge - currentAge);
+  const hasMpfRa = rows.some((a) => a.type === "MPF" || a.type === "ORSO");
   const mpfSuggestion = suggestMpfFromRecurring({
     recurring: rec,
     categories: cats,
-    hasRetirementAccount: rows.some((a) => a.type === "MPF" || a.type === "ORSO"),
+    hasRetirementAccount: hasMpfRa,
   });
+  const mpfFromAssets = suggestMpfFromAssets({ accounts, hasRetirementAccount: hasMpfRa });
   const dupAnnuity = annuityClash(rows, allowances);
 
   const totals = rows.reduce(
@@ -78,12 +81,35 @@ export function RetirementAccountsPage() {
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.more.retireAccountsHint}</p>
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.raOnce}</p>
       {dupAnnuity ? <p className="mx-4 mb-3 rounded-2xl bg-expense-soft px-4 py-3 text-sm text-expense">{t.reports.annuityDup}</p> : null}
-      {mpfSuggestion ? (
+      {mpfFromAssets ? (
+        <div className="mx-4 mb-3 rounded-2xl bg-elevated p-4">
+          <p className="text-sm leading-5">
+            {t.reports.mpfSuggestAssets
+              .replace("{name}", mpfFromAssets.name)
+              .replace("{amount}", money(mpfFromAssets.balance, "HKD"))}
+          </p>
+          <button
+            type="button"
+            className="mt-3 h-11 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent"
+            onClick={() => {
+              const row = blankRetirementAccount("MPF");
+              void upsert({
+                ...row,
+                name: mpfFromAssets.name || "MPF",
+                currentBalance: mpfFromAssets.balance,
+                employeeContributionAmount: mpfSuggestion?.monthly ?? 0,
+              });
+            }}
+          >
+            {t.reports.mpfSuggestAssetsAdd}
+          </button>
+        </div>
+      ) : mpfSuggestion ? (
         <div className="mx-4 mb-3 rounded-2xl bg-elevated p-4">
           <p className="text-sm leading-5">{t.reports.mpfSuggest.replace("{amount}", money(mpfSuggestion.monthly, "HKD"))}</p>
           <button
             type="button"
-            className="mt-3 h-11 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent"
+            className="h-11 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent mt-3"
             onClick={() => {
               const row = blankRetirementAccount("MPF");
               void upsert({ ...row, name: "MPF", employeeContributionAmount: mpfSuggestion.monthly });

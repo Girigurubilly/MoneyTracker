@@ -31,6 +31,7 @@ import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
 import { monthKey } from "@/lib/calc/ledger";
 import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
+import { cn } from "@/lib/utils";
 
 export { SpendingPage } from "@/components/reports-spend";
 export { CashflowPage } from "@/components/reports-cashflow";
@@ -42,6 +43,11 @@ export { BalancePage } from "@/components/reports-balance";
 export function ReportsHub() {
   const t = useT();
   const access = useUi((s) => s.accessMode);
+  const head = useRetirementHeadline();
+  const retireSub =
+    head.story.kind === "setup"
+      ? null
+      : `${head.story.kind === "enough" ? t.reports.verdictEnough : t.reports.verdictShort} · ${money(head.story.gap, "HKD", { sign: true })}`;
   const items = [
     { to: "/reports/dashboard", title: t.reports.dashboard, icon: LayoutDashboard, modes: ["standard", "elderly"] },
     { to: "/reports/spending", title: t.reports.spending, icon: Receipt, modes: ["standard", "elderly", "kid"] },
@@ -72,7 +78,13 @@ export function ReportsHub() {
             {g.items.map((it, i) => (
               <div key={it.to}>
                 {i > 0 ? <Hairline /> : null}
-                <Row icon={<it.icon className="size-4" />} title={it.title} to={it.to} chevron />
+                <Row
+                  icon={<it.icon className="size-4" />}
+                  title={it.title}
+                  subtitle={it.to === "/reports/retirement" ? retireSub ?? undefined : undefined}
+                  to={it.to}
+                  chevron
+                />
               </div>
             ))}
           </Group>
@@ -193,8 +205,10 @@ export function DashboardPage() {
         <div className="flex items-start justify-between gap-2">
           <h2 className="text-base font-semibold">{t.reports.retirement}</h2>
           {ledgerLive && head.story.kind !== "setup" ? (
-            <span className="text-xs font-medium text-muted">
+            <span className={cn("text-xs font-medium tabular-nums", head.story.kind === "enough" ? "text-income" : "text-expense")}>
               {head.story.kind === "enough" ? t.reports.verdictEnough : t.reports.verdictShort}
+              {" · "}
+              {money(head.story.gap, "HKD", { sign: true })}
             </span>
           ) : (
             <span className="text-xs font-medium text-muted">{t.reports.verdictSetup}</span>

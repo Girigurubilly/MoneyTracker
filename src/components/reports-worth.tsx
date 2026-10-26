@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ScreenHeader } from "@/components/shared";
+import { useRetirementHeadline } from "@/components/reports-retire";
 import { compactHkd, money, shortDate, todayISO } from "@/lib/format";
 import { monthLabel } from "@/lib/derived";
 import { periodNetWorthPoints } from "@/lib/calc/networth";
@@ -33,6 +35,7 @@ export function WorthTrendPage() {
   const first = series[0];
   const last = series.at(-1);
   const delta = first && last ? last.net - first.net : 0;
+  const head = useRetirementHeadline();
   const presets: { id: PeriodPreset; label: string }[] = [
     { id: "this-month", label: t.reports.thisMonth },
     { id: "last-month", label: t.reports.lastMonth },
@@ -81,6 +84,9 @@ export function WorthTrendPage() {
         <Stat label={t.assets.totalAssets} value={money(last?.assets ?? 0, "HKD")} />
         <Stat label={t.assets.totalLiab} value={money(last?.liab ?? 0, "HKD")} />
       </div>
+      <Link to="/reports/retirement" className="mx-4 mt-3 block rounded-2xl bg-elevated px-4 py-3 text-sm text-muted">
+        {t.reports.investableOfWhich.replace("{amount}", money(head.investable, "HKD"))}
+      </Link>
       <div className="mt-4 h-56 px-1">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={series}>

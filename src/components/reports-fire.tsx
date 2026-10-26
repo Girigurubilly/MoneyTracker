@@ -211,9 +211,9 @@ export function FirePlanPage() {
       <SectionLabel>{t.reports.fireThree}</SectionLabel>
       <p className="px-5 pb-2 text-[11px] leading-4 text-muted">{t.reports.fireReferenceHint}</p>
       <div className="mx-4 mb-3 grid grid-cols-1 gap-2">
-        <TargetCard title={t.reports.fireTargetFloor} swr="3.5%" amount={targets.floor} now={investable} t={t} />
-        <TargetCard title={t.reports.fireTargetBase} swr="3.5%" amount={targets.base} now={investable} t={t} highlight />
-        <TargetCard title={t.reports.fireTargetComfort} swr="3.25%" amount={targets.comfort} now={investable} t={t} />
+        <TargetCard title={t.reports.fireTargetFloor} swr="3.5%" amount={targets.floor} now={investable} t={t} pathCorpus={head.corpusAtRetire} pathEnough={head.story.kind === "enough"} />
+        <TargetCard title={t.reports.fireTargetBase} swr="3.5%" amount={targets.base} now={investable} t={t} highlight pathCorpus={head.corpusAtRetire} pathEnough={head.story.kind === "enough"} />
+        <TargetCard title={t.reports.fireTargetComfort} swr="3.25%" amount={targets.comfort} now={investable} t={t} pathCorpus={head.corpusAtRetire} pathEnough={head.story.kind === "enough"} />
       </div>
 
       <SectionLabel>{t.reports.fireBucketsTitle}</SectionLabel>
@@ -239,7 +239,7 @@ export function FirePlanPage() {
                   <div className="mt-0.5 text-sm font-semibold">—</div>
                 </div>
               ) : (
-                <MiniStat label={b.gap > 0 ? t.reports.fireGapAmt : t.reports.fireOverAmt} value={Math.abs(b.gap)} danger={b.gap > 0} />
+                <MiniStat label={b.gap > 0 ? t.reports.fireGapFromToday : t.reports.fireOverAmt} value={Math.abs(b.gap)} danger={b.gap > 0} />
               )}
             </div>
           </div>
@@ -418,6 +418,8 @@ function TargetCard({
   now,
   t,
   highlight,
+  pathCorpus,
+  pathEnough,
 }: {
   title: string;
   swr: string;
@@ -425,8 +427,11 @@ function TargetCard({
   now: number;
   t: ReturnType<typeof useT>;
   highlight?: boolean;
+  pathCorpus?: number | null;
+  pathEnough?: boolean;
 }) {
   const gap = amount - now;
+  const pathPct = amount > 0 && pathCorpus != null ? Math.min(999, Math.round((pathCorpus / amount) * 100)) : null;
   return (
     <div className={cn("rounded-2xl p-4", highlight ? "bg-accent-soft" : "bg-elevated")}>
       <div className="flex items-center justify-between gap-2">
@@ -435,8 +440,16 @@ function TargetCard({
       </div>
       <div className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{money(amount, "HKD")}</div>
       <div className={cn("mt-1 text-xs", gap > 0 ? "text-expense" : "text-income")}>
-        {gap > 0 ? `${t.reports.fireGapAmt} ${money(gap, "HKD")}` : `${t.reports.fireOverAmt} ${money(-gap, "HKD")}`}
+        {gap > 0
+          ? `${t.reports.fireGapFromToday} ${money(gap, "HKD")}`
+          : `${t.reports.fireOverAmt} ${money(-gap, "HKD")}`}
       </div>
+      <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.fireGapFromTodayHint}</p>
+      {pathEnough && pathPct != null ? (
+        <div className="mt-2 text-[11px] text-income">
+          {t.reports.firePathProgress}: {pathPct}% ({money(pathCorpus ?? 0, "HKD")})
+        </div>
+      ) : null}
     </div>
   );
 }
