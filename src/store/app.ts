@@ -909,11 +909,10 @@ export const useApp = create<AppState>((set, get) => ({
       data.yearlyPlans = linked.yearlyPlans;
       const nw = netWorthNow(data.accounts, data.fxRates, data.deposits);
       const month = monthKey();
-      if (!data.snapshots.some((s) => s.month === month)) {
-        const row = { month, net: nw.net, assets: nw.assets, liab: nw.liab };
-        await idb().snapshots.put(row);
-        data.snapshots = [...data.snapshots, row];
-      }
+      // Refresh the current-month snapshot so it tracks live balances; freeze past months.
+      const row = { month, net: nw.net, assets: nw.assets, liab: nw.liab };
+      await idb().snapshots.put(row);
+      data.snapshots = [...data.snapshots.filter((s) => s.month !== month), row];
       set({ ...data, ready: true });
       try {
         await persistTripLinks(get, set);

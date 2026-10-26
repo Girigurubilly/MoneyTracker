@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import type { EnoughKind } from "@/lib/calc/retire-view";
 import { useT } from "@/store/ui";
 
-function prefersReducedMotion(): boolean {
+export function prefersReducedMotion(): boolean {
   if (typeof window === "undefined" || !window.matchMedia) return true;
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }

@@ -128,13 +128,14 @@ function cloneAccounts(accounts: Account[]): Account[] {
   return accounts.map((a) => ({ ...a }));
 }
 
-/** Reconstruct net worth from posted income, expenses and transfers.
+export type WorthSnapshot = { month: string; net: number; assets: number; liab: number };
 
-The latest point is the balance on `to` (or today). Each earlier point walks
-those transactions back, so a previous month's change is that month's flow.
-An opening point sits the day before `from`, which keeps the first month's
-transactions inside the period change.
-*/
+/** Reconstruct net worth from posted income, expenses and transfers.
+ *
+ * Prefer frozen monthly snapshots for past months when available so the chart
+ * is not presented as a pure back-solve of today's balances. The latest point
+ * (today / current month) always uses live balances.
+ */
 export function periodNetWorthPoints(
   accounts: Account[],
   txs: Transaction[],
@@ -142,10 +143,13 @@ export function periodNetWorthPoints(
   from: string,
   to: string,
   deposits: TimeSaving[] = [],
+  snapshots: WorthSnapshot[] = [],
 ): WorthPoint[] {
   const today = todayISO();
   const end = to > today ? today : to;
   const start = from > end ? end : from;
+  const currentYm = today.slice(0, 7);
+  const byMonth = new Map(snapshots.map((s) => [s.month, s]));
   let accs = cloneAccounts(accounts);
   const posted = txs
     .filter((t) => !t.planned && (t.type === "income" || t.type === "expense" || t.type === "transfer"))
@@ -155,7 +159,15 @@ export function periodNetWorthPoints(
   }
   const span = (Date.parse(`${end}T12:00:00`) - Date.parse(`${start}T12:00:00`)) / 86_400_000;
   const points: WorthPoint[] = [];
-  const snap = (date: string): WorthPoint => ({ date, ...netWorthNow(accs, rates, deposits, date), flow: 0 });
+  const liveSnap = (date: string): WorthPoint => ({ date, ...netWorthNow(accs, rates, deposits, date), flow: 0 });
+  const pointFor = (date: string, preferSnap: boolean): WorthPoint => {
+    const ym = date.slice(0, 7);
+    if (preferSnap && ym < currentYm) {
+      const frozen = byMonth.get(ym);
+      if (frozen) return { date, net: frozen.net, assets: frozen.assets, liab: frozen.liab, flow: 0 };
+    }
+    return liveSnap(date);
+  };
   if (span <= 62) {
     const byDay = new Map<string, Transaction[]>();
     for (const tx of posted) {
@@ -165,7 +177,8 @@ export function periodNetWorthPoints(
       byDay.set(tx.date, list);
     }
     for (let d = end; d >= start; d = addDays(d, -1)) {
-      points.push(snap(d));
+      // Daily series stays live so intra-month flow matches the ledger.
+      points.push(liveSnap(d));
       for (const tx of byDay.get(d) ?? []) accs = applyDeltas(accs, balanceDeltas(tx, accs, rates), -1);
     }
   } else {
@@ -173,7 +186,7 @@ export function periodNetWorthPoints(
     let ym = end.slice(0, 7);
     while (ym >= startYm) {
       const sample = ym === end.slice(0, 7) ? end : monthEnd(ym);
-      if (sample >= start) points.push(snap(sample));
+      if (sample >= start) points.push(pointFor(sample, ym !== currentYm));
       for (const tx of posted) {
         if (!tx.date.startsWith(ym) || tx.date < start || tx.date > end) continue;
         accs = applyDeltas(accs, balanceDeltas(tx, accs, rates), -1);
@@ -181,7 +194,7 @@ export function periodNetWorthPoints(
       ym = shiftYm(ym, -1);
     }
   }
-  points.push(snap(addDays(start, -1)));
+  points.push(pointFor(addDays(start, -1), true));
   const ordered = points.reverse();
   return ordered.map((p, i) => ({
     ...p,
