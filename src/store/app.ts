@@ -631,6 +631,28 @@ async function syncRegularSchedules() {
   for (const r of rows) await upsertScheduledFor(r);
 }
 
+
+async function ensureTravelCategories() {
+  const cats = await idb().categories.toArray();
+  let travel =
+    cats.find((c) => c.id === "p-travel") ??
+    cats.find((c) => !c.parentId && c.theme === "travel");
+  if (!travel) {
+    const row = seedCategories.find((c) => c.id === "p-travel");
+    if (row) {
+      await idb().categories.add(row);
+      travel = row;
+    }
+  }
+  const parentId = travel?.id ?? "p-travel";
+  const need = seedCategories.filter(
+    (c) => c.parentId === "p-travel" && !cats.some((x) => x.id === c.id),
+  );
+  for (const row of need) {
+    await idb().categories.add({ ...row, parentId });
+  }
+}
+
 async function ensureMortgageCategories() {
   const cats = await idb().categories.toArray();
   let housing =
@@ -852,6 +874,7 @@ export const useApp = create<AppState>((set, get) => ({
         if (catN === 0) await idb().categories.bulkAdd(seedCategories);
         try {
           await ensureMortgageCategories();
+          await ensureTravelCategories();
           await ensureRegularLiving();
           await migrateAdhocFromPlannedTxs();
           await migrateBaselineRows();

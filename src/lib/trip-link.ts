@@ -186,7 +186,7 @@ export function categoryFromSpendHint(hint: string | undefined, categories: { id
     expense.find((c) => needles.some((re) => re.test(`${c.name} ${c.nameZh} ${c.id}`)))?.id || "";
   switch (hint) {
     case "meal":
-      return byId("dining") || byRe(/dining|飲食|就餐|餐飲|food/i) || fallback;
+      return byId("travel-meals") || byId("dining") || byRe(/旅途用餐|dining|飲食|就餐|餐飲|food/i) || fallback;
     case "ride":
       return byId("mtr") || byRe(/transit|交通|鐵路|地鐵|mtr|巴士|公車/i) || fallback;
     case "hotel":

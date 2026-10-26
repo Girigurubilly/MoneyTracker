@@ -54,6 +54,7 @@ export const categories: Category[] = [
   { id: "flights", name: "Flights", nameZh: "機票", theme: "travel", kind: "expense", icon: "plane", parentId: "p-travel" },
   { id: "hotels", name: "Hotels", nameZh: "酒店", theme: "travel", kind: "expense", icon: "building", parentId: "p-travel" },
   { id: "souvenirs", name: "Souvenirs", nameZh: "手信", theme: "travel", kind: "expense", icon: "gift", parentId: "p-travel" },
+  { id: "travel-meals", name: "Meals", nameZh: "旅途用餐", theme: "travel", kind: "expense", icon: "utensils", parentId: "p-travel" },
   { id: "p-income", name: "Income", nameZh: "收入", theme: "other", kind: "income", icon: "briefcase" },
   { id: "salary", name: "Salary", nameZh: "薪金", theme: "other", kind: "income", icon: "briefcase", parentId: "p-income" },
   { id: "interest-inc", name: "Interest income", nameZh: "利息收入", theme: "other", kind: "income", icon: "coins", parentId: "p-income" },
