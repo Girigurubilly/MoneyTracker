@@ -41,19 +41,49 @@ export function travelSpendYtd(
   travelIds: Set<string>,
   rates: FxRate[],
 ): number {
-  let sum = 0;
+  return travelSpendYtdSplit(txs, year, travelIds, rates).total;
+}
+
+/** Split annual travel into trip-linked vs travel-category with no trip. */
+export function travelSpendYtdSplit(
+  txs: Transaction[],
+  year: number,
+  travelIds: Set<string>,
+  rates: FxRate[],
+): { linked: number; unlinked: number; total: number } {
+  let linked = 0;
+  let unlinked = 0;
   const seen = new Set<string>();
   for (const tx of txs) {
     if (tx.planned || tx.type !== "expense") continue;
     if (!tx.date.startsWith(String(year))) continue;
-    const travelCat = tx.categoryId && travelIds.has(tx.categoryId);
-    const trip = Boolean(tx.tripId);
-    if (!travelCat && !trip) continue;
+    const travelCat = Boolean(tx.categoryId && travelIds.has(tx.categoryId));
+    const onTrip = Boolean(tx.tripId);
+    if (!travelCat && !onTrip) continue;
     if (seen.has(tx.id)) continue;
     seen.add(tx.id);
-    sum += Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
+    const hkd = Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
+    if (onTrip) linked += hkd;
+    else unlinked += hkd;
   }
-  return sum;
+  return { linked, unlinked, total: linked + unlinked };
+}
+
+export function travelUnlinkedTxs(
+  txs: Transaction[],
+  year: number,
+  travelIds: Set<string>,
+): Transaction[] {
+  return txs
+    .filter(
+      (tx) =>
+        !tx.planned &&
+        tx.type === "expense" &&
+        tx.date.startsWith(String(year)) &&
+        Boolean(tx.categoryId && travelIds.has(tx.categoryId)) &&
+        !tx.tripId,
+    )
+    .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
 }
 
 export function tripProgress(t: Trip, spent: number) {

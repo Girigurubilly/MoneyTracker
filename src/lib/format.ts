@@ -135,6 +135,20 @@ export function compactHkd(amount: number): string {
   return money(amount, "HKD");
 }
 
+
+export function dateRangeLabel(start: string, end: string, locale: Locale): string {
+  const [ys, ms, ds] = start.split("-").map(Number);
+  const [ye, me, de] = end.split("-").map(Number);
+  if (!ys || !ms || !ds || !ye || !me || !de) return `${start} → ${end}`;
+  if (locale === "zh-HK") {
+    if (ys === ye) return `${ms}月${ds}日 → ${me}月${de}日`;
+    return `${ys}年${ms}月${ds}日 → ${ye}年${me}月${de}日`;
+  }
+  const s = `${ds}/${ms}${ys === ye ? "" : `/${ys}`}`;
+  const e = `${de}/${me}/${ye}`;
+  return `${s} → ${e}`;
+}
+
 export function shortDate(iso: string, locale: Locale): string {
   const [y, m, d] = iso.split("-").map(Number);
   if (!y || !m || !d) return iso;

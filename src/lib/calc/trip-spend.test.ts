@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { tripCashSpent, tripMoneySplit } from "./trips.ts";
+import { travelSpendYtd, travelSpendYtdSplit, travelUnlinkedTxs, tripCashSpent, tripMoneySplit } from "./trips.ts";
 import type { AdhocBudget, Transaction } from "../types.ts";
 
 describe("trip spend", () => {
@@ -16,5 +16,23 @@ describe("trip spend", () => {
     ] as AdhocBudget[];
     assert.equal(tripCashSpent(txs, "osaka", [], adhoc), 170);
     assert.deepEqual(tripMoneySplit(txs, "osaka", [], adhoc), { paid: 100, scheduled: 70, total: 170 });
+  });
+
+  it("splits annual travel into linked vs unlinked travel-category", () => {
+    const travelIds = new Set(["flights", "hotels", "souvenirs", "travel-meals"]);
+    const txs = [
+      { id: "a", type: "expense", amount: 1000, currency: "HKD", date: "2026-03-01", categoryId: "flights", planned: false },
+      { id: "b", type: "expense", amount: 500, currency: "HKD", date: "2026-03-02", categoryId: "hotels", tripId: "t1", planned: false },
+      { id: "c", type: "expense", amount: 200, currency: "HKD", date: "2026-03-03", categoryId: "dining", tripId: "t1", planned: false },
+      { id: "d", type: "expense", amount: 50, currency: "HKD", date: "2026-03-04", categoryId: "flights", planned: true },
+      { id: "e", type: "expense", amount: 80, currency: "HKD", date: "2025-12-01", categoryId: "flights", planned: false },
+    ] as Transaction[];
+    const split = travelSpendYtdSplit(txs, 2026, travelIds, []);
+    assert.deepEqual(split, { linked: 700, unlinked: 1000, total: 1700 });
+    assert.equal(travelSpendYtd(txs, 2026, travelIds, []), 1700);
+    assert.deepEqual(
+      travelUnlinkedTxs(txs, 2026, travelIds).map((tx) => tx.id),
+      ["a"],
+    );
   });
 });
