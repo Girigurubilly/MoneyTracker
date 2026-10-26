@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Hairline, Overlay, ScreenHeader } from "@/components/shared";
@@ -8,8 +8,9 @@ import { MONTHS_S, depositYearTotals, depositsOutsideBalances, suggestedInterest
 import { buildDepositBrief, renderDepositBriefMarkdown } from "@/lib/calc/deposit-brief";
 import { looksLikePromoDeposit } from "@/lib/calc/fc-baseline";
 import { toHkd } from "@/lib/calc/fx";
-import { inclusiveDays, marathonInterest, scbMarathonTiers, type MarathonTier } from "@/lib/calc/marathon";
+import { inclusiveDays, marathonInterest, marathonMonthlyInterest, scbMarathonTiers, type MarathonTier } from "@/lib/calc/marathon";
 import { copyPlainText, sharePlainText } from "@/lib/copy-text";
+import { monthLabel } from "@/lib/derived";
 import { money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { resolveAmountInput } from "@/lib/money-expr";
@@ -187,6 +188,11 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
             const ccy = p.currency === "USD" ? "USD" : "HKD";
             const tiers = p.rateSchedule.map((step, index) => ({ id: `saved-${index}`, ...step }));
             const est = marathonInterest(p.residualHkd, tiers);
+            const months = marathonMonthlyInterest(p.residualHkd, tiers);
+            const booked = months.reduce((sum, month) => {
+              const adj = p.interestAdjustments?.find((item) => item.month === month.month);
+              return sum + (adj ? adj.amount : month.interest);
+            }, 0);
             const from = [...p.rateSchedule].map((step) => step.from).filter(Boolean).sort()[0] ?? "—";
             const to = [...p.rateSchedule].map((step) => step.to).filter(Boolean).sort().at(-1) ?? "—";
             return (
@@ -203,13 +209,14 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
                     </div>
                     <div className="mt-1 flex justify-between text-sm tabular-nums">
                       <span>{money(p.residualHkd, ccy)}</span>
-                      <span className="text-income">+{money(est.total, ccy)}</span>
+                      <span className="text-income">+{money(months.length ? booked : est.total, ccy)}</span>
                     </div>
                   </button>
                   <button type="button" className="grid size-11 shrink-0 place-items-center text-expense" onClick={() => void deletePromoSaving(p.id)} aria-label={locale === "zh-HK" ? "刪除" : "Delete"}>
                     <Trash2 className="size-4" />
                   </button>
                 </div>
+                <PromoMonths row={p} currency={ccy} />
               </div>
             );
           })}
@@ -295,6 +302,81 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
         />
       ) : null}
     </div>
+  );
+}
+
+function bookedMonthAmount(row: PromoSaving, month: string, computed: number): number {
+  const hit = row.interestAdjustments?.find((item) => item.month === month);
+  return hit ? hit.amount : computed;
+}
+
+function PromoMonths({ row, currency }: { row: PromoSaving; currency: Currency }) {
+  const t = useT();
+  const locale = useUi((s) => s.locale);
+  const upsert = useApp((s) => s.upsertPromoSaving);
+  const txs = useApp((s) => s.transactions);
+  const started = useRef(false);
+  const months = marathonMonthlyInterest(row.residualHkd, row.rateSchedule);
+  useEffect(() => {
+    if (started.current) return;
+    if (!(row.residualHkd > 0) || months.length === 0) return;
+    if (txs.some((tx) => tx.promoId === row.id)) {
+      started.current = true;
+      return;
+    }
+    started.current = true;
+    void upsert(row);
+  }, [months.length, row, txs, upsert]);
+  if (months.length === 0) return null;
+
+  async function commit(month: string, computed: number, raw: string) {
+    const amount = resolveAmountInput(raw);
+    const next = Number.isFinite(amount) ? amount : computed;
+    const rest = (row.interestAdjustments ?? []).filter((item) => item.month !== month);
+    const interestAdjustments = Math.abs(next - computed) < 0.001 ? rest : [...rest, { month, amount: next }];
+    await upsert({ ...row, interestAdjustments });
+  }
+
+  return (
+    <div className="border-t border-line px-4 py-2">
+      <div className="pb-1 text-[11px] font-medium text-muted">{t.reports.marathonMonths}</div>
+      <p className="pb-2 text-[11px] leading-4 text-muted">{t.reports.marathonMonthHint}</p>
+      {months.map((month) => {
+        const computed = month.interest;
+        const booked = bookedMonthAmount(row, month.month, computed);
+        const adjusted = Math.abs(booked - computed) >= 0.001;
+        return (
+          <div key={month.month} className="flex items-center justify-between gap-3 border-t border-line py-1.5 first:border-t-0">
+            <div className="min-w-0">
+              <div className="text-sm">{month.month.slice(0, 4)} {monthLabel(month.month, locale)}</div>
+              <div className="text-[11px] text-muted">
+                {month.date} · {t.reports.marathonDays.replace("{n}", String(month.days))}
+              </div>
+              {adjusted ? (
+                <button type="button" className="mt-0.5 text-[11px] font-medium text-accent" onClick={() => void commit(month.month, computed, String(computed))}>
+                  {t.reports.marathonUseEstimate} {money(computed, currency)}
+                </button>
+              ) : null}
+            </div>
+            <MonthAmount value={booked} onCommit={(raw) => void commit(month.month, computed, raw)} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MonthAmount({ value, onCommit }: { value: number; onCommit: (raw: string) => void }) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => setText(String(value)), [value]);
+  return (
+    <input
+      inputMode="decimal"
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => onCommit(text)}
+      className="h-11 w-28 rounded-lg bg-background px-2 text-right text-sm tabular-nums outline-none"
+    />
   );
 }
 

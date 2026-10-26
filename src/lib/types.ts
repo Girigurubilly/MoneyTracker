@@ -381,6 +381,8 @@ export type Transaction = {
   planned?: boolean;
   recurringId?: string;
   depositId?: string;
+  /** Marathon / promo saving that owns this planned interest row. */
+  promoId?: string;
   countsAsExpense?: boolean;
   housing?: boolean;
   adhoc?: boolean;
@@ -439,6 +441,8 @@ export type PromoSaving = {
   distinctFromTd: true;
   name?: string;
   nameZh?: string;
+  /** Booked monthly interest when the user changed the estimate. */
+  interestAdjustments?: { month: string; amount: number }[];
 };
 
 export type YearlyPlan = {

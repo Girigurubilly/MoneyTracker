@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { inclusiveDays, marathonInterest, marathonTiersOverlap, scbMarathonTiers } from "./marathon.ts";
+import { inclusiveDays, marathonInterest, marathonMonthlyInterest, marathonTiersOverlap, scbMarathonTiers } from "./marathon.ts";
 
 describe("SCB marathon tiers", () => {
   it("starts from the published HKD and USD bands", () => {
@@ -38,5 +38,25 @@ describe("SCB marathon tiers", () => {
     tiers[1] = { ...tiers[1], from: "2026-11-30" };
     assert.equal(marathonTiersOverlap(tiers), true);
     assert.equal(marathonInterest(1, tiers).overlap, true);
+  });
+
+  it("projects interest on the last accrual day of each month", () => {
+    const months = marathonMonthlyInterest(100_000, scbMarathonTiers("HKD"));
+    assert.deepEqual(
+      months.map((m) => [m.month, m.date, m.days]),
+      [
+        ["2026-10", "2026-10-31", 30],
+        ["2026-11", "2026-11-30", 30],
+        ["2026-12", "2026-12-31", 31],
+        ["2027-01", "2027-01-31", 31],
+        ["2027-02", "2027-02-01", 1],
+      ],
+    );
+    const oct = Math.round(100_000 * 0.028 * (30 / 365) * 100) / 100;
+    assert.equal(months[0]?.interest, oct);
+    const jan =
+      Math.round((Math.round(100_000 * 0.03 * (3 / 365) * 100) / 100 + Math.round(100_000 * 0.032 * (28 / 365) * 100) / 100) * 100) / 100;
+    assert.equal(months[3]?.interest, jan);
+    assert.equal(months.reduce((s, m) => s + m.days, 0), 123);
   });
 });

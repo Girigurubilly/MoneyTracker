@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { Area, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Overlay, ScreenHeader } from "@/components/shared";
 import { useRetirementHeadline } from "@/components/reports-retire";
@@ -31,6 +32,8 @@ export function WorthTrendPage() {
   const txs = useApp((s) => s.transactions);
   const rates = useApp((s) => s.fxRates);
   const snapshots = useApp((s) => s.snapshots);
+  const flushWorthSnapshots = useApp((s) => s.flushWorthSnapshots);
+  const [flushing, setFlushing] = useState(false);
   const today = todayISO();
   const [preset, setPreset] = useState<PeriodPreset>("this-year");
   const [customFrom, setCustomFrom] = useState(`${today.slice(0, 4)}-01-01`);
@@ -92,6 +95,18 @@ export function WorthTrendPage() {
 
   const sheetPoint = sheetIdx != null ? series[sheetIdx] : null;
   const sheetPrev = sheetIdx != null && sheetIdx > 0 ? series[sheetIdx - 1] : null;
+
+  async function flushSnapshots() {
+    if (flushing) return;
+    if (!window.confirm(t.reports.worthFlushConfirm)) return;
+    setFlushing(true);
+    try {
+      await flushWorthSnapshots();
+      toast(t.reports.worthFlushed);
+    } finally {
+      setFlushing(false);
+    }
+  }
 
   return (
     <div className="pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
@@ -215,6 +230,16 @@ export function WorthTrendPage() {
         </ResponsiveContainer>
       </div>
       <p className="px-5 pt-2 text-[11px] leading-4 text-muted">{t.reports.worthTrendHint}</p>
+      <div className="px-4 pt-3">
+        <button
+          type="button"
+          disabled={flushing}
+          className="tr-press flex h-11 w-full items-center justify-center rounded-xl bg-elevated text-sm font-medium text-accent disabled:opacity-40"
+          onClick={() => void flushSnapshots()}
+        >
+          {t.reports.worthFlush}
+        </button>
+      </div>
       <div className="rt-enter-delay mt-2">
         <div className="flex items-center justify-between px-5 pb-1 text-[11px] text-faint">
           <span />
