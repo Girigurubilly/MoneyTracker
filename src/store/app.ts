@@ -187,7 +187,7 @@ type Dispatchers = {
   setFcNotes: (confirmedFacts: string[], openGaps: string[]) => Promise<void>;
   syncPromoFromDeposits: () => Promise<void>;
   setYearlyCell: (year: number, month0: number, field: "salary" | "other" | "expense", value: number) => Promise<void>;
-  setYearlySalaryYear: (year: number, salary: number) => Promise<void>;
+  setYearlyDefaultsYear: (year: number, defaults: { salary: number; expense: number }) => Promise<void>;
   addWishItem: (row: WishItem) => Promise<void>;
   updateWishItem: (row: WishItem) => Promise<void>;
   deleteWishItem: (id: string) => Promise<void>;
@@ -1315,12 +1315,12 @@ export const useApp = create<AppState>((set, get) => ({
         : [...get().yearlyPlans, next],
     });
   },
-  setYearlySalaryYear: async (year, salary) => {
+  setYearlyDefaultsYear: async (year, defaults) => {
     const plans = [...get().yearlyPlans];
     for (let m = 0; m < 12; m++) {
       const id = `${year}-${String(m + 1).padStart(2, "0")}`;
       const prev = plans.find((p) => p.id === id) ?? emptyYearlyPlan(id);
-      const next = { ...prev, salary };
+      const next = { ...prev, salary: defaults.salary, expense: defaults.expense };
       await idb().yearlyPlans.put(next);
       const idx = plans.findIndex((p) => p.id === id);
       if (idx >= 0) plans[idx] = next;

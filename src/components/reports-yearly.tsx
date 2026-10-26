@@ -22,7 +22,7 @@ export function YearlyPage() {
   const recurring = useApp((s) => s.recurring);
   const budgets = useApp((s) => s.budgets);
   const setYearlyCell = useApp((s) => s.setYearlyCell);
-  const setYearlySalaryYear = useApp((s) => s.setYearlySalaryYear);
+  const setYearlyDefaultsYear = useApp((s) => s.setYearlyDefaultsYear);
   const [ai, setAi] = useState(false);
   const [hint, setHint] = useState(false);
   const [showEmpty, setShowEmpty] = useState(false);
@@ -35,7 +35,8 @@ export function YearlyPage() {
   const [viewYear, setViewYear] = useState(thisYear);
   const isNextYear = viewYear === thisYear + 1;
   const month0 = isNextYear ? -1 : calendarMonth0;
-  const monthCap = isNextYear ? 0 : budgets.find((b) => b.id === MONTH_TOTAL_BUDGET_ID)?.monthly ?? 0;
+  const spendCap = budgets.find((b) => b.id === MONTH_TOTAL_BUDGET_ID)?.monthly ?? 0;
+  const monthCap = isNextYear ? 0 : spendCap;
   const data = yearlyProjection(
     plans,
     deposits,
@@ -339,10 +340,15 @@ export function YearlyPage() {
       {wizard ? (
         <NextYearSalaryWizard
           year={viewYear}
-          initial={data.rows.find((r) => r.salary > 0)?.salary ?? 0}
+          initialSalary={data.rows.find((r) => r.salary > 0)?.salary ?? 0}
+          initialExpense={
+            data.rows.find((r) => r.expense > 0)?.expense
+            ?? spendCap
+            ?? 0
+          }
           onClose={() => setWizard(false)}
-          onApply={async (salary) => {
-            await setYearlySalaryYear(viewYear, salary);
+          onApply={async (salary, expense) => {
+            await setYearlyDefaultsYear(viewYear, { salary, expense });
             setWizard(false);
           }}
         />
@@ -353,29 +359,36 @@ export function YearlyPage() {
 
 function NextYearSalaryWizard({
   year,
-  initial,
+  initialSalary,
+  initialExpense,
   onClose,
   onApply,
 }: {
   year: number;
-  initial: number;
+  initialSalary: number;
+  initialExpense: number;
   onClose: () => void;
-  onApply: (salary: number) => void | Promise<void>;
+  onApply: (salary: number, expense: number) => void | Promise<void>;
 }) {
   const t = useT();
-  const [amount, setAmount] = useState(initial > 0.005 ? String(Math.round(initial * 100) / 100) : "");
+  const fmt = (n: number) => (n > 0.005 ? String(Math.round(n * 100) / 100) : "");
+  const [salary, setSalary] = useState(fmt(initialSalary));
+  const [expense, setExpense] = useState(fmt(initialExpense));
+  const [field, setField] = useState<"salary" | "expense">("salary");
   const [pad, setPad] = useState(true);
   const [busy, setBusy] = useState(false);
 
   async function apply() {
-    const n = parseFloat(amount) || 0;
     setBusy(true);
     try {
-      await onApply(n);
+      await onApply(parseFloat(salary) || 0, parseFloat(expense) || 0);
     } finally {
       setBusy(false);
     }
   }
+
+  const amount = field === "salary" ? salary : expense;
+  const setAmount = field === "salary" ? setSalary : setExpense;
 
   return (
     <Overlay open onClose={onClose} variant="page">
@@ -410,12 +423,34 @@ function NextYearSalaryWizard({
         </p>
         <button
           type="button"
-          className="tr-press flex w-full items-baseline justify-between gap-3 px-4 py-4 text-left"
-          onClick={() => setPad(true)}
+          className={cn(
+            "tr-press flex w-full items-baseline justify-between gap-3 px-4 py-4 text-left",
+            field === "salary" && pad ? "bg-elevated/60" : "",
+          )}
+          onClick={() => {
+            setField("salary");
+            setPad(true);
+          }}
         >
           <span className="text-sm text-muted">{t.reports.nextYearWizardSalary}</span>
           <span className="text-2xl font-semibold tabular-nums text-income">
-            {amount ? `HK$ ${amount}` : "HK$ —"}
+            {salary ? `HK$ ${salary}` : "HK$ —"}
+          </span>
+        </button>
+        <button
+          type="button"
+          className={cn(
+            "tr-press flex w-full items-baseline justify-between gap-3 border-t border-line px-4 py-4 text-left",
+            field === "expense" && pad ? "bg-elevated/60" : "",
+          )}
+          onClick={() => {
+            setField("expense");
+            setPad(true);
+          }}
+        >
+          <span className="text-sm text-muted">{t.reports.nextYearWizardSpend}</span>
+          <span className="text-2xl font-semibold tabular-nums text-expense">
+            {expense ? `HK$ ${expense}` : "HK$ —"}
           </span>
         </button>
       </ComposerShell>
