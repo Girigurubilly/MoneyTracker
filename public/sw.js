@@ -1,5 +1,5 @@
 /* HK Life Money — cache the app shell so the ledger works offline. */
-const CACHE = "hk-life-money-shell-v2";
+const CACHE = "hk-life-money-shell-v3";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -25,25 +25,18 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.includes("accounts.google") || url.hostname.includes("googleapis")) return;
 
   if (req.mode === "navigate") {
+    // Network first; SPA fallback to cached index.html for deep links when offline.
+    // Shell assets are cloned once on install — do not re-put on every navigation.
     event.respondWith(
-      fetch(req, { cache: "no-store" })
-        .then((res) => {
-          const copy = res.clone();
-          void caches.open(CACHE).then((c) => {
-            void c.put(req, copy);
-            void c.put(new URL("index.html", self.registration.scope), res.clone());
-          });
-          return res;
-        })
-        .catch(async () => {
-          const cache = await caches.open(CACHE);
-          return (
-            (await cache.match(req)) ||
-            (await cache.match(new URL("index.html", self.registration.scope))) ||
-            (await cache.match(self.registration.scope)) ||
-            Response.error()
-          );
-        }),
+      fetch(req, { cache: "no-store" }).catch(async () => {
+        const cache = await caches.open(CACHE);
+        return (
+          (await cache.match(new URL("index.html", self.registration.scope))) ||
+          (await cache.match(self.registration.scope)) ||
+          (await cache.match(req)) ||
+          Response.error()
+        );
+      }),
     );
     return;
   }

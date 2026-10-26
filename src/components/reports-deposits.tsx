@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Hairline, Overlay, ScreenHeader } from "@/components/shared";
 import { moneyAccountsForPicker } from "@/lib/accounts";
 import { downloadBlob } from "@/lib/backup";
-import { MONTHS_S, depositYearTotals, suggestedInterest, summarizeDeposits } from "@/lib/calc/deposits";
+import { MONTHS_S, depositYearTotals, depositsOutsideBalances, suggestedInterest, summarizeDeposits } from "@/lib/calc/deposits";
 import { buildDepositBrief, renderDepositBriefMarkdown } from "@/lib/calc/deposit-brief";
 import { looksLikePromoDeposit } from "@/lib/calc/fc-baseline";
 import { toHkd } from "@/lib/calc/fx";
@@ -56,6 +56,10 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const summary = useMemo(() => summarizeDeposits(deposits, today, rates), [deposits, today, rates]);
+  const uncoveredIds = useMemo(
+    () => new Set(depositsOutsideBalances(deposits, accounts, rates, today).map((d) => d.id)),
+    [deposits, accounts, rates, today],
+  );
   const grouped = useMemo(() => {
     const map = new Map<string, typeof deposits>();
     const rows = [...deposits].sort((a, b) => (a.endDate || a.startDate || "").localeCompare(b.endDate || b.startDate || "") || a.id.localeCompare(b.id));
@@ -85,7 +89,7 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
   }
 
   return (
-    <div className="pb-10">
+    <div className="pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
       <ScreenHeader
         title={t.reports.deposits}
         backTo={backTo}
@@ -115,7 +119,7 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
           </div>
         </div>
         <div className="mt-2 flex items-center justify-between">
-          <span className="text-xs text-muted">{t.reports.interestAfterYear.replace("{year}", String(year))}: {money(summary.unrealizedAfterYearHKD, "HKD")}</span>
+          <span className="text-xs text-muted">{(t.reports.interestAfterYear ?? "Interest after {year}").replace("{year}", String(year))}: {money(summary.unrealizedAfterYearHKD, "HKD")}</span>
           <button type="button" onClick={() => void fetchFx()} disabled={busy} className="flex items-center gap-1 text-xs font-medium text-accent">
             <RefreshCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />
             {t.reports.fetchFx}
@@ -202,7 +206,7 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
                       <span className="text-income">+{money(est.total, ccy)}</span>
                     </div>
                   </button>
-                  <button type="button" className="mt-1 text-expense" onClick={() => void deletePromoSaving(p.id)} aria-label={locale === "zh-HK" ? "刪除" : "Delete"}>
+                  <button type="button" className="grid size-11 shrink-0 place-items-center text-expense" onClick={() => void deletePromoSaving(p.id)} aria-label={locale === "zh-HK" ? "刪除" : "Delete"}>
                     <Trash2 className="size-4" />
                   </button>
                 </div>
@@ -251,12 +255,17 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
                         <div className="mt-1 text-xs text-muted">
                           {money(r.amount, r.currency)} · {r.startDate} → {r.endDate}
                         </div>
+                        {uncoveredIds.has(r.id) ? (
+                          <div className="mt-1 text-[11px] leading-4 text-watch">{t.reports.depositNotCovered}</div>
+                        ) : r.accountId ? (
+                          <div className="mt-1 text-[11px] leading-4 text-faint">{t.reports.depositCovered}</div>
+                        ) : null}
                         <div className="mt-1 flex justify-between text-sm tabular-nums">
                           <span className="text-income">+{money(r.interest, r.currency)}</span>
                           <span>{money((r.amount || 0) + (r.interest || 0), r.currency)}</span>
                         </div>
                       </button>
-                      <button type="button" className="mt-1 text-expense" onClick={() => void deleteDeposit(r.id)} aria-label={locale === "zh-HK" ? "刪除" : "Delete"}>
+                      <button type="button" className="grid size-11 shrink-0 place-items-center text-expense" onClick={() => void deleteDeposit(r.id)} aria-label={locale === "zh-HK" ? "刪除" : "Delete"}>
                         <Trash2 className="size-4" />
                       </button>
                     </div>
@@ -277,12 +286,14 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
         initial={editing === "new" ? null : editing}
         onClose={() => setEditing(null)}
       />
-      <PromoEditor
-        key={editingPromo === "new" ? "promo-new" : editingPromo?.id ?? "promo-closed"}
-        open={editingPromo !== null}
-        initial={editingPromo === "new" ? null : editingPromo}
-        onClose={() => setEditingPromo(null)}
-      />
+      {editingPromo !== null ? (
+        <PromoEditor
+          key={editingPromo === "new" ? "promo-new" : editingPromo.id}
+          open
+          initial={editingPromo === "new" ? null : editingPromo}
+          onClose={() => setEditingPromo(null)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -473,21 +484,11 @@ function PromoEditor({ open, initial, onClose }: { open: boolean; initial: Promo
 
   function changeCurrency(next: "HKD" | "USD") {
     setCurrency(next);
+    // Keep saved tier rates when editing an existing promo; only seed SCB rates for brand-new ones.
+    if (initial) return;
     const published = scbMarathonTiers(next);
-    setTiers((prev) =>
-      prev.map((tier) => {
-        const match = published.find((row) => row.from === tier.from && row.to === tier.to);
-        return match ? { ...tier, rate: match.rate } : tier;
-      }),
-    );
-    setRateText((prev) => {
-      const nextText = { ...prev };
-      for (const tier of tiers) {
-        const match = published.find((row) => row.from === tier.from && row.to === tier.to);
-        if (match) nextText[tier.id] = String(match.rate);
-      }
-      return nextText;
-    });
+    setTiers(published);
+    setRateText(Object.fromEntries(published.map((tier) => [tier.id, String(tier.rate)])));
   }
 
   function patchTier(id: string, patch: Partial<MarathonTier>) {
@@ -587,7 +588,7 @@ function PromoEditor({ open, initial, onClose }: { open: boolean; initial: Promo
                     <span className="text-muted">%</span>
                   </label>
                   <div className="text-right">
-                    <div className="text-[11px] text-muted">{t.reports.marathonDays.replace("{n}", String(row?.days ?? 0))}</div>
+                    <div className="text-[11px] text-muted">{(t.reports.marathonDays ?? "{n} days").replace("{n}", String(row?.days ?? 0))}</div>
                     <div className="text-sm font-medium tabular-nums text-income">+{money(row?.interest ?? 0, currency)}</div>
                   </div>
                 </div>
@@ -620,9 +621,9 @@ function PromoEditor({ open, initial, onClose }: { open: boolean; initial: Promo
           value={access}
           onChange={(v) => setAccess(v as PromoAccessibility)}
           options={[
-            { id: "unknown", label: "unknown" },
-            { id: "accessible", label: "accessible" },
-            { id: "restricted", label: "restricted" },
+            { id: "unknown", label: t.reports.promoAccessUnknown },
+            { id: "accessible", label: t.reports.promoAccessAccessible },
+            { id: "restricted", label: t.reports.promoAccessRestricted },
           ]}
         />
         <p className="px-5 pt-3 text-[11px] leading-4 text-muted">{t.reports.promoHint}</p>

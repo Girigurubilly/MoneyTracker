@@ -19,7 +19,7 @@ import {
   SelectLine,
   TextLine,
 } from "@/components/txn-composer";
-import { asOfForMonth, adhocTotal, budgetActuals, chargedDayOf, forecastTone } from "@/lib/calc/budget";
+import { asOfForMonth, adhocTotal, budgetActuals, chargedDayOf, forecastTone, regularSettledInMonth } from "@/lib/calc/budget";
 import { WhenField } from "@/components/when-picker";
 import { travelSpendYtd, isTripActive } from "@/lib/calc/trips";
 import { monthKey } from "@/lib/calc/ledger";
@@ -85,7 +85,7 @@ export function BudgetScreen() {
   const [showBreakdown, setShowBreakdown] = useState(false);
 
   return (
-    <div className="pb-10">
+    <div className="pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
       <ScreenHeader
         title={t.budget.title}
         large
@@ -145,14 +145,40 @@ export function BudgetScreen() {
           </div>
         </div>
         {monthCap > 0 ? (
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ring-track">
-            <div
-              className={cn(
-                "h-full rounded-full",
-                monthTone === "expense" ? "bg-expense" : monthTone === "watch" ? "bg-watch" : "bg-income",
-              )}
-              style={{ width: `${Math.min(100, monthRatio * 100)}%` }}
-            />
+          <div className="mt-2">
+            <div className="h-1.5 overflow-hidden rounded-full bg-ring-track">
+              <div className="flex h-full w-full">
+                <div
+                  className={cn(
+                    "h-full transition-[width] duration-200",
+                    monthTone === "expense" ? "bg-expense" : monthTone === "watch" ? "bg-watch" : "bg-income",
+                  )}
+                  style={{ width: `${Math.min(100, (monthSpent / monthCap) * 100)}%` }}
+                  title={t.budget.barPosted}
+                />
+                <div
+                  className="h-full bg-accent/40 transition-[width] duration-200"
+                  style={{
+                    width: `${Math.min(
+                      Math.max(0, 100 - (monthSpent / monthCap) * 100),
+                      ((reserved + (targetMode === "regular" ? 0 : reservedA)) / monthCap) * 100,
+                    )}%`,
+                  }}
+                  title={t.budget.barReserved}
+                />
+              </div>
+            </div>
+            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted">
+              <span>
+                <span className="mr-1 inline-block size-1.5 rounded-full bg-income align-middle" />
+                {t.budget.barPosted}
+              </span>
+              <span>
+                <span className="mr-1 inline-block size-1.5 rounded-full bg-accent/40 align-middle" />
+                {t.budget.barReserved}
+              </span>
+              <span className="text-faint">{t.budget.barExpected}</span>
+            </div>
           </div>
         ) : null}
         <button
@@ -174,8 +200,11 @@ export function BudgetScreen() {
               <span className="shrink-0 tabular-nums">{money(reserved + reservedA, "HKD")}</span>
             </div>
             <div className="flex items-baseline justify-between gap-3">
-              <span>{t.budget.postedRegulars}</span>
-              <span className="shrink-0 tabular-nums">{money(realized, "HKD")}</span>
+              <span>
+                {t.budget.dueNotPosted}
+                <span className="text-faint"> · {t.budget.postedRegulars}</span>
+              </span>
+              <span className="shrink-0 tabular-nums">{money(Math.max(0, realized - monthSpent), "HKD")}</span>
             </div>
             <div className="flex items-baseline justify-between gap-3">
               <span>
@@ -187,6 +216,20 @@ export function BudgetScreen() {
           </div>
         ) : null}
       </div>
+
+      {kid ? null : (
+        <AdhocBlock
+          month={month}
+          onAdd={() => {
+            setEditingAdhoc(null);
+            setAdhocOpen(true);
+          }}
+          onEdit={(a) => {
+            setEditingAdhoc(a);
+            setAdhocOpen(true);
+          }}
+        />
+      )}
 
       <RegularsBlock
         onAdd={() => {
@@ -201,18 +244,6 @@ export function BudgetScreen() {
 
       {kid ? null : (
         <>
-      <AdhocBlock
-        month={month}
-        onAdd={() => {
-          setEditingAdhoc(null);
-          setAdhocOpen(true);
-        }}
-        onEdit={(a) => {
-          setEditingAdhoc(a);
-          setAdhocOpen(true);
-        }}
-      />
-
       <Link to="/reports/travel" className="mx-4 mt-3 block rounded-xl bg-elevated px-4 py-4">
         <div className="flex items-start justify-between gap-2">
           <span className="text-sm text-muted">{t.budget.annualTravel}</span>
@@ -370,7 +401,10 @@ function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recur
   const locale = useUi((s) => s.locale);
   const recurring = useApp((s) => s.recurring);
   const rates = useApp((s) => s.fxRates);
-  const today = Number(todayISO().slice(8, 10));
+  const txs = useApp((s) => s.transactions);
+  const todayIso = todayISO();
+  const month = todayIso.slice(0, 7);
+  const today = Number(todayIso.slice(8, 10));
   const rows = recurring
     .filter((r) => r.frequency === "monthly" && r.type !== "miles")
     .sort((a, b) => chargedDayOf(a) - chargedDayOf(b) || a.label.localeCompare(b.label));
@@ -378,7 +412,7 @@ function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recur
     <div className="pt-4">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-5 pb-1">
         <h2 className="text-sm font-medium text-muted">{t.budget.monthlyRegulars}</h2>
-        <button type="button" onClick={onAdd} className="text-sm font-medium text-accent">
+        <button type="button" onClick={onAdd} className="flex min-h-11 items-center px-1 text-sm font-medium text-accent">
           {t.budget.addRegular}
         </button>
       </div>
@@ -387,8 +421,27 @@ function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recur
         <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
           {rows.map((r) => {
             const day = chargedDayOf(r);
-            const charged = day <= today;
+            const iso = `${month}-${String(day).padStart(2, "0")}`;
+            const posted = regularSettledInMonth(r, txs, month, iso);
+            const due = day <= today;
             const signed = r.type === "income" ? r.amount : r.type === "expense" || r.countsAsExpense ? -r.amount : r.amount;
+            const badgeClass = posted
+              ? "bg-success-soft text-income"
+              : due
+                ? "bg-watch-soft text-watch"
+                : "bg-accent-soft text-accent";
+            const badgeLabel =
+              r.type === "income"
+                ? posted
+                  ? t.add.received
+                  : due
+                    ? t.budget.dueNotPosted
+                    : t.budget.upcomingIncome
+                : posted
+                  ? t.budget.charged
+                  : due
+                    ? t.budget.dueNotPosted
+                    : t.budget.upcomingStatus;
             return (
               <button key={r.id} type="button" className="w-full border-t border-line px-4 py-3 text-left first:border-0" onClick={() => onEdit(r)}>
                 <div className="flex items-start gap-2">
@@ -399,14 +452,8 @@ function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recur
                         {dayPart(day, locale)}
                         {` · ${r.type === "income" ? t.add.income : r.type === "transfer" ? (r.countsAsExpense ? `${t.add.transfer} · ${t.add.principal}` : t.add.transfer) : t.add.expense}`}
                       </span>
-                      <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", charged ? "bg-success-soft text-income" : "bg-accent-soft text-accent")}>
-                        {r.type === "income"
-                          ? charged
-                            ? t.add.received
-                            : t.budget.upcomingIncome
-                          : charged
-                            ? t.budget.charged
-                            : t.budget.upcomingStatus}
+                      <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", badgeClass)}>
+                        {badgeLabel}
                       </span>
                     </div>
                   </div>
@@ -472,21 +519,31 @@ function AdhocBlock({
         ) : null}
       </div>
       <div className="flex items-center justify-end gap-4 px-5 pb-1 pt-1">
-        <Link to="/more/adhoc" className="text-xs font-medium text-accent">
+        <Link to="/more/adhoc" className="flex min-h-11 items-center text-xs font-medium text-accent">
           {t.budget.manageAdhoc}
         </Link>
-        <button type="button" onClick={onAdd} className="text-sm font-medium text-accent">
+        <button type="button" onClick={onAdd} className="flex min-h-11 items-center px-1 text-sm font-medium text-accent">
           {t.budget.addShort}
         </button>
       </div>
       <p className="px-5 pb-2 text-xs text-faint">{t.budget.adhocHint}</p>
       {rows.length === 0 ? (
-        <p className="px-5 py-4 text-sm text-muted">{t.budget.adhocNone}</p>
+        <div className="mx-4 rounded-xl bg-elevated px-4 py-5 text-center">
+          <p className="text-sm text-muted">{t.budget.adhocNone}</p>
+          <button
+            type="button"
+            onClick={onAdd}
+            className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-on-accent"
+          >
+            {t.budget.adhocEmptyCta}
+          </button>
+        </div>
       ) : (
         <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
           {rows.map((a) => {
             const paid = Boolean(a.paidOn);
             const upcoming = !paid && a.date > today;
+            const dueUnpaid = !paid && a.date <= today;
             return (
             <div key={a.id} className="border-t border-line px-4 py-3 first:border-0">
               <button type="button" className="flex w-full items-start gap-2 text-left" onClick={() => onEdit(a)}>
@@ -497,18 +554,25 @@ function AdhocBlock({
                 <AmountWithHkd amount={-a.amount} currency={a.currency} rates={rates} sign className="shrink-0 text-sm font-semibold text-expense" />
                 <ChevronRight className="mt-0.5 size-4 shrink-0 text-faint" />
               </button>
-              {upcoming ? (
-                <div className="mt-2 flex gap-2">
+              {paid ? (
+                <span className="mt-2 inline-flex rounded-full bg-success-soft px-2 py-1 text-xs font-medium text-income">{t.budget.charged}</span>
+              ) : (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {dueUnpaid ? (
+                    <span className="inline-flex rounded-full bg-watch-soft px-2 py-1 text-xs font-medium text-watch">{t.budget.awaitingPost}</span>
+                  ) : upcoming ? (
+                    <span className="inline-flex rounded-full bg-accent-soft px-2 py-1 text-xs font-medium text-accent">{t.budget.upcomingStatus}</span>
+                  ) : null}
                   <button
                     type="button"
-                    className="h-8 rounded-full bg-accent-soft px-3 text-xs font-medium text-accent"
+                    className="inline-flex h-11 items-center rounded-full bg-accent-soft px-4 text-xs font-medium text-accent"
                     onClick={() => setPosting(a)}
                   >
                     {t.budget.postAdhocShort}
                   </button>
                   <button
                     type="button"
-                    className="h-8 rounded-full bg-background px-3 text-xs font-medium"
+                    className="inline-flex h-11 items-center rounded-full bg-background px-4 text-xs font-medium"
                     onClick={async () => {
                       await addWish(wishFromAdhoc(a, locale));
                       await delAdhoc(a.id);
@@ -518,8 +582,6 @@ function AdhocBlock({
                     {t.budget.toWishlistShort}
                   </button>
                 </div>
-              ) : (
-                <span className="mt-2 inline-flex rounded-full bg-success-soft px-2 py-1 text-xs font-medium text-income">{t.budget.charged}</span>
               )}
             </div>
             );
@@ -678,7 +740,15 @@ function AdhocEditorBody({
   const [name, setName] = useState(initial ? pickName(locale, initial.label, initial.labelZh) : "");
   const [amount, setAmount] = useState(initial ? String(initial.amount) : "");
   const [currency, setCurrency] = useState<Currency>(initial && initial.currency !== "MILES" ? initial.currency : defaultCurrency);
-  const [date, setDate] = useState(initial?.date ?? (today.startsWith(month) ? today : `${month}-28`));
+  const defaultDate = (() => {
+    if (initial?.date) return initial.date;
+    if (!today.startsWith(month)) return `${month}-28`;
+    const [y, m, d] = today.split("-").map(Number);
+    const next = new Date(y, m - 1, d + 1);
+    const iso = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+    return iso.startsWith(month) ? iso : today;
+  })();
+  const [date, setDate] = useState(defaultDate);
   const [time, setTime] = useState(initial?.time || clockNow());
   const [tripId, setTripId] = useState(initial?.tripId ?? "");
   const [categoryId, setCategoryId] = useState(initial?.categoryId ?? "");
@@ -686,8 +756,10 @@ function AdhocEditorBody({
     () => moneyAccounts.find((x) => x.type === "cash" || x.type === "current" || x.type === "savings")?.id ?? moneyAccounts[0]?.id ?? "",
   );
   const [pickCat, setPickCat] = useState(false);
+  const [postNow, setPostNow] = useState(false);
   const cat = categories.find((c) => c.id === categoryId);
-  const postToday = !initial && date === today;
+  const dateIsToday = date === today;
+  const postToday = !initial && dateIsToday && postNow;
 
   async function save() {
     const n = name.trim();
@@ -815,11 +887,36 @@ function AdhocEditorBody({
             ))}
         </select>
       </label>
+      {!initial && dateIsToday ? (
+        <div className="border-b border-line px-4 py-3">
+          <div className="text-xs font-medium text-muted">{t.budget.postTodayHint}</div>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              className={cn(
+                "flex h-11 items-center justify-center rounded-xl text-sm font-medium transition",
+                !postNow ? "bg-accent text-on-accent" : "bg-elevated",
+              )}
+              onClick={() => setPostNow(false)}
+            >
+              {t.budget.budgetOnly}
+            </button>
+            <button
+              type="button"
+              className={cn(
+                "flex h-11 items-center justify-center rounded-xl text-sm font-medium transition",
+                postNow ? "bg-accent text-on-accent" : "bg-elevated",
+              )}
+              onClick={() => setPostNow(true)}
+            >
+              {t.budget.postNow}
+            </button>
+          </div>
+          <p className="mt-2 text-[11px] leading-4 text-faint">{postNow ? t.budget.postNowHint : t.budget.budgetOnlyHint}</p>
+        </div>
+      ) : null}
       {postToday ? (
-        <>
-          <AccountLine accounts={moneyAccounts} value={accountId} onChange={setAccountId} placeholder={t.add.account} role={t.budget.postAdhocFrom} />
-          <p className="px-4 py-3 text-xs leading-5 text-muted">{t.budget.postTodayHint}</p>
-        </>
+        <AccountLine accounts={moneyAccounts} value={accountId} onChange={setAccountId} placeholder={t.add.account} role={t.budget.postAdhocFrom} />
       ) : null}
       {initial ? (
         <>
