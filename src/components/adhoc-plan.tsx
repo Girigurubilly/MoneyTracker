@@ -106,6 +106,7 @@ export function AdhocPlanPage() {
             rates={rates}
             locale={locale}
             categories={categories}
+            accounts={accounts}
             onAdd={() => openAdd(month)}
             onEdit={setEditing}
             onPost={setPosting}
@@ -131,7 +132,7 @@ export function AdhocPlanPage() {
           </button>
         }
       />
-      <p className="px-5 pb-2 text-xs leading-5 text-muted">{t.budget.adhocPlanHint}</p>
+      <p className="rt-enter px-5 pb-2 text-xs leading-5 text-muted">{t.budget.adhocPlanHint}</p>
       <ReportAiButton onClick={() => setAi(true)} />
       {ai ? (
         <ReportAiSheet
@@ -157,6 +158,7 @@ export function AdhocPlanPage() {
           rates={rates}
           locale={locale}
           categories={categories}
+          accounts={accounts}
           empty={t.budget.adhocNone}
           onEdit={setEditing}
           onPost={setPosting}
@@ -196,6 +198,7 @@ function MonthBlock({
   rates,
   locale,
   categories,
+  accounts,
   onAdd,
   onEdit,
   onPost,
@@ -208,6 +211,7 @@ function MonthBlock({
   rates: FxRate[];
   locale: "en" | "zh-HK";
   categories: ReturnType<typeof useApp.getState>["categories"];
+  accounts: ReturnType<typeof useApp.getState>["accounts"];
   onAdd: () => void;
   onEdit: (a: AdhocBudget) => void;
   onPost: (a: AdhocBudget) => void;
@@ -222,7 +226,7 @@ function MonthBlock({
           {t.budget.addShort}
         </button>
       </div>
-      <MonthRows rows={rows} today={today} rates={rates} locale={locale} categories={categories} empty={t.budget.adhocNone} onEdit={onEdit} onPost={onPost} onWish={onWish} />
+      <MonthRows rows={rows} today={today} rates={rates} locale={locale} categories={categories} accounts={accounts} empty={t.budget.adhocNone} onEdit={onEdit} onPost={onPost} onWish={onWish} />
     </div>
   );
 }
@@ -233,6 +237,7 @@ function MonthRows({
   rates,
   locale,
   categories,
+  accounts,
   empty,
   onEdit,
   onPost,
@@ -243,6 +248,7 @@ function MonthRows({
   rates: FxRate[];
   locale: "en" | "zh-HK";
   categories: ReturnType<typeof useApp.getState>["categories"];
+  accounts: ReturnType<typeof useApp.getState>["accounts"];
   empty: string;
   onEdit: (a: AdhocBudget) => void;
   onPost: (a: AdhocBudget) => void;
@@ -264,7 +270,12 @@ function MonthRows({
                   {paid ? `${a.paidOn} · ${t.budget.paidToday}` : a.date}
                   {(() => {
                     const cat = categories.find((c) => c.id === a.categoryId);
-                    return cat ? ` · ${categoryPath(cat, categories, locale)}` : "";
+                    const acc = accounts.find((x) => x.id === a.accountId);
+                    const bits = [
+                      cat ? categoryPath(cat, categories, locale) : "",
+                      acc ? pickName(locale, acc.name, acc.nameZh) : "",
+                    ].filter(Boolean);
+                    return bits.length ? ` · ${bits.join(" · ")}` : "";
                   })()}
                 </div>
               </button>

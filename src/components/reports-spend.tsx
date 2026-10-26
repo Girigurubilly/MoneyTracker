@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { Overlay, ScreenHeader, TxGroupedList } from "@/components/shared";
 import { SpendBriefButton } from "@/components/spend-brief";
-import { money, pct, shortDate, todayISO } from "@/lib/format";
+import { prefersReducedMotion } from "@/components/retire-ux";
+import { money, shortDate, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { periodCategoryTotals, periodCategoryTxs, periodRange, type PeriodPreset, type PeriodTab } from "@/lib/calc/period";
 import type { Category } from "@/lib/types";
@@ -21,6 +22,14 @@ const CHART = [
   "var(--color-chart-8)",
 ];
 
+function softPct(share: number, tinyLabel: string): string {
+  if (!Number.isFinite(share) || share <= 0) return tinyLabel;
+  const rounded = Math.round(share * 100);
+  if (rounded < 1) return tinyLabel;
+  return `${rounded}%`;
+}
+
+
 export function SpendingPage() {
   const t = useT();
   const locale = useUi((s) => s.locale);
@@ -28,6 +37,7 @@ export function SpendingPage() {
   const cats = useApp((s) => s.categories);
   const rates = useApp((s) => s.fxRates);
   const today = todayISO();
+  const animate = !prefersReducedMotion();
   const [preset, setPreset] = useState<PeriodPreset>("this-month");
   const [tab, setTab] = useState<PeriodTab>("expense");
   const [merge, setMerge] = useState(true);
@@ -72,10 +82,15 @@ export function SpendingPage() {
   const netSave = totals.income - totals.expense;
   const bothPie =
     tab === "both" && !focusParent
-      ? [
-          { id: "spend-slice", name: t.reports.expense, nameZh: t.reports.expense, value: totals.expense, colorIndex: 0 },
-          { id: "save-slice", name: t.reports.netSurplus, nameZh: t.reports.netSurplus, value: Math.max(0, netSave), colorIndex: 2 },
-        ].filter((r) => r.value > 0)
+      ? netSave >= 0
+        ? [
+            { id: "spend-slice", name: t.reports.expense, nameZh: t.reports.expense, value: totals.expense, colorIndex: 0 },
+            { id: "save-slice", name: t.reports.netSurplus, nameZh: t.reports.netSurplus, value: netSave, colorIndex: 2 },
+          ].filter((r) => r.value > 0)
+        : [
+            { id: "income-slice", name: t.reports.income, nameZh: t.reports.income, value: totals.income, colorIndex: 2 },
+            { id: "spend-slice", name: t.reports.expense, nameZh: t.reports.expense, value: totals.expense, colorIndex: 0 },
+          ].filter((r) => r.value > 0)
       : null;
   const pieRows = bothPie ?? view.rows;
   const openRow = view.rows.find((r) => r.id === openId) ?? totals.rows.find((r) => r.id === openId) ?? null;
@@ -98,6 +113,7 @@ export function SpendingPage() {
     (r) => Number(r.value) > 0,
   );
   const slices = donut.length ? donut : [{ id: "empty", value: 1, name: "—", nameZh: "—", colorIndex: 0 }];
+  const activeId = openId ?? focusParent ?? null;
 
   function openBucket(id: string) {
     if (merge && !focusParent) {
@@ -111,7 +127,7 @@ export function SpendingPage() {
   }
 
   return (
-    <div className="pb-10">
+    <div className="pb-28">
       <ScreenHeader
         title={focusCat ? pickName(locale, focusCat.name, focusCat.nameZh) : t.reports.spending}
         backTo="/reports"
@@ -129,42 +145,62 @@ export function SpendingPage() {
           )
         }
       />
-      <div className="mx-4 grid grid-cols-2 overflow-hidden rounded-xl bg-elevated">
-        <label className="border-r border-line px-4 py-3">
+      <div className="rt-enter mx-4 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line">
+        <label className="bg-elevated px-4 py-3">
           <div className="text-xs text-muted">{t.reports.start}</div>
           {preset === "custom" ? (
             <input
               type="date"
               value={customFrom}
               onChange={(e) => setCustomFrom(e.target.value)}
-              className="mt-1 w-full bg-transparent text-sm outline-none"
+              className="mt-1 w-full bg-transparent text-sm font-medium tabular-nums text-accent outline-none"
             />
           ) : (
-            <div className="mt-1 text-sm">{shortDate(from, locale)}</div>
+            <button
+              type="button"
+              onClick={() => {
+                setCustomFrom(from);
+                setCustomTo(to);
+                setPreset("custom");
+              }}
+              className="tr-press mt-1 block w-full text-left text-sm font-medium tabular-nums text-accent underline decoration-accent/30 underline-offset-2"
+            >
+              {shortDate(from, locale)}
+            </button>
           )}
         </label>
-        <label className="px-4 py-3">
+        <label className="bg-elevated px-4 py-3">
           <div className="text-xs text-muted">{t.reports.end}</div>
           {preset === "custom" ? (
             <input
               type="date"
               value={customTo}
               onChange={(e) => setCustomTo(e.target.value)}
-              className="mt-1 w-full bg-transparent text-sm outline-none"
+              className="mt-1 w-full bg-transparent text-sm font-medium tabular-nums text-accent outline-none"
             />
           ) : (
-            <div className="mt-1 text-sm">{shortDate(to, locale)}</div>
+            <button
+              type="button"
+              onClick={() => {
+                setCustomFrom(from);
+                setCustomTo(to);
+                setPreset("custom");
+              }}
+              className="tr-press mt-1 block w-full text-left text-sm font-medium tabular-nums text-accent underline decoration-accent/30 underline-offset-2"
+            >
+              {shortDate(to, locale)}
+            </button>
           )}
         </label>
       </div>
-      <div className="flex flex-wrap gap-2 px-4 pt-3">
+      <div className="rt-enter flex flex-wrap gap-2 px-4 pt-3">
         {presets.map((p) => (
           <button
             key={p.id}
             type="button"
             onClick={() => setPreset(p.id)}
             className={cn(
-              "h-8 rounded-full px-3 text-sm",
+              "tr-press flex h-11 items-center rounded-full px-3 text-sm transition",
               preset === p.id ? "bg-accent text-on-accent" : "bg-elevated text-foreground",
             )}
           >
@@ -172,14 +208,14 @@ export function SpendingPage() {
           </button>
         ))}
       </div>
-      <div className="mx-4 mt-3 grid grid-cols-3 rounded-xl bg-elevated p-1">
+      <div className="rt-enter mx-4 mt-3 grid grid-cols-3 rounded-xl bg-elevated p-1">
         {tabs.map((tb) => (
           <button
             key={tb.id}
             type="button"
             onClick={() => setTab(tb.id)}
             className={cn(
-              "h-9 rounded-lg text-sm font-medium",
+              "tr-press h-9 rounded-lg text-sm font-medium transition",
               tab === tb.id ? "bg-background text-foreground shadow-sm" : "text-muted",
             )}
           >
@@ -187,12 +223,21 @@ export function SpendingPage() {
           </button>
         ))}
       </div>
-      <div className="flex flex-wrap gap-2 px-4 pt-3">
+      <div className="rt-enter mx-4 mt-3 grid grid-cols-3 gap-2">
+        <MiniStat label={t.reports.income} value={money(totals.income, "HKD")} tone="income" />
+        <MiniStat label={t.reports.expense} value={money(totals.expense, "HKD")} tone="expense" />
+        <MiniStat
+          label={t.reports.netSurplus}
+          value={money(netSave, "HKD", { sign: true })}
+          tone={netSave >= 0 ? "income" : "expense"}
+        />
+      </div>
+      <div className="rt-enter flex flex-wrap gap-2 px-4 pt-3">
         <button
           type="button"
           onClick={() => setMerge((v) => !v)}
           className={cn(
-            "h-8 rounded-full px-3 text-sm font-medium",
+            "tr-press h-11 rounded-full px-3 text-sm font-medium transition",
             merge ? "bg-accent text-on-accent" : "bg-elevated text-muted",
           )}
         >
@@ -203,7 +248,7 @@ export function SpendingPage() {
             type="button"
             onClick={() => setHideAdhoc((v) => !v)}
             className={cn(
-              "h-8 rounded-full px-3 text-sm font-medium",
+              "tr-press h-11 rounded-full px-3 text-sm font-medium transition",
               hideAdhoc ? "bg-accent text-on-accent" : "bg-elevated text-muted",
             )}
           >
@@ -211,35 +256,52 @@ export function SpendingPage() {
           </button>
         )}
       </div>
-      <div className="relative mx-auto mt-3 h-56 w-56">
+      {hideAdhoc || focusParent ? (
+        <p className="px-5 pt-2 text-[11px] text-faint">
+          {hideAdhoc ? t.reports.spendFilterHideAdhoc : null}
+          {hideAdhoc && focusParent ? " · " : null}
+          {focusParent && focusCat
+            ? t.reports.spendFilterFocus.replace("{name}", pickName(locale, focusCat.name, focusCat.nameZh))
+            : null}
+        </p>
+      ) : null}
+      <div className={cn("rt-enter relative mx-auto mt-3 h-56 w-56", animate && "rt-chart-draw")}>
         <SpendDonut
           slices={slices.map((r) => ({
             id: r.id,
             value: Number(r.value) || 0,
             color: r.id === "empty" ? "var(--color-line)" : CHART[r.colorIndex % CHART.length],
           }))}
+          activeId={activeId}
+          animate={animate}
           onPick={(id) => {
-            if (id !== "spend-slice" && id !== "save-slice" && id !== "empty") openBucket(id);
+            if (id !== "spend-slice" && id !== "save-slice" && id !== "income-slice" && id !== "empty") openBucket(id);
           }}
         />
         <div className="pointer-events-none absolute inset-0 grid place-items-center px-10 text-center">
           <div>
-            <div className="text-base font-semibold tabular-nums">{money(center, "HKD")}</div>
+            <div className={cn("text-base font-semibold tabular-nums", tab === "both" && netSave < 0 && "text-expense")}>
+              {money(center, "HKD")}
+            </div>
             <div className="text-xs text-muted">{centerLabel}</div>
           </div>
         </div>
       </div>
-      <div className="px-5 pt-2">
+      <div className="rt-enter-delay px-5 pt-2">
         {view.rows.map((r) => {
           const cat = cats.find((c) => c.id === r.id);
           const parent = !merge && cat?.parentId ? cats.find((c) => c.id === cat.parentId) : null;
           const label = parent ? `${pickName(locale, parent.name, parent.nameZh)} · ${pickName(locale, r.name, r.nameZh)}` : pickName(locale, r.name, r.nameZh);
+          const active = openId === r.id || focusParent === r.id;
           return (
           <button
             key={r.id}
             type="button"
             onClick={() => openBucket(r.id)}
-            className="flex min-h-11 w-full items-center justify-between gap-3 py-2.5 text-left"
+            className={cn(
+              "tr-press flex min-h-11 w-full items-center justify-between gap-3 rounded-lg py-2.5 text-left transition",
+              active && "bg-accent-soft/60 px-2",
+            )}
           >
             <div className="flex min-w-0 items-center gap-2.5">
               <span className="size-2.5 shrink-0 rounded-full" style={{ background: CHART[r.colorIndex] }} />
@@ -248,7 +310,7 @@ export function SpendingPage() {
             <span className="flex shrink-0 items-center gap-1">
               <span className="text-sm tabular-nums text-muted">
                 {money(r.value, "HKD")}
-                <span className="ml-2 text-xs text-faint">{pct(r.value / shareBase(r.id, cats, tab, totals, center))}</span>
+                <span className="ml-2 text-xs text-faint">{softPct(r.value / shareBase(r.id, cats, tab, totals, center), t.reports.spendShareTiny)}</span>
               </span>
               <ChevronRight className="size-4 text-faint" />
             </span>
@@ -272,12 +334,27 @@ export function SpendingPage() {
   );
 }
 
+function MiniStat({ label, value, tone }: { label: string; value: string; tone?: "income" | "expense" }) {
+  return (
+    <div className="rounded-xl bg-elevated px-3 py-2.5">
+      <div className="text-[11px] text-muted">{label}</div>
+      <div className={cn("mt-0.5 text-sm font-semibold tabular-nums", tone === "income" && "text-income", tone === "expense" && "text-expense")}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
 function SpendDonut({
   slices,
   onPick,
+  activeId,
+  animate,
 }: {
   slices: { id: string; value: number; color: string }[];
   onPick: (id: string) => void;
+  activeId?: string | null;
+  animate: boolean;
 }) {
   const usable = slices.filter((s) => s.value > 0);
   const total = usable.reduce((s, r) => s + r.value, 0);
@@ -294,6 +371,7 @@ function SpendDonut({
   }
   if (usable.length === 1) {
     const only = usable[0];
+    const thick = activeId === only.id ? width + 4 : width;
     return (
       <svg viewBox="0 0 200 200" className="h-full w-full">
         <circle
@@ -302,8 +380,9 @@ function SpendDonut({
           r={radius}
           fill="none"
           stroke={only.color}
-          strokeWidth={width}
-          className={only.id === "empty" ? undefined : "cursor-pointer"}
+          strokeWidth={thick}
+          opacity={activeId && activeId !== only.id ? 0.45 : 1}
+          className={cn(only.id === "empty" ? undefined : "cursor-pointer", animate && "rt-ring")}
           onClick={() => onPick(only.id)}
         />
       </svg>
@@ -322,15 +401,18 @@ function SpendDonut({
         const y1 = cy + radius * Math.sin(start);
         const x2 = cx + radius * Math.cos(end);
         const y2 = cy + radius * Math.sin(end);
+        const active = activeId === s.id;
+        const dimmed = Boolean(activeId) && !active;
         return (
           <path
             key={s.id}
             d={`M ${x1} ${y1} A ${radius} ${radius} 0 ${large} 1 ${x2} ${y2}`}
             fill="none"
             stroke={s.color}
-            strokeWidth={width}
+            strokeWidth={active ? width + 4 : width}
             strokeLinejoin="round"
-            className="cursor-pointer"
+            opacity={dimmed ? 0.45 : 1}
+            className={cn("cursor-pointer", animate && "rt-ring")}
             onClick={() => onPick(s.id)}
           />
         );
@@ -386,7 +468,7 @@ function CategoryTxList({
         <h1 className="min-w-0 flex-1 truncate text-center text-base font-semibold">{pickName(locale, row.name, row.nameZh)}</h1>
         <span className="min-w-11" />
       </header>
-      <div className="mx-4 mb-4 mt-2 rounded-xl bg-elevated px-4 py-4">
+      <div className="rt-enter mx-4 mb-4 mt-2 rounded-xl bg-elevated px-4 py-4">
         <div className="text-xs text-muted">
           {shortDate(from, locale)} – {shortDate(to, locale)}
         </div>

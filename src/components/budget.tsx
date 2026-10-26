@@ -106,11 +106,11 @@ export function BudgetScreen() {
         }
       />
       <p className="px-5 pb-3 text-xs text-muted">{t.budget.soft}</p>
-      <div className="mx-4 rounded-xl bg-elevated px-4 py-4">
+      <div className="rt-enter mx-4 rounded-xl bg-elevated px-4 py-4">
         <div className="flex items-start justify-between gap-2">
           <button
             type="button"
-            className="min-w-0 flex-1 text-left"
+            className="tr-press min-w-0 flex-1 text-left"
             onClick={() => {
               setCapDraft(String(monthCap || ""));
               setEditCap(true);
@@ -502,6 +502,7 @@ function AdhocBlock({
   const t = useT();
   const locale = useUi((s) => s.locale);
   const rates = useApp((s) => s.fxRates);
+  const accounts = useApp((s) => s.accounts);
   const delAdhoc = useApp((s) => s.deleteAdhocBudget);
   const addWish = useApp((s) => s.addWishItem);
   const today = todayISO();
@@ -549,7 +550,13 @@ function AdhocBlock({
               <button type="button" className="flex w-full items-start gap-2 text-left" onClick={() => onEdit(a)}>
                 <div className="min-w-0 flex-1">
                   <div className="break-words text-sm font-medium">{pickName(locale, a.label, a.labelZh)}</div>
-                  <div className="mt-0.5 text-xs text-muted">{dayPart(paid ? (a.paidOn ?? today) : a.date, locale)}</div>
+                  <div className="mt-0.5 text-xs text-muted">
+                    {dayPart(paid ? (a.paidOn ?? today) : a.date, locale)}
+                    {(() => {
+                      const acc = accounts.find((x) => x.id === a.accountId);
+                      return acc ? ` · ${pickName(locale, acc.name, acc.nameZh)}` : "";
+                    })()}
+                  </div>
                 </div>
                 <AmountWithHkd amount={-a.amount} currency={a.currency} rates={rates} sign className="shrink-0 text-sm font-semibold text-expense" />
                 <ChevronRight className="mt-0.5 size-4 shrink-0 text-faint" />
@@ -642,7 +649,7 @@ function PostAdhocBody({ item, onClose }: { item: AdhocBudget; onClose: () => vo
       tripId: item.tripId,
       tripManual: Boolean(item.tripId),
     });
-    await update({ ...item, amount: amt, currency, paidOn: today });
+    await update({ ...item, amount: amt, currency, accountId, paidOn: today });
     onClose();
   }
 
@@ -753,7 +760,11 @@ function AdhocEditorBody({
   const [tripId, setTripId] = useState(initial?.tripId ?? "");
   const [categoryId, setCategoryId] = useState(initial?.categoryId ?? "");
   const [accountId, setAccountId] = useState(
-    () => moneyAccounts.find((x) => x.type === "cash" || x.type === "current" || x.type === "savings")?.id ?? moneyAccounts[0]?.id ?? "",
+    () =>
+      initial?.accountId ||
+      moneyAccounts.find((x) => x.type === "cash" || x.type === "current" || x.type === "savings")?.id ||
+      moneyAccounts[0]?.id ||
+      "",
   );
   const [pickCat, setPickCat] = useState(false);
   const [postNow, setPostNow] = useState(false);
@@ -768,7 +779,7 @@ function AdhocEditorBody({
       toast(t.add.needAmount);
       return;
     }
-    if (postToday && !accountId) {
+    if (!accountId) {
       toast(t.add.account);
       return;
     }
@@ -788,7 +799,7 @@ function AdhocEditorBody({
       priceCards: initial?.priceCards,
       valueCards: initial?.valueCards,
       tripId: tripId || undefined,
-      accountId: initial?.accountId,
+      accountId: accountId || undefined,
     };
     if (initial) await update(row);
     else await add(row);
@@ -915,9 +926,8 @@ function AdhocEditorBody({
           <p className="mt-2 text-[11px] leading-4 text-faint">{postNow ? t.budget.postNowHint : t.budget.budgetOnlyHint}</p>
         </div>
       ) : null}
-      {postToday ? (
-        <AccountLine accounts={moneyAccounts} value={accountId} onChange={setAccountId} placeholder={t.add.account} role={t.budget.postAdhocFrom} />
-      ) : null}
+      <AccountLine accounts={moneyAccounts} value={accountId} onChange={setAccountId} placeholder={t.add.account} role={t.budget.expectedAccount} />
+      <p className="px-4 pb-2 text-[11px] leading-4 text-faint">{t.budget.expectedAccountHint}</p>
       {initial ? (
         <>
           {initial.paidOn || !(initial.date > today) ? null : (
