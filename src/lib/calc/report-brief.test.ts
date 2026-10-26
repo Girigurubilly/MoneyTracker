@@ -28,9 +28,9 @@ describe("report briefs", () => {
     ];
     const data = yearlyProjection(plans, [], [], 2026, 2, txs, cats, 8000, [], "2026-03-15");
     const md = renderYearlyBriefMarkdown({ asOf: "2026-03-15", year: 2026, monthCap: 8000, ...data });
-    assert.match(md, /2026-01 \| 10000 \| 0 \| 0 \| 4000 \| 6000 \| posted \| posted/);
-    assert.match(md, /2026-03 \(current\).*spending cap/);
-    assert.match(md, /2026-04 \| 11000 \| 0 \| 0 \| 5000 \| 6000 \| planned \| planned/);
+    assert.match(md, /Jan \| 10000 \| 0 \| 0 \| 4000 \| 6000 \| posted \| posted/);
+    assert.match(md, /Mar \(current\).*spending cap/);
+    assert.match(md, /Apr \| 11000 \| 0 \| 0 \| 5000 \| 6000 \| planned \| planned/);
     assert.match(md, /not money already received/);
   });
 
