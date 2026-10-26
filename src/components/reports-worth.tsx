@@ -12,6 +12,7 @@ import {
   largestWorthMove,
   periodNetWorthPoints,
   periodPostedCashflow,
+  plainTransferOffsetHkd,
   worthMoveIsCliff,
   type WorthPoint,
   type WorthPointSource,
@@ -278,6 +279,7 @@ export function WorthTrendPage() {
           point={sheetPoint}
           prev={sheetPrev}
           sourceLabel={sourceLabel}
+          accounts={accounts}
           txs={txs}
           rates={rates}
           locale={locale}
@@ -311,6 +313,7 @@ function WorthPointSheet({
   point,
   prev,
   sourceLabel,
+  accounts,
   txs,
   rates,
   locale,
@@ -320,6 +323,7 @@ function WorthPointSheet({
   point: WorthPoint & { label?: string };
   prev: (WorthPoint & { label?: string }) | null | undefined;
   sourceLabel: (s: WorthPointSource) => string;
+  accounts: ReturnType<typeof useApp.getState>["accounts"];
   txs: ReturnType<typeof useApp.getState>["transactions"];
   rates: ReturnType<typeof useApp.getState>["fxRates"];
   locale: "en" | "zh-HK";
@@ -334,6 +338,10 @@ function WorthPointSheet({
   const deltaAssets = prev ? Math.round((point.assets - prev.assets) * 100) / 100 : 0;
   const deltaLiab = prev ? Math.round((point.liab - prev.liab) * 100) / 100 : 0;
   const unexplained = Math.round((deltaNet - posted.net) * 100) / 100;
+  const transferHeld = useMemo(() => {
+    if (!prev) return 0;
+    return Math.round((plainTransferOffsetHkd(accounts, txs, rates, point.date) - plainTransferOffsetHkd(accounts, txs, rates, prev.date)) * 100) / 100;
+  }, [accounts, txs, rates, point.date, prev]);
   const seam = Boolean(prev && prev.source !== point.source);
   const topTxs = useMemo(() => {
     const rows = txs
@@ -376,6 +384,11 @@ function WorthPointSheet({
         </div>
       </div>
       {seam ? <p className="rt-enter mx-4 mt-3 rounded-xl bg-watch-soft px-3 py-2 text-xs leading-4 text-watch">{t.reports.worthSeamNote}</p> : null}
+      {Math.abs(transferHeld) >= 1 ? (
+        <p className="rt-enter mx-4 mt-3 rounded-xl bg-elevated px-3 py-2 text-xs leading-4 text-muted">
+          {t.reports.worthTransferHeld.replace("{amount}", money(transferHeld, "HKD"))}
+        </p>
+      ) : null}
       {prev ? (
         <div className="rt-enter mx-4 mt-3 rounded-xl bg-elevated px-4 py-3">
           <div className="text-xs font-medium text-muted">{t.reports.worthDeltaVsPrev}</div>

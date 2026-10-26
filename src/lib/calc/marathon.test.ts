@@ -40,7 +40,7 @@ describe("SCB marathon tiers", () => {
     assert.equal(marathonInterest(1, tiers).overlap, true);
   });
 
-  it("pays each month's interest on the 1st of the next month", () => {
+  it("pays each month on the 1st, and folds a final 1st into the previous payout", () => {
     const months = marathonMonthlyInterest(100_000, scbMarathonTiers("HKD"));
     assert.deepEqual(
       months.map((m) => [m.month, m.date, m.days]),
@@ -48,14 +48,18 @@ describe("SCB marathon tiers", () => {
         ["2026-10", "2026-11-01", 30],
         ["2026-11", "2026-12-01", 30],
         ["2026-12", "2027-01-01", 31],
-        ["2027-01", "2027-02-01", 31],
-        ["2027-02", "2027-03-01", 1],
+        ["2027-01", "2027-02-02", 32],
       ],
     );
     const oct = Math.round(100_000 * 0.028 * (30 / 365) * 100) / 100;
     assert.equal(months[0]?.interest, oct);
     const jan =
-      Math.round((Math.round(100_000 * 0.03 * (3 / 365) * 100) / 100 + Math.round(100_000 * 0.032 * (28 / 365) * 100) / 100) * 100) / 100;
+      Math.round(
+        (Math.round(100_000 * 0.03 * (3 / 365) * 100) / 100 +
+          Math.round(100_000 * 0.032 * (28 / 365) * 100) / 100 +
+          Math.round(100_000 * 0.032 * (1 / 365) * 100) / 100) *
+          100,
+      ) / 100;
     assert.equal(months[3]?.interest, jan);
     assert.equal(months.reduce((s, m) => s + m.days, 0), 123);
   });

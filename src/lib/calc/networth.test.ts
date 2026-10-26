@@ -114,3 +114,66 @@ describe("largestWorthMove", () => {
 function toAssets(n: number) {
   return n;
 }
+
+describe("plain transfers do not move reconstructed net worth", () => {
+  const broker: Account = {
+    id: "broker",
+    name: "Broker",
+    nameZh: "證券",
+    type: "investment",
+    currency: "HKD",
+    balance: 0,
+    includeInNetWorth: false,
+    group: "assets",
+  };
+
+  it("holds money that moved to an account outside the total", () => {
+    const points = periodNetWorthPoints(
+      [{ ...cash, balance: 500_000 }, broker],
+      [tx({ id: "move", type: "transfer", amount: 1_000_000, date: "2026-09-07", accountId: "cash", toAccountId: "broker" })],
+      [],
+      "2026-08-01",
+      "2026-10-26",
+      [],
+      [],
+    );
+    const aug = points.find((p) => p.date === "2026-08-31");
+    const sep = points.find((p) => p.date === "2026-09-30");
+    assert.equal(aug?.net, 1_500_000);
+    assert.equal(sep?.net, 1_500_000);
+  });
+
+  it("leaves an internal transfer unchanged", () => {
+    const save: Account = { ...cash, id: "save", name: "Save", nameZh: "儲蓄", balance: 1_000_000 };
+    const points = periodNetWorthPoints(
+      [{ ...cash, balance: 0 }, save],
+      [tx({ id: "move", type: "transfer", amount: 1_000_000, date: "2026-09-07", accountId: "cash", toAccountId: "save" })],
+      [],
+      "2026-08-01",
+      "2026-10-26",
+    );
+    assert.equal(points.find((p) => p.date === "2026-08-31")?.net, 1_000_000);
+    assert.equal(points.find((p) => p.date === "2026-09-30")?.net, 1_000_000);
+  });
+
+  it("lifts a raw snapshot that was saved after the transfer", () => {
+    const points = periodNetWorthPoints(
+      [{ ...cash, balance: 400_000 }],
+      [tx({ id: "out", type: "transfer", amount: 1_610_000, date: "2026-09-07", accountId: "cash" })],
+      [],
+      "2026-08-01",
+      "2026-10-26",
+      [],
+      [
+        { month: "2026-08", net: 2_010_000, assets: 2_010_000, liab: 0 },
+        { month: "2026-09", net: 400_000, assets: 400_000, liab: 0 },
+      ],
+    );
+    const aug = points.find((p) => p.date.startsWith("2026-08"));
+    const sep = points.find((p) => p.date.startsWith("2026-09"));
+    assert.equal(aug?.source, "snapshot");
+    assert.equal(sep?.source, "snapshot");
+    assert.equal(aug?.net, 2_010_000);
+    assert.equal(sep?.net, 2_010_000);
+  });
+});
