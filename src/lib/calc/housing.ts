@@ -2,7 +2,7 @@ import type { Account, Category, FxRate, Locale, Mortgage, Recurring, Transactio
 import { isMortgagePrincipalCategory, isMortgageInterestCategory, isHousingCategory } from "../categories.ts";
 import { isSpendLike, inMonth } from "./ledger.ts";
 import { monthlyExpenseRegulars, hkdOfRegular, coverRegulars } from "./budget.ts";
-import { monthlyPayment, remainingInterest, effectiveRate, originalPrincipal, originalTermMonths, amortizeFrom, monthsBetween } from "./mortgage.ts";
+import { monthlyPayment, remainingInterest, effectiveRate, originalPrincipal, originalTermMonths, remainingFromStart, monthsBetween } from "./mortgage.ts";
 import { toHkd } from "./fx.ts";
 import { todayISO } from "../format.ts";
 
@@ -24,11 +24,19 @@ export function installmentOf(m: Mortgage): number {
 }
 
 export function loanTimeProgress(m: Mortgage, today = todayISO()): number {
-  if (!m.startDate || m.remainingMonths <= 0) return m.original > 0 ? Math.max(0, 1 - m.outstanding / m.original) : 0;
+  // Time progress needs a loan start date; without it callers should hide the ring.
+  if (!m.startDate) return 0;
+  if (m.remainingMonths <= 0) return 1;
   const elapsed = monthsBetween(m.startDate, today);
   const total = elapsed + m.remainingMonths;
   if (total <= 0) return 0;
   return Math.max(0, Math.min(1, elapsed / total));
+}
+
+/** Principal repaid vs original — separate from time progress. */
+export function loanPrincipalProgress(m: Mortgage): number {
+  if (!(m.original > 0)) return 0;
+  return Math.max(0, Math.min(1, 1 - m.outstanding / m.original));
 }
 
 export function isPrincipalRegular(r: Recurring, categories: Category[]): boolean {
@@ -229,51 +237,62 @@ export function monthsAgoIso(fromIso: string, months: number): string {
 }
 
 export function stressRows(m: Mortgage): { shock: number; payment: number; interest: number }[] {
+  const today = todayISO();
   const rate = effectiveRate(m);
-  const orig = originalPrincipal(m);
-  const term = originalTermMonths(m, todayISO());
+  // Stress remaining payments on current outstanding — not full-term interest on original.
+  const months = Math.max(1, remainingFromStart(m, today).remainingMonths);
+  const principal = m.outstanding > 0 ? m.outstanding : originalPrincipal(m);
   return [0.005, 0.01, 0.02].map((shock) => ({
     shock,
-    payment: monthlyPayment(orig, rate + shock, term),
-    interest: remainingInterest(orig, rate + shock, term),
+    payment: monthlyPayment(principal, rate + shock, months),
+    interest: remainingInterest(principal, rate + shock, months),
   }));
 }
 
 export function projection12(m: Mortgage, today = todayISO()) {
-  const orig = originalPrincipal(m);
-  const term = originalTermMonths(m, today);
-  let skip = m.startDate ? monthsBetween(m.startDate, today) : Math.max(0, term - m.remainingMonths);
+  const left = remainingFromStart(m, today).remainingMonths;
+  const months = Math.max(1, left);
+  const annual = effectiveRate(m);
   const payDay = Math.min(28, Math.max(1, m.paymentDay || 1));
   const thisMonth = today.slice(0, 7);
   const started = !m.startDate || m.startDate.slice(0, 7) <= thisMonth;
   const includeCurrent = !started || Number(today.slice(8, 10)) <= payDay;
-  if (started && !includeCurrent) skip += 1;
-  const shown = amortizeFrom(orig, effectiveRate(m), term, skip, 12);
   const [y, mo] = thisMonth.split("-").map(Number);
   const start = new Date(y, (mo || 1) - 1 + (includeCurrent ? 0 : 1), 1);
   const firstMonth = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
+  // Schedule from current outstanding so 尚欠 matches the first balance (not original-principal amortize).
+  const opening = m.outstanding > 0 ? m.outstanding : originalPrincipal(m);
+  const payment = installmentOf(m) || monthlyPayment(opening, annual, months);
+  const r = annual / 12;
+  const formula: { n: number; interest: number; principal: number; balance: number }[] = [];
+  let bal = opening;
+  for (let i = 1; i <= 12 && bal > 0.5; i++) {
+    const interest = bal * r;
+    const principal = Math.min(Math.max(0, payment - interest), bal);
+    bal = Math.max(0, bal - principal);
+    formula.push({ n: i, interest, principal, balance: bal });
+  }
   const edits = m.scheduleEdits ?? {};
-  const hasEdit = Object.keys(edits).some((month) => shown.rows.some((_, i) => addYearMonths(firstMonth, i) === month));
+  const hasEdit = Object.keys(edits).some((month) => formula.some((_, i) => addYearMonths(firstMonth, i) === month));
   if (!hasEdit) {
     return {
-      payment: shown.payment,
+      payment,
       firstMonth,
-      rows: shown.rows.map((r, i) => ({ ...r, month: addYearMonths(firstMonth, i), edited: false })),
+      rows: formula.map((row, i) => ({ ...row, month: addYearMonths(firstMonth, i), edited: false })),
     };
   }
-  let bal = shown.rows[0] ? shown.rows[0].balance + shown.rows[0].principal : orig;
-  const rate = effectiveRate(m) / 12;
-  const rows = shown.rows.map((r, i) => {
+  bal = opening;
+  const rows = formula.map((row, i) => {
     const month = addYearMonths(firstMonth, i);
     const edit = edits[month];
-    const interestCalc = bal * rate;
-    const principalCalc = Math.min(Math.max(0, shown.payment - interestCalc), bal);
+    const interestCalc = bal * r;
+    const principalCalc = Math.min(Math.max(0, payment - interestCalc), bal);
     const interest = edit ? roundMoney(edit.interest) : roundMoney(interestCalc);
     const principal = edit ? roundMoney(Math.min(Math.max(0, edit.principal), bal)) : roundMoney(principalCalc);
     bal = roundMoney(Math.max(0, bal - principal));
-    return { ...r, month, interest, principal, balance: bal, edited: Boolean(edit) };
+    return { ...row, month, interest, principal, balance: bal, edited: Boolean(edit) };
   });
-  return { payment: shown.payment, rows, firstMonth };
+  return { payment, rows, firstMonth };
 }
 
 export function mortgageMonthLabel(month: string, locale: Locale): string {

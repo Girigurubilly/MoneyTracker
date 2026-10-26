@@ -142,7 +142,7 @@ export function LineRow({
           type="button"
           onClick={onFocusAmount}
           className={cn(
-            "max-w-[58%] shrink-0 whitespace-nowrap text-right text-lg font-bold tabular-nums tracking-tight",
+            "tr-press max-w-[58%] shrink-0 whitespace-nowrap text-right text-lg font-bold tabular-nums tracking-tight",
             active ? "text-accent" : "text-foreground",
           )}
         >
@@ -508,7 +508,7 @@ export function ActiveKeypad({
   setPrincipal: (v: string) => void;
   setInterest: (v: string) => void;
   currency: Currency;
-  onCurrency: (c: Currency) => void;
+  onCurrency?: (c: Currency) => void;
 }) {
   const value = field === "dest" ? dest : field === "principal" ? principal : field === "interest" ? interest : amount;
   const set =

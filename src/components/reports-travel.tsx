@@ -600,6 +600,7 @@ function TripEditor({
   onDeleted?: () => void;
 }) {
   const t = useT();
+  const locale = useUi((s) => s.locale);
   const add = useApp((s) => s.addTrip);
   const update = useApp((s) => s.updateTrip);
   const today = todayISO();
@@ -610,7 +611,7 @@ function TripEditor({
   const [budget, setBudget] = useState(String(trip?.cashBudget ?? 10000));
   const [monthly, setMonthly] = useState(String(trip?.monthlyCash ?? 0));
   const [plannerId, setPlannerId] = useState(trip?.plannerId || "");
-  const [field, setField] = useState<"amount" | "dest" | "principal" | "interest">("amount");
+  const [field, setField] = useState<"amount" | "dest">("amount");
 
   async function save() {
     const n = name.trim() || dest.trim();
@@ -636,60 +637,69 @@ function TripEditor({
     onClose();
   }
 
+  function confirmRemove() {
+    if (!onDeleted) return;
+    const ok = window.confirm(t.reports.removeTripConfirm);
+    if (ok) onDeleted();
+  }
+
   return (
     <Overlay open={open} onClose={onClose} variant="page">
-      <ComposerShell
-        header={<ComposerHeader onClose={onClose} onSave={() => void save()} title={trip ? t.reports.editTrip : t.reports.addTrip} />}
-        keypad={
-          <>
-            {trip && onDeleted ? (
-              <button type="button" className="flex h-11 w-full items-center justify-center border-t border-line bg-background text-sm text-expense" onClick={onDeleted}>
-                {t.reports.removeTrip}
-              </button>
-            ) : null}
-            <ActiveKeypad
-              field="amount"
-              amount={budget}
-              dest=""
-              principal=""
-              interest=""
-              setAmount={setBudget}
-              setDest={() => undefined}
-              setPrincipal={() => undefined}
-              setInterest={() => undefined}
-              currency="HKD"
-              onCurrency={() => undefined}
-            />
-          </>
-        }
-      >
-        <TextLine value={name} onChange={setName} label={t.reports.tripName} placeholder={t.budget.customName} />
-        <TextLine value={dest} onChange={setDest} label={t.reports.destination} placeholder={t.reports.destination} />
-        <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-          <span className="text-sm text-muted">{t.reports.tripStart}</span>
-          <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
-        </div>
-        <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-          <span className="text-sm text-muted">{t.reports.tripEnd}</span>
-          <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
-        </div>
-        <LineRow label={t.reports.cashBudget} amount={budget} currency="HKD" active={field === "amount"} onFocusAmount={() => setField("amount")} />
-        <TextLine value={monthly} onChange={setMonthly} label={t.reports.monthlyCash} placeholder="0" />
-        <TextLine value={plannerId} onChange={setPlannerId} label={t.reports.plannerId} placeholder={t.reports.plannerId} />
-        <p className="px-4 py-2 text-xs leading-5 text-muted">{t.reports.plannerHint}</p>
-        {trip ? (
-          <a
-            href={plannerTripUrl({ ...trip, plannerId: plannerId.trim() || trip.plannerId }, { pick: true })}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mx-4 mb-3 flex h-11 items-center justify-center rounded-xl bg-elevated text-sm font-medium text-accent"
-          >
-            {t.reports.plannerPick}
-          </a>
-        ) : (
-          <p className="px-4 pb-3 text-xs text-muted">{t.reports.plannerSaveFirst}</p>
-        )}
-      </ComposerShell>
+      <div className="rt-sheet-in">
+        <ComposerShell
+          header={<ComposerHeader onClose={onClose} onSave={() => void save()} title={trip ? t.reports.editTrip : t.reports.addTrip} />}
+          keypad={
+            <>
+              {trip && onDeleted ? (
+                <button type="button" className="tr-press flex h-11 w-full items-center justify-center border-t border-line bg-background text-sm text-expense" onClick={confirmRemove}>
+                  {t.reports.removeTrip}
+                </button>
+              ) : null}
+              <ActiveKeypad
+                field={field}
+                amount={budget}
+                dest={monthly}
+                principal=""
+                interest=""
+                setAmount={setBudget}
+                setDest={setMonthly}
+                setPrincipal={() => undefined}
+                setInterest={() => undefined}
+                currency="HKD"
+              />
+            </>
+          }
+        >
+          <div className="rt-enter space-y-0">
+            <TextLine value={name} onChange={setName} label={t.reports.tripName} placeholder={t.budget.customName} />
+            <TextLine value={dest} onChange={setDest} label={t.reports.destination} placeholder={locale === "zh-HK" ? "例如 Osaka" : "e.g. Osaka"} />
+            <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+              <span className="text-sm text-muted">{t.reports.tripStart}</span>
+              <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
+            </div>
+            <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+              <span className="text-sm text-muted">{t.reports.tripEnd}</span>
+              <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
+            </div>
+            <LineRow label={t.reports.cashBudget} amount={budget} currency="HKD" active={field === "amount"} onFocusAmount={() => setField("amount")} />
+            <LineRow label={t.reports.monthlyCash} amount={monthly} currency="HKD" active={field === "dest"} onFocusAmount={() => setField("dest")} />
+            <TextLine value={plannerId} onChange={setPlannerId} label={t.reports.plannerId} placeholder={locale === "zh-HK" ? "選填" : "Optional"} />
+            <p className="px-4 py-2 text-xs leading-5 text-muted">{t.reports.plannerHint}</p>
+            {trip ? (
+              <a
+                href={plannerTripUrl({ ...trip, plannerId: plannerId.trim() || trip.plannerId }, { pick: true })}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="tr-press mx-4 mb-3 flex h-11 items-center justify-center rounded-xl bg-elevated text-sm font-medium text-accent"
+              >
+                {t.reports.plannerPick}
+              </a>
+            ) : (
+              <p className="px-4 pb-3 text-xs text-muted">{t.reports.plannerSaveFirst}</p>
+            )}
+          </div>
+        </ComposerShell>
+      </div>
     </Overlay>
   );
 }

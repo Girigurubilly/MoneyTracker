@@ -551,6 +551,8 @@ function PostAdhocBody({ item, onClose }: { item: AdhocBudget; onClose: () => vo
   const [accountId, setAccountId] = useState(
     () => item.accountId || moneyAccounts.find((x) => x.type === "cash" || x.type === "current" || x.type === "savings")?.id || moneyAccounts[0]?.id || "",
   );
+  const [amount, setAmount] = useState(() => String(item.amount ?? ""));
+  const [currency, setCurrency] = useState<Currency>(() => (item.currency !== "MILES" ? item.currency : "HKD"));
   const cat = categories.find((c) => c.id === item.categoryId);
 
   async function save() {
@@ -558,12 +560,17 @@ function PostAdhocBody({ item, onClose }: { item: AdhocBudget; onClose: () => vo
       toast(t.add.account);
       return;
     }
+    const amt = resolveAmountInput(amount);
+    if (amt <= 0) {
+      toast(t.add.needAmount);
+      return;
+    }
     await addTx({
       type: "expense",
       date: today,
       time: item.time,
-      amount: item.amount,
-      currency: item.currency,
+      amount: amt,
+      currency,
       accountId,
       categoryId: item.categoryId,
       payee: item.label,
@@ -573,28 +580,52 @@ function PostAdhocBody({ item, onClose }: { item: AdhocBudget; onClose: () => vo
       tripId: item.tripId,
       tripManual: Boolean(item.tripId),
     });
-    await update({ ...item, paidOn: today });
+    await update({ ...item, amount: amt, currency, paidOn: today });
     onClose();
   }
 
   return (
-    <ComposerShell
-      header={<ComposerHeader onClose={onClose} onSave={() => void save()} title={t.budget.postAdhoc} />}
-      keypad={null}
-    >
-      <LineRow label={pickName(locale, item.label, item.labelZh)} amount={String(item.amount)} />
-      <div className="px-4 pt-3 text-xs text-muted">{t.budget.postAdhocFrom}</div>
-      <AccountLine accounts={moneyAccounts} value={accountId} onChange={setAccountId} placeholder={t.add.account} />
-      {cat ? (
-        <div className="flex items-center gap-3 border-b border-line px-4 py-3 text-sm">
-          <span className="grid size-8 place-items-center rounded-full bg-elevated">
-            <CategoryIcon name={cat.icon} />
-          </span>
-          {categoryPath(cat, categories, locale)}
+    <div className="rt-sheet-in">
+      <ComposerShell
+        header={<ComposerHeader onClose={onClose} onSave={() => void save()} title={t.budget.postAdhoc} />}
+        keypad={
+          <ActiveKeypad
+            field="amount"
+            amount={amount}
+            dest=""
+            principal=""
+            interest=""
+            setAmount={setAmount}
+            setDest={() => undefined}
+            setPrincipal={() => undefined}
+            setInterest={() => undefined}
+            currency={currency}
+            onCurrency={setCurrency}
+          />
+        }
+      >
+        <div className="rt-enter">
+          <LineRow
+            label={pickName(locale, item.label, item.labelZh)}
+            amount={amount}
+            currency={currency}
+            active
+            onFocusAmount={() => undefined}
+          />
         </div>
-      ) : null}
-      <p className="px-4 py-3 text-xs leading-5 text-muted">{t.budget.paidToday}</p>
-    </ComposerShell>
+        <div className="px-4 pt-3 text-xs text-muted">{t.budget.postAdhocFrom}</div>
+        <AccountLine accounts={moneyAccounts} value={accountId} onChange={setAccountId} placeholder={t.add.account} />
+        {cat ? (
+          <div className="flex items-center gap-3 border-b border-line px-4 py-3 text-sm">
+            <span className="grid size-8 place-items-center rounded-full bg-elevated">
+              <CategoryIcon name={cat.icon} />
+            </span>
+            {categoryPath(cat, categories, locale)}
+          </div>
+        ) : null}
+        <p className="px-4 py-3 text-xs leading-5 text-muted">{t.budget.paidToday}</p>
+      </ComposerShell>
+    </div>
   );
 }
 
