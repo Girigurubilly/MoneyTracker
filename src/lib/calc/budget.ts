@@ -168,6 +168,18 @@ export function totalExpenseRegulars(recurring: Recurring[], rates: FxRate[]): n
   return monthlyExpenseRegulars(recurring).reduce((s, r) => s + hkdOfRegular(r, rates), 0);
 }
 
+/** Net HKD for monthly regulars shown on the budget list (income +, expense −). Pure transfers are omitted. */
+export function monthlyRegularsNetHkd(recurring: Recurring[], rates: FxRate[]): number {
+  let sum = 0;
+  for (const r of recurring) {
+    if (r.frequency !== "monthly" || r.type === "miles") continue;
+    const hkd = hkdOfRegular(r, rates);
+    if (r.type === "income") sum += hkd;
+    else if (isExpenseRegular(r)) sum -= hkd;
+  }
+  return sum;
+}
+
 export function daysInMonth(month: string): number {
   const [y, m] = month.split("-").map(Number);
   return new Date(y, m, 0).getDate();

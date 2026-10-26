@@ -6,6 +6,7 @@ import {
   reservedAdhoc,
   realizedRegulars,
   adhocTotal,
+  monthlyRegularsNetHkd,
   budgetActuals,
   monthCashflowForecast,
   forecastTone,
@@ -157,6 +158,16 @@ describe("budget formulas", () => {
     assert.equal(reservedRegulars(recurring, [], "2026-08-15"), 300);
     assert.equal(adhocTotal(adhoc, "2026-08", []), 50);
     assert.equal(reservedAdhoc(adhoc, "2026-08", [], "2026-08-15"), 40);
+
+  it("monthly regulars net totals income minus expense", () => {
+    const recurring: Recurring[] = [
+      rec({ id: "salary", type: "income", amount: 20_000, chargedDay: 1 }),
+      rec({ id: "rent", type: "expense", amount: 8_000, chargedDay: 1 }),
+      rec({ id: "mpf", type: "transfer", amount: 1_000, chargedDay: 5, countsAsExpense: true }),
+      rec({ id: "move", type: "transfer", amount: 500, chargedDay: 10 }),
+      rec({ id: "miles", type: "miles", amount: 100, chargedDay: 15 }),
+    ];
+    assert.equal(monthlyRegularsNetHkd(recurring, []), 11_000);
   });
 });
 

@@ -19,7 +19,7 @@ import {
   SelectLine,
   TextLine,
 } from "@/components/txn-composer";
-import { asOfForMonth, adhocTotal, budgetActuals, chargedDayOf, forecastTone, regularSettledInMonth } from "@/lib/calc/budget";
+import { asOfForMonth, adhocTotal, budgetActuals, chargedDayOf, forecastTone, monthlyRegularsNetHkd, regularSettledInMonth } from "@/lib/calc/budget";
 import { WhenField } from "@/components/when-picker";
 import { travelSpendYtd, isTripActive } from "@/lib/calc/trips";
 import { monthKey } from "@/lib/calc/ledger";
@@ -408,10 +408,23 @@ function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recur
   const rows = recurring
     .filter((r) => r.frequency === "monthly" && r.type !== "miles")
     .sort((a, b) => chargedDayOf(a) - chargedDayOf(b) || a.label.localeCompare(b.label));
+  const lump = monthlyRegularsNetHkd(recurring, rates);
   return (
     <div className="pt-4">
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-5 pb-1">
+      <div className="flex items-baseline justify-between gap-3 px-5">
         <h2 className="text-sm font-medium text-muted">{t.budget.monthlyRegulars}</h2>
+        {rows.length ? (
+          <span
+            className={cn(
+              "text-sm font-semibold tabular-nums",
+              lump > 0 ? "text-income" : lump < 0 ? "text-expense" : "text-muted",
+            )}
+          >
+            {money(lump, "HKD", { sign: true })}
+          </span>
+        ) : null}
+      </div>
+      <div className="flex items-center justify-end px-5 pb-1 pt-1">
         <button type="button" onClick={onAdd} className="flex min-h-11 items-center px-1 text-sm font-medium text-accent">
           {t.budget.addRegular}
         </button>

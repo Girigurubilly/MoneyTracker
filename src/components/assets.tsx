@@ -28,7 +28,6 @@ import {
   ComposerShell,
   ExtraIconBar,
   LineRow,
-  NoteSheet,
   SelectLine,
   TextLine,
 } from "@/components/txn-composer";
@@ -39,7 +38,6 @@ import { depositsOutsideBalances } from "@/lib/calc/deposits";
 import { accountsInGroup, BALANCE_GROUP_ORDER, isKidVisibleAccount, nextSortOrder } from "@/lib/accounts";
 import {
   ACCOUNT_TYPE_OPTIONS,
-  CURRENCIES,
   groupForType,
   typesInGroup,
   type Account,
@@ -432,6 +430,28 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
     account?.planningAvailability ?? "",
   );
   const [extra, setExtra] = useState<"note" | null>(null);
+  const [pad, setPad] = useState(!account);
+  const [more, setMore] = useState(false);
+
+  function dismissPad() {
+    setPad(false);
+  }
+
+  function pickGroup(next: AccountGroup | "fx") {
+    dismissPad();
+    if (next === "fx") {
+      setGroup("cash");
+      setType("fx");
+      if (currency === "MILES") setCurrency("USD");
+      return;
+    }
+    setGroup(next);
+    const keep = type !== "fx" && typesInGroup(next).includes(type);
+    const nextType = keep ? type : typesInGroup(next).filter((id) => id !== "fx")[0] ?? typesInGroup(next)[0];
+    setType(nextType);
+    if (nextType === "miles") setCurrency("MILES");
+    else if (currency === "MILES") setCurrency("HKD");
+  }
 
   async function save() {
     const n = name.trim() || (locale === "zh-HK" ? "帳戶" : "Account");
@@ -480,15 +500,33 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
 
   const linkOptions = type === "property" ? loans : type === "mortgage" || type === "loan" ? properties : [];
   const ccy = (type === "miles" || currency === "MILES" ? "HKD" : currency) as Currency;
+  const groupChips: { id: AccountGroup | "fx"; label: string }[] = kid
+    ? [
+        { id: "cash", label: t.assets.cash },
+        { id: "credit", label: t.assets.credit },
+        { id: "fx", label: t.assets.foreign },
+      ]
+    : [
+        { id: "cash", label: t.assets.cash },
+        { id: "credit", label: t.assets.credit },
+        { id: "assets", label: t.assets.investments },
+        { id: "housing", label: t.assets.housing },
+        { id: "fx", label: t.assets.foreign },
+      ];
+  const groupChipValue: AccountGroup | "fx" = type === "fx" ? "fx" : group;
+  const subtypeOptions = typesInGroup(group)
+    .filter((id) => id !== "fx" && id !== "miles")
+    .map((id) => {
+      const o = ACCOUNT_TYPE_OPTIONS.find((x) => x.id === id)!;
+      return { id, label: locale === "zh-HK" ? o.zh : o.en };
+    });
 
   return (
     <Overlay open={open} onClose={onClose} variant="page">
       <ComposerShell
         header={<ComposerHeader onClose={onClose} onSave={() => void save()} title={account ? t.common.edit : t.assets.addAccount} />}
         keypad={
-          type === "miles" ? (
-            <div />
-          ) : (
+          type === "miles" || !pad ? null : (
             <ActiveKeypad
               field="amount"
               amount={bal}
@@ -505,137 +543,147 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
           )
         }
       >
-        <TextLine value={name} onChange={setName} placeholder={t.assets.name} />
-        <SelectLine
-          label={t.assets.type}
-          value={type === "fx" ? "fx" : group}
-          onChange={(v) => {
-            if (v === "fx") {
-              setGroup("cash");
-              setType("fx");
-              if (currency === "MILES") setCurrency("USD");
-              return;
-            }
-            const next = v as AccountGroup;
-            setGroup(next);
-            const keep = type !== "fx" && typesInGroup(next).includes(type);
-            const nextType = keep ? type : typesInGroup(next).filter((id) => id !== "fx")[0] ?? typesInGroup(next)[0];
-            setType(nextType);
-            if (nextType === "miles") setCurrency("MILES");
-            else if (currency === "MILES") setCurrency("HKD");
-          }}
-          options={
-            kid
-              ? [
-                  { id: "cash", label: t.assets.cash },
-                  { id: "credit", label: t.assets.credit },
-                  { id: "fx", label: t.assets.foreign },
-                ]
-              : [
-                  { id: "cash", label: t.assets.cash },
-                  { id: "credit", label: t.assets.credit },
-                  { id: "assets", label: t.assets.investments },
-                  { id: "housing", label: t.assets.housing },
-                  { id: "fx", label: t.assets.foreign },
-                ]
-          }
-        />
+        <div className="rt-enter flex flex-wrap gap-1.5 border-b border-line px-4 py-3" onClick={dismissPad}>
+          {groupChips.map((chip) => (
+            <button
+              key={chip.id}
+              type="button"
+              onClick={() => pickGroup(chip.id)}
+              className={cn(
+                "rt-chip-pill tr-press min-h-11 rounded-full px-3 text-xs font-medium",
+                groupChipValue === chip.id ? "bg-accent text-on-accent" : "bg-elevated text-muted",
+              )}
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
+        <div className="rt-enter" onFocusCapture={dismissPad} onClick={dismissPad}>
+          <TextLine value={name} onChange={setName} placeholder={t.assets.name} />
+        </div>
         {type === "fx" ? null : (
-          <SelectLine
-            label={t.assets.subtype}
-            value={type}
-            onChange={(v) => {
-              const next = v as AccountType;
-              setType(next);
-              setGroup(groupForType(next));
-              if (next === "miles") setCurrency("MILES");
-              else if (currency === "MILES") setCurrency("HKD");
-            }}
-            options={typesInGroup(group)
-              .filter((id) => id !== "fx" && id !== "miles")
-              .map((id) => {
-                const o = ACCOUNT_TYPE_OPTIONS.find((x) => x.id === id)!;
-                return { id, label: locale === "zh-HK" ? o.zh : o.en };
-              })}
-          />
+          <div className="rt-enter" onClick={dismissPad} onFocusCapture={dismissPad}>
+            <SelectLine
+              label={t.assets.subtype}
+              value={type}
+              onChange={(v) => {
+                const next = v as AccountType;
+                setType(next);
+                setGroup(groupForType(next));
+                if (next === "miles") setCurrency("MILES");
+                else if (currency === "MILES") setCurrency("HKD");
+              }}
+              options={subtypeOptions}
+            />
+          </div>
         )}
-        <LineRow label={t.assets.balance} amount={bal} currency={currency} active onFocusAmount={() => undefined} />
-        <SelectLine
-          label={t.assets.basis}
-          value={basis}
-          onChange={(v) => setBasis(v as BalanceBasis)}
-          options={[
-            { id: "unverified", label: t.assets.basisUnverified },
-            { id: "available_ex_deposits", label: t.assets.basisAvailable },
-            { id: "bank_total_incl_deposits", label: t.assets.basisBankTotal },
-            { id: "holdings_derived", label: t.assets.basisHoldings },
-          ]}
+        <LineRow
+          label={t.assets.balance}
+          amount={bal}
+          currency={currency}
+          active={pad && type !== "miles"}
+          onFocusAmount={() => {
+            if (type !== "miles") setPad(true);
+          }}
         />
-        <p className="px-4 pb-2 text-[11px] leading-4 text-muted">{t.assets.basisHint}</p>
-        <SelectLine
-          label={t.assets.ownership}
-          value={ownership}
-          onChange={(v) => setOwnership(v === "joint" ? "joint" : "sole")}
-          options={[
-            { id: "sole", label: t.assets.ownershipSole },
-            { id: "joint", label: t.assets.ownershipJoint },
-          ]}
-        />
-        <SelectLine
-          label={t.assets.planningAvail}
-          value={planningAvail}
-          onChange={(v) => setPlanningAvail(v as typeof planningAvail)}
-          options={[
-            { id: "", label: t.common.none },
-            { id: "full_household", label: t.assets.planningAvailFull },
-            { id: "haircut_50", label: t.assets.planningAvailHaircut },
-            { id: "custom", label: t.assets.planningAvailCustom },
-          ]}
-        />
-        <p className="px-4 pb-2 text-[11px] leading-4 text-muted">{t.assets.planningAvailHint}</p>
-        {type === "miles" ? null : (
-          <label className="flex min-h-12 items-center justify-between gap-3 border-b border-line px-4">
-            <span className="text-sm">{t.assets.include}</span>
-            <input type="checkbox" className="size-5" checked={include} onChange={(e) => setInclude(e.target.checked)} />
-          </label>
-        )}
-        {kid ? null : linkOptions.length ? (
-          <SelectLine
-            label={type === "property" ? t.assets.linkedLoan : t.assets.linkedProperty}
-            value={linkedId}
-            onChange={setLinkedId}
-            options={[{ id: "", label: t.common.none }, ...linkOptions.map((x) => ({ id: x.id, label: pickName(locale, x.name, x.nameZh) }))]}
-          />
-        ) : null}
-        {kid || type !== "investment" ? null : (
-          <SelectLine
-            label={t.holdings.book}
-            value={stockBook}
-            onChange={setStockBook}
-            options={[
-              { id: "", label: t.holdings.bookNone },
-              { id: "hk", label: t.holdings.bookHk },
-              { id: "us", label: t.holdings.bookUs },
-              { id: "all", label: t.holdings.bookAll },
-            ]}
-          />
-        )}
-        {kid ? null : (
-        <ExtraIconBar
-          extra={extra}
-          onExtra={(v) => setExtra(v === "note" ? "note" : extra)}
-          noteOn={!!notes}
-          noteValue={notes}
-          onNoteChange={setNotes}
-        />
-        )}
+        <button
+          type="button"
+          className="tr-press flex h-11 min-h-11 w-full items-center justify-center text-sm text-accent"
+          onClick={() => {
+            dismissPad();
+            setMore((v) => !v);
+          }}
+        >
+          {more ? t.reports.raHideMore : t.reports.raMore}
+        </button>
+        <div className={cn("rt-fold", more && "rt-fold-open")}>
+          <div className="rt-fold-inner" onFocusCapture={dismissPad} onClick={dismissPad}>
+            <SelectLine
+              label={t.assets.basis}
+              value={basis}
+              onChange={(v) => setBasis(v as BalanceBasis)}
+              options={[
+                { id: "unverified", label: t.assets.basisUnverified },
+                { id: "available_ex_deposits", label: t.assets.basisAvailable },
+                { id: "bank_total_incl_deposits", label: t.assets.basisBankTotal },
+                { id: "holdings_derived", label: t.assets.basisHoldings },
+              ]}
+            />
+            <p className="px-4 pb-2 text-[11px] leading-4 text-muted">{t.assets.basisHint}</p>
+            <SelectLine
+              label={t.assets.ownership}
+              value={ownership}
+              onChange={(v) => setOwnership(v === "joint" ? "joint" : "sole")}
+              options={[
+                { id: "sole", label: t.assets.ownershipSole },
+                { id: "joint", label: t.assets.ownershipJoint },
+              ]}
+            />
+            {kid ? null : (
+              <>
+                <SelectLine
+                  label={t.assets.planningAvail}
+                  value={planningAvail}
+                  onChange={(v) => setPlanningAvail(v as typeof planningAvail)}
+                  options={[
+                    { id: "", label: t.common.none },
+                    { id: "full_household", label: t.assets.planningAvailFull },
+                    { id: "haircut_50", label: t.assets.planningAvailHaircut },
+                    { id: "custom", label: t.assets.planningAvailCustom },
+                  ]}
+                />
+                <p className="px-4 pb-2 text-[11px] leading-4 text-muted">{t.assets.planningAvailHint}</p>
+              </>
+            )}
+            {type === "miles" ? null : (
+              <label className="flex min-h-12 items-center justify-between gap-3 border-b border-line px-4">
+                <span className="text-sm">{t.assets.include}</span>
+                <input type="checkbox" className="size-5" checked={include} onChange={(e) => setInclude(e.target.checked)} />
+              </label>
+            )}
+            <label className="flex min-h-12 items-center justify-between gap-3 border-b border-line px-4">
+              <span className="text-sm">{t.assets.hideAccount}</span>
+              <input type="checkbox" className="size-5" checked={hidden} onChange={(e) => setHidden(e.target.checked)} />
+            </label>
+            {kid ? null : linkOptions.length ? (
+              <SelectLine
+                label={type === "property" ? t.assets.linkedLoan : t.assets.linkedProperty}
+                value={linkedId}
+                onChange={setLinkedId}
+                options={[{ id: "", label: t.common.none }, ...linkOptions.map((x) => ({ id: x.id, label: pickName(locale, x.name, x.nameZh) }))]}
+              />
+            ) : null}
+            {kid || type !== "investment" ? null : (
+              <SelectLine
+                label={t.holdings.book}
+                value={stockBook}
+                onChange={setStockBook}
+                options={[
+                  { id: "", label: t.holdings.bookNone },
+                  { id: "hk", label: t.holdings.bookHk },
+                  { id: "us", label: t.holdings.bookUs },
+                  { id: "all", label: t.holdings.bookAll },
+                ]}
+              />
+            )}
+            {kid ? null : (
+              <ExtraIconBar
+                extra={extra}
+                onExtra={(v) => setExtra(v === "note" ? "note" : extra)}
+                noteOn={!!notes}
+                noteValue={notes}
+                onNoteChange={setNotes}
+              />
+            )}
+          </div>
+        </div>
         {account &&
-        !txs.some((t) => t.accountId === account.id || t.toAccountId === account.id) &&
+        !txs.some((tx) => tx.accountId === account.id || tx.toAccountId === account.id) &&
         !recurring.some((r) => r.accountId === account.id || r.toAccountId === account.id) &&
         !deposits.some((d) => d.accountId === account.id) ? (
           <button
             type="button"
-            className="tr-press mx-4 mt-4 h-12 rounded-xl bg-expense-soft text-sm font-semibold text-expense"
+            className="tr-press mx-4 mt-4 mb-4 h-12 rounded-xl bg-expense-soft text-sm font-semibold text-expense"
             onClick={async () => {
               const ok = await remove(account.id);
               toast(ok ? t.assets.removed : t.assets.removeBlocked);
