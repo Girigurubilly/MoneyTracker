@@ -131,16 +131,16 @@ export function AssetsScreen() {
         large
         right={
           <div className="flex items-center">
-            <button type="button" className="h-11 px-2 text-sm font-medium text-accent" onClick={() => setReorder((v) => !v)}>
+            <button type="button" className="tr-press h-11 px-2 text-sm font-medium text-accent" onClick={() => setReorder((v) => !v)}>
               {reorder ? t.common.done : t.common.edit}
             </button>
-            <button type="button" aria-label={t.assets.addAccount} onClick={() => setEditingId("new")} className="grid size-11 place-items-center text-accent">
+            <button type="button" aria-label={t.assets.addAccount} onClick={() => setEditingId("new")} className="tr-press grid size-11 place-items-center text-accent">
               <Plus className="size-6" />
             </button>
           </div>
         }
       />
-      <Link to="/reports/balance" className="mx-4 mb-5 block overflow-hidden rounded-2xl bg-elevated px-4 py-5 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+      <Link to="/reports/balance" className="rt-enter tr-press mx-4 mb-5 block overflow-hidden rounded-2xl bg-elevated px-4 py-5 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
         <div className="flex items-start justify-between gap-2">
           <div className="text-sm text-muted">{t.assets.netWorth}</div>
           <ChevronRight className="size-4 shrink-0 text-faint" />
@@ -158,8 +158,8 @@ export function AssetsScreen() {
         </div>
       </Link>
       {kid ? null : (
-        <div className="mx-4 mb-5">
-          <AssetBriefButton className="flex h-11 w-full items-center justify-center rounded-xl bg-elevated text-sm font-medium" />
+        <div className="rt-enter-delay mx-4 mb-5">
+          <AssetBriefButton className="tr-press flex h-11 w-full items-center justify-center rounded-xl bg-elevated text-sm font-medium" />
         </div>
       )}
       {groups.map((g) => {
@@ -171,7 +171,7 @@ export function AssetsScreen() {
           counted.reduce((s, a) => s + toHkd(a.balance, a.currency, rates), 0) +
           depositRows.reduce((s, d) => s + toHkd(d.amount, d.currency, rates), 0);
         return (
-          <AssetSection key={g.id} label={g.label} total={total} currencyHint="HKD">
+          <AssetSection key={g.id} label={g.label} total={total} currencyHint="HKD" enter>
             {rows.map((a, i) => (
               <AccountCard
                 key={a.id}
@@ -183,7 +183,7 @@ export function AssetsScreen() {
               />
             ))}
             {depositRows.map((d) => (
-              <Link key={d.id} to="/reports/deposits" className="flex items-center gap-3 rounded-2xl bg-elevated px-3 py-3 shadow-[0_6px_18px_rgba(15,23,42,0.05)]">
+              <Link key={d.id} to="/reports/deposits" className="tr-press flex items-center gap-3 rounded-2xl bg-elevated px-3 py-3 shadow-[0_6px_18px_rgba(15,23,42,0.05)]">
                 <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#e8f8ee] text-[#1f7a3a]">
                   <PiggyBank className="size-5" />
                 </span>
@@ -204,7 +204,7 @@ export function AssetsScreen() {
         <div className="mb-4">
           <button
             type="button"
-            className="flex w-full items-center justify-between px-5 pb-2 pt-1 text-left"
+            className="tr-press flex w-full items-center justify-between px-5 pb-2 pt-1 text-left"
             onClick={() => setShowHidden((v) => !v)}
           >
             <span className="text-sm font-medium text-muted">
@@ -213,13 +213,13 @@ export function AssetsScreen() {
             </span>
             <ChevronDown className={cn("size-4 text-faint transition", showHidden && "rotate-180")} />
           </button>
-          {showHidden ? (
-            <div className="space-y-2 px-4">
+          <div className={cn("rt-fold", showHidden && "rt-fold-open")}>
+            <div className="rt-fold-inner space-y-2 px-4 pb-1">
               {hiddenRows.map((a) => (
                 <AccountCard key={a.id} a={a} reorder={false} canUp={false} canDown={false} onEdit={() => openAccount(a.id)} />
               ))}
             </div>
-          ) : null}
+          </div>
         </div>
       ) : null}
       {viewingId && !editingId ? (
@@ -244,14 +244,16 @@ function AssetSection({
   total,
   currencyHint,
   children,
+  enter,
 }: {
   label: string;
   total: number;
   currencyHint: MoneyUnit;
   children: ReactNode;
+  enter?: boolean;
 }) {
   return (
-    <div className="mb-5">
+    <div className={cn("mb-5", enter && "rt-enter")}>
       <div className="flex items-baseline justify-between px-5 pb-2">
         <h2 className="text-sm font-medium text-muted">{label}</h2>
         <span className="text-xs tabular-nums text-muted">{money(total, currencyHint)}</span>
@@ -293,7 +295,7 @@ function AccountCard({
   const negative = a.balance < 0;
   return (
     <div className="flex items-stretch overflow-hidden rounded-2xl bg-elevated shadow-[0_6px_18px_rgba(15,23,42,0.05)]">
-      <button type="button" className="flex min-w-0 flex-1 items-center gap-3 px-3 py-3 text-left" onClick={onEdit}>
+      <button type="button" className="tr-press flex min-w-0 flex-1 items-center gap-3 px-3 py-3 text-left" onClick={onEdit}>
         <span className={cn("grid size-11 shrink-0 place-items-center rounded-2xl", tone)}>
           <TypeGlyph type={a.type} />
         </span>
@@ -329,10 +331,10 @@ function AccountCard({
             ))}
             <option value="fx">{t.assets.foreign}</option>
           </select>
-          <button type="button" aria-label="up" disabled={!canUp} className="grid size-8 place-items-center text-accent disabled:text-faint" onClick={() => void move(a.id, -1)}>
+          <button type="button" aria-label="up" disabled={!canUp} className="tr-press grid size-8 place-items-center text-accent disabled:text-faint" onClick={() => void move(a.id, -1)}>
             <ChevronUp className="size-5" />
           </button>
-          <button type="button" aria-label="down" disabled={!canDown} className="grid size-8 place-items-center text-accent disabled:text-faint" onClick={() => void move(a.id, 1)}>
+          <button type="button" aria-label="down" disabled={!canDown} className="tr-press grid size-8 place-items-center text-accent disabled:text-faint" onClick={() => void move(a.id, 1)}>
             <ChevronDown className="size-5" />
           </button>
         </div>
@@ -374,15 +376,15 @@ function AccountDetail({
   return (
     <Overlay open onClose={onClose} variant="page">
       <header className="flex items-center justify-between px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <button type="button" className="h-11 min-w-11 px-2 text-sm text-accent" onClick={onClose}>
+        <button type="button" className="tr-press h-11 min-w-11 px-2 text-sm text-accent" onClick={onClose}>
           {t.common.back}
         </button>
         <h1 className="min-w-0 flex-1 truncate text-center text-base font-semibold">{pickName(locale, account.name, account.nameZh)}</h1>
-        <button type="button" className="h-11 min-w-11 px-2 text-sm font-medium text-accent" onClick={onEdit}>
+        <button type="button" className="tr-press h-11 min-w-11 px-2 text-sm font-medium text-accent" onClick={onEdit}>
           {t.common.edit}
         </button>
       </header>
-      <div className="mx-4 mb-4 mt-2 rounded-xl bg-elevated px-4 py-4">
+      <div className="rt-enter mx-4 mb-4 mt-2 rounded-xl bg-elevated px-4 py-4">
         <div className="text-xs text-muted">
           {groupLabel}
           {typeLabel ? ` · ${locale === "zh-HK" ? typeLabel.zh : typeLabel.en}` : ""}
@@ -633,7 +635,7 @@ function AccountEditor({ open, account, onClose }: { open: boolean; account: Acc
         !deposits.some((d) => d.accountId === account.id) ? (
           <button
             type="button"
-            className="mx-4 mt-4 h-12 rounded-xl bg-expense-soft text-sm font-semibold text-expense"
+            className="tr-press mx-4 mt-4 h-12 rounded-xl bg-expense-soft text-sm font-semibold text-expense"
             onClick={async () => {
               const ok = await remove(account.id);
               toast(ok ? t.assets.removed : t.assets.removeBlocked);

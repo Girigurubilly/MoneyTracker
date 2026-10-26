@@ -43,42 +43,42 @@ export function TodayScreen() {
             <button
               type="button"
               onClick={() => setLocale(locale === "zh-HK" ? "en" : "zh-HK")}
-              className="grid size-11 place-items-center text-sm font-medium text-accent"
+              className="tr-press grid size-11 place-items-center text-sm font-medium text-accent"
               aria-label={t.more.language}
             >
               {locale === "zh-HK" ? "繁" : "EN"}
             </button>
-            <button type="button" aria-label={t.today.search} onClick={() => setSearch(true)} className="grid size-11 place-items-center">
+            <button type="button" aria-label={t.today.search} onClick={() => setSearch(true)} className="tr-press grid size-11 place-items-center">
               <Search className="size-6" strokeWidth={1.7} />
             </button>
-            <button type="button" aria-label={t.add.title} onClick={() => openAdd("expense")} className="grid size-11 place-items-center">
+            <button type="button" aria-label={t.add.title} onClick={() => openAdd("expense")} className="tr-press grid size-11 place-items-center">
               <Plus className="size-7" strokeWidth={1.7} />
             </button>
           </div>
         </div>
         <div className="mt-1 flex items-center justify-center">
-          <button type="button" aria-label={t.today.prevMonth} onClick={() => setSelected(shiftMonth(selected, -1))} className="grid size-11 place-items-center text-accent">
+          <button type="button" aria-label={t.today.prevMonth} onClick={() => setSelected(shiftMonth(selected, -1))} className="tr-press grid size-11 place-items-center text-accent">
             <ChevronLeft className="size-6" />
           </button>
           <button
             type="button"
             onClick={() => setSelected(today)}
             disabled={onThisMonth}
-            className={cn("min-w-16 text-center text-sm font-medium", onThisMonth ? "text-faint" : "text-accent")}
+            className={cn("tr-press min-w-16 text-center text-sm font-medium", onThisMonth ? "text-faint" : "text-accent")}
           >
             {t.today.jumpToday}
           </button>
-          <button type="button" aria-label={t.today.nextMonth} onClick={() => setSelected(shiftMonth(selected, 1))} className="grid size-11 place-items-center text-accent">
+          <button type="button" aria-label={t.today.nextMonth} onClick={() => setSelected(shiftMonth(selected, 1))} className="tr-press grid size-11 place-items-center text-accent">
             <ChevronRight className="size-6" />
           </button>
         </div>
       </header>
       {covering ? (
-        <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
+        <div className="rt-enter mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
           <Link
             to="/reports/travel/$id"
             params={{ id: covering.id }}
-            className="flex min-h-11 items-center justify-between gap-3 px-4 py-3"
+            className="tr-press flex min-h-11 items-center justify-between gap-3 px-4 py-3"
           >
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold">
@@ -93,7 +93,7 @@ export function TodayScreen() {
               href={plannerTripUrl(covering, { day: selected })}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex min-h-11 items-center gap-2 text-sm text-muted"
+              className="tr-press inline-flex min-h-11 items-center gap-2 text-sm text-muted"
             >
               <MapPinned className="size-4 text-accent" strokeWidth={1.7} />
               {t.today.openPlan}
@@ -163,7 +163,7 @@ function TodayBody() {
 
   return (
     <div className="pb-10">
-      <div className="mx-4 mb-4 rounded-xl bg-elevated px-2 py-3">
+      <div className="rt-enter mx-4 mb-4 rounded-xl bg-elevated px-2 py-3">
           <div className="grid grid-cols-7 text-center text-xs text-muted">
             {weekdays.map((w) => (
               <div key={w} className="py-1">
@@ -179,7 +179,7 @@ function TodayBody() {
                   type="button"
                   onClick={() => setSelected(c.iso)}
                   className={cn(
-                    "relative mx-auto flex size-12 flex-col items-center justify-center rounded-full text-sm",
+                    "td-day tr-press relative mx-auto flex size-12 flex-col items-center justify-center rounded-full text-sm",
                     c.iso === selected && "bg-accent font-semibold text-on-accent",
                     c.iso === today && c.iso !== selected && "font-semibold text-accent",
                   )}
@@ -201,38 +201,40 @@ function TodayBody() {
       {kid ? null : (
       <button
         type="button"
-        className="mx-4 mb-2 flex min-h-11 w-[calc(100%-2rem)] items-center justify-center gap-1 text-sm font-medium text-accent"
+        className="tr-press mx-4 mb-2 flex min-h-11 w-[calc(100%-2rem)] items-center justify-center gap-1 text-sm font-medium text-accent"
         onClick={() => setShowSummary((v) => !v)}
       >
         {showSummary ? t.today.hideSummary : t.today.showSummary}
         <ChevronDown className={cn("size-3.5 transition", showSummary && "rotate-180")} />
       </button>
       )}
-      {!kid && showSummary ? (
-        <>
-          <div className="mx-4 mb-4 rounded-xl bg-elevated px-4 py-1">
-            <SummaryRow label={t.today.incomeMonth} value={money(stats.flow.income, "HKD")} tone="income" />
-            <SummaryRow label={t.today.expenseMonth} value={money(stats.flow.expense, "HKD")} tone="expense" />
-            <SummaryRow label={t.today.netMonth} value={money(stats.flow.net, "HKD", { sign: true })} tone={stats.flow.net >= 0 ? "income" : "expense"} />
+      {!kid ? (
+        <div className={cn("rt-fold", showSummary && "rt-fold-open")}>
+          <div className="rt-fold-inner">
+            <div className="rt-enter mx-4 mb-4 rounded-xl bg-elevated px-4 py-1">
+              <SummaryRow label={t.today.incomeMonth} value={money(stats.flow.income, "HKD")} tone="income" />
+              <SummaryRow label={t.today.expenseMonth} value={money(stats.flow.expense, "HKD")} tone="expense" />
+              <SummaryRow label={t.today.netMonth} value={money(stats.flow.net, "HKD", { sign: true })} tone={stats.flow.net >= 0 ? "income" : "expense"} />
+            </div>
+            {onThisMonth ? (
+              <>
+                <div className="mx-4 mb-2 rounded-xl bg-elevated px-4 py-1">
+                  <SummaryRow label={t.today.remainingBudget} value={money(stats.remainingBudget, "HKD")} />
+                  <SummaryRow label={t.today.remainingDisc} value={money(stats.remainingDisc, "HKD")} info="disc" />
+                </div>
+                <p className="px-5 pb-2 text-xs text-faint">{t.today.guidance}</p>
+              </>
+            ) : null}
           </div>
-          {onThisMonth ? (
-            <>
-              <div className="mx-4 mb-2 rounded-xl bg-elevated px-4 py-1">
-                <SummaryRow label={t.today.remainingBudget} value={money(stats.remainingBudget, "HKD")} />
-                <SummaryRow label={t.today.remainingDisc} value={money(stats.remainingDisc, "HKD")} info="disc" />
-              </div>
-              <p className="px-5 pb-2 text-xs text-faint">{t.today.guidance}</p>
-            </>
-          ) : null}
-        </>
+        </div>
       ) : null}
       {onThisMonth ? (
         <>
           <SectionLabel>{t.today.goals}</SectionLabel>
           <Hairline />
-          <Link to="/budget" className="flex w-full items-center gap-3 px-5 py-3.5 text-left">
+          <Link to="/budget" className="tr-press flex w-full items-center gap-3 px-5 py-3.5 text-left">
             <span className="relative">
-              <ProgressRing value={target ? spentNow / target : 0} size={40} stroke={3} tone={ringTone} />
+              <ProgressRing value={target ? spentNow / target : 0} size={40} stroke={3} tone={ringTone} draw />
               <span className={cn("pointer-events-none absolute inset-0 grid place-items-center", ringTone === "expense" ? "text-expense" : ringTone === "watch" ? "text-watch" : "text-income")}>
                 <Wallet className="size-3.5" />
               </span>
@@ -252,7 +254,7 @@ function TodayBody() {
         </>
       ) : null}
 
-      <div className="flex items-baseline justify-between gap-3 px-5 pb-1 pt-5">
+      <div className="rt-enter-delay flex items-baseline justify-between gap-3 px-5 pb-1 pt-5">
         <h2 className="text-sm font-medium text-muted">{t.today.dayTx}</h2>
         {paid.length ? (
           <span className={cn("text-sm font-semibold tabular-nums", dayNet > 0 ? "text-income" : dayNet < 0 ? "text-expense" : "text-muted")}>
@@ -273,12 +275,12 @@ function TodayBody() {
         ) : null}
       </p>
       {paid.length === 0 ? (
-        <div className="mx-5 my-4 rounded-xl bg-elevated px-4 py-5 text-center">
+        <div className="rt-enter mx-5 my-4 rounded-xl bg-elevated px-4 py-5 text-center">
           <p className="text-sm text-muted">{t.today.emptyDay}</p>
           <button
             type="button"
             onClick={() => openAdd("expense")}
-            className="mt-3 inline-flex h-11 items-center justify-center rounded-full bg-accent px-5 text-sm font-semibold text-on-accent"
+            className="tr-press mt-3 inline-flex h-11 items-center justify-center rounded-full bg-accent px-5 text-sm font-semibold text-on-accent"
           >
             {t.today.addOne}
           </button>
@@ -443,7 +445,7 @@ function ScheduleRow({ row, onTx }: { row: ScheduleRowModel; onTx: (id: string) 
       />
     </>
   );
-  const className = "flex w-full items-center gap-3 px-5 py-3 text-left";
+  const className = "tr-press flex w-full items-center gap-3 px-5 py-3 text-left";
   if (row.to === "/budget") {
     return (
       <Link to="/budget" className={className}>

@@ -464,6 +464,43 @@ html[data-font="serif"] {
   }
 }
 
+/* Today / Assets — day press + fold panels */
+@media (prefers-reduced-motion: no-preference) {
+  .td-day {
+    transition: background-color 150ms ease, color 150ms ease, transform 120ms ease;
+  }
+  .td-day:active {
+    transform: scale(0.92);
+  }
+  .rt-fold {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 200ms ease;
+  }
+  .rt-fold-open {
+    grid-template-rows: 1fr;
+  }
+  .rt-fold > .rt-fold-inner {
+    overflow: hidden;
+    min-height: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .td-day,
+  .rt-fold {
+    transition: none !important;
+  }
+  .td-day:active {
+    transform: none;
+  }
+  .rt-fold {
+    display: block;
+  }
+  .rt-fold:not(.rt-fold-open) {
+    display: none;
+  }
+}
+
 /* Travel UX — press + sticky compact bar (reuse rt-* motion) */
 .tr-press {
   transition: opacity 120ms ease;

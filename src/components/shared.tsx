@@ -357,7 +357,7 @@ export function TransactionRow({ tx, onClick, showDate }: { tx: Transaction; onC
         ? pickName(locale, fromAcc.name, fromAcc.nameZh)
         : "—";
   return (
-    <button type="button" onClick={onClick} className="flex w-full items-center gap-3 px-5 py-3 text-left">
+    <button type="button" onClick={onClick} className="tr-press flex w-full items-center gap-3 px-5 py-3 text-left">
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium">{title}</div>
         <div className="truncate text-xs text-muted">
