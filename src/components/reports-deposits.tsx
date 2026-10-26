@@ -320,12 +320,15 @@ function PromoMonths({ row, currency }: { row: PromoSaving; currency: Currency }
   useEffect(() => {
     if (started.current) return;
     if (!(row.residualHkd > 0) || months.length === 0) return;
-    if (txs.some((tx) => tx.promoId === row.id)) {
-      started.current = true;
-      return;
-    }
+    const stale = months.some((month) => {
+      const tx =
+        txs.find((t) => t.depositId === `${row.id}:${month.month}`) ??
+        txs.find((t) => t.promoId === row.id && t.date.slice(0, 7) === month.month);
+      if (!tx) return true;
+      return tx.planned && tx.date !== month.date;
+    });
     started.current = true;
-    void upsert(row);
+    if (stale) void upsert(row);
   }, [months.length, row, txs, upsert]);
   if (months.length === 0) return null;
 

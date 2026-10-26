@@ -21,6 +21,7 @@ export function YearComparePage() {
   const rates = useApp((s) => s.fxRates);
   const plans = useApp((s) => s.yearlyPlans);
   const deposits = useApp((s) => s.deposits);
+  const promos = useApp((s) => s.promoSavings);
   const recurring = useApp((s) => s.recurring);
   const budgets = useApp((s) => s.budgets);
   const today = todayISO();
@@ -37,9 +38,9 @@ export function YearComparePage() {
   const proj = useMemo(
     () =>
       projected
-        ? yearProjectionCompare(plans, deposits, rates, txs, cats, recurring, today, monthCap)
+        ? yearProjectionCompare(plans, deposits, rates, txs, cats, recurring, today, monthCap, promos)
         : null,
-    [projected, plans, deposits, rates, txs, cats, recurring, today, monthCap],
+    [projected, plans, deposits, rates, txs, cats, recurring, today, monthCap, promos],
   );
 
   const data = useMemo(

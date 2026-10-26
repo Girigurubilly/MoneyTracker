@@ -290,7 +290,7 @@ export function buildFcBaseline(input: {
       in_headline: false,
     });
   }
-  const yearRows = yearlyProjection(input.plans, deposits, input.rates, year, month0, input.txs, input.categories, input.monthCap, input.recurring, asOf);
+  const yearRows = yearlyProjection(input.plans, deposits, input.rates, year, month0, input.txs, input.categories, input.monthCap, input.recurring, asOf, promo);
   const checks = baselineChecks({
     accounts: input.accounts,
     holdings: input.holdings,

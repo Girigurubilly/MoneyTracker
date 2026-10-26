@@ -1,7 +1,8 @@
-import type { Account, Category, Currency, FxRate, Recurring, TimeSaving, Transaction, YearlyPlan } from "../types.ts";
+import type { Account, Category, Currency, FxRate, PromoSaving, Recurring, TimeSaving, Transaction, YearlyPlan } from "../types.ts";
 import { toHkd } from "./fx.ts";
 import { cashflowSide, roundMoney } from "./ledger.ts";
 import { hkdOfRegular, monthlyIncomeRegulars, regularChargedBy } from "./budget.ts";
+import { marathonMonthlyInterest } from "./marathon.ts";
 
 export const MONTHS_EN = [
   "January",
@@ -110,6 +111,52 @@ export function getMonthlyDepositInterest(list: TimeSaving[], year: number, mont
     total += toHkd(ts.interest || 0, ts.currency, rates);
   }
   return total;
+}
+
+/** Marathon interest paid on the 1st of `payMonth`, in HKD. Adjustments replace the estimate. */
+export function promoInterestInMonth(promos: PromoSaving[], payMonth: string, rates: FxRate[]): number {
+  let total = 0;
+  for (const promo of promos) {
+    if (!(promo.residualHkd > 0)) continue;
+    const adjustments = new Map((promo.interestAdjustments ?? []).map((item) => [item.month, item.amount]));
+    for (const month of marathonMonthlyInterest(promo.residualHkd, promo.rateSchedule)) {
+      if (!month.date.startsWith(payMonth)) continue;
+      const amount = adjustments.has(month.month) ? Number(adjustments.get(month.month)) : month.interest;
+      if (amount > 0) total += toHkd(amount, promo.currency ?? "HKD", rates);
+    }
+  }
+  return Math.round(total * 100) / 100;
+}
+
+function promoInterestAlreadyPosted(promo: PromoSaving, accrualMonth: string, txs: Transaction[], payMonth: string): boolean {
+  return txs.some(
+    (tx) =>
+      !tx.planned &&
+      tx.type === "income" &&
+      tx.date.startsWith(payMonth) &&
+      (tx.depositId === `${promo.id}:${accrualMonth}` || tx.promoId === promo.id),
+  );
+}
+
+/** Add marathon interest that is not already inside posted 利息 for this month. */
+export function promoInterestExtra(
+  promos: PromoSaving[],
+  txs: Transaction[],
+  rates: FxRate[],
+  payMonth: string,
+): number {
+  let total = 0;
+  for (const promo of promos) {
+    if (!(promo.residualHkd > 0)) continue;
+    const adjustments = new Map((promo.interestAdjustments ?? []).map((item) => [item.month, item.amount]));
+    for (const month of marathonMonthlyInterest(promo.residualHkd, promo.rateSchedule)) {
+      if (!month.date.startsWith(payMonth)) continue;
+      if (promoInterestAlreadyPosted(promo, month.month, txs, payMonth)) continue;
+      const amount = adjustments.has(month.month) ? Number(adjustments.get(month.month)) : month.interest;
+      if (amount > 0) total += toHkd(amount, promo.currency ?? "HKD", rates);
+    }
+  }
+  return Math.round(total * 100) / 100;
 }
 
 export function emptyYearlyPlan(id: string): YearlyPlan {
@@ -331,6 +378,7 @@ export function yearlyProjection(
   currentMonthCap = 0,
   recurring: Recurring[] = [],
   today = "",
+  promos: PromoSaving[] = [],
 ): {
   rows: YearlyMonthRow[];
   yearIncome: number;
@@ -364,8 +412,9 @@ export function yearlyProjection(
     const depInt = fromLedger
       ? (actual?.interest ?? 0)
       : isCurrent && today.startsWith(plan.id)
-        ? currentMonthDepositInterest(deposits, txs, categories, rates, plan.id, actual?.interest ?? 0)
-        : getMonthlyDepositInterest(deposits, year, month0, rates);
+        ? currentMonthDepositInterest(deposits, txs, categories, rates, plan.id, actual?.interest ?? 0) +
+          promoInterestExtra(promos, txs, rates, plan.id)
+        : getMonthlyDepositInterest(deposits, year, month0, rates) + promoInterestInMonth(promos, plan.id, rates);
     const income = salary + other + depInt;
     const saving = income - expense;
     yearIncome += income;
@@ -405,6 +454,7 @@ export function yearProjectionCompare(
   recurring: Recurring[],
   today: string,
   currentMonthCap = 0,
+  promos: PromoSaving[] = [],
 ): {
   year: number;
   lastYear: number;
@@ -443,6 +493,7 @@ export function yearProjectionCompare(
     currentMonthCap,
     recurring,
     today,
+    promos,
   );
   const lastActuals = monthActualsFromTxs(txs, categories, rates, year - 1);
   let lastSalary = 0;
