@@ -237,7 +237,7 @@ export function Overlay({
         className={cn(
           "relative z-[81] w-full overflow-y-auto bg-background",
           page
-            ? "h-dvh max-h-dvh pb-[max(1rem,env(safe-area-inset-bottom))]"
+            ? "rt-page-in h-dvh max-h-dvh pb-[max(1rem,env(safe-area-inset-bottom))]"
             : "rt-sheet-in max-h-[92dvh] rounded-t-2xl pb-[max(1rem,env(safe-area-inset-bottom))] md:max-w-md md:rounded-2xl",
         )}
       >

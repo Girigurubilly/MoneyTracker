@@ -417,11 +417,40 @@ html[data-font="serif"] {
   to { stroke-dashoffset: 0; }
 }
 
+/* Balance drill — in-place zoom (no full-page swap jump) */
+@media (prefers-reduced-motion: no-preference) {
+  .rt-page-in {
+    animation: rt-page-slide 220ms ease-out both;
+  }
+  .rt-drill-swap {
+    animation: rt-fade-up 200ms ease-out both;
+  }
+  .rt-drill-chrome {
+    transition: max-height 220ms ease, opacity 180ms ease;
+  }
+  .rt-drill-row {
+    animation: rt-fade-up 180ms ease-out both;
+  }
+}
+@keyframes rt-page-slide {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .rt-enter,
   .rt-enter-delay,
   .rt-sheet-in,
   .rt-backdrop-in,
+  .rt-page-in,
+  .rt-drill-swap,
+  .rt-drill-row,
   .rt-chart-draw .recharts-area-curve,
   .rt-chart-draw .recharts-line-curve {
     animation: none !important;
@@ -429,6 +458,7 @@ html[data-font="serif"] {
   .rt-ring,
   .rt-ref-line,
   .rt-chip-pill,
+  .rt-drill-chrome,
   .tr-press {
     transition: none !important;
   }

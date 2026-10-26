@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
-import { ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Overlay, ScreenHeader } from "@/components/shared";
 import { AssetBriefButton } from "@/components/asset-brief";
 import { prefersReducedMotion } from "@/components/retire-ux";
@@ -27,6 +27,13 @@ const CHART = [
   "var(--color-chart-8)",
 ];
 
+type PieRow = {
+  id: string;
+  name: string;
+  value: number;
+  colorIndex: number;
+};
+
 export function BalancePage() {
   const t = useT();
   const locale = useUi((s) => s.locale);
@@ -47,19 +54,46 @@ export function BalancePage() {
     return o ? (locale === "zh-HK" ? o.zh : o.en) : type;
   }
 
-  const pie = [
-    { id: "assets" as const, name: t.assets.totalAssets, value: Math.max(0, nw.assets), colorIndex: 0 },
-    { id: "liab" as const, name: t.assets.totalLiab, value: Math.max(0, nw.liab), colorIndex: 1 },
+  function pickSide(side: "assets" | "liab") {
+    if (focus === side) {
+      setFocus(null);
+      setOpenId(null);
+      return;
+    }
+    setOpenId(null);
+    setFocus(side);
+  }
+
+  function clearFocus() {
+    setFocus(null);
+    setOpenId(null);
+  }
+
+  const rootPie: PieRow[] = [
+    { id: "assets", name: t.assets.totalAssets, value: Math.max(0, nw.assets), colorIndex: 0 },
+    { id: "liab", name: t.assets.totalLiab, value: Math.max(0, nw.liab), colorIndex: 1 },
   ].filter((r) => r.value > 0);
+
   const typed = (focus === "assets" ? parts.assets : focus === "liab" ? parts.liabilities : []).map((r, i) => ({
     ...r,
     name: r.id === "deposits" ? (locale === "zh-HK" ? r.labelZh : r.label) : typeLabel(r.type),
     value: r.amount,
     colorIndex: i % 8,
   }));
+
   const openRow = typed.find((r) => r.id === openId) ?? null;
   const focusLabel = focus === "assets" ? t.assets.totalAssets : t.assets.totalLiab;
   const focusTotal = focus === "assets" ? nw.assets : nw.liab;
+  const chartRows: PieRow[] = focus
+    ? typed.map((r) => ({ id: r.id, name: r.name, value: r.value, colorIndex: r.colorIndex }))
+    : rootPie;
+  const centerValue = focus ? focusTotal : nw.net;
+  const centerLabel = focus ? focusLabel : t.assets.netWorth;
+  const listRows: PieRow[] = focus
+    ? typed.map((r) => ({ id: r.id, name: r.name, value: r.value, colorIndex: r.colorIndex }))
+    : rootPie;
+  const listDenom = focus ? focusTotal : nw.assets + nw.liab;
+  const drillKey = focus ?? "root";
 
   return (
     <div className="pb-28">
@@ -79,7 +113,7 @@ export function BalancePage() {
               "tr-press rounded-xl bg-success-soft px-3 py-2 text-left transition",
               focus === "assets" && "ring-2 ring-accent",
             )}
-            onClick={() => setFocus("assets")}
+            onClick={() => pickSide("assets")}
           >
             <div className="text-[11px] text-income">{t.assets.totalAssets}</div>
             <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(nw.assets, "HKD")}</div>
@@ -90,7 +124,7 @@ export function BalancePage() {
               "tr-press rounded-xl bg-expense-soft px-3 py-2 text-left transition",
               focus === "liab" && "ring-2 ring-accent",
             )}
-            onClick={() => setFocus("liab")}
+            onClick={() => pickSide("liab")}
           >
             <div className="text-[11px] text-expense">{t.assets.totalLiab}</div>
             <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(nw.liab, "HKD")}</div>
@@ -101,147 +135,120 @@ export function BalancePage() {
           <div className="mt-0.5 text-xs font-medium text-accent">{t.reports.balanceWorthLink}</div>
         </Link>
       </div>
-      <div className={cn("rt-enter relative mx-auto h-56 w-56", animate && "rt-chart-draw")}>
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={pie.length ? pie : [{ id: "empty", value: 1, name: "—" }]}
-              dataKey="value"
-              nameKey="name"
-              innerRadius="62%"
-              outerRadius="88%"
-              stroke="none"
-              paddingAngle={pie.length > 1 ? 1.2 : 0}
-              isAnimationActive={animate}
-              animationDuration={480}
-              onClick={(_, index) => {
-                const row = pie[index];
-                if (row) setFocus(row.id);
-              }}
+
+      <div className="rt-drill-stage mx-0">
+        <div
+          className={cn(
+            "overflow-hidden px-4",
+            animate && "rt-drill-chrome",
+            focus ? "max-h-14 opacity-100" : "pointer-events-none max-h-0 opacity-0",
+          )}
+          aria-hidden={!focus}
+        >
+          <div className="mb-2 flex min-h-11 items-center gap-1">
+            <button
+              type="button"
+              className="tr-press inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-accent"
+              onClick={clearFocus}
+              aria-label={t.common.back}
             >
-              {(pie.length ? pie : [{ id: "empty", colorIndex: 0 }]).map((r) => (
-                <Cell
-                  key={r.id}
-                  fill={CHART[r.colorIndex]}
-                  opacity={focus && r.id !== focus && r.id !== "empty" ? 0.45 : 1}
-                  className={r.id === "empty" ? undefined : "cursor-pointer outline-none"}
-                  onClick={() => {
-                    if (r.id !== "empty") setFocus(r.id as "assets" | "liab");
-                  }}
-                />
-              ))}
-            </Pie>
-          </PieChart>
-        </ResponsiveContainer>
-        <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
-          <div>
-            <div className="text-base font-semibold tabular-nums">{money(nw.net, "HKD")}</div>
-            <div className="text-xs text-muted">{t.assets.netWorth}</div>
+              <ChevronLeft className="size-5" />
+            </button>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold">{focusLabel}</div>
+              <div className="text-xs tabular-nums text-muted">{money(focusTotal, "HKD")}</div>
+            </div>
           </div>
         </div>
-      </div>
-      <div className="rt-enter-delay px-5 pt-2">
-        {pie.map((r) => (
-          <button
-            key={r.id}
-            type="button"
-            onClick={() => setFocus(r.id)}
-            className={cn(
-              "tr-press flex min-h-11 w-full items-center justify-between gap-3 rounded-lg py-2.5 text-left transition",
-              focus === r.id && "bg-accent-soft/60 px-2",
-            )}
-          >
-            <div className="flex min-w-0 items-center gap-2.5">
-              <span className="size-2.5 shrink-0 rounded-full" style={{ background: CHART[r.colorIndex] }} />
-              <span className="truncate text-sm">{r.name}</span>
-            </div>
-            <span className="flex shrink-0 items-center gap-1">
-              <span className="text-sm tabular-nums text-muted">
-                {money(r.value, "HKD")}
-                <span className="ml-2 text-xs text-faint">{nw.assets + nw.liab > 0 ? pct(r.value / (nw.assets + nw.liab)) : "—"}</span>
-              </span>
-              <ChevronRight className="size-4 text-faint" />
-            </span>
-          </button>
-        ))}
-      </div>
 
-      {focus ? (
-        <Overlay open onClose={() => { setFocus(null); setOpenId(null); }} variant="page">
-          <header className="flex items-center justify-between px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-            <button type="button" className="h-11 min-w-11 px-2 text-sm text-accent" onClick={() => { setFocus(null); setOpenId(null); }}>
-              {t.common.back}
-            </button>
-            <h1 className="min-w-0 flex-1 truncate text-center text-base font-semibold">{focusLabel}</h1>
-            <span className="min-w-11" />
-          </header>
-          <div className={cn("rt-enter relative mx-auto h-56 w-56", animate && "rt-chart-draw")}>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={typed.length ? typed : [{ id: "empty", value: 1, name: "—" }]}
-                  dataKey="value"
-                  nameKey="name"
-                  innerRadius="62%"
-                  outerRadius="88%"
-                  stroke="none"
-                  paddingAngle={typed.length > 1 ? 1.2 : 0}
-                  isAnimationActive={animate}
-                  animationDuration={480}
-                  onClick={(_, index) => {
-                    const row = typed[index];
-                    if (row) setOpenId(row.id);
-                  }}
-                >
-                  {(typed.length ? typed : [{ id: "empty", colorIndex: 0 }]).map((r) => (
-                    <Cell
-                      key={r.id}
-                      fill={CHART[r.colorIndex]}
-                      opacity={openId && r.id !== openId && r.id !== "empty" ? 0.45 : 1}
-                      className={r.id === "empty" ? undefined : "cursor-pointer outline-none"}
-                      onClick={() => {
-                        if (r.id !== "empty") setOpenId(r.id);
-                      }}
-                    />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
-              <div>
-                <div className="text-base font-semibold tabular-nums">{money(focusTotal, "HKD")}</div>
-                <div className="text-xs text-muted">{focusLabel}</div>
-              </div>
+        <div
+          key={`chart-${drillKey}`}
+          className={cn("relative mx-auto h-56 w-56", animate && "rt-drill-swap rt-chart-draw")}
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={chartRows.length ? chartRows : [{ id: "empty", value: 1, name: "—" }]}
+                dataKey="value"
+                nameKey="name"
+                innerRadius="62%"
+                outerRadius="88%"
+                stroke="none"
+                paddingAngle={chartRows.length > 1 ? 1.2 : 0}
+                isAnimationActive={animate}
+                animationDuration={420}
+                animationBegin={0}
+                onClick={(_, index) => {
+                  const row = chartRows[index];
+                  if (!row || row.id === "empty") return;
+                  if (!focus) {
+                    if (row.id === "assets" || row.id === "liab") pickSide(row.id);
+                    return;
+                  }
+                  setOpenId(row.id);
+                }}
+              >
+                {(chartRows.length ? chartRows : [{ id: "empty", colorIndex: 0 }]).map((r) => (
+                  <Cell
+                    key={r.id}
+                    fill={CHART[r.colorIndex % 8]}
+                    opacity={openId && r.id !== openId && r.id !== "empty" ? 0.45 : 1}
+                    className={r.id === "empty" ? undefined : "cursor-pointer outline-none"}
+                    style={animate ? { transition: "opacity 200ms ease" } : undefined}
+                    onClick={() => {
+                      if (r.id === "empty") return;
+                      if (!focus) {
+                        if (r.id === "assets" || r.id === "liab") pickSide(r.id as "assets" | "liab");
+                        return;
+                      }
+                      setOpenId(r.id);
+                    }}
+                  />
+                ))}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
+            <div key={`center-${drillKey}`} className={cn(animate && "rt-drill-swap")}>
+              <div className="text-base font-semibold tabular-nums">{money(centerValue, "HKD")}</div>
+              <div className="text-xs text-muted">{centerLabel}</div>
             </div>
           </div>
-          <div className="rt-enter-delay px-5 pt-2">
-            {typed.map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                onClick={() => setOpenId(r.id)}
-                className={cn(
-                  "tr-press flex min-h-11 w-full items-center justify-between gap-3 rounded-lg py-2.5 text-left transition",
-                  openId === r.id && "bg-accent-soft/60 px-2",
-                )}
-              >
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <span className="size-2.5 shrink-0 rounded-full" style={{ background: CHART[r.colorIndex] }} />
-                  <span className="truncate text-sm">{r.name}</span>
-                </div>
-                <span className="flex shrink-0 items-center gap-1">
-                  <span className="text-sm tabular-nums text-muted">
-                    {money(r.value, "HKD")}
-                    <span className="ml-2 text-xs text-faint">{focusTotal > 0 ? pct(r.value / focusTotal) : "—"}</span>
-                  </span>
-                  <ChevronRight className="size-4 text-faint" />
+        </div>
+
+        <div key={`list-${drillKey}`} className={cn("px-5 pt-2", animate && "rt-drill-swap")}>
+          {listRows.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => {
+                if (!focus) {
+                  if (r.id === "assets" || r.id === "liab") pickSide(r.id);
+                  return;
+                }
+                setOpenId(r.id);
+              }}
+              className={cn(
+                "tr-press flex min-h-11 w-full items-center justify-between gap-3 rounded-lg py-2.5 text-left transition",
+                (focus ? openId === r.id : focus === r.id) && "bg-accent-soft/60 px-2",
+              )}
+            >
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="size-2.5 shrink-0 rounded-full" style={{ background: CHART[r.colorIndex % 8] }} />
+                <span className="truncate text-sm">{r.name}</span>
+              </div>
+              <span className="flex shrink-0 items-center gap-1">
+                <span className="text-sm tabular-nums text-muted">
+                  {money(r.value, "HKD")}
+                  <span className="ml-2 text-xs text-faint">{listDenom > 0 ? pct(r.value / listDenom) : "—"}</span>
                 </span>
-              </button>
-            ))}
-            {typed.length === 0 ? <p className="py-6 text-center text-sm text-muted">{t.common.none}</p> : null}
-          </div>
-        </Overlay>
-      ) : null}
+                <ChevronRight className="size-4 text-faint" />
+              </span>
+            </button>
+          ))}
+          {focus && listRows.length === 0 ? <p className="py-6 text-center text-sm text-muted">{t.common.none}</p> : null}
+        </div>
+      </div>
 
       {openRow ? (
         <TypeAccountList row={openRow} side={focus === "liab" ? "liab" : "assets"} onClose={() => setOpenId(null)} />
@@ -271,33 +278,43 @@ function TypeAccountList({
       : [];
 
   return (
-    <Overlay open onClose={onClose} variant="page" layer="stack">
-      <header className="flex items-center justify-between px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <button type="button" className="h-11 min-w-11 px-2 text-sm text-accent" onClick={onClose}>
-          {t.common.back}
+    <Overlay open onClose={onClose} variant="sheet" layer="stack">
+      <header className="flex items-center justify-between px-3 pt-2">
+        <button type="button" className="tr-press h-11 min-w-11 px-2 text-sm text-accent" onClick={onClose}>
+          {t.common.close}
         </button>
-        <h1 className="min-w-0 flex-1 truncate text-center text-base font-semibold">{row.name}</h1>
+        <h2 className="min-w-0 flex-1 truncate text-center text-base font-semibold">{row.name}</h2>
         <span className="min-w-11" />
       </header>
-      <div className="rt-enter mx-4 mb-4 mt-2 rounded-xl bg-elevated px-4 py-4">
+      <div className="rt-enter mx-4 mb-4 mt-1 rounded-xl bg-elevated px-4 py-4">
         <div className="text-xs text-muted">{side === "assets" ? t.assets.totalAssets : t.assets.totalLiab}</div>
         <div className="mt-1 text-2xl font-semibold tabular-nums">{money(row.value, "HKD")}</div>
       </div>
-      <div className="rt-enter-delay px-5">
-        {row.accounts.map((a) => (
-          <div key={a.id} className="flex min-h-11 items-center justify-between gap-3 py-2.5">
+      <div className="rt-enter-delay px-5 pb-2">
+        {row.accounts.map((a, i) => (
+          <div
+            key={a.id}
+            className="rt-drill-row flex min-h-11 items-center justify-between gap-3 py-2.5"
+            style={{ animationDelay: `${i * 28}ms` }}
+          >
             <span className="truncate text-sm">{pickName(locale, a.name, a.nameZh)}</span>
             <span className="text-sm tabular-nums text-muted">
               {money(Math.abs(toHkd(a.balance, a.currency, rates)), "HKD")}
-              <span className="ml-2 text-xs text-faint">{row.value > 0 ? pct(Math.abs(toHkd(a.balance, a.currency, rates)) / row.value) : "—"}</span>
+              <span className="ml-2 text-xs text-faint">
+                {row.value > 0 ? pct(Math.abs(toHkd(a.balance, a.currency, rates)) / row.value) : "—"}
+              </span>
             </span>
           </div>
         ))}
         {outside.length ? (
           <>
             <p className="pb-1 pt-2 text-xs text-muted">{t.reports.balanceTdOutside}</p>
-            {outside.map((d) => (
-              <div key={d.id} className="flex min-h-11 items-center justify-between gap-3 py-2.5">
+            {outside.map((d, i) => (
+              <div
+                key={d.id}
+                className="rt-drill-row flex min-h-11 items-center justify-between gap-3 py-2.5"
+                style={{ animationDelay: `${(row.accounts.length + i) * 28}ms` }}
+              >
                 <span className="min-w-0 truncate text-sm">
                   {d.bank}
                   {d.endDate ? <span className="ml-1 text-xs text-faint">{d.endDate}</span> : null}
