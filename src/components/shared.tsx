@@ -411,12 +411,14 @@ export function Group({ children }: { children: ReactNode }) {
 
 export function Row({
   title,
+  subtitle,
   to,
   chevron,
   icon,
   onClick,
 }: {
   title: string;
+  subtitle?: string;
   to?: string;
   chevron?: boolean;
   icon?: ReactNode;
@@ -425,7 +427,10 @@ export function Row({
   const inner = (
     <div className="flex items-center gap-3 px-4 py-3.5">
       {icon ? <span className="text-accent">{icon}</span> : null}
-      <span className="flex-1 text-sm">{title}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm">{title}</span>
+        {subtitle ? <span className="mt-0.5 block truncate text-[11px] tabular-nums text-muted">{subtitle}</span> : null}
+      </span>
       {chevron ? <ChevronRight className="size-4 text-faint" /> : null}
     </div>
   );

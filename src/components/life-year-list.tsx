@@ -4,18 +4,20 @@ import { money } from "@/lib/format";
 import type { LifeYearRow } from "@/lib/calc/life-plan";
 import { useT } from "@/store/ui";
 
-export function LifeYearList({ years }: { years: LifeYearRow[] }) {
+export function LifeYearList({ years, focusAge, highlightAge }: { years: LifeYearRow[]; focusAge?: number; highlightAge?: number | null }) {
   const t = useT();
   const [open, setOpen] = useState<number | null>(null);
   const [all, setAll] = useState(false);
-  const visible = all ? years : years.slice(0, 5);
+  const focus = focusAge ?? years.find((y) => y.phase !== "retired")?.age ?? years[0]?.age;
+  const near = focus == null ? years.slice(0, 5) : years.filter((y) => Math.abs(y.age - focus) <= 2);
+  const visible = all ? years : near.length ? near : years.slice(0, 5);
   return (
     <div className="mb-3">
       <SectionLabel>{t.reports.lpYears}</SectionLabel>
       <p className="px-5 pb-2 text-[11px] leading-4 text-muted">{t.reports.lpLivingNote}</p>
       <div className="mx-4 overflow-hidden rounded-2xl bg-elevated">
         {visible.map((y, i) => (
-          <div key={y.age}>
+          <div key={y.age} className={highlightAge === y.age ? "bg-accent-soft" : undefined}>
             {i > 0 ? <Hairline /> : null}
             <button type="button" className="flex min-h-11 w-full items-start justify-between gap-2 px-4 py-2.5 text-left" onClick={() => setOpen(open === y.age ? null : y.age)}>
               <div>
