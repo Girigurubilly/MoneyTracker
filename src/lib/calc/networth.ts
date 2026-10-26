@@ -6,44 +6,10 @@ import { depositsOutsideBalances } from "./deposits.ts";
 import { todayISO } from "../format.ts";
 import { inPeriod } from "./period.ts";
 
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
-
 export function countsInNetWorth(a: Account): boolean {
   if (a.currency === "MILES" || a.type === "miles") return false;
   if (groupForType(a.type) === "cash") return true;
   return Boolean(a.includeInNetWorth);
-}
-
-/** Counted HKD effect of a plain transfer. Negative when net worth falls.
- *  A transfer that stays inside the total and balances out returns 0.
- *  Inflows (effect > 0) are left alone.
- */
-export function plainTransferLeakHkd(tx: Transaction, accounts: Account[], rates: FxRate[]): number {
-  if (tx.planned || tx.type !== "transfer" || tx.countsAsExpense) return 0;
-  let hkd = 0;
-  let touched = false;
-  for (const d of balanceDeltas(tx, accounts, rates)) {
-    const acc = accounts.find((a) => a.id === d.accountId);
-    if (!acc || !countsInNetWorth(acc)) continue;
-    touched = true;
-    hkd += toHkd(d.delta, acc.currency, rates);
-  }
-  if (!touched) return 0;
-  const effect = round2(hkd);
-  return effect < -0.005 ? effect : 0;
-}
-
-/** Add-back so a plain transfer that leaves the counted accounts does not move net worth. */
-export function plainTransferOffsetHkd(accounts: Account[], txs: Transaction[], rates: FxRate[], asOf: string): number {
-  let adj = 0;
-  for (const tx of txs) {
-    if (tx.date > asOf) continue;
-    const leak = plainTransferLeakHkd(tx, accounts, rates);
-    if (leak) adj -= leak;
-  }
-  return round2(adj);
 }
 
 function outsideDepositHkd(accounts: Account[], rates: FxRate[], deposits: TimeSaving[], asOf: string): number {
@@ -264,23 +230,17 @@ export function periodNetWorthPoints(
   const span = (Date.parse(`${end}T12:00:00`) - Date.parse(`${start}T12:00:00`)) / 86_400_000;
   const points: WorthPoint[] = [];
   const tagLive = (date: string): WorthPointSource => (date >= today ? "live" : "reconstructed");
-  const hold = (date: string, base: { net: number; assets: number; liab: number }, source: WorthPointSource): WorthPoint => {
-    const offset = plainTransferOffsetHkd(accounts, txs, rates, date);
-    return {
-      date,
-      assets: round2(base.assets + offset),
-      liab: base.liab,
-      net: round2(base.net + offset),
-      flow: 0,
-      source,
-    };
-  };
-  const liveSnap = (date: string): WorthPoint => hold(date, netWorthNow(accs, rates, deposits, date), tagLive(date));
+  const liveSnap = (date: string): WorthPoint => ({
+    date,
+    ...netWorthNow(accs, rates, deposits, date),
+    flow: 0,
+    source: tagLive(date),
+  });
   const pointFor = (date: string, preferSnap: boolean): WorthPoint => {
     const ym = date.slice(0, 7);
     if (preferSnap && ym < currentYm) {
       const frozen = byMonth.get(ym);
-      if (frozen) return hold(date, frozen, "snapshot");
+      if (frozen) return { date, net: frozen.net, assets: frozen.assets, liab: frozen.liab, flow: 0, source: "snapshot" };
     }
     return liveSnap(date);
   };
