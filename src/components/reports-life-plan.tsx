@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { Disclaimer, ScreenHeader, SectionLabel } from "@/components/shared";
+import { Enter } from "@/components/retire-ux";
 import { LifePlanJobs } from "@/components/life-plan-setup";
 import { SharedRetirementStrip, useLifePlanResult } from "@/components/reports-retire";
 import { money } from "@/lib/format";
@@ -25,16 +26,18 @@ export function EarlyRetirementPlanPage() {
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.lpHint}</p>
       <SharedRetirementStrip />
       <LifePlanJobs />
-      <Link to="/reports/retirement" className="mx-4 mb-3 flex min-h-11 items-center rounded-2xl bg-elevated px-4 text-sm">
+      <Link to="/reports/retirement" className="tr-press mx-4 mb-3 flex min-h-11 items-center rounded-2xl bg-elevated px-4 text-sm">
         {t.reports.assumptionsOne}
       </Link>
 
       {result.ready ? (
         <>
+          <Enter>
           <div className="mx-4 mb-3 grid grid-cols-1 gap-2">
             {result.stay ? <PathCard title={t.reports.lpStay} row={result.stay} target={plan.personal.targetTerminalFinancialAssets} t={t} /> : null}
             {result.switch ? <PathCard title={t.reports.lpSwitch} row={result.switch} target={plan.personal.targetTerminalFinancialAssets} t={t} /> : null}
           </div>
+          </Enter>
           <SectionLabel>{t.reports.lpChart}</SectionLabel>
           <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated pt-2">
             <div className="h-44">
@@ -54,16 +57,16 @@ export function EarlyRetirementPlanPage() {
           </div>
           {result.switch ? (
             <div className="mx-4 mb-2 grid grid-cols-2 gap-2">
-              <button type="button" className={cn("h-11 rounded-xl text-sm font-medium", path === "stay" ? "bg-accent text-on-accent" : "bg-elevated")} onClick={() => setPath("stay")}>
+              <button type="button" className={cn("tr-press h-11 rounded-xl text-sm font-medium", path === "stay" ? "bg-accent text-on-accent" : "bg-elevated")} onClick={() => setPath("stay")}>
                 {t.reports.lpStay}
               </button>
-              <button type="button" className={cn("h-11 rounded-xl text-sm font-medium", path === "switch" ? "bg-accent text-on-accent" : "bg-elevated")} onClick={() => setPath("switch")}>
+              <button type="button" className={cn("tr-press h-11 rounded-xl text-sm font-medium", path === "switch" ? "bg-accent text-on-accent" : "bg-elevated")} onClick={() => setPath("switch")}>
                 {t.reports.lpSwitch}
               </button>
             </div>
           ) : null}
           <p className="px-5 pb-2 text-xs leading-5 text-muted">{t.reports.oneYearList}</p>
-          <Link to="/reports/retirement/projection" className="mx-4 mb-3 flex min-h-11 items-center rounded-2xl bg-elevated px-4 text-sm">
+          <Link to="/reports/retirement/projection" className="tr-press mx-4 mb-3 flex min-h-11 items-center rounded-2xl bg-elevated px-4 text-sm">
             {t.reports.scenarioYears}
           </Link>
         </>
