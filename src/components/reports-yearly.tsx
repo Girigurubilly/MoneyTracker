@@ -5,6 +5,7 @@ import { money, todayISO } from "@/lib/format";
 import { Enter, useCountUp } from "@/components/retire-ux";
 import { Overlay, ScreenHeader } from "@/components/shared";
 import { ReportAiButton, ReportAiSheet } from "@/components/report-ai-sheet";
+import { ActiveKeypad, ComposerHeader, ComposerShell } from "@/components/txn-composer";
 import { cn } from "@/lib/utils";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
 import { useApp } from "@/store/app";
@@ -21,35 +22,57 @@ export function YearlyPage() {
   const recurring = useApp((s) => s.recurring);
   const budgets = useApp((s) => s.budgets);
   const setYearlyCell = useApp((s) => s.setYearlyCell);
+  const setYearlySalaryYear = useApp((s) => s.setYearlySalaryYear);
   const [ai, setAi] = useState(false);
   const [hint, setHint] = useState(false);
   const [showEmpty, setShowEmpty] = useState(false);
+  const [wizard, setWizard] = useState(false);
   const [focus, setFocus] = useState<number | null>(null);
   const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
   const today = todayISO();
-  const year = Number(today.slice(0, 4));
-  const month0 = Number(today.slice(5, 7)) - 1;
-  const monthCap = budgets.find((b) => b.id === MONTH_TOTAL_BUDGET_ID)?.monthly ?? 0;
-  const data = yearlyProjection(plans, deposits, rates, year, month0, txs, cats, monthCap, recurring, today);
+  const thisYear = Number(today.slice(0, 4));
+  const calendarMonth0 = Number(today.slice(5, 7)) - 1;
+  const [viewYear, setViewYear] = useState(thisYear);
+  const isNextYear = viewYear === thisYear + 1;
+  const month0 = isNextYear ? -1 : calendarMonth0;
+  const monthCap = isNextYear ? 0 : budgets.find((b) => b.id === MONTH_TOTAL_BUDGET_ID)?.monthly ?? 0;
+  const data = yearlyProjection(
+    plans,
+    deposits,
+    rates,
+    viewYear,
+    month0,
+    txs,
+    cats,
+    monthCap,
+    recurring,
+    isNextYear ? "" : today,
+  );
   const months = locale === "zh-HK" ? MONTHS_ZH : MONTHS_EN;
   const markdown = useMemo(
     () =>
       renderYearlyBriefMarkdown({
         asOf: today,
-        year,
+        year: viewYear,
         monthCap,
         locale,
         ...data,
       }),
-    [today, year, monthCap, data, locale],
+    [today, viewYear, monthCap, data, locale],
   );
   const shownSaving = useCountUp(data.yearSaving, false, 480);
-  const activeFocus = focus ?? month0;
+  const activeFocus = focus ?? (isNextYear ? 0 : calendarMonth0);
+
+  const nextYearNeedsSetup = useMemo(() => {
+    if (!isNextYear) return false;
+    return data.rows.every((r) => Math.abs(r.salary) < 0.005);
+  }, [data.rows, isNextYear]);
 
   const emptyEarly = useMemo(() => {
+    if (isNextYear) return [] as number[];
     const empties: number[] = [];
     for (const row of data.rows) {
-      if (row.month0 >= month0) break;
+      if (row.month0 >= calendarMonth0) break;
       const blank =
         Math.abs(row.salary) < 0.005 &&
         Math.abs(row.other) < 0.005 &&
@@ -59,7 +82,7 @@ export function YearlyPage() {
       else break;
     }
     return empties;
-  }, [data.rows, month0]);
+  }, [data.rows, calendarMonth0, isNextYear]);
 
   const visibleRows = useMemo(() => {
     if (showEmpty || !emptyEarly.length) return data.rows;
@@ -68,8 +91,8 @@ export function YearlyPage() {
   }, [data.rows, emptyEarly, showEmpty]);
 
   useEffect(() => {
-    setFocus(month0);
-  }, [month0]);
+    setFocus(isNextYear ? 0 : calendarMonth0);
+  }, [viewYear, isNextYear, calendarMonth0]);
 
   function scrubTo(m0: number) {
     setFocus(m0);
@@ -81,7 +104,47 @@ export function YearlyPage() {
 
   return (
     <div className="pb-24">
-      <ScreenHeader title={t.reports.yearlyTitleYear.replace("{year}", String(year))} backTo="/reports" />
+      <ScreenHeader title={t.reports.yearlyTitleYear.replace("{year}", String(viewYear))} backTo="/reports" />
+
+      <div className="mx-4 mb-2 flex gap-2">
+        <button
+          type="button"
+          className={cn(
+            "tr-press min-h-11 flex-1 rounded-xl px-3 text-sm font-medium",
+            !isNextYear ? "bg-accent text-on-accent" : "bg-elevated text-muted",
+          )}
+          onClick={() => setViewYear(thisYear)}
+        >
+          {t.reports.yearThis} · {thisYear}
+        </button>
+        <button
+          type="button"
+          className={cn(
+            "tr-press min-h-11 flex-1 rounded-xl px-3 text-sm font-medium",
+            isNextYear ? "bg-accent text-on-accent" : "bg-elevated text-muted",
+          )}
+          onClick={() => setViewYear(thisYear + 1)}
+        >
+          {t.reports.yearNext} · {thisYear + 1}
+        </button>
+      </div>
+
+      {isNextYear ? (
+        <div className="mx-4 mb-3 flex items-center justify-between gap-2 rounded-2xl bg-elevated px-3 py-3">
+          <p className="text-xs leading-5 text-muted">
+            {nextYearNeedsSetup
+              ? t.reports.nextYearEmptyHint.replace("{year}", String(viewYear))
+              : t.reports.nextYearWizardHint.replace("{year}", String(viewYear))}
+          </p>
+          <button
+            type="button"
+            className="tr-press shrink-0 rounded-xl bg-accent px-3 py-2 text-xs font-semibold text-on-accent"
+            onClick={() => setWizard(true)}
+          >
+            {t.reports.setupNextYear.replace("{year}", String(viewYear))}
+          </button>
+        </div>
+      ) : null}
 
       <div className="tr-sticky px-4 py-2">
         <div className="flex items-baseline justify-between gap-2">
@@ -107,29 +170,35 @@ export function YearlyPage() {
               <div className="text-[11px] text-expense">{t.reports.yearlyExpense}</div>
               <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(data.yearExpense, "HKD")}</div>
             </div>
-            <div className="rounded-xl bg-background px-3 py-2">
-              <div className="text-[11px] text-muted">{t.reports.earnAsOfNow}</div>
-              <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(data.asOfIncome, "HKD")}</div>
-            </div>
-            <button type="button" className="tr-press rounded-xl bg-background px-3 py-2 text-left" onClick={() => setHint(true)}>
-              <div className="text-[11px] text-muted">{t.reports.expenseAsOfNow}</div>
-              <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(data.asOfExpense, "HKD")}</div>
-              {monthCap > 0 ? <p className="mt-1 text-[10px] leading-3 text-faint">{t.reports.expenseAsOfCapNote}</p> : null}
-            </button>
+            {!isNextYear ? (
+              <>
+                <div className="rounded-xl bg-background px-3 py-2">
+                  <div className="text-[11px] text-muted">{t.reports.earnAsOfNow}</div>
+                  <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(data.asOfIncome, "HKD")}</div>
+                </div>
+                <button type="button" className="tr-press rounded-xl bg-background px-3 py-2 text-left" onClick={() => setHint(true)}>
+                  <div className="text-[11px] text-muted">{t.reports.expenseAsOfNow}</div>
+                  <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(data.asOfExpense, "HKD")}</div>
+                  {monthCap > 0 ? <p className="mt-1 text-[10px] leading-3 text-faint">{t.reports.expenseAsOfCapNote}</p> : null}
+                </button>
+              </>
+            ) : null}
           </div>
-          <div className="mt-2 rounded-xl bg-background px-3 py-2">
-            <div className="text-[11px] text-muted">{t.reports.savingAsOfNow}</div>
-            <div className={cn("mt-0.5 text-sm font-semibold tabular-nums", data.asOfSaving >= 0 ? "text-income" : "text-expense")}>
-              {money(data.asOfSaving, "HKD")}
+          {!isNextYear ? (
+            <div className="mt-2 rounded-xl bg-background px-3 py-2">
+              <div className="text-[11px] text-muted">{t.reports.savingAsOfNow}</div>
+              <div className={cn("mt-0.5 text-sm font-semibold tabular-nums", data.asOfSaving >= 0 ? "text-income" : "text-expense")}>
+                {money(data.asOfSaving, "HKD")}
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
       </Enter>
 
       <Enter delay>
         <div className="mx-4 mb-3 rounded-2xl bg-elevated px-3 py-3">
           <div className="mb-2 flex items-center justify-between">
-            <div className="text-[11px] text-muted">{t.reports.savingAsOfNow}</div>
+            <div className="text-[11px] text-muted">{t.reports.yearlyBalanceBars}</div>
             <div className="text-[11px] font-medium text-[var(--color-foreground)]">{months[activeFocus]}</div>
           </div>
           <div className="flex h-16 items-end gap-1">
@@ -168,7 +237,7 @@ export function YearlyPage() {
         <ReportAiSheet
           title={t.reports.exportBrief}
           hint={t.reports.yearlyAiHint}
-          filename={`hk-life-yearly-${today}.md`}
+          filename={`hk-life-yearly-${viewYear}-${today}.md`}
           markdown={markdown}
           onClose={() => setAi(false)}
         />
@@ -189,69 +258,73 @@ export function YearlyPage() {
       ) : null}
 
       <div className="mx-4 space-y-2">
-        {visibleRows.map((row) => {
+        {visibleRows.map((row, i) => {
           const capDriven = row.isCurrent && !row.fromLedger && monthCap > 0;
           return (
-            <div
-              key={row.id}
-              ref={(el) => {
-                cardRefs.current[row.month0] = el;
-              }}
-              className={cn(
-                "rounded-2xl bg-elevated px-3 py-3",
-                row.month0 === activeFocus && "ring-1 ring-accent",
-              )}
-            >
-              <button type="button" className="tr-press flex w-full items-center justify-between gap-2 text-left" onClick={() => setFocus(row.month0)}>
-                <div className="text-sm font-semibold">
-                  {months[row.month0]}
-                  {row.isCurrent ? (
-                    <span className="ml-1 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-on-accent">{t.reports.nowBadge}</span>
-                  ) : null}
-                </div>
-                <div className={cn("text-sm font-semibold tabular-nums", row.saving >= 0 ? "text-income" : "text-expense")}>
-                  {money(row.saving, "HKD")}
-                </div>
-              </button>
-              <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <div className="text-muted">{t.reports.salary}</div>
-                  {row.incomeLocked ? (
-                    <LedgerNum value={row.salary} />
-                  ) : (
-                    <NumCell value={row.salary} onChange={(n) => void setYearlyCell(year, row.month0, "salary", n)} />
-                  )}
-                </div>
-                <div>
-                  <div className="text-muted">{t.reports.depositInterestHkd}</div>
-                  <div className="mt-1 flex h-9 items-center justify-end tabular-nums text-income">
-                    {row.depInt ? money(row.depInt, "HKD") : "—"}
+            <Enter key={row.id} delay={i > 0}>
+              <div
+                ref={(el) => {
+                  cardRefs.current[row.month0] = el;
+                }}
+                className={cn(
+                  "rounded-2xl bg-elevated px-3 py-3",
+                  row.month0 === activeFocus && "ring-1 ring-accent",
+                )}
+              >
+                <button type="button" className="tr-press flex w-full items-center justify-between gap-2 text-left" onClick={() => setFocus(row.month0)}>
+                  <div className="text-sm font-semibold">
+                    {months[row.month0]}
+                    {row.isCurrent ? (
+                      <span className="ml-1 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-on-accent">{t.reports.nowBadge}</span>
+                    ) : null}
+                  </div>
+                  <div className={cn("text-sm font-semibold tabular-nums", row.saving >= 0 ? "text-income" : "text-expense")}>
+                    {money(row.saving, "HKD")}
+                  </div>
+                </button>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <div className="text-muted">{t.reports.salary}</div>
+                    {row.incomeLocked ? (
+                      <LedgerNum value={row.salary} />
+                    ) : (
+                      <NumCell value={row.salary} onChange={(n) => void setYearlyCell(viewYear, row.month0, "salary", n)} />
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-muted">{t.reports.depositInterestHkd}</div>
+                    <div className="mt-1 flex h-9 items-center justify-end tabular-nums text-income">
+                      {row.depInt ? money(row.depInt, "HKD") : "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between gap-1 text-muted">
+                      <span>{t.reports.otherIncome}</span>
+                      {row.otherLocked ? <span className="text-[10px] text-faint">{t.reports.otherFromSchedule}</span> : null}
+                    </div>
+                    {row.otherLocked || row.incomeLocked ? (
+                      <LedgerNum value={row.other} />
+                    ) : (
+                      <NumCell value={row.other} onChange={(n) => void setYearlyCell(viewYear, row.month0, "other", n)} />
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-muted">{t.reports.expectedExpense}</div>
+                    {row.fromLedger || capDriven ? (
+                      <>
+                        <LedgerNum value={row.expense} />
+                        {capDriven ? <p className="mt-1 text-[11px] leading-4 text-faint">{t.reports.capDrivenExpense}</p> : null}
+                      </>
+                    ) : (
+                      <>
+                        <NumCell value={row.expense} onChange={(n) => void setYearlyCell(viewYear, row.month0, "expense", n)} />
+                        {row.isCurrent ? <p className="mt-1 text-[11px] leading-4 text-faint">{t.reports.linkedMonthCap}</p> : null}
+                      </>
+                    )}
                   </div>
                 </div>
-                <div>
-                  <div className="text-muted">{t.reports.otherIncome}</div>
-                  {row.incomeLocked ? (
-                    <LedgerNum value={row.other} />
-                  ) : (
-                    <NumCell value={row.other} onChange={(n) => void setYearlyCell(year, row.month0, "other", n)} />
-                  )}
-                </div>
-                <div>
-                  <div className="text-muted">{t.reports.expectedExpense}</div>
-                  {row.fromLedger || capDriven ? (
-                    <>
-                      <LedgerNum value={row.expense} />
-                      {capDriven ? <p className="mt-1 text-[11px] leading-4 text-faint">{t.reports.capDrivenExpense}</p> : null}
-                    </>
-                  ) : (
-                    <>
-                      <NumCell value={row.expense} onChange={(n) => void setYearlyCell(year, row.month0, "expense", n)} />
-                      {row.isCurrent ? <p className="mt-1 text-[11px] leading-4 text-faint">{t.reports.linkedMonthCap}</p> : null}
-                    </>
-                  )}
-                </div>
               </div>
-            </div>
+            </Enter>
           );
         })}
       </div>
@@ -262,7 +335,91 @@ export function YearlyPage() {
           {monthCap > 0 ? <p className="px-5 pb-8 text-sm leading-6 text-muted">{t.reports.expenseAsOfCapNote}</p> : null}
         </Overlay>
       ) : null}
+
+      {wizard ? (
+        <NextYearSalaryWizard
+          year={viewYear}
+          initial={data.rows.find((r) => r.salary > 0)?.salary ?? 0}
+          onClose={() => setWizard(false)}
+          onApply={async (salary) => {
+            await setYearlySalaryYear(viewYear, salary);
+            setWizard(false);
+          }}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function NextYearSalaryWizard({
+  year,
+  initial,
+  onClose,
+  onApply,
+}: {
+  year: number;
+  initial: number;
+  onClose: () => void;
+  onApply: (salary: number) => void | Promise<void>;
+}) {
+  const t = useT();
+  const [amount, setAmount] = useState(initial > 0.005 ? String(Math.round(initial * 100) / 100) : "");
+  const [pad, setPad] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  async function apply() {
+    const n = parseFloat(amount) || 0;
+    setBusy(true);
+    try {
+      await onApply(n);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Overlay open onClose={onClose} variant="page">
+      <ComposerShell
+        header={
+          <ComposerHeader
+            onClose={onClose}
+            onSave={busy ? undefined : () => void apply()}
+            title={t.reports.nextYearWizardTitle}
+          />
+        }
+        keypad={
+          pad ? (
+            <ActiveKeypad
+              field="amount"
+              amount={amount}
+              dest=""
+              principal=""
+              interest=""
+              setAmount={setAmount}
+              setDest={() => undefined}
+              setPrincipal={() => undefined}
+              setInterest={() => undefined}
+              currency="HKD"
+              onCurrency={() => undefined}
+            />
+          ) : null
+        }
+      >
+        <p className="border-b border-line px-4 py-3 text-sm leading-6 text-muted" onClick={() => setPad(false)}>
+          {t.reports.nextYearWizardHint.replace("{year}", String(year))}
+        </p>
+        <button
+          type="button"
+          className="tr-press flex w-full items-baseline justify-between gap-3 px-4 py-4 text-left"
+          onClick={() => setPad(true)}
+        >
+          <span className="text-sm text-muted">{t.reports.nextYearWizardSalary}</span>
+          <span className="text-2xl font-semibold tabular-nums text-income">
+            {amount ? `HK$ ${amount}` : "HK$ —"}
+          </span>
+        </button>
+      </ComposerShell>
+    </Overlay>
   );
 }
 

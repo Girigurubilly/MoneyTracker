@@ -187,6 +187,7 @@ type Dispatchers = {
   setFcNotes: (confirmedFacts: string[], openGaps: string[]) => Promise<void>;
   syncPromoFromDeposits: () => Promise<void>;
   setYearlyCell: (year: number, month0: number, field: "salary" | "other" | "expense", value: number) => Promise<void>;
+  setYearlySalaryYear: (year: number, salary: number) => Promise<void>;
   addWishItem: (row: WishItem) => Promise<void>;
   updateWishItem: (row: WishItem) => Promise<void>;
   deleteWishItem: (id: string) => Promise<void>;
@@ -1313,6 +1314,19 @@ export const useApp = create<AppState>((set, get) => ({
         ? get().yearlyPlans.map((p) => (p.id === id ? next : p))
         : [...get().yearlyPlans, next],
     });
+  },
+  setYearlySalaryYear: async (year, salary) => {
+    const plans = [...get().yearlyPlans];
+    for (let m = 0; m < 12; m++) {
+      const id = `${year}-${String(m + 1).padStart(2, "0")}`;
+      const prev = plans.find((p) => p.id === id) ?? emptyYearlyPlan(id);
+      const next = { ...prev, salary };
+      await idb().yearlyPlans.put(next);
+      const idx = plans.findIndex((p) => p.id === id);
+      if (idx >= 0) plans[idx] = next;
+      else plans.push(next);
+    }
+    set({ yearlyPlans: plans });
   },
   addWishItem: async (row) => {
     await idb().wishlist.put(row);
