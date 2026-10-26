@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Hairline, InfoButton, Overlay, ProgressRing, ScreenHeader, SectionLabel, TxGroupedList } from "@/components/shared";
+import { ActiveKeypad, LineRow } from "@/components/txn-composer";
 import { money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import {
@@ -10,6 +11,7 @@ import {
   linkedLoan,
   linkedProperty,
   livingModeOf,
+  loanPrincipalProgress,
   loanTimeProgress,
   monthsAgoIso,
   alignMortgageAndRegulars,
@@ -19,7 +21,7 @@ import {
   remainingMonthsLabel,
   stressRows,
 } from "@/lib/calc/housing";
-import { effectiveRate, endDateFromRemaining, remainingFromStart, remainingInterest } from "@/lib/calc/mortgage";
+import { effectiveRate, endDateFromRemaining, monthlyPayment, remainingFromStart, remainingInterest } from "@/lib/calc/mortgage";
 import type { Mortgage } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
@@ -86,24 +88,35 @@ export function LivingPage() {
           </div>
         }
       />
-      <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
+      <div className="rt-enter mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="text-xs font-medium text-accent">{modeLabel}</div>
             <div className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{money(cost, "HKD")}</div>
             <div className="mt-0.5 text-xs text-muted">{t.reports.housingCost}</div>
+            {m && !m.startDate ? (
+              <button type="button" className="tr-press mt-2 text-left text-xs font-medium text-accent" onClick={() => setEdit(true)}>
+                {t.reports.setLoanStart}
+              </button>
+            ) : null}
           </div>
-          {m ? (
+          {m && m.startDate ? (
             <div className="relative shrink-0">
               <ProgressRing
                 value={paidPct}
                 size={64}
                 stroke={5}
                 tone={paidPct < 0.3 ? "watch" : "income"}
+                draw
               />
               <span className="pointer-events-none absolute inset-0 grid place-items-center text-[10px] font-semibold tabular-nums">
                 {`${Math.round(paidPct * 100)}%`}
               </span>
+            </div>
+          ) : m ? (
+            <div className="max-w-[7.5rem] rounded-xl bg-background px-2.5 py-2 text-center">
+              <div className="text-[10px] text-muted">{t.reports.principalPaidPct}</div>
+              <div className="mt-0.5 text-sm font-semibold tabular-nums">{`${Math.round(loanPrincipalProgress(m) * 100)}%`}</div>
             </div>
           ) : null}
         </div>
@@ -171,7 +184,8 @@ export function LivingPage() {
           </div>
 
           <SectionLabel>{t.reports.stress}</SectionLabel>
-          <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
+          <p className="px-5 pb-2 text-xs leading-5 text-muted">{t.reports.stressOutstandingHint}</p>
+          <div className="rt-enter mx-4 overflow-hidden rounded-xl bg-elevated">
             {stress.map((s, i) => (
               <div key={s.shock}>
                 {i > 0 ? <Hairline /> : null}
@@ -192,6 +206,7 @@ export function LivingPage() {
           {proj ? (
             <>
               <SectionLabel>{t.reports.projection12}</SectionLabel>
+              <p className="px-5 pb-2 text-xs leading-5 text-muted">{t.reports.scheduleFromOutstanding}</p>
               <p className="px-5 pb-2 text-xs leading-5 text-muted">{t.reports.scheduleEditHint}</p>
               <div className="mx-4 space-y-2">
                 {proj.rows.map((r) => (
@@ -324,149 +339,186 @@ function MortgageEditor({ open, onClose }: { open: boolean; onClose: () => void 
   const [linkedSavingsId, setLinkedSavingsId] = useState(m?.rateLinkedSavingsAccountId ?? "");
   const [day, setDay] = useState(String(m?.paymentDay ?? 1));
   const [override, setOverride] = useState(m?.paymentOverride ? String(m.paymentOverride) : "");
+  const [field, setField] = useState<"amount" | "dest" | "principal">("dest");
+  const today = todayISO();
   const preview = remainingFromStart(
     { startDate, remainingMonths: Number(termYears) * 12 || 240, termYears: Number(termYears) || undefined, paymentDay: Number(day) || 1 },
-    todayISO(),
+    today,
   );
+  const liveRate = useMemo(() => {
+    if (type === "fixed") return (Number(fixed) || 0) / 100;
+    return ((Number(pRate) || 0) + (Number(spread) || 0)) / 100;
+  }, [type, fixed, pRate, spread]);
+  const liveInstallment = useMemo(() => {
+    const ov = Number(override);
+    if (ov > 0) return ov;
+    const months = Math.max(1, preview.remainingMonths);
+    const out = Number(outstanding) || 0;
+    const orig = Number(original) || out;
+    if (startDate && orig > 0) {
+      const term = Math.max(1, Math.round((Number(termYears) || 0) * 12) || months);
+      return monthlyPayment(orig, liveRate, term);
+    }
+    return monthlyPayment(out, liveRate, months);
+  }, [override, outstanding, original, startDate, termYears, preview.remainingMonths, liveRate]);
 
   return (
     <Overlay open={open} onClose={onClose} title={t.reports.updateMortgage} variant="page">
-      <div className="px-5 pb-10">
-        <label className="block py-2 text-xs text-muted">
-          {t.reports.livingMode}
-          <select value={mode} onChange={(e) => setMode(e.target.value as typeof mode)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground">
-            <option value="own-mortgage">{t.reports.modeOwnMortgage}</option>
-            <option value="own-outright">{t.reports.modeOwnOutright}</option>
-            <option value="rent">{t.reports.modeRent}</option>
-            <option value="other">{t.reports.modeOther}</option>
-          </select>
-        </label>
-        <label className="block py-2 text-xs text-muted">
-          {t.reports.linkedProperty}
-          <select value={propertyId} onChange={(e) => setPropertyId(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground">
-            <option value="">{t.common.none}</option>
-            {properties.map((a) => (
-              <option key={a.id} value={a.id}>
-                {pickName(locale, a.name, a.nameZh)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block py-2 text-xs text-muted">
-          {t.reports.loan}
-          <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground">
-            {loans.map((a) => (
-              <option key={a.id} value={a.id}>
-                {pickName(locale, a.name, a.nameZh)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block py-2 text-xs text-muted">
-          {t.reports.rateLinkedSavings}
-          <select value={linkedSavingsId} onChange={(e) => setLinkedSavingsId(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground">
-            <option value="">{t.common.none}</option>
-            {savings.map((a) => (
-              <option key={a.id} value={a.id}>
-                {pickName(locale, a.name, a.nameZh)}
-              </option>
-            ))}
-          </select>
-          <span className="mt-1 block text-[11px] text-muted">{t.reports.rateLinkedSavingsHint}</span>
-        </label>
-        <label className="block py-2 text-xs text-muted">
-          {t.reports.originalLoan}
-          <input inputMode="decimal" value={original} onChange={(e) => setOriginal(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
-        </label>
-        <label className="block py-2 text-xs text-muted">
-          {t.reports.loanStart}
-          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
-        </label>
-        <label className="block py-2 text-xs text-muted">
-          {t.reports.owedBank}
-          <input inputMode="decimal" value={outstanding} onChange={(e) => setOutstanding(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
-        </label>
-        <label className="block py-2 text-xs text-muted">
-          {t.reports.termYears}
-          <input inputMode="decimal" value={termYears} onChange={(e) => setTermYears(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
-        </label>
-        <div className="grid grid-cols-2 gap-3 py-2">
-          <div className="rounded-xl bg-elevated px-3 py-2">
-            <div className="text-[11px] text-muted">{t.reports.remainingYears}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{preview.remainingYears}</div>
-          </div>
-          <div className="rounded-xl bg-elevated px-3 py-2">
-            <div className="text-[11px] text-muted">{t.reports.remainingPayments}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{preview.paymentsLeft}</div>
-          </div>
-        </div>
-        <label className="block py-2 text-xs text-muted">
-          {locale === "zh-HK" ? "利率類型" : "Rate type"}
-          <select value={type} onChange={(e) => setType(e.target.value as Mortgage["type"])} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground">
-            <option value="p">P</option>
-            <option value="h">H</option>
-            <option value="fixed">{locale === "zh-HK" ? "固定" : "Fixed"}</option>
-          </select>
-        </label>
-        {type === "fixed" ? (
+      <div className="rt-sheet-in flex min-h-full flex-col">
+        <div className="rt-enter flex-1 px-5 pb-4">
           <label className="block py-2 text-xs text-muted">
-            {t.reports.effectiveRate} (%)
-            <input inputMode="decimal" value={fixed} onChange={(e) => setFixed(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
+            {t.reports.livingMode}
+            <select value={mode} onChange={(e) => setMode(e.target.value as typeof mode)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground">
+              <option value="own-mortgage">{t.reports.modeOwnMortgage}</option>
+              <option value="own-outright">{t.reports.modeOwnOutright}</option>
+              <option value="rent">{t.reports.modeRent}</option>
+              <option value="other">{t.reports.modeOther}</option>
+            </select>
           </label>
-        ) : (
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block py-2 text-xs text-muted">
-              {type.toUpperCase()} (%)
-              <input inputMode="decimal" value={pRate} onChange={(e) => setPRate(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
-            </label>
-            <label className="block py-2 text-xs text-muted">
-              {locale === "zh-HK" ? "息差 (%)" : "Spread (%)"}
-              <input inputMode="decimal" value={spread} onChange={(e) => setSpread(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
-            </label>
+          <label className="block py-2 text-xs text-muted">
+            {t.reports.linkedProperty}
+            <select value={propertyId} onChange={(e) => setPropertyId(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground">
+              <option value="">{t.common.none}</option>
+              {properties.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {pickName(locale, a.name, a.nameZh)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block py-2 text-xs text-muted">
+            {t.reports.loan}
+            <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground">
+              {loans.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {pickName(locale, a.name, a.nameZh)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block py-2 text-xs text-muted">
+            {t.reports.rateLinkedSavings}
+            <select value={linkedSavingsId} onChange={(e) => setLinkedSavingsId(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground">
+              <option value="">{t.common.none}</option>
+              {savings.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {pickName(locale, a.name, a.nameZh)}
+                </option>
+              ))}
+            </select>
+            <span className="mt-1 block text-[11px] text-muted">{t.reports.rateLinkedSavingsHint}</span>
+          </label>
+          <LineRow label={t.reports.originalLoan} amount={original} currency="HKD" active={field === "amount"} onFocusAmount={() => setField("amount")} />
+          <label className="block py-2 text-xs text-muted">
+            {t.reports.loanStart}
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
+            {!startDate ? <span className="mt-1 block text-[11px] text-watch">{t.reports.loanStartNeeded}</span> : null}
+          </label>
+          <LineRow label={t.reports.owedBank} amount={outstanding} currency="HKD" active={field === "dest"} onFocusAmount={() => setField("dest")} />
+          <label className="block py-2 text-xs text-muted">
+            {t.reports.termYears}
+            <input inputMode="decimal" value={termYears} onChange={(e) => setTermYears(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
+            <span className="mt-1 block text-[11px] text-muted">{startDate ? t.reports.termYearsWithStart : t.reports.termYearsNoStart}</span>
+          </label>
+          <div className="grid grid-cols-2 gap-3 py-2">
+            <div className="rounded-xl bg-elevated px-3 py-2">
+              <div className="text-[11px] text-muted">{t.reports.remainingYears}</div>
+              <div className="mt-0.5 text-sm font-semibold tabular-nums">{preview.remainingYears}</div>
+            </div>
+            <div className="rounded-xl bg-elevated px-3 py-2">
+              <div className="text-[11px] text-muted">{t.reports.remainingPayments}</div>
+              <div className="mt-0.5 text-sm font-semibold tabular-nums">{preview.paymentsLeft}</div>
+            </div>
           </div>
-        )}
-        <label className="block py-2 text-xs text-muted">
-          {locale === "zh-HK" ? "供款日" : "Payment day"}
-          <input inputMode="numeric" value={day} onChange={(e) => setDay(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
-        </label>
-        <label className="block py-2 text-xs text-muted">
-          {t.reports.installment} ({locale === "zh-HK" ? "可覆寫" : "optional override"})
-          <input inputMode="decimal" value={override} onChange={(e) => setOverride(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
-        </label>
-        <button
-          type="button"
-          className="mt-4 h-12 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent"
-          onClick={async () => {
-            const p = Number(pRate) / 100;
-            const sp = Number(spread) / 100;
-            const fx = Number(fixed) / 100;
-            const next: Mortgage = {
-              id: m?.id ?? "m1",
-              name: m?.name ?? "Mortgage",
-              nameZh: m?.nameZh ?? "按揭",
-              accountId: accountId || m?.accountId || "mortgage",
-              original: Number(original) || Number(outstanding) || 0,
-              startDate: startDate || undefined,
-              termYears: Number(termYears) || undefined,
-              outstanding: Number(outstanding) || 0,
-              rate: type === "fixed" ? fx : p + sp,
-              pRate: type === "fixed" ? undefined : p,
-              spread: type === "fixed" ? undefined : sp,
-              remainingMonths: Math.max(0, preview.remainingMonths),
-              paymentDay: Math.min(28, Math.max(1, Number(day) || 1)),
-              type,
-              livingMode: mode,
-              propertyAccountId: propertyId || undefined,
-              rateLinkedSavingsAccountId: linkedSavingsId || null,
-              paymentOverride: Number(override) > 0 ? Number(override) : undefined,
-              scheduleEdits: m?.scheduleEdits,
-            };
-            await update(next);
-            onClose();
-          }}
-        >
-          {t.add.save}
-        </button>
+          <div className="mb-2 rounded-xl bg-success-soft px-3 py-2">
+            <div className="text-[11px] text-income">{t.reports.installmentPreview}</div>
+            <div className="mt-0.5 text-base font-semibold tabular-nums">{money(liveInstallment, "HKD")}</div>
+          </div>
+          <label className="block py-2 text-xs text-muted">
+            {locale === "zh-HK" ? "利率類型" : "Rate type"}
+            <select value={type} onChange={(e) => setType(e.target.value as Mortgage["type"])} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground">
+              <option value="p">P</option>
+              <option value="h">H</option>
+              <option value="fixed">{locale === "zh-HK" ? "固定" : "Fixed"}</option>
+            </select>
+          </label>
+          {type === "fixed" ? (
+            <label className="block py-2 text-xs text-muted">
+              {t.reports.effectiveRate} (%)
+              <input inputMode="decimal" value={fixed} onChange={(e) => setFixed(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
+            </label>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block py-2 text-xs text-muted">
+                {type.toUpperCase()} (%)
+                <input inputMode="decimal" value={pRate} onChange={(e) => setPRate(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
+              </label>
+              <label className="block py-2 text-xs text-muted">
+                {locale === "zh-HK" ? "息差 (%)" : "Spread (%)"}
+                <input inputMode="decimal" value={spread} onChange={(e) => setSpread(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
+              </label>
+            </div>
+          )}
+          <label className="block py-2 text-xs text-muted">
+            {locale === "zh-HK" ? "供款日" : "Payment day"}
+            <input inputMode="numeric" value={day} onChange={(e) => setDay(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
+          </label>
+          <LineRow
+            label={`${t.reports.installment} (${locale === "zh-HK" ? "可覆寫" : "optional override"})`}
+            amount={override}
+            currency="HKD"
+            active={field === "principal"}
+            onFocusAmount={() => setField("principal")}
+          />
+        </div>
+        <div className="sticky bottom-0 z-10 border-t border-line bg-background">
+          <ActiveKeypad
+            field={field === "principal" ? "principal" : field === "amount" ? "amount" : "dest"}
+            amount={original}
+            dest={outstanding}
+            principal={override}
+            interest=""
+            setAmount={setOriginal}
+            setDest={setOutstanding}
+            setPrincipal={setOverride}
+            setInterest={() => undefined}
+            currency="HKD"
+          />
+          <button
+            type="button"
+            className="tr-press mx-4 mb-[max(0.75rem,env(safe-area-inset-bottom))] mt-2 h-12 w-[calc(100%-2rem)] rounded-xl bg-accent text-sm font-semibold text-on-accent"
+            onClick={async () => {
+              const p = Number(pRate) / 100;
+              const sp = Number(spread) / 100;
+              const fx = Number(fixed) / 100;
+              const next: Mortgage = {
+                id: m?.id ?? "m1",
+                name: m?.name ?? "Mortgage",
+                nameZh: m?.nameZh ?? "按揭",
+                accountId: accountId || m?.accountId || "mortgage",
+                original: Number(original) || Number(outstanding) || 0,
+                startDate: startDate || undefined,
+                termYears: Number(termYears) || undefined,
+                outstanding: Number(outstanding) || 0,
+                rate: type === "fixed" ? fx : p + sp,
+                pRate: type === "fixed" ? undefined : p,
+                spread: type === "fixed" ? undefined : sp,
+                remainingMonths: Math.max(0, preview.remainingMonths),
+                paymentDay: Math.min(28, Math.max(1, Number(day) || 1)),
+                type,
+                livingMode: mode,
+                propertyAccountId: propertyId || undefined,
+                rateLinkedSavingsAccountId: linkedSavingsId || null,
+                paymentOverride: Number(override) > 0 ? Number(override) : undefined,
+                scheduleEdits: m?.scheduleEdits,
+              };
+              await update(next);
+              onClose();
+            }}
+          >
+            {t.add.save}
+          </button>
+        </div>
       </div>
     </Overlay>
   );
