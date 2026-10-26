@@ -276,8 +276,8 @@ function InfoDialog() {
       zh: "收入同而家開支：有人手填就用你填嘅數，否則用近 12 個月帳本平均。退休後冇薪金。頂部黏住條係官方路徑結論。",
     },
     trip: {
-      en: "Annual travel is travel-category and trip-linked spending this year ÷ the annual travel budget you set.",
-      zh: "全年旅遊 = 本年旅遊分類及已連結旅程的開支 ÷ 你設定的全年旅遊預算。",
+      en: "Annual travel = travel-category spends plus anything linked to a trip this year ÷ your annual budget. The linked / unlinked split explains why the ring can be higher than trip cards. Trip meals: use Travel → Meals, or link Dining out to a trip.",
+      zh: "全年旅遊 = 本年旅遊分類開支加已掛旅程嘅開支 ÷ 你設嘅全年預算。「已掛／未掛」解釋點解環形圖可以高過旅程卡。旅途用餐請用「旅遊・旅途用餐」，或者將飲食掛到旅程。",
     },
   };
   const body = key ? copy[key] : null;

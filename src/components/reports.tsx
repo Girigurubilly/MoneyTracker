@@ -181,22 +181,25 @@ export function DashboardPage() {
             <span className="text-xs font-medium text-muted">{t.reports.notSet}</span>
           )}
         </div>
-        <div className="mt-4 grid grid-cols-2 gap-4">
-          <div>
-            <div className="text-xs text-muted">{t.reports.travelYtd}</div>
-            <div className="mt-1 text-base font-semibold tabular-nums leading-snug">
-              {money(ytd, "HKD")}
-              <span className="block text-sm font-normal text-muted">/ {money(annual, "HKD")}</span>
-            </div>
+        <div className="mt-4">
+          <div className="text-xs text-muted">{t.reports.travelYtd}</div>
+          <div className="mt-1 text-base font-semibold tabular-nums leading-snug">
+            {money(ytd, "HKD")}
+            <span className="text-sm font-normal text-muted"> / {money(annual, "HKD")}</span>
           </div>
-          <Metric label={t.reports.nextTrip} value={nxt ? pickName(loc, nxt.name, nxt.nameZh) : t.common.none} />
         </div>
         {nxt ? (
           <div className="mt-3 text-sm text-muted">
-            {t.reports.nextTrip}: {pickName(loc, nxt.name, nxt.nameZh)}
-            {nxt.cashBudget > 0 ? ` · ${Math.round((nxtSpent / nxt.cashBudget) * 100)}%` : ""}
+            {pickName(loc, nxt.name, nxt.nameZh)}
+            {" · "}
+            {t.reports.tripUsedPct.replace(
+              "{pct}",
+              nxt.cashBudget > 0 ? `${Math.round((nxtSpent / nxt.cashBudget) * 100)}%` : "—",
+            )}
           </div>
-        ) : null}
+        ) : (
+          <div className="mt-3 text-sm text-muted">{t.common.none}</div>
+        )}
         <div className="mt-2 flex justify-end">
           <ChevronRight className="size-4 text-faint" />
         </div>

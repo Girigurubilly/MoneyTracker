@@ -48,13 +48,16 @@ export function TextLine({
   value,
   onChange,
   placeholder,
+  label,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+  label?: string;
 }) {
   return (
     <div className="border-b border-line px-4 py-1.5">
+      {label ? <div className="pt-1 text-[11px] text-muted">{label}</div> : null}
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}

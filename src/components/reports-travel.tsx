@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
-import { Hairline, InfoButton, Overlay, ProgressBar, ProgressRing, ScreenHeader, SectionLabel, BudgetChip, TxGroupedList } from "@/components/shared";
+import { InfoButton, Overlay, ProgressRing, ScreenHeader, SectionLabel, BudgetChip, TxGroupedList } from "@/components/shared";
 import { ComposerHeader, ComposerShell, LineRow, TextLine, ActiveKeypad } from "@/components/txn-composer";
-import { AmountWithHkd } from "@/components/currency-field";
-import { money, todayISO } from "@/lib/format";
+import { dateRangeLabel, formatTypingAmount, money, shortDate, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { toHkd } from "@/lib/calc/fx";
 import { cashflowSide } from "@/lib/calc/ledger";
 import {
-  travelSpendYtd,
+  travelSpendYtdSplit,
+  travelUnlinkedTxs,
   tripBudgetUsed,
   tripLinkedTxs,
   tripMoneySplit,
@@ -21,24 +21,27 @@ import { useT, useUi } from "@/store/ui";
 
 export function TravelPage() {
   const t = useT();
-  const loc = useUi((s) => s.locale);
   const trips = useApp((s) => s.trips);
   const txs = useApp((s) => s.transactions);
   const cats = useApp((s) => s.categories);
   const rates = useApp((s) => s.fxRates);
   const annual = useApp((s) => s.annualTravelBudget);
   const setAnnual = useApp((s) => s.setAnnualTravel);
+  const setTx = useUi((s) => s.setTxDetailId);
   const travelIds = new Set(cats.filter((c) => c.theme === "travel").map((c) => c.id));
-  const ytd = travelSpendYtd(txs, Number(todayISO().slice(0, 4)), travelIds, rates);
-  const yearOver = annual > 0 && ytd > annual;
+  const year = Number(todayISO().slice(0, 4));
+  const ytd = travelSpendYtdSplit(txs, year, travelIds, rates);
+  const yearOver = annual > 0 && ytd.total > annual;
   const [adding, setAdding] = useState(false);
   const [editAnnual, setEditAnnual] = useState(false);
+  const [showUnlinked, setShowUnlinked] = useState(false);
+  const unlinked = travelUnlinkedTxs(txs, year, travelIds);
   const visible = trips.filter((tr) => tr.status !== "cancelled");
   const current = visible.filter((tr) => tr.end >= todayISO());
   const past = visible.filter((tr) => tr.end < todayISO()).sort((a, b) => b.end.localeCompare(a.end) || b.start.localeCompare(a.start));
 
   return (
-    <div className="pb-10">
+    <div className="pb-24">
       <ScreenHeader
         title={t.reports.travel}
         backTo="/reports"
@@ -55,16 +58,34 @@ export function TravelPage() {
         <div className="flex items-start justify-between gap-3">
           <button type="button" className="min-w-0 text-left" onClick={() => setEditAnnual(true)}>
             <div className="text-xs font-medium text-accent">{t.reports.annualTravel}</div>
-            <div className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{money(ytd, "HKD")}</div>
+            <div className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{money(ytd.total, "HKD")}</div>
             <div className="mt-0.5 text-xs text-muted">/ {money(annual, "HKD")}</div>
           </button>
           <div className="relative shrink-0">
-            <ProgressRing value={annual > 0 ? ytd / annual : 0} size={64} stroke={5} tone={yearOver ? "expense" : "income"} />
+            <ProgressRing value={annual > 0 ? ytd.total / annual : 0} size={64} stroke={5} tone={yearOver ? "expense" : "income"} />
             <span className="pointer-events-none absolute inset-0 grid place-items-center text-[11px] font-semibold tabular-nums">
-              {annual > 0 ? `${Math.round((ytd / annual) * 100)}%` : "—"}
+              {annual > 0 ? `${Math.round((ytd.total / annual) * 100)}%` : "—"}
             </span>
           </div>
         </div>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="rounded-xl bg-background px-3 py-2">
+            <div className="text-[11px] text-muted">{t.reports.travelLinked}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(ytd.linked, "HKD")}</div>
+          </div>
+          <button
+            type="button"
+            className="rounded-xl bg-background px-3 py-2 text-left disabled:opacity-60"
+            disabled={!unlinked.length}
+            onClick={() => setShowUnlinked(true)}
+            aria-label={t.reports.travelUnlinkedOpen}
+          >
+            <div className="text-[11px] text-muted">{t.reports.travelUnlinked}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums text-accent">{money(ytd.unlinked, "HKD")}</div>
+          </button>
+        </div>
+        <p className="mt-2 text-[11px] leading-4 text-faint">{t.reports.travelSplitNote}</p>
+        <p className="mt-1 text-[11px] leading-4 text-faint">{t.reports.mealTravelHint}</p>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <div className="rounded-xl bg-background px-3 py-2">
             <div className="text-[11px] text-muted">{t.reports.trips}</div>
@@ -93,6 +114,12 @@ export function TravelPage() {
       <Overlay open={editAnnual} onClose={() => setEditAnnual(false)} title={t.reports.annualTravel}>
         <AnnualEditor current={annual} onSave={async (n) => { await setAnnual(n); setEditAnnual(false); }} onClose={() => setEditAnnual(false)} />
       </Overlay>
+      <Overlay open={showUnlinked} onClose={() => setShowUnlinked(false)} title={t.reports.travelUnlinked}>
+        <div className="px-1 pb-8">
+          <p className="px-4 pb-2 text-xs text-muted">{t.reports.travelUnlinkedOpen}</p>
+          <TxGroupedList txs={unlinked} onClick={(tx) => { setShowUnlinked(false); setTx(tx.id); }} empty={t.common.none} />
+        </div>
+      </Overlay>
     </div>
   );
 }
@@ -108,6 +135,8 @@ function TripCard({ trip }: { trip: Trip }) {
   const paidPct = trip.cashBudget > 0 ? split.paid / trip.cashBudget : 0;
   const scheduledPct = trip.cashBudget > 0 ? split.scheduled / trip.cashBudget : 0;
   const over = trip.cashBudget > 0 && split.total > trip.cashBudget;
+  const today = todayISO();
+  const live = trip.start <= today && today <= trip.end;
   return (
     <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
       <Link to="/reports/travel/$id" params={{ id: trip.id }} className="block p-4">
@@ -115,12 +144,12 @@ function TripCard({ trip }: { trip: Trip }) {
           <div className="min-w-0">
             <div className="text-base font-semibold">
               {pickName(loc, trip.name, trip.nameZh)}
-              {trip.start <= todayISO() && todayISO() <= trip.end ? (
+              {live ? (
                 <span className="ml-2 rounded-full bg-success-soft px-2 py-0.5 align-middle text-[10px] font-medium text-income">{t.reports.onTrip}</span>
               ) : null}
             </div>
             <div className="mt-0.5 text-xs text-muted">
-              {trip.destination} · {trip.start} → {trip.end}
+              {trip.destination} · {dateRangeLabel(trip.start, trip.end, loc)}
             </div>
           </div>
           <div className="relative shrink-0">
@@ -131,24 +160,28 @@ function TripCard({ trip }: { trip: Trip }) {
           </div>
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2">
-          <div className="rounded-xl bg-background px-2 py-2">
-            <div className="text-[11px] text-expense">{t.reports.tripPaid}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(split.paid, "HKD")}</div>
-          </div>
-          <div className="rounded-xl bg-background px-2 py-2">
-            <div className="text-[11px] text-watch">{t.reports.tripScheduled}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(split.scheduled, "HKD")}</div>
-          </div>
-          <div className="rounded-xl bg-background px-2 py-2">
-            <div className="text-[11px] text-income">{t.reports.remaining}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(used.remaining, "HKD")}</div>
-          </div>
+          <MoneyPill label={t.reports.tripPaid} value={split.paid} tone={split.paid > 0 ? "expense" : "muted"} />
+          <MoneyPill label={t.reports.tripScheduled} value={split.scheduled} tone={split.scheduled > 0 ? "watch" : "muted"} />
+          <MoneyPill label={t.reports.remaining} value={used.remaining} tone="income" />
         </div>
         <div className="mt-2 flex justify-end">
           <BudgetChip over={over} />
         </div>
       </Link>
-      <TripPlannerBar trip={trip} compact />
+      <div className="px-4 pb-3">
+        <TripPlannerBar trip={trip} compact />
+      </div>
+    </div>
+  );
+}
+
+function MoneyPill({ label, value, tone }: { label: string; value: number; tone: "expense" | "watch" | "income" | "muted" }) {
+  const labelClass =
+    tone === "expense" ? "text-expense" : tone === "watch" ? "text-watch" : tone === "income" ? "text-income" : "text-muted";
+  return (
+    <div className="rounded-xl bg-background px-2 py-2">
+      <div className={`text-[11px] ${labelClass}`}>{label}</div>
+      <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(value, "HKD")}</div>
     </div>
   );
 }
@@ -161,7 +194,7 @@ function TripPlannerBar({ trip, compact }: { trip: Trip; compact?: boolean }) {
   const href = plannerTripUrl(trip, { day: live ? today : undefined, pick: !linked });
   const label = !linked ? t.reports.plannerConnect : live ? t.reports.plannerOpenToday : t.reports.planTrip;
   return (
-    <div className={compact ? "border-t border-line" : ""}>
+    <div className={compact ? "border-t border-line pt-3" : ""}>
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[11px] font-medium text-muted">{t.reports.plannerLink}</div>
@@ -191,7 +224,15 @@ function AnnualEditor({ current, onSave, onClose }: { current: number; onSave: (
   const [v, setV] = useState(String(current));
   return (
     <div className="px-5 pb-8">
-      <input inputMode="decimal" value={v} onChange={(e) => setV(e.target.value)} className="h-11 w-full rounded-lg bg-elevated px-3" />
+      <div className="text-[11px] text-muted">HK$</div>
+      <input
+        inputMode="decimal"
+        value={v}
+        onChange={(e) => setV(e.target.value)}
+        className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 tabular-nums"
+        aria-label={t.reports.annualTravel}
+      />
+      <div className="mt-1 text-xs text-muted">{formatTypingAmount(v || "0", "HKD")}</div>
       <button type="button" className="mt-4 h-12 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={() => onSave(Number(v) || 0)}>
         {t.add.save}
       </button>
@@ -213,6 +254,8 @@ export function TripDetailPage({ id }: { id: string }) {
   const rates = useApp((s) => s.fxRates);
   const adhoc = useApp((s) => s.adhocBudgets);
   const setTx = useUi((s) => s.setTxDetailId);
+  const openAdd = useUi((s) => s.openAdd);
+  const setSelected = useUi((s) => s.setSelectedDate);
   const [edit, setEdit] = useState(false);
   if (!trip) return <div className="p-5 text-sm text-muted">—</div>;
   const split = tripMoneySplit(txs, trip.id, rates, adhoc);
@@ -222,9 +265,19 @@ export function TripDetailPage({ id }: { id: string }) {
   const linked = tripLinkedTxs(txs, trip.id);
   const scheduledAdhoc = adhoc.filter((row) => row.tripId === trip.id && !row.paidOn);
   const over = trip.cashBudget > 0 && split.total > trip.cashBudget;
+  const empty = linked.length === 0 && scheduledAdhoc.length === 0;
+
+  function logSpend() {
+    const today = todayISO();
+    const start = trip!.start;
+    const end = trip!.end;
+    const date = today >= start && today <= end ? today : start;
+    setSelected(date);
+    openAdd("expense");
+  }
 
   return (
-    <div className="pb-10">
+    <div className="pb-24">
       <ScreenHeader
         title={pickName(loc, trip.name, trip.nameZh)}
         backTo="/reports/travel"
@@ -241,9 +294,7 @@ export function TripDetailPage({ id }: { id: string }) {
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-sm font-semibold">{trip.destination}</div>
-            <div className="mt-0.5 text-xs text-muted">
-              {trip.start} → {trip.end}
-            </div>
+            <div className="mt-0.5 text-xs text-muted">{dateRangeLabel(trip.start, trip.end, loc)}</div>
           </div>
           <div className="relative shrink-0">
             <ProgressRing value={paidPct} extra={scheduledPct} size={64} stroke={5} tone={over ? "expense" : "income"} />
@@ -257,12 +308,12 @@ export function TripDetailPage({ id }: { id: string }) {
             <div className="text-[11px] text-muted">{t.reports.tripBudget}</div>
             <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(trip.cashBudget, "HKD")}</div>
           </div>
-          <div className="rounded-xl bg-expense-soft px-3 py-2">
-            <div className="text-[11px] text-expense">{t.reports.tripPaid}</div>
+          <div className={`rounded-xl px-3 py-2 ${split.paid > 0 ? "bg-expense-soft" : "bg-background"}`}>
+            <div className={`text-[11px] ${split.paid > 0 ? "text-expense" : "text-muted"}`}>{t.reports.tripPaid}</div>
             <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(split.paid, "HKD")}</div>
           </div>
-          <div className="rounded-xl bg-watch-soft px-3 py-2">
-            <div className="text-[11px] text-watch">{t.reports.tripScheduled}</div>
+          <div className={`rounded-xl px-3 py-2 ${split.scheduled > 0 ? "bg-watch-soft" : "bg-background"}`}>
+            <div className={`text-[11px] ${split.scheduled > 0 ? "text-watch" : "text-muted"}`}>{t.reports.tripScheduled}</div>
             <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(split.scheduled, "HKD")}</div>
           </div>
           <div className="rounded-xl bg-success-soft px-3 py-2">
@@ -271,6 +322,14 @@ export function TripDetailPage({ id }: { id: string }) {
           </div>
         </div>
       </div>
+      {empty ? (
+        <div className="mx-4 mt-4 rounded-2xl bg-elevated px-4 py-5 text-center">
+          <p className="text-sm text-muted">{t.reports.tripEmptyHint}</p>
+          <button type="button" className="mt-3 inline-flex h-11 items-center justify-center rounded-xl bg-accent px-5 text-sm font-semibold text-on-accent" onClick={logSpend}>
+            {t.reports.logTripSpend}
+          </button>
+        </div>
+      ) : null}
       {scheduledAdhoc.length ? (
         <>
           <h2 className="px-5 pb-1 pt-5 text-sm font-medium text-muted">{t.reports.tripScheduled}</h2>
@@ -279,7 +338,7 @@ export function TripDetailPage({ id }: { id: string }) {
               <div key={row.id} className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 last:border-0">
                 <div className="min-w-0">
                   <div className="truncate text-sm">{pickName(loc, row.label, row.labelZh)}</div>
-                  <div className="text-xs text-muted">{row.date}</div>
+                  <div className="text-xs text-muted">{shortDate(row.date, loc)}</div>
                 </div>
                 <div className="shrink-0 text-sm font-medium tabular-nums text-watch">{money(row.amount, row.currency)}</div>
               </div>
@@ -328,7 +387,6 @@ function TripEditor({
   const [budget, setBudget] = useState(String(trip?.cashBudget ?? 10000));
   const [monthly, setMonthly] = useState(String(trip?.monthlyCash ?? 0));
   const [plannerId, setPlannerId] = useState(trip?.plannerId || "");
-
   const [field, setField] = useState<"amount" | "dest" | "principal" | "interest">("amount");
 
   async function save() {
@@ -360,23 +418,30 @@ function TripEditor({
       <ComposerShell
         header={<ComposerHeader onClose={onClose} onSave={() => void save()} title={trip ? t.reports.editTrip : t.reports.addTrip} />}
         keypad={
-          <ActiveKeypad
-            field="amount"
-            amount={budget}
-            dest=""
-            principal=""
-            interest=""
-            setAmount={setBudget}
-            setDest={() => undefined}
-            setPrincipal={() => undefined}
-            setInterest={() => undefined}
-            currency="HKD"
-            onCurrency={() => undefined}
-          />
+          <>
+            {trip && onDeleted ? (
+              <button type="button" className="flex h-11 w-full items-center justify-center border-t border-line bg-background text-sm text-expense" onClick={onDeleted}>
+                {t.reports.removeTrip}
+              </button>
+            ) : null}
+            <ActiveKeypad
+              field="amount"
+              amount={budget}
+              dest=""
+              principal=""
+              interest=""
+              setAmount={setBudget}
+              setDest={() => undefined}
+              setPrincipal={() => undefined}
+              setInterest={() => undefined}
+              currency="HKD"
+              onCurrency={() => undefined}
+            />
+          </>
         }
       >
-        <TextLine value={name} onChange={setName} placeholder={t.budget.customName} />
-        <TextLine value={dest} onChange={setDest} placeholder={t.reports.destination} />
+        <TextLine value={name} onChange={setName} label={t.reports.tripName} placeholder={t.budget.customName} />
+        <TextLine value={dest} onChange={setDest} label={t.reports.destination} placeholder={t.reports.destination} />
         <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
           <span className="text-sm text-muted">{t.reports.tripStart}</span>
           <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
@@ -385,9 +450,9 @@ function TripEditor({
           <span className="text-sm text-muted">{t.reports.tripEnd}</span>
           <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
         </div>
-        <LineRow label={t.reports.cashBudget} amount={budget} active={field === "amount"} onFocusAmount={() => setField("amount")} />
-        <TextLine value={monthly} onChange={setMonthly} placeholder={t.reports.monthlyCash} />
-        <TextLine value={plannerId} onChange={setPlannerId} placeholder={t.reports.plannerId} />
+        <LineRow label={t.reports.cashBudget} amount={budget} currency="HKD" active={field === "amount"} onFocusAmount={() => setField("amount")} />
+        <TextLine value={monthly} onChange={setMonthly} label={t.reports.monthlyCash} placeholder="0" />
+        <TextLine value={plannerId} onChange={setPlannerId} label={t.reports.plannerId} placeholder={t.reports.plannerId} />
         <p className="px-4 py-2 text-xs leading-5 text-muted">{t.reports.plannerHint}</p>
         {trip ? (
           <a
@@ -401,11 +466,6 @@ function TripEditor({
         ) : (
           <p className="px-4 pb-3 text-xs text-muted">{t.reports.plannerSaveFirst}</p>
         )}
-        {trip && onDeleted ? (
-          <button type="button" className="mx-4 my-3 h-11 text-sm text-expense" onClick={onDeleted}>
-            {t.reports.removeTrip}
-          </button>
-        ) : null}
       </ComposerShell>
     </Overlay>
   );
@@ -486,38 +546,33 @@ function TripHeat({
   const dayTxs = openDay ? txs.filter((tx) => tx.date === openDay && !tx.planned && cashflowSide(tx) === "expense") : [];
   return (
     <>
-    <div className="mx-4 mb-4 flex flex-wrap gap-1 rounded-xl bg-elevated px-3 py-3">
-      {days.map((iso) => {
-        const amt = daily.get(iso) ?? 0;
-        const heat = amt / max;
-        return (
-          <button
-            key={iso}
-            type="button"
-            className="flex flex-col items-center gap-0.5"
-            onClick={() => setOpenDay(iso)}
-          >
-            <span
-              className="grid size-8 place-items-center rounded-md text-[10px] tabular-nums"
-              style={{
-                background: amt ? `color-mix(in srgb, var(--color-expense) ${Math.round(20 + heat * 70)}%, transparent)` : "var(--color-background)",
-                color: heat > 0.55 ? "var(--color-on-accent, #fff)" : undefined,
-              }}
-            >
-              {iso.slice(8)}
-            </span>
-          </button>
-        );
-      })}
-    </div>
-    {openDay ? (
-      <Overlay open onClose={() => setOpenDay(null)} title={`${t.reports.tripDaySpend} · ${openDay}`}>
-        <div className="px-5 pb-8">
-          <div className="mb-3 text-2xl font-semibold tabular-nums">{money(daily.get(openDay) ?? 0, "HKD")}</div>
-          <TripCatRows txs={dayTxs} cats={cats} rates={rates} locale={locale} />
-        </div>
-      </Overlay>
-    ) : null}
+      <div className="mx-4 mb-4 flex flex-wrap gap-1.5 rounded-xl bg-elevated px-3 py-3">
+        {days.map((iso) => {
+          const amt = daily.get(iso) ?? 0;
+          const heat = amt / max;
+          return (
+            <button key={iso} type="button" className="flex min-h-12 min-w-12 flex-col items-center justify-center gap-0.5" onClick={() => setOpenDay(iso)}>
+              <span
+                className="grid size-12 place-items-center rounded-lg text-sm tabular-nums"
+                style={{
+                  background: amt ? `color-mix(in srgb, var(--color-expense) ${Math.round(20 + heat * 70)}%, transparent)` : "var(--color-background)",
+                  color: heat > 0.55 ? "var(--color-on-accent, #fff)" : undefined,
+                }}
+              >
+                {iso.slice(8)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {openDay ? (
+        <Overlay open onClose={() => setOpenDay(null)} title={`${t.reports.tripDaySpend} · ${shortDate(openDay, locale)}`}>
+          <div className="px-5 pb-8">
+            <div className="mb-3 text-2xl font-semibold tabular-nums">{money(daily.get(openDay) ?? 0, "HKD")}</div>
+            <TripCatRows txs={dayTxs} cats={cats} rates={rates} locale={locale} />
+          </div>
+        </Overlay>
+      ) : null}
     </>
   );
 }
