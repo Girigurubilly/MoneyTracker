@@ -394,7 +394,7 @@ function AccountDetail({
         </div>
         {account.hidden ? <div className="mt-1 text-xs text-muted">{t.assets.hidden}</div> : null}
       </div>
-      <TxGroupedList txs={rows} onClick={(tx) => setTx(tx.id)} empty={t.assets.noTransactions} />
+      <TxGroupedList txs={rows} onClick={(tx) => setTx(tx.id)} empty={t.assets.noTransactions} showMonthTotal accountId={account.id} />
     </Overlay>
   );
 }

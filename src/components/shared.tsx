@@ -6,7 +6,8 @@ import { cn } from "@/lib/utils";
 import { money, monthTitle, whenStamp } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { AmountWithHkd } from "@/components/currency-field";
-import type { Transaction } from "@/lib/types";
+import { toHkd } from "@/lib/calc/fx";
+import type { FxRate, Transaction } from "@/lib/types";
 import { useT, useUi } from "@/store/ui";
 import { useApp } from "@/store/app";
 
@@ -386,24 +387,57 @@ export function TransactionRow({ tx, onClick, showDate }: { tx: Transaction; onC
   );
 }
 
+/** Net HKD impact of one tx, optionally relative to a single account. */
+function txMonthSignedHkd(tx: Transaction, rates: FxRate[], accountId?: string): number {
+  const transfer = tx.type === "transfer" && !tx.countsAsExpense;
+  if (accountId) {
+    if (transfer) {
+      if (tx.toAccountId === accountId && tx.accountId !== accountId) {
+        const amt = tx.destAmount ?? tx.amount;
+        return toHkd(amt, tx.currency, rates, tx.fxToHkd);
+      }
+      if (tx.accountId === accountId && tx.toAccountId !== accountId) {
+        return -toHkd(tx.amount, tx.currency, rates, tx.fxToHkd);
+      }
+      return 0;
+    }
+    if (tx.accountId !== accountId) return 0;
+  }
+  const spend = tx.type === "expense" || Boolean(tx.countsAsExpense);
+  const signed = transfer ? 0 : spend ? -tx.amount : tx.amount;
+  return toHkd(signed, tx.currency, rates, tx.fxToHkd);
+}
+
 export function TxGroupedList({
   txs,
   onClick,
   empty,
+  showMonthTotal,
+  accountId,
 }: {
   txs: Transaction[];
   onClick?: (tx: Transaction) => void;
   empty?: string;
+  /** Show a lump-sum net total beside each month heading (HKD). */
+  showMonthTotal?: boolean;
+  /** When set with showMonthTotal, sign amounts relative to this account (in/out). */
+  accountId?: string;
 }) {
   const locale = useUi((s) => s.locale);
   const t = useT();
+  const rates = useApp((s) => s.fxRates);
   const sorted = [...txs].sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
-  const groups: { key: string; rows: Transaction[] }[] = [];
+  const groups: { key: string; rows: Transaction[]; totalHkd: number }[] = [];
   for (const tx of sorted) {
     const key = tx.date.slice(0, 7);
     const last = groups[groups.length - 1];
-    if (last && last.key === key) last.rows.push(tx);
-    else groups.push({ key, rows: [tx] });
+    const signed = showMonthTotal ? txMonthSignedHkd(tx, rates, accountId) : 0;
+    if (last && last.key === key) {
+      last.rows.push(tx);
+      last.totalHkd += signed;
+    } else {
+      groups.push({ key, rows: [tx], totalHkd: signed });
+    }
   }
   if (!sorted.length) {
     return <p className="px-5 py-6 text-sm text-muted">{empty ?? t.common.none}</p>;
@@ -412,7 +446,21 @@ export function TxGroupedList({
     <>
       {groups.map((g) => (
         <div key={g.key}>
-          <SectionLabel>{monthTitle(`${g.key}-01`, locale)}</SectionLabel>
+          {showMonthTotal ? (
+            <div className="flex items-baseline justify-between gap-3 px-5 pb-1 pt-5">
+              <h2 className="text-sm font-medium text-muted">{monthTitle(`${g.key}-01`, locale)}</h2>
+              <span
+                className={cn(
+                  "shrink-0 text-sm font-semibold tabular-nums",
+                  g.totalHkd > 0 ? "text-income" : g.totalHkd < 0 ? "text-expense" : "text-muted",
+                )}
+              >
+                {money(g.totalHkd, "HKD", { sign: true })}
+              </span>
+            </div>
+          ) : (
+            <SectionLabel>{monthTitle(`${g.key}-01`, locale)}</SectionLabel>
+          )}
           <Hairline />
           {g.rows.map((tx, i) => (
             <div key={tx.id}>
