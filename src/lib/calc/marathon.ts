@@ -46,6 +46,63 @@ export function marathonTiersOverlap(tiers: { from: string; to: string }[]): boo
 
 export type MarathonTierInterest = { id: string; days: number; interest: number };
 
+export type MarathonMonthInterest = {
+  month: string;
+  /** Last accrual day in that month. This is the planned-income date. */
+  date: string;
+  days: number;
+  interest: number;
+};
+
+function utcDayAfter(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return iso;
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function utcMonthEnd(iso: string): string {
+  const [y, m] = iso.split("-").map(Number);
+  if (!y || !m) return iso;
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(last).padStart(2, "0")}`;
+}
+
+/** Split each tier across calendar months. Actual/365, inclusive days, rounded per slice then summed in the month. */
+export function marathonMonthlyInterest(
+  amount: number,
+  tiers: { from: string; to: string; rate: number }[],
+): MarathonMonthInterest[] {
+  const buckets = new Map<string, { days: number; interest: number; date: string }>();
+  for (const tier of tiers) {
+    if (!tier.from || !tier.to || tier.to < tier.from || !(tier.rate > 0) || !(amount > 0)) continue;
+    let cursor = tier.from;
+    let guard = 0;
+    while (cursor <= tier.to && guard < 36) {
+      guard += 1;
+      const sliceTo = utcMonthEnd(cursor) < tier.to ? utcMonthEnd(cursor) : tier.to;
+      const days = inclusiveDays(cursor, sliceTo);
+      const month = cursor.slice(0, 7);
+      const interest = days > 0 ? roundMoney(amount * (tier.rate / 100) * (days / 365)) : 0;
+      const prev = buckets.get(month);
+      if (!prev) buckets.set(month, { days, interest, date: sliceTo });
+      else {
+        buckets.set(month, {
+          days: prev.days + days,
+          interest: roundMoney(prev.interest + interest),
+          date: sliceTo > prev.date ? sliceTo : prev.date,
+        });
+      }
+      const next = utcDayAfter(sliceTo);
+      if (next <= cursor) break;
+      cursor = next;
+    }
+  }
+  return [...buckets.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([month, row]) => ({ month, date: row.date, days: row.days, interest: row.interest }));
+}
+
 /** Actual/365 on the stated balance. Each tier is inclusive. This does not post a transaction. */
 export function marathonInterest(amount: number, tiers: MarathonTier[]): {
   total: number;
