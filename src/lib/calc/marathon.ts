@@ -76,13 +76,14 @@ function utcNextMonthFirst(month: string): string {
 }
 
 /** Split each tier across calendar months. Actual/365, inclusive days, rounded per slice.
- *  Interest is paid on the 1st of the following month, same as a scheduled income date.
+ *  A full month is paid on the 1st of the next month. A promo that ends on the 1st
+ *  of a month keeps that single day with the previous month and pays the day after.
  */
 export function marathonMonthlyInterest(
   amount: number,
   tiers: { from: string; to: string; rate: number }[],
 ): MarathonMonthInterest[] {
-  const buckets = new Map<string, { days: number; interest: number }>();
+  const buckets = new Map<string, { days: number; interest: number; end: string }>();
   for (const tier of tiers) {
     if (!tier.from || !tier.to || tier.to < tier.from || !(tier.rate > 0) || !(amount > 0)) continue;
     let cursor = tier.from;
@@ -94,16 +95,46 @@ export function marathonMonthlyInterest(
       const month = cursor.slice(0, 7);
       const interest = days > 0 ? roundMoney(amount * (tier.rate / 100) * (days / 365)) : 0;
       const prev = buckets.get(month);
-      if (!prev) buckets.set(month, { days, interest });
-      else buckets.set(month, { days: prev.days + days, interest: roundMoney(prev.interest + interest) });
+      if (!prev) buckets.set(month, { days, interest, end: sliceTo });
+      else {
+        buckets.set(month, {
+          days: prev.days + days,
+          interest: roundMoney(prev.interest + interest),
+          end: sliceTo > prev.end ? sliceTo : prev.end,
+        });
+      }
       const next = utcDayAfter(sliceTo);
       if (next <= cursor) break;
       cursor = next;
     }
   }
-  return [...buckets.entries()]
+  const rows = [...buckets.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([month, row]) => ({ month, date: utcNextMonthFirst(month), days: row.days, interest: row.interest }));
+    .map(([month, row]) => ({ month, ...row }));
+  const last = rows.at(-1);
+  const prior = rows.at(-2);
+  if (last && last.days === 1 && last.end.endsWith("-01")) {
+    const pay = utcDayAfter(last.end);
+    if (prior) {
+      prior.days += last.days;
+      prior.interest = roundMoney(prior.interest + last.interest);
+      prior.end = last.end;
+      rows.pop();
+      return rows.map((row) => ({
+        month: row.month,
+        date: row === prior ? pay : utcNextMonthFirst(row.month),
+        days: row.days,
+        interest: row.interest,
+      }));
+    }
+    return [{ month: last.month, date: pay, days: last.days, interest: last.interest }];
+  }
+  return rows.map((row) => ({
+    month: row.month,
+    date: utcNextMonthFirst(row.month),
+    days: row.days,
+    interest: row.interest,
+  }));
 }
 
 /** Actual/365 on the stated balance. Each tier is inclusive. This does not post a transaction. */
