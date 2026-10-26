@@ -16,7 +16,9 @@ import {
   Sunset,
   TrendingUp,
 } from "lucide-react";
-import { Disclaimer, Group, Hairline, Row, ScreenHeader, SectionLabel, StatusChip, BudgetChip } from "@/components/shared";
+import { useState } from "react";
+import { Disclaimer, Group, Hairline, Overlay, ProgressRing, Row, ScreenHeader, SectionLabel, StatusChip, BudgetChip } from "@/components/shared";
+import { Enter, useCountUp } from "@/components/retire-ux";
 import { money, pct, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { monthKeysBack, monthLabel } from "@/lib/derived";
@@ -110,6 +112,7 @@ export function DashboardPage() {
   const trips = useApp((s) => s.trips);
   const annual = useApp((s) => s.annualTravelBudget);
   const head = useRetirementHeadline();
+  const [explain, setExplain] = useState<null | "available" | "saveMonth" | "saveYtd" | "travel">(null);
   const today = todayISO();
   const cost = monthlyHousingCost(txs, rec, cats, rates, today);
   const houseStatus = housingStatus(m);
@@ -134,103 +137,174 @@ export function DashboardPage() {
   const hold = (monthRow?.reserved ?? 0) + (targetMode === "regular" ? 0 : (monthRow?.reservedAdhoc ?? 0));
   const available = cap > 0 ? (monthRow?.remaining ?? cap - spent - hold) : flow.income - spent - hold;
   const next14 = committedOutflows(rec, adhoc, txs, rates, today, 14);
+  const afterCommit = available - next14;
   const nw = netWorthNow(accounts, rates, deposits);
   const prevEnd = monthEndIso(shiftYm(month, -1));
   const prevWorth = periodNetWorthPoints(accounts, txs, rates, prevEnd, prevEnd, deposits).at(-1)?.net;
   const nwDelta = prevWorth == null ? 0 : nw.net - prevWorth;
   const saveM = flow.income > 0 ? flow.net / flow.income : 0;
   const saveY = ytdFlow.income > 0 ? (ytdFlow.income - ytdFlow.expense) / ytdFlow.income : 0;
+  const incomeZero = flow.income <= 0.005;
   const ledgerLive =
     txs.some((tx) => !tx.planned) ||
     accounts.some((a) => a.type !== "miles" && a.currency !== "MILES" && Math.abs(a.balance) > 0.005);
+  const yearTravelPct = annual > 0 ? ytd / annual : 0;
+  const tripPct = nxt && nxt.cashBudget > 0 ? nxtSpent / nxt.cashBudget : 0;
+  const shownAvail = useCountUp(available, false, 420);
+  const monthTitle = monthLabel(month, loc);
+
+  const explainCopy =
+    explain === "available"
+      ? { title: t.reports.explainAvailableTitle, body: t.reports.explainAvailableBody }
+      : explain === "saveMonth"
+        ? { title: t.reports.explainSaveMonthTitle, body: t.reports.explainSaveMonthBody }
+        : explain === "saveYtd"
+          ? { title: t.reports.explainSaveYtdTitle, body: t.reports.explainSaveYtdBody }
+          : explain === "travel"
+            ? { title: t.reports.explainTravelTitle, body: t.reports.explainTravelBody }
+            : null;
 
   return (
-    <div className="pb-10">
+    <div className="pb-24">
       <ScreenHeader title={t.reports.dashboard} backTo="/reports" />
-      <div className="mx-4 mb-3 rounded-xl bg-elevated px-4 py-3">
-        <DashRow label={t.reports.availableSpend} value={money(available, "HKD", { sign: true })} />
-        <DashRow label={t.reports.mtdVsBudget} value={cap ? `${money(spent, "HKD")} / ${money(cap, "HKD")}` : money(spent, "HKD")} />
-        <DashRow label={t.reports.next14} value={money(next14, "HKD")} />
-        <DashRow label={t.reports.netWorthNow} value={`${money(nw.net, "HKD")} (${t.reports.vsLastMonth} ${money(nwDelta, "HKD", { sign: true })})`} />
-        <DashRow label={t.reports.saveRateMonth} value={pct(saveM)} />
-        <DashRow label={t.reports.saveRateYtd} value={pct(saveY)} />
-      </div>
-      <Link to="/reports/living" className="mx-4 block rounded-xl bg-elevated p-4">
-        <div className="flex items-start justify-between gap-2">
-          <h2 className="text-base font-semibold">{t.reports.living}</h2>
-          {m ? <StatusChip status={houseStatus} /> : <span className="text-xs font-medium text-muted">{t.reports.notSet}</span>}
-        </div>
-        <div className="mt-4">
-          <div className="text-xs text-muted">{t.reports.housingCost}</div>
-          <div className="mt-1 text-lg font-semibold tabular-nums">{money(cost, "HKD")}</div>
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-4">
-          <Metric label={t.reports.outstanding} value={m ? money(m.outstanding, "HKD") : "—"} />
-          <Metric label={t.reports.effectiveRate} value={m ? `${(effectiveRate(m) * 100).toFixed(2)}%` : "—"} />
-        </div>
-        <div className="mt-2 flex justify-end">
-          <ChevronRight className="size-4 text-faint" />
-        </div>
-      </Link>
-      <Link to="/reports/travel" className="mx-4 mt-3 block rounded-xl bg-elevated p-4">
-        <div className="flex items-start justify-between gap-2">
-          <h2 className="text-base font-semibold">{t.reports.travel}</h2>
-          {ledgerLive && annual > 0 ? (
-            <BudgetChip over={ytd > annual} />
-          ) : (
-            <span className="text-xs font-medium text-muted">{t.reports.notSet}</span>
-          )}
-        </div>
-        <div className="mt-4">
-          <div className="text-xs text-muted">{t.reports.travelYtd}</div>
-          <div className="mt-1 text-base font-semibold tabular-nums leading-snug">
-            {money(ytd, "HKD")}
-            <span className="text-sm font-normal text-muted"> / {money(annual, "HKD")}</span>
+      <Enter>
+        <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
+          <button type="button" className="tr-press w-full text-left" onClick={() => setExplain("available")}>
+            <div className="text-xs font-medium text-accent">
+              {t.reports.availableSpend}
+              <span className="ml-1 font-normal text-muted">· {monthTitle}</span>
+            </div>
+            <div className={cn("mt-1 text-3xl font-semibold tabular-nums tracking-tight", shownAvail >= 0 ? "text-income" : "text-expense")}>
+              {money(shownAvail, "HKD", { sign: true })}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
+              <span>
+                {t.reports.budgetRemain} {money(available, "HKD", { sign: true })}
+              </span>
+              {next14 > 0.005 ? (
+                <span>
+                  {t.reports.afterCommitments} {money(afterCommit, "HKD", { sign: true })}
+                </span>
+              ) : null}
+            </div>
+          </button>
+          <div className="mt-3 border-t border-line pt-1">
+            <DashRow label={t.reports.mtdVsBudget} value={cap ? `${money(spent, "HKD")} / ${money(cap, "HKD")}` : money(spent, "HKD")} />
+            <DashRow label={t.reports.next14} value={money(next14, "HKD")} />
+            <DashRow label={t.reports.netWorthNow} value={money(nw.net, "HKD")} />
+            <DashRow label={t.reports.nwDeltaLine} value={money(nwDelta, "HKD", { sign: true })} />
+            <button type="button" className="tr-press flex w-full items-start justify-between gap-3 border-b border-line py-2.5 text-left" onClick={() => setExplain("saveMonth")}>
+              <span className="text-xs text-muted">{t.reports.saveRateMonth}</span>
+              <span className="max-w-[58%] text-right text-sm font-semibold tabular-nums">
+                {incomeZero ? t.reports.salaryNotPosted : pct(saveM)}
+              </span>
+            </button>
+            <button type="button" className="tr-press flex w-full items-start justify-between gap-3 py-2.5 text-left" onClick={() => setExplain("saveYtd")}>
+              <span className="text-xs text-muted">{t.reports.saveRateYtdPosted}</span>
+              <span className="max-w-[58%] text-right text-sm font-semibold tabular-nums">{pct(saveY)}</span>
+            </button>
           </div>
         </div>
-        {nxt ? (
-          <div className="mt-3 text-sm text-muted">
-            {pickName(loc, nxt.name, nxt.nameZh)}
-            {" · "}
-            {t.reports.tripUsedPct.replace(
-              "{pct}",
-              nxt.cashBudget > 0 ? `${Math.round((nxtSpent / nxt.cashBudget) * 100)}%` : "—",
+      </Enter>
+
+      <Enter delay>
+        <Link to="/reports/living" className="tr-press mx-4 block rounded-xl bg-elevated p-4">
+          <div className="flex items-start justify-between gap-2">
+            <h2 className="text-base font-semibold">{t.reports.living}</h2>
+            {m ? <StatusChip status={houseStatus} /> : <span className="text-xs font-medium text-muted">{t.reports.notSet}</span>}
+          </div>
+          <div className="mt-4">
+            <div className="text-xs text-muted">{t.reports.housingCost}</div>
+            <div className="mt-1 text-lg font-semibold tabular-nums">{money(cost, "HKD")}</div>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            <Metric label={t.reports.outstanding} value={m ? money(m.outstanding, "HKD") : "—"} />
+            <Metric label={t.reports.effectiveRate} value={m ? `${(effectiveRate(m) * 100).toFixed(2)}%` : "—"} />
+          </div>
+          <div className="mt-2 flex justify-end">
+            <ChevronRight className="size-4 text-faint" />
+          </div>
+        </Link>
+      </Enter>
+
+      <Enter delay>
+        <div className="mx-4 mt-3 rounded-xl bg-elevated p-4">
+          <Link to="/reports/travel" className="tr-press block">
+            <div className="flex items-start justify-between gap-2">
+              <h2 className="text-base font-semibold">{t.reports.travel}</h2>
+              <div className="flex items-center gap-2">
+                {ledgerLive && annual > 0 ? <BudgetChip over={ytd > annual} /> : <span className="text-xs font-medium text-muted">{t.reports.notSet}</span>}
+                <div className="relative shrink-0">
+                  <ProgressRing value={yearTravelPct} size={36} stroke={3} tone={ytd > annual && annual > 0 ? "expense" : "income"} draw />
+                  <span className="pointer-events-none absolute inset-0 grid place-items-center text-[9px] font-semibold tabular-nums">
+                    {annual > 0 ? `${Math.round(yearTravelPct * 100)}%` : "—"}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="mt-4">
+              <div className="text-xs text-muted">{t.reports.travelYtd}</div>
+              <div className="mt-1 text-base font-semibold tabular-nums leading-snug">
+                {money(ytd, "HKD")}
+                <span className="text-sm font-normal text-muted"> / {money(annual, "HKD")}</span>
+              </div>
+            </div>
+            <div className="mt-2 flex justify-end">
+              <ChevronRight className="size-4 text-faint" />
+            </div>
+          </Link>
+          <button type="button" className="tr-press mt-2 w-full rounded-lg bg-background px-3 py-2 text-left text-[11px] leading-4 text-muted" onClick={() => setExplain("travel")}>
+            <span className="font-medium text-[var(--color-foreground)]">
+              {t.reports.travelYearUsed.replace("{pct}", annual > 0 ? `${Math.round(yearTravelPct * 100)}%` : "—")}
+            </span>
+            {nxt ? (
+              <>
+                {" · "}
+                {pickName(loc, nxt.name, nxt.nameZh)}
+                {" · "}
+                {t.reports.travelTripUsed.replace("{pct}", nxt.cashBudget > 0 ? `${Math.round(tripPct * 100)}%` : "—")}
+              </>
+            ) : null}
+          </button>
+        </div>
+      </Enter>
+
+      <Enter delay>
+        <Link to="/reports/retirement" className="tr-press mx-4 mt-3 block rounded-xl bg-elevated p-4">
+          <div className="flex items-start justify-between gap-2">
+            <h2 className="text-base font-semibold">{t.reports.retirement}</h2>
+            {ledgerLive && head.story.kind !== "setup" ? (
+              <span className={cn("text-xs font-medium tabular-nums", head.story.kind === "enough" ? "text-income" : "text-expense")}>
+                {head.story.kind === "enough" ? t.reports.verdictEnough : t.reports.verdictShort}
+                {" · "}
+                {money(head.story.gap, "HKD", { sign: true })}
+              </span>
+            ) : (
+              <span className="text-xs font-medium text-muted">{t.reports.verdictSetup}</span>
             )}
           </div>
-        ) : (
-          <div className="mt-3 text-sm text-muted">{t.common.none}</div>
-        )}
-        <div className="mt-2 flex justify-end">
-          <ChevronRight className="size-4 text-faint" />
-        </div>
-      </Link>
-      <Link to="/reports/retirement" className="mx-4 mt-3 block rounded-xl bg-elevated p-4">
-        <div className="flex items-start justify-between gap-2">
-          <h2 className="text-base font-semibold">{t.reports.retirement}</h2>
           {ledgerLive && head.story.kind !== "setup" ? (
-            <span className={cn("text-xs font-medium tabular-nums", head.story.kind === "enough" ? "text-income" : "text-expense")}>
-              {head.story.kind === "enough" ? t.reports.verdictEnough : t.reports.verdictShort}
-              {" · "}
-              {money(head.story.gap, "HKD", { sign: true })}
-            </span>
+            <div className="mt-4 grid grid-cols-2 gap-4">
+              <Metric label={t.reports.spendRetired} value={money(head.base.targetMonthly, "HKD")} />
+              <Metric label={t.reports.surplus} value={money(head.story.gap, "HKD", { sign: true })} />
+              <Metric label={t.reports.investableNow} value={money(head.investable, "HKD")} />
+            </div>
           ) : (
-            <span className="text-xs font-medium text-muted">{t.reports.verdictSetup}</span>
+            <p className="mt-3 text-sm text-muted">{t.reports.setupLine}</p>
           )}
-        </div>
-        {ledgerLive && head.story.kind !== "setup" ? (
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            <Metric label={t.reports.spendRetired} value={money(head.base.targetMonthly, "HKD")} />
-            <Metric label={t.reports.surplus} value={money(head.story.gap, "HKD", { sign: true })} />
-            <Metric label={t.reports.investableNow} value={money(head.investable, "HKD")} />
+          <div className="mt-2 flex justify-end">
+            <ChevronRight className="size-4 text-faint" />
           </div>
-        ) : (
-          <p className="mt-3 text-sm text-muted">{t.reports.setupLine}</p>
-        )}
-        <div className="mt-2 flex justify-end">
-          <ChevronRight className="size-4 text-faint" />
-        </div>
-      </Link>
+        </Link>
+      </Enter>
+
       <Disclaimer>{t.reports.disclaimer}</Disclaimer>
+
+      {explainCopy ? (
+        <Overlay open onClose={() => setExplain(null)} title={explainCopy.title}>
+          <p className="px-5 pb-8 text-sm leading-6 text-muted">{explainCopy.body}</p>
+        </Overlay>
+      ) : null}
     </div>
   );
 }

@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MONTHS_EN, MONTHS_ZH, yearlyProjection } from "@/lib/calc/deposits";
 import { renderYearlyBriefMarkdown } from "@/lib/calc/yearly-brief";
 import { money, todayISO } from "@/lib/format";
-import { ScreenHeader } from "@/components/shared";
+import { Enter, useCountUp } from "@/components/retire-ux";
+import { Overlay, ScreenHeader } from "@/components/shared";
 import { ReportAiButton, ReportAiSheet } from "@/components/report-ai-sheet";
 import { cn } from "@/lib/utils";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
@@ -21,6 +22,10 @@ export function YearlyPage() {
   const budgets = useApp((s) => s.budgets);
   const setYearlyCell = useApp((s) => s.setYearlyCell);
   const [ai, setAi] = useState(false);
+  const [hint, setHint] = useState(false);
+  const [showEmpty, setShowEmpty] = useState(false);
+  const [focus, setFocus] = useState<number | null>(null);
+  const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
   const today = todayISO();
   const year = Number(today.slice(0, 4));
   const month0 = Number(today.slice(5, 7)) - 1;
@@ -28,102 +33,264 @@ export function YearlyPage() {
   const data = yearlyProjection(plans, deposits, rates, year, month0, txs, cats, monthCap, recurring, today);
   const months = locale === "zh-HK" ? MONTHS_ZH : MONTHS_EN;
   const markdown = useMemo(
-    () => renderYearlyBriefMarkdown({ asOf: today, year, monthCap, ...data }),
-    [today, year, monthCap, data],
+    () =>
+      renderYearlyBriefMarkdown({
+        asOf: today,
+        year,
+        monthCap,
+        locale,
+        ...data,
+      }),
+    [today, year, monthCap, data, locale],
   );
+  const shownSaving = useCountUp(data.yearSaving, false, 480);
+  const activeFocus = focus ?? month0;
+
+  const emptyEarly = useMemo(() => {
+    const empties: number[] = [];
+    for (const row of data.rows) {
+      if (row.month0 >= month0) break;
+      const blank =
+        Math.abs(row.salary) < 0.005 &&
+        Math.abs(row.other) < 0.005 &&
+        Math.abs(row.expense) < 0.005 &&
+        Math.abs(row.depInt) < 0.005;
+      if (blank) empties.push(row.month0);
+      else break;
+    }
+    return empties;
+  }, [data.rows, month0]);
+
+  const visibleRows = useMemo(() => {
+    if (showEmpty || !emptyEarly.length) return data.rows;
+    const hide = new Set(emptyEarly);
+    return data.rows.filter((r) => !hide.has(r.month0));
+  }, [data.rows, emptyEarly, showEmpty]);
+
+  useEffect(() => {
+    setFocus(month0);
+  }, [month0]);
+
+  function scrubTo(m0: number) {
+    setFocus(m0);
+    const el = cardRefs.current[m0];
+    el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  const maxAbs = Math.max(1, ...data.rows.map((r) => Math.abs(r.saving)));
 
   return (
-    <div className="pb-10">
-      <ScreenHeader title={t.reports.yearly} backTo="/reports" />
-      <p className="px-5 pb-3 text-xs text-muted">{t.reports.yearlyPastHint}</p>
-      <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
-        <div className="text-xs font-medium text-accent">{t.reports.yearlySaving}</div>
-        <div className={cn("mt-1 text-2xl font-semibold tabular-nums", data.yearSaving >= 0 ? "text-income" : "text-expense")}>
-          {money(data.yearSaving, "HKD")}
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <div className="rounded-xl bg-success-soft px-3 py-2">
-            <div className="text-[11px] text-income">{t.reports.yearlyEarn}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(data.yearIncome, "HKD")}</div>
-          </div>
-          <div className="rounded-xl bg-expense-soft px-3 py-2">
-            <div className="text-[11px] text-expense">{t.reports.yearlyExpense}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(data.yearExpense, "HKD")}</div>
-          </div>
-          <div className="rounded-xl bg-background px-3 py-2">
-            <div className="text-[11px] text-muted">{t.reports.earnAsOfNow}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(data.asOfIncome, "HKD")}</div>
-          </div>
-          <div className="rounded-xl bg-background px-3 py-2">
-            <div className="text-[11px] text-muted">{t.reports.expenseAsOfNow}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(data.asOfExpense, "HKD")}</div>
+    <div className="pb-24">
+      <ScreenHeader title={t.reports.yearlyTitleYear.replace("{year}", String(year))} backTo="/reports" />
+
+      <div className="tr-sticky px-4 py-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <div className="text-xs font-medium text-accent">{t.reports.yearlySaving}</div>
+          <div className={cn("text-lg font-semibold tabular-nums", shownSaving >= 0 ? "text-income" : "text-expense")}>
+            {money(shownSaving, "HKD")}
           </div>
         </div>
       </div>
+
+      <Enter>
+        <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
+          <div className="text-xs font-medium text-accent">{t.reports.yearlySaving}</div>
+          <div className={cn("mt-1 text-2xl font-semibold tabular-nums", data.yearSaving >= 0 ? "text-income" : "text-expense")}>
+            {money(shownSaving, "HKD")}
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="rounded-xl bg-success-soft px-3 py-2">
+              <div className="text-[11px] text-income">{t.reports.yearlyEarn}</div>
+              <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(data.yearIncome, "HKD")}</div>
+            </div>
+            <div className="rounded-xl bg-expense-soft px-3 py-2">
+              <div className="text-[11px] text-expense">{t.reports.yearlyExpense}</div>
+              <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(data.yearExpense, "HKD")}</div>
+            </div>
+            <div className="rounded-xl bg-background px-3 py-2">
+              <div className="text-[11px] text-muted">{t.reports.earnAsOfNow}</div>
+              <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(data.asOfIncome, "HKD")}</div>
+            </div>
+            <button type="button" className="tr-press rounded-xl bg-background px-3 py-2 text-left" onClick={() => setHint(true)}>
+              <div className="text-[11px] text-muted">{t.reports.expenseAsOfNow}</div>
+              <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(data.asOfExpense, "HKD")}</div>
+              {monthCap > 0 ? <p className="mt-1 text-[10px] leading-3 text-faint">{t.reports.expenseAsOfCapNote}</p> : null}
+            </button>
+          </div>
+          <div className="mt-2 rounded-xl bg-background px-3 py-2">
+            <div className="text-[11px] text-muted">{t.reports.savingAsOfNow}</div>
+            <div className={cn("mt-0.5 text-sm font-semibold tabular-nums", data.asOfSaving >= 0 ? "text-income" : "text-expense")}>
+              {money(data.asOfSaving, "HKD")}
+            </div>
+          </div>
+        </div>
+      </Enter>
+
+      <Enter delay>
+        <div className="mx-4 mb-3 rounded-2xl bg-elevated px-3 py-3">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="text-[11px] text-muted">{t.reports.savingAsOfNow}</div>
+            <div className="text-[11px] font-medium text-[var(--color-foreground)]">{months[activeFocus]}</div>
+          </div>
+          <div className="flex h-16 items-end gap-1">
+            {data.rows.map((row) => {
+              const h = Math.max(4, (Math.abs(row.saving) / maxAbs) * 48);
+              const on = row.month0 === activeFocus;
+              return (
+                <button
+                  key={row.id}
+                  type="button"
+                  className={cn("tr-press flex min-h-11 flex-1 flex-col items-center justify-end", on && "opacity-100")}
+                  onClick={() => scrubTo(row.month0)}
+                  aria-label={months[row.month0]}
+                >
+                  <span
+                    className={cn(
+                      "w-full rounded-t-sm",
+                      row.saving >= 0 ? "bg-income" : "bg-expense",
+                      on ? "opacity-100 ring-2 ring-accent ring-offset-1 ring-offset-elevated" : "opacity-55",
+                    )}
+                    style={{ height: h }}
+                  />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </Enter>
+
+      <button type="button" className="tr-press mx-4 mb-2 text-left text-xs leading-5 text-muted underline-offset-2 hover:underline" onClick={() => setHint(true)}>
+        {t.reports.yearlyPastHint.slice(0, 48)}…
+      </button>
+
       <ReportAiButton onClick={() => setAi(true)} />
-      {ai ? <ReportAiSheet title={t.reports.exportBrief} hint={t.reports.yearlyAiHint} filename={`hk-life-yearly-${today}.md`} markdown={markdown} onClose={() => setAi(false)} /> : null}
+      {ai ? (
+        <ReportAiSheet
+          title={t.reports.exportBrief}
+          hint={t.reports.yearlyAiHint}
+          filename={`hk-life-yearly-${today}.md`}
+          markdown={markdown}
+          onClose={() => setAi(false)}
+        />
+      ) : null}
+
+      {emptyEarly.length ? (
+        <button
+          type="button"
+          className="tr-press mx-4 mb-2 inline-flex min-h-11 items-center text-xs font-medium text-accent"
+          onClick={() => setShowEmpty((v) => !v)}
+        >
+          {showEmpty
+            ? t.reports.hideEmptyMonths
+            : t.reports.emptyEarlyMonths
+                .replace("{from}", months[emptyEarly[0]])
+                .replace("{to}", months[emptyEarly[emptyEarly.length - 1]])}
+        </button>
+      ) : null}
+
       <div className="mx-4 space-y-2">
-        {data.rows.map((row) => (
-          <div key={row.id} className={cn("rounded-2xl bg-elevated px-3 py-3", row.isCurrent && "ring-1 ring-accent")}>
-            <div className="flex items-center justify-between gap-2">
-              <div className="text-sm font-semibold">
-                {months[row.month0]}
-                {row.isCurrent ? <span className="ml-1 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-on-accent">{t.reports.nowBadge}</span> : null}
+        {visibleRows.map((row) => {
+          const capDriven = row.isCurrent && !row.fromLedger && monthCap > 0;
+          return (
+            <div
+              key={row.id}
+              ref={(el) => {
+                cardRefs.current[row.month0] = el;
+              }}
+              className={cn(
+                "rounded-2xl bg-elevated px-3 py-3",
+                row.month0 === activeFocus && "ring-1 ring-accent",
+              )}
+            >
+              <button type="button" className="tr-press flex w-full items-center justify-between gap-2 text-left" onClick={() => setFocus(row.month0)}>
+                <div className="text-sm font-semibold">
+                  {months[row.month0]}
+                  {row.isCurrent ? (
+                    <span className="ml-1 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-on-accent">{t.reports.nowBadge}</span>
+                  ) : null}
+                </div>
+                <div className={cn("text-sm font-semibold tabular-nums", row.saving >= 0 ? "text-income" : "text-expense")}>
+                  {money(row.saving, "HKD")}
+                </div>
+              </button>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <div className="text-muted">{t.reports.salary}</div>
+                  {row.incomeLocked ? (
+                    <LedgerNum value={row.salary} />
+                  ) : (
+                    <NumCell value={row.salary} onChange={(n) => void setYearlyCell(year, row.month0, "salary", n)} />
+                  )}
+                </div>
+                <div>
+                  <div className="text-muted">{t.reports.depositInterestHkd}</div>
+                  <div className="mt-1 flex h-9 items-center justify-end tabular-nums text-income">
+                    {row.depInt ? money(row.depInt, "HKD") : "—"}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-muted">{t.reports.otherIncome}</div>
+                  {row.incomeLocked ? (
+                    <LedgerNum value={row.other} />
+                  ) : (
+                    <NumCell value={row.other} onChange={(n) => void setYearlyCell(year, row.month0, "other", n)} />
+                  )}
+                </div>
+                <div>
+                  <div className="text-muted">{t.reports.expectedExpense}</div>
+                  {row.fromLedger || capDriven ? (
+                    <>
+                      <LedgerNum value={row.expense} />
+                      {capDriven ? <p className="mt-1 text-[11px] leading-4 text-faint">{t.reports.capDrivenExpense}</p> : null}
+                    </>
+                  ) : (
+                    <>
+                      <NumCell value={row.expense} onChange={(n) => void setYearlyCell(year, row.month0, "expense", n)} />
+                      {row.isCurrent ? <p className="mt-1 text-[11px] leading-4 text-faint">{t.reports.linkedMonthCap}</p> : null}
+                    </>
+                  )}
+                </div>
               </div>
-              <div className={cn("text-sm font-semibold tabular-nums", row.saving >= 0 ? "text-income" : "text-expense")}>{money(row.saving, "HKD")}</div>
             </div>
-            <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-              <div>
-                <div className="text-muted">{t.reports.salary}</div>
-                {row.incomeLocked ? (
-                  <LedgerNum value={row.salary} />
-                ) : (
-                  <NumCell value={row.salary} onChange={(n) => void setYearlyCell(year, row.month0, "salary", n)} />
-                )}
-              </div>
-              <div>
-                <div className="text-muted">{t.reports.depositInterestHkd}</div>
-                <div className="mt-1 h-9 py-2 tabular-nums text-income">{row.depInt ? money(row.depInt, "HKD") : "—"}</div>
-              </div>
-              <div>
-                <div className="text-muted">{t.reports.otherIncome}</div>
-                {row.incomeLocked ? (
-                  <LedgerNum value={row.other} />
-                ) : (
-                  <NumCell value={row.other} onChange={(n) => void setYearlyCell(year, row.month0, "other", n)} />
-                )}
-              </div>
-              <div>
-                <div className="text-muted">{t.reports.expectedExpense}</div>
-                {row.fromLedger ? (
-                  <LedgerNum value={row.expense} />
-                ) : (
-                  <>
-                    <NumCell value={row.expense} onChange={(n) => void setYearlyCell(year, row.month0, "expense", n)} />
-                    {row.isCurrent ? <p className="mt-1 text-[11px] leading-4 text-faint">{t.reports.linkedMonthCap}</p> : null}
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
+
+      {hint ? (
+        <Overlay open onClose={() => setHint(false)} title={t.reports.yearly}>
+          <p className="px-5 pb-8 text-sm leading-6 text-muted">{t.reports.yearlyPastHint}</p>
+          {monthCap > 0 ? <p className="px-5 pb-8 text-sm leading-6 text-muted">{t.reports.expenseAsOfCapNote}</p> : null}
+        </Overlay>
+      ) : null}
     </div>
   );
 }
 
 function LedgerNum({ value }: { value: number }) {
-  return <div className="mt-1 h-9 py-2 tabular-nums">{value ? money(value, "HKD") : "—"}</div>;
+  return <div className="mt-1 flex h-9 items-center justify-end tabular-nums">{value ? money(value, "HKD") : "—"}</div>;
 }
 
 function NumCell({ value, onChange }: { value: number; onChange: (n: number) => void }) {
+  const [raw, setRaw] = useState(value > 0.005 ? String(Math.round(value * 100) / 100) : "");
+  useEffect(() => {
+    setRaw(value > 0.005 ? String(Math.round(value * 100) / 100) : "");
+  }, [value]);
   return (
-    <input
-      type="number"
-      className="mt-1 h-9 w-full rounded-lg bg-background px-2 text-right tabular-nums"
-      value={value || ""}
-      placeholder="0"
-      onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-    />
+    <div className="relative mt-1">
+      <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted">HK$</span>
+      <input
+        type="text"
+        inputMode="decimal"
+        className="h-9 w-full rounded-lg bg-background py-2 pl-9 pr-2 text-right tabular-nums"
+        value={raw}
+        placeholder="—"
+        onChange={(e) => {
+          const v = e.target.value.replace(/[^\d.]/g, "");
+          setRaw(v);
+          onChange(parseFloat(v) || 0);
+        }}
+        onBlur={() => setRaw(value > 0.005 ? String(Math.round(value * 100) / 100) : "")}
+      />
+    </div>
   );
 }
