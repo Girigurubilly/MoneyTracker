@@ -1,9 +1,10 @@
 import type { Account, FxRate, TimeSaving, Transaction } from "../types.ts";
 import { groupForType } from "../types.ts";
 import { toHkd } from "./fx.ts";
-import { applyDeltas, balanceDeltas } from "./ledger.ts";
+import { applyDeltas, balanceDeltas, cashflowSide } from "./ledger.ts";
 import { depositsOutsideBalances } from "./deposits.ts";
 import { todayISO } from "../format.ts";
+import { inPeriod } from "./period.ts";
 
 export function countsInNetWorth(a: Account): boolean {
   if (a.currency === "MILES" || a.type === "miles") return false;
@@ -101,7 +102,17 @@ export function investableNow(accounts: Account[], rates: FxRate[], deposits: Ti
   return n + outsideDepositHkd(accounts, rates, deposits, asOf);
 }
 
-export type WorthPoint = { date: string; net: number; assets: number; liab: number; flow: number };
+export type WorthPointSource = "snapshot" | "reconstructed" | "live";
+
+export type WorthPoint = {
+  date: string;
+  net: number;
+  assets: number;
+  liab: number;
+  /** Δ net vs previous point (not posted cash flow). */
+  flow: number;
+  source: WorthPointSource;
+};
 
 function pad(n: number): string {
   return String(n).padStart(2, "0");
@@ -130,11 +141,70 @@ function cloneAccounts(accounts: Account[]): Account[] {
 
 export type WorthSnapshot = { month: string; net: number; assets: number; liab: number };
 
+/** Posted income − spend-like outflows in [from, to]. Plain transfers ignored. */
+export function periodPostedCashflow(
+  txs: Transaction[],
+  rates: FxRate[],
+  from: string,
+  to: string,
+): { income: number; expense: number; net: number } {
+  let income = 0;
+  let expense = 0;
+  for (const tx of txs) {
+    if (tx.planned) continue;
+    if (!inPeriod(tx.date, from, to)) continue;
+    const side = cashflowSide(tx);
+    if (side === "none") continue;
+    const hkd = Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
+    if (side === "income") income += hkd;
+    else expense += hkd;
+  }
+  return {
+    income: Math.round(income * 100) / 100,
+    expense: Math.round(expense * 100) / 100,
+    net: Math.round((income - expense) * 100) / 100,
+  };
+}
+
+export type WorthMove = {
+  from: WorthPoint;
+  to: WorthPoint;
+  deltaNet: number;
+  deltaAssets: number;
+  deltaLiab: number;
+};
+
+/** Largest |Δ net| between adjacent points (skips the opening point's zero flow). */
+export function largestWorthMove(points: WorthPoint[]): WorthMove | null {
+  let best: WorthMove | null = null;
+  for (let i = 1; i < points.length; i++) {
+    const from = points[i - 1];
+    const to = points[i];
+    const deltaNet = Math.round((to.net - from.net) * 100) / 100;
+    const move: WorthMove = {
+      from,
+      to,
+      deltaNet,
+      deltaAssets: Math.round((to.assets - from.assets) * 100) / 100,
+      deltaLiab: Math.round((to.liab - from.liab) * 100) / 100,
+    };
+    if (!best || Math.abs(move.deltaNet) > Math.abs(best.deltaNet)) best = move;
+  }
+  return best;
+}
+
+export function worthMoveIsCliff(move: WorthMove | null, lastNet: number): boolean {
+  if (!move) return false;
+  const floor = Math.max(100_000, Math.abs(lastNet) * 0.02);
+  return Math.abs(move.deltaNet) >= floor;
+}
+
 /** Reconstruct net worth from posted income, expenses and transfers.
  *
  * Prefer frozen monthly snapshots for past months when available so the chart
  * is not presented as a pure back-solve of today's balances. The latest point
- * (today / current month) always uses live balances.
+ * (today / current month) always uses live balances. Each point carries a
+ * `source` so the UI can flag snapshot vs reconstructed vs live.
  */
 export function periodNetWorthPoints(
   accounts: Account[],
@@ -159,12 +229,18 @@ export function periodNetWorthPoints(
   }
   const span = (Date.parse(`${end}T12:00:00`) - Date.parse(`${start}T12:00:00`)) / 86_400_000;
   const points: WorthPoint[] = [];
-  const liveSnap = (date: string): WorthPoint => ({ date, ...netWorthNow(accs, rates, deposits, date), flow: 0 });
+  const tagLive = (date: string): WorthPointSource => (date >= today ? "live" : "reconstructed");
+  const liveSnap = (date: string): WorthPoint => ({
+    date,
+    ...netWorthNow(accs, rates, deposits, date),
+    flow: 0,
+    source: tagLive(date),
+  });
   const pointFor = (date: string, preferSnap: boolean): WorthPoint => {
     const ym = date.slice(0, 7);
     if (preferSnap && ym < currentYm) {
       const frozen = byMonth.get(ym);
-      if (frozen) return { date, net: frozen.net, assets: frozen.assets, liab: frozen.liab, flow: 0 };
+      if (frozen) return { date, net: frozen.net, assets: frozen.assets, liab: frozen.liab, flow: 0, source: "snapshot" };
     }
     return liveSnap(date);
   };
