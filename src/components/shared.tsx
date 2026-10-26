@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Info } from "lucide-react";
@@ -95,20 +95,38 @@ export function ProgressRing({
   size = 40,
   stroke = 3,
   tone = "income",
+  draw = false,
 }: {
   value: number;
   extra?: number;
   size?: number;
   stroke?: number;
   tone?: "income" | "watch" | "expense";
+  /** Animate fill once on mount (retirement/travel restrained motion). */
+  draw?: boolean;
 }) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
-  const paid = Math.max(0, Math.min(1, value));
-  const scheduled = Math.max(0, Math.min(1 - paid, extra));
+  const paidTarget = Math.max(0, Math.min(1, value));
+  const scheduledTarget = Math.max(0, Math.min(1 - paidTarget, extra));
+  const [paid, setPaid] = useState(draw ? 0 : paidTarget);
+  const [scheduled, setScheduled] = useState(draw ? 0 : scheduledTarget);
+  useEffect(() => {
+    if (!draw) {
+      setPaid(paidTarget);
+      setScheduled(scheduledTarget);
+      return;
+    }
+    const id = requestAnimationFrame(() => {
+      setPaid(paidTarget);
+      setScheduled(scheduledTarget);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [paidTarget, scheduledTarget, draw]);
   const color = tone === "expense" ? "var(--color-expense)" : tone === "watch" ? "var(--color-watch)" : "var(--color-income)";
+  const showCap = paid > 0.005;
   return (
-    <svg width={size} height={size} className="block -rotate-90">
+    <svg width={size} height={size} className="block -rotate-90" aria-hidden>
       <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--color-ring-track)" strokeWidth={stroke} />
       <circle
         cx={size / 2}
@@ -117,10 +135,12 @@ export function ProgressRing({
         fill="none"
         stroke={color}
         strokeWidth={stroke}
-        strokeDasharray={`${c * paid} ${c}`}
-        strokeLinecap="round"
+        strokeDasharray={c}
+        strokeDashoffset={c * (1 - paid)}
+        strokeLinecap={showCap ? "round" : "butt"}
+        className="rt-ring"
       />
-      {scheduled > 0 ? (
+      {scheduled > 0.005 ? (
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -131,6 +151,7 @@ export function ProgressRing({
           strokeDasharray={`${c * scheduled} ${c}`}
           strokeDashoffset={-c * paid}
           strokeLinecap="round"
+          className="rt-ring"
         />
       ) : null}
     </svg>
@@ -210,14 +231,14 @@ export function Overlay({
   const sheet = (
     <div className={cn("fixed inset-0 grid", zClass, page ? "bg-background" : "place-items-end md:place-items-center")}>
       {page ? null : (
-        <button type="button" className="absolute inset-0 scrim" aria-label={t.common.close} onClick={onClose} />
+        <button type="button" className="absolute inset-0 scrim rt-backdrop-in" aria-label={t.common.close} onClick={onClose} />
       )}
       <div
         className={cn(
           "relative z-[81] w-full overflow-y-auto bg-background",
           page
             ? "h-dvh max-h-dvh pb-[max(1rem,env(safe-area-inset-bottom))]"
-            : "max-h-[92dvh] rounded-t-2xl pb-[max(1rem,env(safe-area-inset-bottom))] md:max-w-md md:rounded-2xl",
+            : "rt-sheet-in max-h-[92dvh] rounded-t-2xl pb-[max(1rem,env(safe-area-inset-bottom))] md:max-w-md md:rounded-2xl",
         )}
       >
         {title ? (

@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { InfoButton, Overlay, ProgressRing, ScreenHeader, SectionLabel, BudgetChip, TxGroupedList } from "@/components/shared";
+import { Enter, useCountUp } from "@/components/retire-ux";
 import { ComposerHeader, ComposerShell, LineRow, TextLine, ActiveKeypad } from "@/components/txn-composer";
 import { dateRangeLabel, formatTypingAmount, money, shortDate, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { toHkd } from "@/lib/calc/fx";
 import { cashflowSide } from "@/lib/calc/ledger";
 import {
+  isTripActive,
   travelSpendYtdSplit,
   travelUnlinkedTxs,
   tripBudgetUsed,
@@ -16,29 +18,76 @@ import {
 } from "@/lib/calc/trips";
 import type { Category, FxRate, Locale, Transaction, Trip } from "@/lib/types";
 import { plannerTripUrl } from "@/lib/trip-link";
+import { cn } from "@/lib/utils";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 
 export function TravelPage() {
   const t = useT();
+  const loc = useUi((s) => s.locale);
   const trips = useApp((s) => s.trips);
   const txs = useApp((s) => s.transactions);
   const cats = useApp((s) => s.categories);
   const rates = useApp((s) => s.fxRates);
   const annual = useApp((s) => s.annualTravelBudget);
   const setAnnual = useApp((s) => s.setAnnualTravel);
+  const updateTx = useApp((s) => s.updateTransaction);
   const setTx = useUi((s) => s.setTxDetailId);
-  const travelIds = new Set(cats.filter((c) => c.theme === "travel").map((c) => c.id));
+  const travelIds = useMemo(() => new Set(cats.filter((c) => c.theme === "travel").map((c) => c.id)), [cats]);
   const year = Number(todayISO().slice(0, 4));
   const ytd = travelSpendYtdSplit(txs, year, travelIds, rates);
   const yearOver = annual > 0 && ytd.total > annual;
   const [adding, setAdding] = useState(false);
   const [editAnnual, setEditAnnual] = useState(false);
   const [showUnlinked, setShowUnlinked] = useState(false);
+  const [showLinked, setShowLinked] = useState(false);
+  const [linkTxId, setLinkTxId] = useState<string | null>(null);
+  const [countReady, setCountReady] = useState(false);
+  const [stickyOn, setStickyOn] = useState(false);
+  const summaryRef = useRef<HTMLDivElement>(null);
   const unlinked = travelUnlinkedTxs(txs, year, travelIds);
   const visible = trips.filter((tr) => tr.status !== "cancelled");
   const current = visible.filter((tr) => tr.end >= todayISO());
   const past = visible.filter((tr) => tr.end < todayISO()).sort((a, b) => b.end.localeCompare(a.end) || b.start.localeCompare(a.start));
+  const tripsWithSpend = useMemo(() => {
+    const ids = new Set(
+      txs
+        .filter((tx) => tx.tripId && !tx.planned && tx.type === "expense" && tx.date.startsWith(String(year)))
+        .map((tx) => tx.tripId as string),
+    );
+    return visible.filter((tr) => ids.has(tr.id));
+  }, [txs, visible, year]);
+  const linkCandidates = useMemo(
+    () => visible.filter((tr) => isTripActive(tr, todayISO())),
+    [visible],
+  );
+
+  useEffect(() => {
+    setCountReady(true);
+  }, []);
+
+  useEffect(() => {
+    const el = summaryRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const obs = new IntersectionObserver(([entry]) => setStickyOn(!entry.isIntersecting), {
+      root: null,
+      threshold: 0,
+      rootMargin: "-8px 0px 0px 0px",
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  const shownTotal = useCountUp(countReady ? ytd.total : 0, false, 500);
+  const shownUnlinked = useCountUp(countReady ? ytd.unlinked : 0, false, 500);
+  const ringPct = annual > 0 ? ytd.total / annual : 0;
+
+  async function attachTrip(txId: string, tripId: string) {
+    const tx = txs.find((row) => row.id === txId);
+    if (!tx) return;
+    await updateTx({ ...tx, tripId }, tx);
+    setLinkTxId(null);
+  }
 
   return (
     <div className="pb-24">
@@ -48,55 +97,89 @@ export function TravelPage() {
         right={
           <div className="flex items-center">
             <InfoButton k="trip" />
-            <button type="button" aria-label={t.reports.addTrip} className="grid size-11 place-items-center text-foreground" onClick={() => setAdding(true)}>
+            <button type="button" aria-label={t.reports.addTrip} className="tr-press grid size-11 place-items-center text-foreground" onClick={() => setAdding(true)}>
               <Plus className="size-6" strokeWidth={1.8} />
             </button>
           </div>
         }
       />
-      <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
-        <div className="flex items-start justify-between gap-3">
-          <button type="button" className="min-w-0 text-left" onClick={() => setEditAnnual(true)}>
-            <div className="text-xs font-medium text-accent">{t.reports.annualTravel}</div>
-            <div className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{money(ytd.total, "HKD")}</div>
-            <div className="mt-0.5 text-xs text-muted">/ {money(annual, "HKD")}</div>
-          </button>
+
+      {stickyOn ? (
+        <div className="tr-sticky flex items-center gap-3 px-4 py-2">
           <div className="relative shrink-0">
-            <ProgressRing value={annual > 0 ? ytd.total / annual : 0} size={64} stroke={5} tone={yearOver ? "expense" : "income"} />
-            <span className="pointer-events-none absolute inset-0 grid place-items-center text-[11px] font-semibold tabular-nums">
-              {annual > 0 ? `${Math.round((ytd.total / annual) * 100)}%` : "—"}
+            <ProgressRing value={ringPct} size={36} stroke={3} tone={yearOver ? "expense" : "income"} />
+            <span className="pointer-events-none absolute inset-0 grid place-items-center text-[9px] font-semibold tabular-nums">
+              {annual > 0 ? `${Math.round(ringPct * 100)}%` : "—"}
             </span>
           </div>
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <div className="rounded-xl bg-background px-3 py-2">
-            <div className="text-[11px] text-muted">{t.reports.travelLinked}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(ytd.linked, "HKD")}</div>
-          </div>
-          <button
-            type="button"
-            className="rounded-xl bg-background px-3 py-2 text-left disabled:opacity-60"
-            disabled={!unlinked.length}
-            onClick={() => setShowUnlinked(true)}
-            aria-label={t.reports.travelUnlinkedOpen}
-          >
-            <div className="text-[11px] text-muted">{t.reports.travelUnlinked}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums text-accent">{money(ytd.unlinked, "HKD")}</div>
-          </button>
-        </div>
-        <p className="mt-2 text-[11px] leading-4 text-faint">{t.reports.travelSplitNote}</p>
-        <p className="mt-1 text-[11px] leading-4 text-faint">{t.reports.mealTravelHint}</p>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <div className="rounded-xl bg-background px-3 py-2">
-            <div className="text-[11px] text-muted">{t.reports.trips}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{current.length}</div>
-          </div>
-          <div className="rounded-xl bg-background px-3 py-2">
-            <div className="text-[11px] text-muted">{t.reports.pastTrips}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{past.length}</div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold tabular-nums">{money(ytd.total, "HKD")}</div>
+            <div className="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-muted">
+              <span>
+                {t.reports.travelLinked} {money(ytd.linked, "HKD")}
+              </span>
+              <span>
+                {t.reports.travelUnlinked} {money(ytd.unlinked, "HKD")}
+              </span>
+            </div>
           </div>
         </div>
+      ) : null}
+
+      <div ref={summaryRef}>
+        <Enter>
+          <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
+            <div className="flex items-start justify-between gap-3">
+              <button type="button" className="tr-press min-w-0 text-left" onClick={() => setEditAnnual(true)}>
+                <div className="text-xs font-medium text-accent">{t.reports.annualTravel}</div>
+                <div className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{money(shownTotal, "HKD")}</div>
+                <div className="mt-0.5 text-xs text-muted">/ {money(annual, "HKD")}</div>
+              </button>
+              <div className="relative shrink-0">
+                <ProgressRing value={ringPct} size={64} stroke={5} tone={yearOver ? "expense" : "income"} draw />
+                <span className="pointer-events-none absolute inset-0 grid place-items-center text-[11px] font-semibold tabular-nums">
+                  {annual > 0 ? `${Math.round(ringPct * 100)}%` : "—"}
+                </span>
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                className="tr-press rounded-xl bg-background px-3 py-2 text-left disabled:opacity-60"
+                disabled={!tripsWithSpend.length}
+                onClick={() => setShowLinked(true)}
+                aria-label={t.reports.travelLinkedOpen}
+              >
+                <div className="text-[11px] text-muted">{t.reports.travelLinked}</div>
+                <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(ytd.linked, "HKD")}</div>
+              </button>
+              <button
+                type="button"
+                className="tr-press rounded-xl bg-background px-3 py-2 text-left disabled:opacity-60"
+                disabled={!unlinked.length}
+                onClick={() => setShowUnlinked(true)}
+                aria-label={t.reports.travelUnlinkedOpen}
+              >
+                <div className="text-[11px] text-muted">{t.reports.travelUnlinked}</div>
+                <div className="mt-0.5 text-sm font-semibold tabular-nums text-accent">{money(shownUnlinked, "HKD")}</div>
+              </button>
+            </div>
+            <p className="mt-2 text-[11px] leading-4 text-faint">{t.reports.travelSplitNote}</p>
+            <p className="mt-1 text-[11px] leading-4 text-faint">{t.reports.mealTravelHint}</p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="rounded-xl bg-background px-3 py-2">
+                <div className="text-[11px] text-muted">{t.reports.trips}</div>
+                <div className="mt-0.5 text-sm font-semibold tabular-nums">{current.length}</div>
+              </div>
+              <div className="rounded-xl bg-background px-3 py-2">
+                <div className="text-[11px] text-muted">{t.reports.pastTrips}</div>
+                <div className="mt-0.5 text-sm font-semibold tabular-nums">{past.length}</div>
+              </div>
+            </div>
+          </div>
+        </Enter>
       </div>
+
       <SectionLabel>{t.reports.trips}</SectionLabel>
       {current.map((tr) => (
         <TripCard key={tr.id} trip={tr} />
@@ -110,14 +193,116 @@ export function TravelPage() {
           ))}
         </>
       ) : null}
+
       <TripEditor key={adding ? "new-trip" : "new-idle"} open={adding} onClose={() => setAdding(false)} />
       <Overlay open={editAnnual} onClose={() => setEditAnnual(false)} title={t.reports.annualTravel}>
         <AnnualEditor current={annual} onSave={async (n) => { await setAnnual(n); setEditAnnual(false); }} onClose={() => setEditAnnual(false)} />
       </Overlay>
+
       <Overlay open={showUnlinked} onClose={() => setShowUnlinked(false)} title={t.reports.travelUnlinked}>
         <div className="px-1 pb-8">
-          <p className="px-4 pb-2 text-xs text-muted">{t.reports.travelUnlinkedOpen}</p>
-          <TxGroupedList txs={unlinked} onClick={(tx) => { setShowUnlinked(false); setTx(tx.id); }} empty={t.common.none} />
+          <p className="px-4 pb-2 text-xs text-muted">{t.reports.travelUnlinkedHint}</p>
+          {unlinked.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-muted">{t.common.none}</p>
+          ) : (
+            unlinked
+              .slice()
+              .sort((a, b) => b.date.localeCompare(a.date))
+              .map((tx) => (
+                <div key={tx.id} className="border-b border-line px-4 py-3 last:border-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium">{pickName(loc, tx.payee, tx.payeeZh) || "—"}</div>
+                      <div className="text-xs text-muted">{shortDate(tx.date, loc)}</div>
+                    </div>
+                    <div className="shrink-0 text-sm font-semibold tabular-nums text-expense">
+                      {money(Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd)), "HKD")}
+                    </div>
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      className="tr-press h-10 flex-1 rounded-xl bg-accent text-sm font-semibold text-on-accent"
+                      onClick={() => setLinkTxId(tx.id)}
+                    >
+                      {t.reports.linkToTrip}
+                    </button>
+                    <button
+                      type="button"
+                      className="tr-press h-10 rounded-xl bg-elevated px-3 text-sm font-medium text-accent"
+                      onClick={() => {
+                        setShowUnlinked(false);
+                        setTx(tx.id);
+                      }}
+                    >
+                      {t.reports.editTxn}
+                    </button>
+                  </div>
+                </div>
+              ))
+          )}
+        </div>
+      </Overlay>
+
+      <Overlay open={showLinked} onClose={() => setShowLinked(false)} title={t.reports.travelLinked}>
+        <div className="px-1 pb-8">
+          <p className="px-4 pb-2 text-xs text-muted">{t.reports.travelLinkedOpen}</p>
+          {tripsWithSpend.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-muted">{t.common.none}</p>
+          ) : (
+            tripsWithSpend.map((tr) => {
+              const split = tripMoneySplit(txs, tr.id, rates);
+              return (
+                <Link
+                  key={tr.id}
+                  to="/reports/travel/$id"
+                  params={{ id: tr.id }}
+                  className="tr-press flex items-center justify-between gap-3 border-b border-line px-4 py-3 last:border-0"
+                  onClick={() => setShowLinked(false)}
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium">{pickName(loc, tr.name, tr.nameZh)}</div>
+                    <div className="text-xs text-muted">
+                      {tr.destination} · {dateRangeLabel(tr.start, tr.end, loc)}
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-sm font-semibold tabular-nums">{money(split.paid, "HKD")}</div>
+                </Link>
+              );
+            })
+          )}
+        </div>
+      </Overlay>
+
+      <Overlay
+        open={!!linkTxId}
+        onClose={() => setLinkTxId(null)}
+        title={t.reports.linkToTrip}
+        layer="stack"
+      >
+        <div className="px-1 pb-8">
+          <p className="px-4 pb-2 text-xs text-muted">{t.reports.pickTripToLink}</p>
+          {linkCandidates.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-muted">{t.common.none}</p>
+          ) : (
+            linkCandidates.map((tr) => (
+              <button
+                key={tr.id}
+                type="button"
+                className="tr-press flex w-full items-center justify-between gap-3 border-b border-line px-4 py-3 text-left last:border-0"
+                onClick={() => {
+                  if (linkTxId) void attachTrip(linkTxId, tr.id);
+                }}
+              >
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">{pickName(loc, tr.name, tr.nameZh)}</div>
+                  <div className="text-xs text-muted">
+                    {tr.destination} · {dateRangeLabel(tr.start, tr.end, loc)}
+                  </div>
+                </div>
+              </button>
+            ))
+          )}
         </div>
       </Overlay>
     </div>
@@ -139,7 +324,7 @@ function TripCard({ trip }: { trip: Trip }) {
   const live = trip.start <= today && today <= trip.end;
   return (
     <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
-      <Link to="/reports/travel/$id" params={{ id: trip.id }} className="block p-4">
+      <Link to="/reports/travel/$id" params={{ id: trip.id }} className="tr-press block p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="text-base font-semibold">
@@ -153,7 +338,7 @@ function TripCard({ trip }: { trip: Trip }) {
             </div>
           </div>
           <div className="relative shrink-0">
-            <ProgressRing value={paidPct} extra={scheduledPct} size={52} stroke={4} tone={over ? "expense" : "income"} />
+            <ProgressRing value={paidPct} extra={scheduledPct} size={52} stroke={4} tone={over ? "expense" : "income"} draw />
             <span className="pointer-events-none absolute inset-0 grid place-items-center text-[10px] font-semibold tabular-nums">
               {Math.round(used.pct * 100)}%
             </span>
@@ -204,7 +389,7 @@ function TripPlannerBar({ trip, compact }: { trip: Trip; compact?: boolean }) {
           href={href}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex h-9 shrink-0 items-center rounded-full bg-accent px-3 text-xs font-medium text-on-accent"
+          className="tr-press flex h-9 shrink-0 items-center rounded-full bg-accent px-3 text-xs font-medium text-on-accent"
         >
           {label}
         </a>
@@ -233,10 +418,10 @@ function AnnualEditor({ current, onSave, onClose }: { current: number; onSave: (
         aria-label={t.reports.annualTravel}
       />
       <div className="mt-1 text-xs text-muted">{formatTypingAmount(v || "0", "HKD")}</div>
-      <button type="button" className="mt-4 h-12 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={() => onSave(Number(v) || 0)}>
+      <button type="button" className="tr-press mt-4 h-12 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={() => onSave(Number(v) || 0)}>
         {t.add.save}
       </button>
-      <button type="button" className="mt-2 h-11 w-full text-sm text-muted" onClick={onClose}>
+      <button type="button" className="tr-press mt-2 h-11 w-full text-sm text-muted" onClick={onClose}>
         {t.add.cancel}
       </button>
     </div>
@@ -257,20 +442,36 @@ export function TripDetailPage({ id }: { id: string }) {
   const openAdd = useUi((s) => s.openAdd);
   const setSelected = useUi((s) => s.setSelectedDate);
   const [edit, setEdit] = useState(false);
+  const [stickyOn, setStickyOn] = useState(false);
+  const summaryRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = summaryRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const obs = new IntersectionObserver(([entry]) => setStickyOn(!entry.isIntersecting), {
+      root: null,
+      threshold: 0,
+      rootMargin: "-8px 0px 0px 0px",
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [trip?.id]);
+
   if (!trip) return <div className="p-5 text-sm text-muted">—</div>;
-  const split = tripMoneySplit(txs, trip.id, rates, adhoc);
-  const used = tripBudgetUsed(split.total, trip.cashBudget);
-  const paidPct = trip.cashBudget > 0 ? split.paid / trip.cashBudget : 0;
-  const scheduledPct = trip.cashBudget > 0 ? split.scheduled / trip.cashBudget : 0;
-  const linked = tripLinkedTxs(txs, trip.id);
-  const scheduledAdhoc = adhoc.filter((row) => row.tripId === trip.id && !row.paidOn);
-  const over = trip.cashBudget > 0 && split.total > trip.cashBudget;
+  const active = trip;
+  const split = tripMoneySplit(txs, active.id, rates, adhoc);
+  const used = tripBudgetUsed(split.total, active.cashBudget);
+  const paidPct = active.cashBudget > 0 ? split.paid / active.cashBudget : 0;
+  const scheduledPct = active.cashBudget > 0 ? split.scheduled / active.cashBudget : 0;
+  const linked = tripLinkedTxs(txs, active.id);
+  const scheduledAdhoc = adhoc.filter((row) => row.tripId === active.id && !row.paidOn);
+  const over = active.cashBudget > 0 && split.total > active.cashBudget;
   const empty = linked.length === 0 && scheduledAdhoc.length === 0;
 
   function logSpend() {
     const today = todayISO();
-    const start = trip!.start;
-    const end = trip!.end;
+    const start = active.start;
+    const end = active.end;
     const date = today >= start && today <= end ? today : start;
     setSelected(date);
     openAdd("expense");
@@ -279,53 +480,75 @@ export function TripDetailPage({ id }: { id: string }) {
   return (
     <div className="pb-24">
       <ScreenHeader
-        title={pickName(loc, trip.name, trip.nameZh)}
+        title={pickName(loc, active.name, active.nameZh)}
         backTo="/reports/travel"
         right={
-          <button type="button" className="px-2 text-sm font-medium text-accent" onClick={() => setEdit(true)}>
+          <button type="button" className="tr-press px-2 text-sm font-medium text-accent" onClick={() => setEdit(true)}>
             {t.reports.editTrip}
           </button>
         }
       />
-      <div className="mx-4 mb-3 overflow-hidden rounded-xl bg-elevated px-4 py-3">
-        <TripPlannerBar trip={trip} />
-      </div>
-      <div className="mx-4 overflow-hidden rounded-2xl bg-elevated p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-sm font-semibold">{trip.destination}</div>
-            <div className="mt-0.5 text-xs text-muted">{dateRangeLabel(trip.start, trip.end, loc)}</div>
-          </div>
+
+      {stickyOn ? (
+        <div className="tr-sticky flex items-center gap-3 px-4 py-2">
           <div className="relative shrink-0">
-            <ProgressRing value={paidPct} extra={scheduledPct} size={64} stroke={5} tone={over ? "expense" : "income"} />
-            <span className="pointer-events-none absolute inset-0 grid place-items-center text-[11px] font-semibold tabular-nums">
+            <ProgressRing value={paidPct} extra={scheduledPct} size={36} stroke={3} tone={over ? "expense" : "income"} />
+            <span className="pointer-events-none absolute inset-0 grid place-items-center text-[9px] font-semibold tabular-nums">
               {Math.round(used.pct * 100)}%
             </span>
           </div>
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <div className="rounded-xl bg-background px-3 py-2">
-            <div className="text-[11px] text-muted">{t.reports.tripBudget}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(trip.cashBudget, "HKD")}</div>
-          </div>
-          <div className={`rounded-xl px-3 py-2 ${split.paid > 0 ? "bg-expense-soft" : "bg-background"}`}>
-            <div className={`text-[11px] ${split.paid > 0 ? "text-expense" : "text-muted"}`}>{t.reports.tripPaid}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(split.paid, "HKD")}</div>
-          </div>
-          <div className={`rounded-xl px-3 py-2 ${split.scheduled > 0 ? "bg-watch-soft" : "bg-background"}`}>
-            <div className={`text-[11px] ${split.scheduled > 0 ? "text-watch" : "text-muted"}`}>{t.reports.tripScheduled}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(split.scheduled, "HKD")}</div>
-          </div>
-          <div className="rounded-xl bg-success-soft px-3 py-2">
-            <div className="text-[11px] text-income">{t.reports.remaining}</div>
-            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(used.remaining, "HKD")}</div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold">{active.destination}</div>
+            <div className="mt-0.5 text-[11px] text-muted">
+              {Math.round(used.pct * 100)}% · {t.reports.remaining} {money(used.remaining, "HKD")}
+            </div>
           </div>
         </div>
+      ) : null}
+
+      <div className="mx-4 mb-3 overflow-hidden rounded-xl bg-elevated px-4 py-3">
+        <TripPlannerBar trip={active} />
+      </div>
+      <div ref={summaryRef}>
+        <Enter>
+          <div className="mx-4 overflow-hidden rounded-2xl bg-elevated p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold">{active.destination}</div>
+                <div className="mt-0.5 text-xs text-muted">{dateRangeLabel(active.start, active.end, loc)}</div>
+              </div>
+              <div className="relative shrink-0">
+                <ProgressRing value={paidPct} extra={scheduledPct} size={64} stroke={5} tone={over ? "expense" : "income"} draw />
+                <span className="pointer-events-none absolute inset-0 grid place-items-center text-[11px] font-semibold tabular-nums">
+                  {Math.round(used.pct * 100)}%
+                </span>
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="rounded-xl bg-background px-3 py-2">
+                <div className="text-[11px] text-muted">{t.reports.tripBudget}</div>
+                <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(active.cashBudget, "HKD")}</div>
+              </div>
+              <div className={`rounded-xl px-3 py-2 ${split.paid > 0 ? "bg-expense-soft" : "bg-background"}`}>
+                <div className={`text-[11px] ${split.paid > 0 ? "text-expense" : "text-muted"}`}>{t.reports.tripPaid}</div>
+                <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(split.paid, "HKD")}</div>
+              </div>
+              <div className={`rounded-xl px-3 py-2 ${split.scheduled > 0 ? "bg-watch-soft" : "bg-background"}`}>
+                <div className={`text-[11px] ${split.scheduled > 0 ? "text-watch" : "text-muted"}`}>{t.reports.tripScheduled}</div>
+                <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(split.scheduled, "HKD")}</div>
+              </div>
+              <div className="rounded-xl bg-success-soft px-3 py-2">
+                <div className="text-[11px] text-income">{t.reports.remaining}</div>
+                <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(used.remaining, "HKD")}</div>
+              </div>
+            </div>
+          </div>
+        </Enter>
       </div>
       {empty ? (
         <div className="mx-4 mt-4 rounded-2xl bg-elevated px-4 py-5 text-center">
           <p className="text-sm text-muted">{t.reports.tripEmptyHint}</p>
-          <button type="button" className="mt-3 inline-flex h-11 items-center justify-center rounded-xl bg-accent px-5 text-sm font-semibold text-on-accent" onClick={logSpend}>
+          <button type="button" className="tr-press mt-3 inline-flex h-11 items-center justify-center rounded-xl bg-accent px-5 text-sm font-semibold text-on-accent" onClick={logSpend}>
             {t.reports.logTripSpend}
           </button>
         </div>
@@ -349,15 +572,15 @@ export function TripDetailPage({ id }: { id: string }) {
       <h2 className="px-5 pb-1 pt-5 text-sm font-medium text-muted">{t.reports.tripCats}</h2>
       <TripCatRows txs={linked} cats={cats} rates={rates} locale={loc} />
       <h2 className="px-5 pb-1 pt-4 text-sm font-medium text-muted">{t.reports.tripHeat}</h2>
-      <TripHeat start={trip.start} end={trip.end} txs={linked} cats={cats} rates={rates} locale={loc} />
+      <TripHeat start={active.start} end={active.end} txs={linked} cats={cats} rates={rates} locale={loc} />
       <TxGroupedList txs={linked} onClick={(tx) => setTx(tx.id)} empty={t.common.none} />
       <TripEditor
-        key={edit ? trip.id : "edit-idle"}
+        key={edit ? active.id : "edit-idle"}
         open={edit}
-        trip={trip}
+        trip={active}
         onClose={() => setEdit(false)}
         onDeleted={() => {
-          void del(trip.id);
+          void del(active.id);
           void nav({ to: "/reports/travel" });
         }}
       />
@@ -529,7 +752,7 @@ function TripHeat({
   locale: Locale;
 }) {
   const t = useT();
-  const [openDay, setOpenDay] = useState<string | null>(null);
+  const today = todayISO();
   const days: string[] = [];
   const cursor = new Date(`${start}T12:00:00`);
   const last = new Date(`${end}T12:00:00`);
@@ -543,15 +766,70 @@ function TripHeat({
     daily.set(tx.date, (daily.get(tx.date) ?? 0) + Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd)));
   }
   const max = Math.max(1, ...daily.values());
+  const defaultFocus = days.includes(today) ? today : days[0] ?? start;
+  const [focusDay, setFocusDay] = useState(defaultFocus);
+  const [openDay, setOpenDay] = useState<string | null>(null);
+  const [emptyHint, setEmptyHint] = useState(false);
+  const stripRef = useRef<HTMLDivElement>(null);
   const dayTxs = openDay ? txs.filter((tx) => tx.date === openDay && !tx.planned && cashflowSide(tx) === "expense") : [];
+
+  function syncFocusFromScroll(e: UIEvent<HTMLDivElement>) {
+    const el = e.currentTarget;
+    const kids = Array.from(el.children) as HTMLElement[];
+    if (!kids.length) return;
+    const left = el.scrollLeft + 8;
+    let best = kids[0];
+    let bestDist = Infinity;
+    for (const kid of kids) {
+      const dist = Math.abs(kid.offsetLeft - left);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = kid;
+      }
+    }
+    const iso = best.dataset.day;
+    if (iso && iso !== focusDay) {
+      setFocusDay(iso);
+      setEmptyHint(false);
+    }
+  }
+
   return (
     <>
-      <div className="mx-4 mb-4 flex flex-wrap gap-1.5 rounded-xl bg-elevated px-3 py-3">
+      <div className="mx-4 mb-2 flex items-baseline justify-between gap-2 rounded-xl bg-elevated px-3 py-2">
+        <div className="text-xs text-muted">
+          {shortDate(focusDay, locale)}
+          {focusDay === today ? <span className="ml-1 text-accent">{t.reports.todayMark}</span> : null}
+        </div>
+        <div className="text-sm font-semibold tabular-nums">{money(daily.get(focusDay) ?? 0, "HKD")}</div>
+      </div>
+      {emptyHint ? <p className="px-5 pb-2 text-xs text-muted">{t.reports.dayNoSpend}</p> : null}
+      <div
+        ref={stripRef}
+        className="tr-day-strip mx-4 mb-4 rounded-xl bg-elevated px-3 py-3"
+        onScroll={syncFocusFromScroll}
+      >
         {days.map((iso) => {
           const amt = daily.get(iso) ?? 0;
           const heat = amt / max;
+          const selected = iso === focusDay;
           return (
-            <button key={iso} type="button" className="flex min-h-12 min-w-12 flex-col items-center justify-center gap-0.5" onClick={() => setOpenDay(iso)}>
+            <button
+              key={iso}
+              type="button"
+              data-day={iso}
+              className={cn("tr-day-chip tr-press flex min-h-12 min-w-12 flex-col items-center justify-center gap-0.5 rounded-lg", selected && "ring-2 ring-accent ring-offset-1 ring-offset-elevated")}
+              onClick={() => {
+                setFocusDay(iso);
+                if (amt > 0) {
+                  setEmptyHint(false);
+                  setOpenDay(iso);
+                } else {
+                  setOpenDay(null);
+                  setEmptyHint(true);
+                }
+              }}
+            >
               <span
                 className="grid size-12 place-items-center rounded-lg text-sm tabular-nums"
                 style={{
@@ -561,6 +839,7 @@ function TripHeat({
               >
                 {iso.slice(8)}
               </span>
+              {iso === today ? <span className="text-[9px] font-medium text-accent">{t.reports.todayMark}</span> : null}
             </button>
           );
         })}
