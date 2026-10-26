@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Overlay, ScreenHeader } from "@/components/shared";
@@ -130,10 +129,9 @@ export function BalancePage() {
             <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(nw.liab, "HKD")}</div>
           </button>
         </div>
-        <Link to="/reports/worth" className="tr-press mt-3 block rounded-xl bg-background px-3 py-2.5 text-sm">
-          <div className="text-muted">{t.reports.balanceInvestable.replace("{amount}", money(investable || head.investable, "HKD"))}</div>
-          <div className="mt-0.5 text-xs font-medium text-accent">{t.reports.balanceWorthLink}</div>
-        </Link>
+        <div className="mt-3 rounded-xl bg-background px-3 py-2.5 text-sm text-muted">
+          {t.reports.balanceInvestable.replace("{amount}", money(investable || head.investable, "HKD"))}
+        </div>
       </div>
 
       <div className="rt-drill-stage mx-0">
