@@ -1,13 +1,18 @@
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import { ChevronRight } from "lucide-react";
 import { Overlay, ScreenHeader } from "@/components/shared";
 import { AssetBriefButton } from "@/components/asset-brief";
-import { money, pct } from "@/lib/format";
+import { prefersReducedMotion } from "@/components/retire-ux";
+import { useRetirementHeadline } from "@/components/reports-retire";
+import { money, pct, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
-import { netWorthBreakdown, netWorthNow, type WorthRow } from "@/lib/calc/networth";
+import { investableNow, netWorthBreakdown, netWorthNow, type WorthRow } from "@/lib/calc/networth";
+import { depositsOutsideBalances } from "@/lib/calc/deposits";
 import { ACCOUNT_TYPE_OPTIONS } from "@/lib/types";
 import { toHkd } from "@/lib/calc/fx";
+import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 
@@ -30,8 +35,12 @@ export function BalancePage() {
   const deposits = useApp((s) => s.deposits);
   const nw = netWorthNow(accounts, rates, deposits);
   const parts = netWorthBreakdown(accounts, rates, deposits);
+  const head = useRetirementHeadline();
+  const investable = investableNow(accounts, rates, deposits);
+  const animate = !prefersReducedMotion();
   const [focus, setFocus] = useState<"assets" | "liab" | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  const debtRatio = nw.assets > 0 ? nw.liab / nw.assets : null;
 
   function typeLabel(type: string) {
     const o = ACCOUNT_TYPE_OPTIONS.find((x) => x.id === type);
@@ -53,23 +62,46 @@ export function BalancePage() {
   const focusTotal = focus === "assets" ? nw.assets : nw.liab;
 
   return (
-    <div className="pb-10">
+    <div className="pb-28">
       <ScreenHeader title={t.reports.balance} backTo="/reports" right={<AssetBriefButton className="px-2 text-sm font-medium text-accent" />} />
-      <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
+      <div className="rt-enter mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
         <div className="text-xs text-muted">{t.assets.netWorth}</div>
         <div className="mt-1 text-2xl font-semibold tabular-nums">{money(nw.net, "HKD")}</div>
+        <div className="mt-2 text-xs text-muted">
+          {debtRatio == null
+            ? t.reports.debtRatioZero
+            : t.reports.debtRatio.replace("{pct}", pct(debtRatio))}
+        </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <button type="button" className="rounded-xl bg-success-soft px-3 py-2 text-left" onClick={() => setFocus("assets")}>
+          <button
+            type="button"
+            className={cn(
+              "tr-press rounded-xl bg-success-soft px-3 py-2 text-left transition",
+              focus === "assets" && "ring-2 ring-accent",
+            )}
+            onClick={() => setFocus("assets")}
+          >
             <div className="text-[11px] text-income">{t.assets.totalAssets}</div>
             <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(nw.assets, "HKD")}</div>
           </button>
-          <button type="button" className="rounded-xl bg-expense-soft px-3 py-2 text-left" onClick={() => setFocus("liab")}>
+          <button
+            type="button"
+            className={cn(
+              "tr-press rounded-xl bg-expense-soft px-3 py-2 text-left transition",
+              focus === "liab" && "ring-2 ring-accent",
+            )}
+            onClick={() => setFocus("liab")}
+          >
             <div className="text-[11px] text-expense">{t.assets.totalLiab}</div>
             <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(nw.liab, "HKD")}</div>
           </button>
         </div>
+        <Link to="/reports/worth" className="tr-press mt-3 block rounded-xl bg-background px-3 py-2.5 text-sm">
+          <div className="text-muted">{t.reports.balanceInvestable.replace("{amount}", money(investable || head.investable, "HKD"))}</div>
+          <div className="mt-0.5 text-xs font-medium text-accent">{t.reports.balanceWorthLink}</div>
+        </Link>
       </div>
-      <div className="relative mx-auto h-56 w-56">
+      <div className={cn("rt-enter relative mx-auto h-56 w-56", animate && "rt-chart-draw")}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
@@ -80,6 +112,8 @@ export function BalancePage() {
               outerRadius="88%"
               stroke="none"
               paddingAngle={pie.length > 1 ? 1.2 : 0}
+              isAnimationActive={animate}
+              animationDuration={480}
               onClick={(_, index) => {
                 const row = pie[index];
                 if (row) setFocus(row.id);
@@ -89,6 +123,7 @@ export function BalancePage() {
                 <Cell
                   key={r.id}
                   fill={CHART[r.colorIndex]}
+                  opacity={focus && r.id !== focus && r.id !== "empty" ? 0.45 : 1}
                   className={r.id === "empty" ? undefined : "cursor-pointer outline-none"}
                   onClick={() => {
                     if (r.id !== "empty") setFocus(r.id as "assets" | "liab");
@@ -105,13 +140,16 @@ export function BalancePage() {
           </div>
         </div>
       </div>
-      <div className="px-5 pt-2">
+      <div className="rt-enter-delay px-5 pt-2">
         {pie.map((r) => (
           <button
             key={r.id}
             type="button"
             onClick={() => setFocus(r.id)}
-            className="flex min-h-11 w-full items-center justify-between gap-3 py-2.5 text-left"
+            className={cn(
+              "tr-press flex min-h-11 w-full items-center justify-between gap-3 rounded-lg py-2.5 text-left transition",
+              focus === r.id && "bg-accent-soft/60 px-2",
+            )}
           >
             <div className="flex min-w-0 items-center gap-2.5">
               <span className="size-2.5 shrink-0 rounded-full" style={{ background: CHART[r.colorIndex] }} />
@@ -137,7 +175,7 @@ export function BalancePage() {
             <h1 className="min-w-0 flex-1 truncate text-center text-base font-semibold">{focusLabel}</h1>
             <span className="min-w-11" />
           </header>
-          <div className="relative mx-auto h-56 w-56">
+          <div className={cn("rt-enter relative mx-auto h-56 w-56", animate && "rt-chart-draw")}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -148,6 +186,8 @@ export function BalancePage() {
                   outerRadius="88%"
                   stroke="none"
                   paddingAngle={typed.length > 1 ? 1.2 : 0}
+                  isAnimationActive={animate}
+                  animationDuration={480}
                   onClick={(_, index) => {
                     const row = typed[index];
                     if (row) setOpenId(row.id);
@@ -157,6 +197,7 @@ export function BalancePage() {
                     <Cell
                       key={r.id}
                       fill={CHART[r.colorIndex]}
+                      opacity={openId && r.id !== openId && r.id !== "empty" ? 0.45 : 1}
                       className={r.id === "empty" ? undefined : "cursor-pointer outline-none"}
                       onClick={() => {
                         if (r.id !== "empty") setOpenId(r.id);
@@ -173,13 +214,16 @@ export function BalancePage() {
               </div>
             </div>
           </div>
-          <div className="px-5 pt-2">
+          <div className="rt-enter-delay px-5 pt-2">
             {typed.map((r) => (
               <button
                 key={r.id}
                 type="button"
                 onClick={() => setOpenId(r.id)}
-                className="flex min-h-11 w-full items-center justify-between gap-3 py-2.5 text-left"
+                className={cn(
+                  "tr-press flex min-h-11 w-full items-center justify-between gap-3 rounded-lg py-2.5 text-left transition",
+                  openId === r.id && "bg-accent-soft/60 px-2",
+                )}
               >
                 <div className="flex min-w-0 items-center gap-2.5">
                   <span className="size-2.5 shrink-0 rounded-full" style={{ background: CHART[r.colorIndex] }} />
@@ -218,6 +262,14 @@ function TypeAccountList({
   const t = useT();
   const locale = useUi((s) => s.locale);
   const rates = useApp((s) => s.fxRates);
+  const accounts = useApp((s) => s.accounts);
+  const deposits = useApp((s) => s.deposits);
+  const today = todayISO();
+  const outside =
+    row.id === "deposits" && row.accounts.length === 0
+      ? depositsOutsideBalances(deposits, accounts, rates, today)
+      : [];
+
   return (
     <Overlay open onClose={onClose} variant="page" layer="stack">
       <header className="flex items-center justify-between px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
@@ -227,11 +279,11 @@ function TypeAccountList({
         <h1 className="min-w-0 flex-1 truncate text-center text-base font-semibold">{row.name}</h1>
         <span className="min-w-11" />
       </header>
-      <div className="mx-4 mb-4 mt-2 rounded-xl bg-elevated px-4 py-4">
+      <div className="rt-enter mx-4 mb-4 mt-2 rounded-xl bg-elevated px-4 py-4">
         <div className="text-xs text-muted">{side === "assets" ? t.assets.totalAssets : t.assets.totalLiab}</div>
         <div className="mt-1 text-2xl font-semibold tabular-nums">{money(row.value, "HKD")}</div>
       </div>
-      <div className="px-5">
+      <div className="rt-enter-delay px-5">
         {row.accounts.map((a) => (
           <div key={a.id} className="flex min-h-11 items-center justify-between gap-3 py-2.5">
             <span className="truncate text-sm">{pickName(locale, a.name, a.nameZh)}</span>
@@ -241,7 +293,21 @@ function TypeAccountList({
             </span>
           </div>
         ))}
-        {row.accounts.length === 0 ? <p className="py-6 text-center text-sm text-muted">{t.common.none}</p> : null}
+        {outside.length ? (
+          <>
+            <p className="pb-1 pt-2 text-xs text-muted">{t.reports.balanceTdOutside}</p>
+            {outside.map((d) => (
+              <div key={d.id} className="flex min-h-11 items-center justify-between gap-3 py-2.5">
+                <span className="min-w-0 truncate text-sm">
+                  {d.bank}
+                  {d.endDate ? <span className="ml-1 text-xs text-faint">{d.endDate}</span> : null}
+                </span>
+                <span className="text-sm tabular-nums text-muted">{money(Math.abs(toHkd(d.amount, d.currency, rates)), "HKD")}</span>
+              </div>
+            ))}
+          </>
+        ) : null}
+        {row.accounts.length === 0 && outside.length === 0 ? <p className="py-6 text-center text-sm text-muted">{t.common.none}</p> : null}
       </div>
     </Overlay>
   );
