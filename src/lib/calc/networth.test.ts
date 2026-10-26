@@ -156,6 +156,28 @@ describe("plain transfers do not move reconstructed net worth", () => {
     assert.equal(points.find((p) => p.date === "2026-09-30")?.net, 1_000_000);
   });
 
+  it("does not drop when the destination is counted but credited nothing", () => {
+    const broker: Account = {
+      id: "broker",
+      name: "Broker",
+      nameZh: "證券",
+      type: "investment",
+      currency: "HKD",
+      balance: 2_000_000,
+      includeInNetWorth: true,
+      group: "assets",
+    };
+    const points = periodNetWorthPoints(
+      [{ ...cash, balance: 500_000 }, broker],
+      [tx({ id: "move", type: "transfer", amount: 1_000_000, destAmount: 0, date: "2026-09-07", accountId: "cash", toAccountId: "broker" })],
+      [],
+      "2026-08-01",
+      "2026-10-26",
+    );
+    assert.equal(points.find((p) => p.date === "2026-08-31")?.net, 3_500_000);
+    assert.equal(points.find((p) => p.date === "2026-09-30")?.net, 3_500_000);
+  });
+
   it("lifts a raw snapshot that was saved after the transfer", () => {
     const points = periodNetWorthPoints(
       [{ ...cash, balance: 400_000 }],
