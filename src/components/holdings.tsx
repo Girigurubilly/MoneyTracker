@@ -169,74 +169,48 @@ export function HoldingsPage() {
       <button
         type="button"
         className="tr-press mx-4 mt-3 flex h-11 min-h-11 w-[calc(100%-2rem)] items-center justify-center gap-1.5 rounded-xl bg-elevated text-sm"
-        onClick={() => setShowAdd((v) => !v)}
+        onClick={() => setShowAdd(true)}
       >
         <Plus className="size-4" />
         {t.holdings.manual}
       </button>
       {showAdd ? (
-        <div className="rt-enter mx-4 mt-2 space-y-2">
-          <div className="flex gap-2">
-            {(["hk", "us", "lse"] as HoldingListing[]).map((id) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => {
-                  setAddMarket(id);
-                  setAddCcy(defaultListingCurrency(id));
-                }}
-                className={cn("rt-chip-pill tr-press flex h-11 min-h-11 flex-1 items-center justify-center rounded-xl text-sm font-medium", addMarket === id ? "bg-accent text-on-accent" : "bg-elevated")}
-              >
-                {id === "hk" ? t.holdings.hk : id === "lse" ? t.holdings.lse : t.holdings.us}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <input value={symbol} onChange={(e) => setSymbol(e.target.value)} placeholder={addMarket === "lse" ? "VXUS" : t.holdings.symbol} className="h-11 min-w-0 flex-1 rounded-xl bg-elevated px-3 text-sm" />
-            <input value={qty} onChange={(e) => setQty(e.target.value)} placeholder={t.holdings.qty} inputMode="decimal" className="h-11 w-20 shrink-0 rounded-xl bg-elevated px-2 text-sm" />
-          </div>
-          <div className="flex gap-2">
-            <select
-              value={addCcy}
-              onChange={(e) => setAddCcy(e.target.value as Currency)}
-              className="h-11 min-w-0 flex-1 rounded-xl bg-elevated px-3 text-sm"
-              aria-label={t.holdings.currency}
-            >
-              {holdingCurrencies(addCcy).map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="tr-press h-11 min-h-11 shrink-0 rounded-xl bg-accent px-4 text-sm font-semibold text-on-accent"
-              onClick={() => {
-                const q = Number(qty.replace(/,/g, ""));
-                const s = symbol.trim().toUpperCase();
-                if (!s || !q) {
-                  toast(t.holdings.needFields);
-                  return;
-                }
-                const listed = applyListing(addMarket, s);
-                void upsert({
-                  id: newId(),
-                  symbol: listed.symbol,
-                  name: listed.symbol,
-                  market: listed.market,
-                  source: "manual",
-                  quantity: q,
-                  currency: addCcy,
-                  lastPrice: 0,
-                });
-                setSymbol("");
-                setQty("");
-              }}
-            >
-              {t.holdings.add}
-            </button>
-          </div>
-        </div>
+        <AddHoldingSheet
+          market={addMarket}
+          currency={addCcy}
+          symbol={symbol}
+          qty={qty}
+          onMarket={(id) => {
+            setAddMarket(id);
+            setAddCcy(defaultListingCurrency(id));
+          }}
+          onCurrency={setAddCcy}
+          onSymbol={setSymbol}
+          onQty={setQty}
+          onClose={() => setShowAdd(false)}
+          onAdd={() => {
+            const q = Number(qty.replace(/,/g, ""));
+            const s = symbol.trim().toUpperCase();
+            if (!s || !q) {
+              toast(t.holdings.needFields);
+              return;
+            }
+            const listed = applyListing(addMarket, s);
+            void upsert({
+              id: newId(),
+              symbol: listed.symbol,
+              name: listed.symbol,
+              market: listed.market,
+              source: "manual",
+              quantity: q,
+              currency: addCcy,
+              lastPrice: 0,
+            });
+            setSymbol("");
+            setQty("");
+            setShowAdd(false);
+          }}
+        />
       ) : null}
 
       <div className="rt-enter-delay pt-4">
@@ -283,6 +257,85 @@ export function HoldingsPage() {
       </div>
       {editing ? <HoldingEditor holding={editing} onClose={() => setEditing(null)} /> : null}
     </div>
+  );
+}
+
+function AddHoldingSheet({
+  market,
+  currency,
+  symbol,
+  qty,
+  onMarket,
+  onCurrency,
+  onSymbol,
+  onQty,
+  onClose,
+  onAdd,
+}: {
+  market: HoldingListing;
+  currency: Currency;
+  symbol: string;
+  qty: string;
+  onMarket: (id: HoldingListing) => void;
+  onCurrency: (c: Currency) => void;
+  onSymbol: (v: string) => void;
+  onQty: (v: string) => void;
+  onClose: () => void;
+  onAdd: () => void;
+}) {
+  const t = useT();
+  return (
+    <Overlay open onClose={onClose} title={t.holdings.manual} variant="sheet">
+      <div className="rt-enter space-y-3 px-5 pb-4 pt-1">
+        <div className="flex gap-2">
+          {(["hk", "us", "lse"] as HoldingListing[]).map((id) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onMarket(id)}
+              className={cn(
+                "rt-chip-pill tr-press flex h-11 min-h-11 flex-1 items-center justify-center rounded-xl text-sm font-medium",
+                market === id ? "bg-accent text-on-accent" : "bg-elevated",
+              )}
+            >
+              {id === "hk" ? t.holdings.hk : id === "lse" ? t.holdings.lse : t.holdings.us}
+            </button>
+          ))}
+        </div>
+        <label className="block text-[11px] text-muted">{t.holdings.symbol}</label>
+        <input
+          value={symbol}
+          onChange={(e) => onSymbol(e.target.value)}
+          placeholder={market === "lse" ? "VXUS" : t.holdings.symbol}
+          className="h-11 min-h-11 w-full rounded-xl bg-elevated px-3 text-sm"
+          autoFocus
+        />
+        <label className="block text-[11px] text-muted">{t.holdings.qty}</label>
+        <input
+          value={qty}
+          onChange={(e) => onQty(e.target.value)}
+          placeholder={t.holdings.qty}
+          inputMode="decimal"
+          className="h-11 min-h-11 w-full rounded-xl bg-elevated px-3 text-sm"
+        />
+        <label className="block text-[11px] text-muted">{t.holdings.currency}</label>
+        <select
+          value={currency}
+          onChange={(e) => onCurrency(e.target.value as Currency)}
+          className="h-11 min-h-11 w-full rounded-xl bg-elevated px-3 text-sm"
+          aria-label={t.holdings.currency}
+        >
+          {holdingCurrencies(currency).map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        <button type="button" className="tr-press h-12 min-h-12 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={onAdd}>
+          {t.holdings.add}
+        </button>
+      </div>
+    </Overlay>
   );
 }
 

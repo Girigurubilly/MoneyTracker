@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { CategoryPicker } from "@/components/category-picker";
 import { CategoryIcon } from "@/components/category-icon";
@@ -82,13 +82,21 @@ export function WishlistBlock({ compact }: { compact?: boolean }) {
               return (
                 <div key={it.id}>
                   {i > 0 ? <Hairline /> : null}
-                  <div className="flex min-h-11 items-center gap-2 px-4 py-2.5">
+                  <div className="flex min-h-11 items-center gap-1 px-3 py-2.5">
                     <button type="button" className="tr-press min-w-0 flex-1 text-left" onClick={() => setBoard(it)}>
                       <div className="truncate text-sm font-medium">{it.name}</div>
                       <div className="mt-0.5 text-xs tabular-nums text-muted">
                         {money(it.price, it.currency)}
                         {notes ? (locale === "zh-HK" ? ` · ${notes} 張卡` : ` · ${notes} cards`) : ""}
                       </div>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={t.wish.edit}
+                      className="tr-press grid size-11 shrink-0 place-items-center text-muted"
+                      onClick={() => setEditing(it)}
+                    >
+                      <Pencil className="size-4" />
                     </button>
                     <button
                       type="button"
@@ -185,18 +193,21 @@ function WishBoard({
           {t.wish.edit}
         </button>
       </header>
-      <div className="rt-enter px-5 pb-1 pt-1">
-        <p className="text-sm font-semibold tabular-nums">{money(item.price, item.currency)}</p>
-        <p className="pb-2 pt-1 text-xs leading-5 text-muted">{t.wish.boardHint}</p>
+      <div className="rt-enter px-4 pb-2 pt-1">
+        <button type="button" className="tr-press text-left" onClick={() => onEdit(item)}>
+          <p className="text-sm font-semibold tabular-nums text-accent">{money(item.price, item.currency)}</p>
+          <p className="pt-0.5 text-[11px] text-muted">{t.wish.edit}</p>
+        </button>
+        <p className="pb-2 pt-2 text-xs leading-5 text-muted">{t.wish.boardHint}</p>
         <button
           type="button"
-          className="tr-press mb-3 inline-flex h-11 min-h-11 items-center rounded-full bg-accent-soft px-4 text-xs font-medium text-accent"
+          className="tr-press mb-2 inline-flex h-11 min-h-11 items-center rounded-full bg-accent-soft px-4 text-xs font-medium text-accent"
           onClick={() => onConvert(item)}
         >
           {t.wish.convert}
         </button>
       </div>
-      <div className="grid grid-cols-2 gap-2 px-3 pb-10">
+      <div className="grid grid-cols-2 gap-1.5 px-2 pb-6">
         <WishColumn
           title={t.wish.priceCol}
           cards={item.priceCards ?? []}
@@ -241,7 +252,7 @@ function WishColumn({
     setDraft("");
   }
   return (
-    <section className="rt-enter min-h-[16rem] rounded-2xl bg-elevated px-2 py-2">
+    <section className="rt-enter rounded-2xl bg-elevated px-1.5 py-2">
       <h2 className="px-1 pb-2 text-xs font-semibold text-muted">{title}</h2>
       <div className="space-y-2">
         {cards.map((card) => (
@@ -290,6 +301,7 @@ function WishEditor({
   const [name, setName] = useState(initial?.name ?? "");
   const [price, setPrice] = useState(initial ? String(initial.price) : "");
   const [currency, setCurrency] = useState<Currency>(initial?.currency ?? defaultCurrency);
+  const [pad, setPad] = useState(false);
 
   function save() {
     const n = name.trim();
@@ -306,23 +318,27 @@ function WishEditor({
       <ComposerShell
         header={<ComposerHeader onClose={onClose} onSave={save} title={initial ? t.common.edit : t.wish.add} />}
         keypad={
-          <ActiveKeypad
-            field="amount"
-            amount={price}
-            dest=""
-            principal=""
-            interest=""
-            setAmount={setPrice}
-            setDest={() => undefined}
-            setPrincipal={() => undefined}
-            setInterest={() => undefined}
-            currency={currency}
-            onCurrency={setCurrency}
-          />
+          pad ? (
+            <ActiveKeypad
+              field="amount"
+              amount={price}
+              dest=""
+              principal=""
+              interest=""
+              setAmount={setPrice}
+              setDest={() => undefined}
+              setPrincipal={() => undefined}
+              setInterest={() => undefined}
+              currency={currency}
+              onCurrency={setCurrency}
+            />
+          ) : null
         }
       >
-        <TextLine value={name} onChange={setName} placeholder={t.wish.name} />
-        <LineRow label={t.wish.price} amount={price} active onFocusAmount={() => undefined} />
+        <div className="rt-enter" onFocusCapture={() => setPad(false)} onClick={() => setPad(false)}>
+          <TextLine value={name} onChange={setName} placeholder={t.wish.name} />
+        </div>
+        <LineRow label={t.wish.price} amount={price} active={pad} onFocusAmount={() => setPad(true)} />
       </ComposerShell>
     </Overlay>
   );
@@ -482,21 +498,7 @@ function ConvertSheet({ item, onClose }: { item: WishItem; onClose: () => void }
     <Overlay open onClose={onClose} variant="page">
       <ComposerShell
         header={<ComposerHeader onClose={() => setDest("choose")} onSave={() => void saveExpense()} title={t.wish.convert} />}
-        keypad={
-          <ActiveKeypad
-            field="amount"
-            amount={String(item.price)}
-            dest=""
-            principal=""
-            interest=""
-            setAmount={() => undefined}
-            setDest={() => undefined}
-            setPrincipal={() => undefined}
-            setInterest={() => undefined}
-            currency={item.currency}
-            onCurrency={() => undefined}
-          />
-        }
+        keypad={null}
       >
         <LineRow label={item.name} amount={String(item.price)} />
         <AccountLine accounts={accounts} value={accountId} onChange={setAccountId} placeholder={t.add.account} />

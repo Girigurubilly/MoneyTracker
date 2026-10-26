@@ -163,11 +163,13 @@ export function RetirementAccountsPage() {
             ))}
           </Group>
         </div>
-      ) : (
+      ) : !mpfFromAssets && !mpfSuggestion ? (
         <div className="rt-enter-delay mx-4 mb-2 rounded-2xl bg-elevated px-4 py-6 text-center">
           <p className="text-sm font-medium">{t.reports.raEmpty}</p>
           <p className="mt-1 text-xs leading-5 text-muted">{t.reports.raEmptyHint}</p>
         </div>
+      ) : (
+        <p className="rt-enter-delay px-5 pb-2 text-xs leading-5 text-muted">{t.reports.raEmptyHint}</p>
       )}
       {editing ? (
         <AccountEditor
@@ -238,7 +240,9 @@ function AccountEditor({ initial, isNew, onClose }: { initial: RetirementAccount
   const [years, setYears] = useState(yearsDefault);
   const [startAge, setStartAge] = useState(row.scheduledIncomeStartAge ?? row.accessibleAge);
   const [more, setMore] = useState(false);
+  const [pad, setPad] = useState(false);
   const patch = (p: Partial<RetirementAccount>) => setRow((r) => ({ ...r, ...p, updatedAt: new Date().toISOString() }));
+  const dismissPad = () => setPad(false);
 
   function changeType(type: RetirementAccountType) {
     const next = { ...blankRetirementAccount(type), id: row.id, name: row.name || blankRetirementAccount(type).name, currentBalance: row.currentBalance };
@@ -273,22 +277,24 @@ function AccountEditor({ initial, isNew, onClose }: { initial: RetirementAccount
       <ComposerShell
         header={<ComposerHeader onClose={onClose} onSave={save} title={isNew ? t.reports.raAdd : row.name} />}
         keypad={
-          <ActiveKeypad
-            field="amount"
-            amount={amount}
-            dest=""
-            principal=""
-            interest=""
-            setAmount={setAmount}
-            setDest={() => undefined}
-            setPrincipal={() => undefined}
-            setInterest={() => undefined}
-            currency={row.currency}
-            onCurrency={() => undefined}
-          />
+          pad ? (
+            <ActiveKeypad
+              field="amount"
+              amount={amount}
+              dest=""
+              principal=""
+              interest=""
+              setAmount={setAmount}
+              setDest={() => undefined}
+              setPrincipal={() => undefined}
+              setInterest={() => undefined}
+              currency={row.currency}
+              onCurrency={() => undefined}
+            />
+          ) : null
         }
       >
-        <div className="flex flex-wrap gap-1.5 border-b border-line px-4 py-3">
+        <div className="flex flex-wrap gap-1.5 border-b border-line px-4 py-3" onClick={dismissPad}>
           {TYPES.map((type) => (
             <button
               key={type}
@@ -303,34 +309,47 @@ function AccountEditor({ initial, isNew, onClose }: { initial: RetirementAccount
             </button>
           ))}
         </div>
-        <TextLine value={row.name} onChange={(v) => patch({ name: v })} placeholder={t.common.name} />
+        <div onFocusCapture={dismissPad} onClick={dismissPad}>
+          <TextLine value={row.name} onChange={(v) => patch({ name: v })} placeholder={t.common.name} />
+        </div>
         {payout ? (
           <>
             <LineRow
               label={t.reports.raMonthlyPayout}
               amount={amount || "0"}
-              active
-              onFocusAmount={() => undefined}
+              active={pad}
+              onFocusAmount={() => setPad(true)}
             />
             <p className="px-4 py-2 text-xs leading-5 text-muted">{t.reports.raPayoutHint}</p>
-            <StepperRow label={t.reports.raStartPayout} value={startAge} min={40} max={90} onChange={setStartAge} />
-            <YearChips years={years} onChange={setYears} lifetimeLabel={t.reports.raLifetime} yearsLabel={t.reports.raYears} />
+            <div onClick={dismissPad}>
+              <StepperRow label={t.reports.raStartPayout} value={startAge} min={40} max={90} onChange={setStartAge} />
+              <YearChips years={years} onChange={setYears} lifetimeLabel={t.reports.raLifetime} yearsLabel={t.reports.raYears} />
+            </div>
           </>
         ) : (
           <>
-            <LineRow label={t.reports.raBalance} amount={amount || "0"} active onFocusAmount={() => undefined} />
-            <StepperRow label={t.reports.raAccess} value={row.accessibleAge} min={50} max={75} onChange={(n) => patch({ accessibleAge: n })} />
-            <NumLine label={t.reports.raEmployee} value={row.employeeContributionAmount} onChange={(n) => patch({ employeeContributionAmount: n })} />
-            <NumLine label={t.reports.raEmployer} value={row.employerContributionAmount} onChange={(n) => patch({ employerContributionAmount: n })} />
-            <NumLine label={t.reports.raVoluntary} value={row.voluntaryContributionAmount} onChange={(n) => patch({ voluntaryContributionAmount: n })} />
-            <NumLine label={`${t.reports.expectedReturn} %`} value={+(row.expectedAnnualReturnRate * 100).toFixed(2)} onChange={(n) => patch({ expectedAnnualReturnRate: n / 100 })} />
+            <LineRow label={t.reports.raBalance} amount={amount || "0"} active={pad} onFocusAmount={() => setPad(true)} />
+            <div onClick={dismissPad} onFocusCapture={dismissPad}>
+              <StepperRow label={t.reports.raAccess} value={row.accessibleAge} min={50} max={75} onChange={(n) => patch({ accessibleAge: n })} />
+              <NumLine label={t.reports.raEmployee} value={row.employeeContributionAmount} onChange={(n) => patch({ employeeContributionAmount: n })} />
+              <NumLine label={t.reports.raEmployer} value={row.employerContributionAmount} onChange={(n) => patch({ employerContributionAmount: n })} />
+              <NumLine label={t.reports.raVoluntary} value={row.voluntaryContributionAmount} onChange={(n) => patch({ voluntaryContributionAmount: n })} />
+              <NumLine label={`${t.reports.expectedReturn} %`} value={+(row.expectedAnnualReturnRate * 100).toFixed(2)} onChange={(n) => patch({ expectedAnnualReturnRate: n / 100 })} />
+            </div>
           </>
         )}
-        <button type="button" className="tr-press flex h-11 min-h-11 w-full items-center justify-center text-sm text-accent" onClick={() => setMore((v) => !v)}>
+        <button
+          type="button"
+          className="tr-press flex h-11 min-h-11 w-full items-center justify-center text-sm text-accent"
+          onClick={() => {
+            dismissPad();
+            setMore((v) => !v);
+          }}
+        >
           {more ? t.reports.raHideMore : t.reports.raMore}
         </button>
         {more ? (
-          <>
+          <div onFocusCapture={dismissPad} onClick={dismissPad}>
             <TextLine value={row.provider ?? ""} onChange={(v) => patch({ provider: v })} placeholder={t.reports.raProvider} />
             {payout ? (
               <NumLine label={t.reports.raBalance} value={row.currentBalance} onChange={(n) => patch({ currentBalance: n })} />
@@ -361,7 +380,7 @@ function AccountEditor({ initial, isNew, onClose }: { initial: RetirementAccount
                 </label>
               </>
             )}
-          </>
+          </div>
         ) : null}
         {isNew ? null : (
           <button
@@ -592,6 +611,7 @@ function IncomeEditor({
   const t = useT();
   const [row, setRow] = useState(initial);
   const [amount, setAmount] = useState(String(row.monthly || ""));
+  const [pad, setPad] = useState(false);
 
   function save() {
     const monthly = resolveAmountInput(amount);
@@ -608,31 +628,37 @@ function IncomeEditor({
       <ComposerShell
         header={<ComposerHeader onClose={onClose} onSave={save} title={kindLabel(row.kind, t)} />}
         keypad={
-          <ActiveKeypad
-            field="amount"
-            amount={amount}
-            dest=""
-            principal=""
-            interest=""
-            setAmount={setAmount}
-            setDest={() => undefined}
-            setPrincipal={() => undefined}
-            setInterest={() => undefined}
-            currency="HKD"
-            onCurrency={() => undefined}
-          />
+          pad ? (
+            <ActiveKeypad
+              field="amount"
+              amount={amount}
+              dest=""
+              principal=""
+              interest=""
+              setAmount={setAmount}
+              setDest={() => undefined}
+              setPrincipal={() => undefined}
+              setInterest={() => undefined}
+              currency="HKD"
+              onCurrency={() => undefined}
+            />
+          ) : null
         }
       >
         {row.kind === "other" ? (
-          <TextLine
-            value={row.labelZh || row.label}
-            onChange={(v) => setRow((r) => ({ ...r, label: v, labelZh: v }))}
-            placeholder={t.common.name}
-          />
+          <div onFocusCapture={() => setPad(false)} onClick={() => setPad(false)}>
+            <TextLine
+              value={row.labelZh || row.label}
+              onChange={(v) => setRow((r) => ({ ...r, label: v, labelZh: v }))}
+              placeholder={t.common.name}
+            />
+          </div>
         ) : null}
-        <LineRow label={t.reports.allowanceMonthly} amount={amount || "0"} active onFocusAmount={() => undefined} />
-        <StepperRow label={t.reports.startAge} value={row.startAge} min={60} max={90} onChange={(n) => setRow((r) => ({ ...r, startAge: n }))} />
-        <label className="flex items-center gap-2 px-4 py-3 text-sm">
+        <LineRow label={t.reports.allowanceMonthly} amount={amount || "0"} active={pad} onFocusAmount={() => setPad(true)} />
+        <div onClick={() => setPad(false)}>
+          <StepperRow label={t.reports.startAge} value={row.startAge} min={60} max={90} onChange={(n) => setRow((r) => ({ ...r, startAge: n }))} />
+        </div>
+        <label className="flex items-center gap-2 px-4 py-3 text-sm" onClick={() => setPad(false)}>
           <input
             type="checkbox"
             checked={row.inflationAdjusted}
