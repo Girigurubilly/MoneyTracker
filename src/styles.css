@@ -466,3 +466,23 @@ html[data-font="serif"] {
   scroll-snap-align: start;
   flex-shrink: 0;
 }
+
+
+/* Prices sparkline draw-once */
+@media (prefers-reduced-motion: no-preference) {
+  .rt-spark-draw {
+    stroke-dasharray: 800;
+    stroke-dashoffset: 800;
+    animation: rt-draw 500ms ease-out forwards;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rt-spark-draw {
+    animation: none !important;
+    stroke-dasharray: none !important;
+    stroke-dashoffset: 0 !important;
+  }
+  .animate-spin {
+    animation: none !important;
+  }
+}

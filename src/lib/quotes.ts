@@ -1,5 +1,5 @@
 import { isLondonEtf, normalizeSymbol, yahooSymbol } from "./holdings.ts";
-import { convertAmount } from "./calc/fx.ts";
+import { convertAmount, toHkd } from "./calc/fx.ts";
 import type { Currency, FxRate, HoldingMarket } from "./types.ts";
 
 export type QuoteHit = { price: number; name?: string; prevClose?: number; currency?: Currency; pence?: boolean };
@@ -485,4 +485,44 @@ export async function fetchHoldingMoves(
 
   if (gen === moveGen) moveCache.set(cacheKey, { at: Date.now(), data: out });
   return out;
+}
+
+export type SparkPt = { date: string; value: number };
+
+/** HKD portfolio path for the selected range (downsampled). Used once for the prices sparkline. */
+export async function fetchPortfolioSparkline(
+  rows: { market: HoldingMarket; symbol: string; quantity: number; currency: Currency; lastPrice: number }[],
+  range: PriceRange,
+  rates: FxRate[],
+): Promise<number[]> {
+  if (!rows.length) return [];
+  const series = await Promise.all(
+    rows.map(async (r) => {
+      const pts = await historyFor(r.market, r.symbol, range);
+      return { r, pts };
+    }),
+  );
+  const dates = new Set<string>();
+  for (const s of series) for (const p of s.pts) dates.add(p.date);
+  const sorted = [...dates].sort();
+  if (sorted.length < 2) {
+    let now = 0;
+    let start = 0;
+    for (const r of rows) {
+      const mv = r.lastPrice || 0;
+      now += toHkd(r.quantity * mv, r.currency, rates);
+      start += toHkd(r.quantity * mv, r.currency, rates);
+    }
+    return start || now ? [start || now, now] : [];
+  }
+  const step = Math.max(1, Math.floor(sorted.length / 48));
+  const picked = sorted.filter((_, i) => i % step === 0 || i === sorted.length - 1);
+  return picked.map((d) => {
+    let sum = 0;
+    for (const s of series) {
+      const close = closeOnOrBefore(s.pts, d) ?? s.r.lastPrice;
+      if (close > 0) sum += toHkd(s.r.quantity * close, s.r.currency, rates);
+    }
+    return sum;
+  });
 }

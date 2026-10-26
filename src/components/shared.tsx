@@ -244,7 +244,7 @@ export function Overlay({
         {title ? (
           <div className="flex items-center justify-between px-5 pb-2 pt-3">
             <h2 className="text-base font-semibold">{title}</h2>
-            <button type="button" onClick={onClose} className="text-sm text-accent">
+            <button type="button" onClick={onClose} className="tr-press inline-flex min-h-11 min-w-11 items-center justify-center px-2 text-sm font-medium text-accent">
               {t.common.close}
             </button>
           </div>
