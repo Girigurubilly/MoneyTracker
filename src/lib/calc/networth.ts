@@ -16,23 +16,23 @@ export function countsInNetWorth(a: Account): boolean {
   return Boolean(a.includeInNetWorth);
 }
 
-/** HKD a plain transfer removes from counted net worth. Negative when money leaves.
- *  Both sides inside the total, or a spend-like transfer, return 0.
+/** Counted HKD effect of a plain transfer. Negative when net worth falls.
+ *  A transfer that stays inside the total and balances out returns 0.
+ *  Inflows (effect > 0) are left alone.
  */
 export function plainTransferLeakHkd(tx: Transaction, accounts: Account[], rates: FxRate[]): number {
   if (tx.planned || tx.type !== "transfer" || tx.countsAsExpense) return 0;
-  const src = accounts.find((a) => a.id === tx.accountId);
-  const dest = tx.toAccountId ? accounts.find((a) => a.id === tx.toAccountId) : undefined;
-  const srcCounts = Boolean(src && countsInNetWorth(src));
-  const destCounts = Boolean(dest && countsInNetWorth(dest));
-  if (!srcCounts || destCounts) return 0;
   let hkd = 0;
+  let touched = false;
   for (const d of balanceDeltas(tx, accounts, rates)) {
     const acc = accounts.find((a) => a.id === d.accountId);
     if (!acc || !countsInNetWorth(acc)) continue;
+    touched = true;
     hkd += toHkd(d.delta, acc.currency, rates);
   }
-  return round2(hkd);
+  if (!touched) return 0;
+  const effect = round2(hkd);
+  return effect < -0.005 ? effect : 0;
 }
 
 /** Add-back so a plain transfer that leaves the counted accounts does not move net worth. */
