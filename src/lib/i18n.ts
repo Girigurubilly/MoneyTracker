@@ -308,6 +308,11 @@ export const messages = {
       emptyHint: "Add something you are thinking about buying. Hold it against this month’s budget, or record it when you buy.",
       edit: "Edit item",
       remove: "Remove",
+      prosCol: "Pros",
+      consCol: "Cons",
+      addCard: "Add a card",
+      cardPlaceholder: "Write a point…",
+      boardHint: "Add pros and cons before you buy — tap a card column to jot reasons.",
     },
     holdings: {
       title: "Stocks & holdings",
@@ -1669,6 +1674,11 @@ export const messages = {
       emptyHint: "加入你想買嘅嘢。可以先佔本月臨時預算，或者買咗之後轉成開支。",
       edit: "編輯項目",
       remove: "刪除",
+      prosCol: "優點",
+      consCol: "缺點",
+      addCard: "新增卡片",
+      cardPlaceholder: "寫一點想法…",
+      boardHint: "買之前喺優點／缺點欄加卡片，方便比較再決定。",
     },
     holdings: {
       title: "股票持股",
