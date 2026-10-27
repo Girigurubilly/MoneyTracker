@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Link, Navigate, useRouterState } from "@tanstack/react-router";
-import { BarChart3, Bone, Building2, Cat, Cpu, Fish, Heart, Home, Landmark, Leaf, Moon, MoreHorizontal, PawPrint, PieChart, Plus, Sparkles, TreePine, Wallet, WalletCards } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
@@ -8,6 +8,8 @@ import { useT, useUi, readOnboarded } from "@/store/ui";
 import { isDarkTheme } from "@/lib/theme";
 import { applyPwaIcon, readSavedPwaIcon } from "@/lib/pwa-icon";
 import { Overlay } from "@/components/shared";
+import { CategoryIcon } from "@/components/category-icon";
+import { defaultNavIcons, type NavSlot } from "@/lib/nav-icons";
 import { AddFlow } from "@/components/add-sheet";
 import { SearchFlow } from "@/components/search-sheet";
 import { TxDetail } from "@/components/tx-detail";
@@ -197,31 +199,16 @@ function Nav() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const access = useUi((s) => s.accessMode);
   const theme = useUi((s) => s.theme);
-  const pack =
-    theme === "shiba"
-      ? { today: PawPrint, assets: Bone, budget: Heart, reports: Home, more: MoreHorizontal }
-      : theme === "cat"
-        ? { today: Cat, assets: Fish, budget: Heart, reports: Home, more: MoreHorizontal }
-        : theme === "panda"
-          ? { today: Leaf, assets: TreePine, budget: Heart, reports: Home, more: MoreHorizontal }
-          : theme === "hongkong"
-            ? { today: Landmark, assets: Building2, budget: PieChart, reports: BarChart3, more: MoreHorizontal }
-            : theme === "anime"
-              ? { today: Sparkles, assets: Heart, budget: PieChart, reports: BarChart3, more: MoreHorizontal }
-              : theme === "pinky"
-                ? { today: Heart, assets: WalletCards, budget: PieChart, reports: BarChart3, more: MoreHorizontal }
-                : theme === "cyberpunk"
-                  ? { today: Cpu, assets: WalletCards, budget: PieChart, reports: BarChart3, more: MoreHorizontal }
-                  : theme === "dark"
-                    ? { today: Moon, assets: WalletCards, budget: PieChart, reports: BarChart3, more: MoreHorizontal }
-                    : { today: Wallet, assets: WalletCards, budget: PieChart, reports: BarChart3, more: MoreHorizontal };
+  const navIcons = useUi((s) => s.navIcons);
+  const defaults = defaultNavIcons(theme);
+  const iconFor = (slot: NavSlot) => navIcons[slot] ?? defaults[slot];
   const all = [
-    { to: "/", label: t.nav.today, icon: pack.today, match: (p: string) => p === "/" },
-    { to: "/assets", label: t.nav.assets, icon: pack.assets, match: (p: string) => p.startsWith("/assets") },
-    { to: "/budget", label: t.nav.budget, icon: pack.budget, match: (p: string) => p.startsWith("/budget") },
-    { to: "/reports", label: t.nav.reports, icon: pack.reports, match: (p: string) => p.startsWith("/reports") },
-    { to: "/more", label: t.nav.more, icon: pack.more, match: (p: string) => p.startsWith("/more") },
-  ] as const;
+    { to: "/", slot: "today" as const, label: t.nav.today, match: (p: string) => p === "/" },
+    { to: "/assets", slot: "assets" as const, label: t.nav.assets, match: (p: string) => p.startsWith("/assets") },
+    { to: "/budget", slot: "budget" as const, label: t.nav.budget, match: (p: string) => p.startsWith("/budget") },
+    { to: "/reports", slot: "reports" as const, label: t.nav.reports, match: (p: string) => p.startsWith("/reports") },
+    { to: "/more", slot: "more" as const, label: t.nav.more, match: (p: string) => p.startsWith("/more") },
+  ];
   const items = access === "kid" ? all.filter((it) => it.to !== "/reports") : all;
   const cols = items.length === 4 ? "grid-cols-4" : items.length === 3 ? "grid-cols-3" : "grid-cols-5";
   return (
@@ -230,7 +217,7 @@ function Nav() {
         <div className={cn("mx-auto grid max-w-lg", cols)}>
           {items.map((it) => (
             <Link key={it.to} to={it.to} className={cn("flex h-16 flex-col items-center justify-center gap-0.5 text-xs", access === "elderly" && "h-[4.5rem] text-sm", it.match(path) ? "text-accent" : "text-muted")}>
-              <it.icon className={access === "elderly" ? "size-6" : "size-5"} />
+              <CategoryIcon name={iconFor(it.slot)} className={access === "elderly" ? "size-6" : "size-5"} />
               {it.label}
             </Link>
           ))}
@@ -240,7 +227,7 @@ function Nav() {
         <div className="mb-6 text-lg font-semibold">{t.app}</div>
         {items.map((it) => (
           <Link key={it.to} to={it.to} className={cn("flex items-center gap-2 rounded-lg px-3 py-2 text-sm", it.match(path) ? "bg-accent-soft text-accent" : "text-muted")}>
-            <it.icon className="size-4" />
+            <CategoryIcon name={iconFor(it.slot)} className="size-4" />
             {it.label}
           </Link>
         ))}

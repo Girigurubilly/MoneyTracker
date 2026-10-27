@@ -278,7 +278,23 @@ export type CategoryIconName =
   | "taxi"
   | "parking"
   | "cookie"
-  | "soup";
+  | "soup"
+  | "pen"
+  | "highlighter"
+  | "chart"
+  | "candle"
+  | "atom"
+  | "orbit"
+  | "flame"
+  | "wand"
+  | "star"
+  | "clover"
+  | "sprout"
+  | "sailboat"
+  | "pie"
+  | "bars"
+  | "cards"
+  | "more";
 
 export type CategoryIconGroupId =
   | "financial"
@@ -303,7 +319,8 @@ export type CategoryIconGroupId =
   | "sport"
   | "times"
   | "subscriptions"
-  | "nature";
+  | "nature"
+  | "themes";
 
 export const CATEGORY_ICON_GROUPS: { id: CategoryIconGroupId; icons: CategoryIconName[] }[] = [
   { id: "financial", icons: ["wallet", "coins", "dollar", "piggy", "landmark", "trending", "card", "banknote", "receipt", "percent", "calculator", "vault"] },
@@ -329,6 +346,10 @@ export const CATEGORY_ICON_GROUPS: { id: CategoryIconGroupId; icons: CategoryIco
   { id: "times", icons: ["clock", "calendar", "hourglass", "timer", "alarm", "bell"] },
   { id: "subscriptions", icons: ["repeat", "newspaper", "podcast", "play", "crown", "rss"] },
   { id: "nature", icons: ["leaf", "tree", "mountain", "flower", "waves"] },
+  {
+    id: "themes",
+    icons: ["pen", "highlighter", "chart", "candle", "atom", "orbit", "flame", "wand", "star", "clover", "sprout", "sailboat", "pie", "bars", "cards", "more"],
+  },
 ];
 
 export const CATEGORY_ICONS: CategoryIconName[] = CATEGORY_ICON_GROUPS.flatMap((g) => g.icons);

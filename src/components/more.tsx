@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { Archive, BookOpen, CalendarClock, Check, FolderTree, Globe, Palette, PiggyBank, Settings2, ShoppingBag, SlidersHorizontal, TrendingUp, Undo2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
+import { CategoryIcon, IconGrid } from "@/components/category-icon";
 import { Disclaimer, Group, Hairline, Overlay, Row, ScreenHeader, SectionLabel } from "@/components/shared";
+import { defaultNavIcons, NAV_SLOTS, type NavSlot } from "@/lib/nav-icons";
 import { CurrencySelect } from "@/components/currency-field";
 import { CategoryPicker } from "@/components/category-picker";
 import { pickName } from "@/lib/i18n";
@@ -823,6 +825,11 @@ export function AppearancePage() {
   const depth = custom.depth ?? (theme === "mist" || theme === "ink" ? "soft" : "flat");
   const glow = custom.glow ?? (theme === "cyberpunk" ? "soft" : "off");
   const wallpaperRef = useRef<HTMLInputElement>(null);
+  const navIcons = useUi((s) => s.navIcons);
+  const setNavIcon = useUi((s) => s.setNavIcon);
+  const resetNavIcons = useUi((s) => s.resetNavIcons);
+  const [navPick, setNavPick] = useState<NavSlot | null>(null);
+  const navDefaults = defaultNavIcons(theme);
   const radiusLabels: Record<RadiusId, string> = {
     tight: t.more.shapeTight,
     regular: t.more.shapeRegular,
@@ -994,6 +1001,37 @@ export function AppearancePage() {
           );
         })}
       </div>
+      <h2 className="px-5 pb-2 pt-6 text-sm font-medium text-muted">{t.more.navIcons}</h2>
+      <p className="px-5 pb-3 text-xs text-muted">{t.more.navIconsHint}</p>
+      <Group>
+        {NAV_SLOTS.map((slot, i) => (
+          <div key={slot}>
+            {i > 0 ? <Hairline /> : null}
+            <button type="button" onClick={() => setNavPick(slot)} className="flex w-full items-center gap-3 px-4 py-3 text-left">
+              <span className="grid size-9 place-items-center rounded-full bg-background text-accent">
+                <CategoryIcon name={navIcons[slot] ?? navDefaults[slot]} className="size-4" />
+              </span>
+              <span className="min-w-0 flex-1 text-sm">{t.nav[slot]}</span>
+            </button>
+          </div>
+        ))}
+      </Group>
+      <div className="px-5 pt-3">
+        <button type="button" className="h-11 w-full rounded-xl bg-elevated text-sm" onClick={resetNavIcons}>
+          {t.more.resetNavIcons}
+        </button>
+      </div>
+      <Overlay open={navPick !== null} onClose={() => setNavPick(null)} title={navPick ? t.nav[navPick] : t.more.navIcons}>
+        <div className="max-h-[70vh] overflow-y-auto px-4 pb-8">
+          <IconGrid
+            value={navPick ? navIcons[navPick] ?? navDefaults[navPick] : undefined}
+            onPick={(id) => {
+              if (navPick) setNavIcon(navPick, id);
+              setNavPick(null);
+            }}
+          />
+        </div>
+      </Overlay>
       <h2 className="px-5 pb-2 pt-6 text-sm font-medium text-muted">{t.more.wallpaper}</h2>
       <p className="px-5 pb-3 text-xs text-muted">{t.more.wallpaperHint}</p>
       <div className="mx-4 mb-2 grid grid-cols-3 gap-2">

@@ -1,14 +1,13 @@
 import { useState } from "react";
 import { Overlay } from "@/components/shared";
-import { CategoryIcon } from "@/components/category-icon";
+import { IconGrid } from "@/components/category-icon";
 import { AccountLine, ComposerHeader, SelectLine, TextLine } from "@/components/txn-composer";
 import { pickName } from "@/lib/i18n";
 import { infersAdhoc } from "@/lib/tx-rules";
 import { isHousingCategory, isTaxCategory, resolvedSpecial } from "@/lib/categories";
-import { CATEGORY_ICON_GROUPS, type Category, type CategoryIconName, type CategorySpecial, type FireSpendKind, type LifeTheme } from "@/lib/types";
+import { type Category, type CategoryIconName, type CategorySpecial, type FireSpendKind, type LifeTheme } from "@/lib/types";
 import { useApp, newId } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
-import { cn } from "@/lib/utils";
 
 export function CategoryEditor({
   open,
@@ -199,28 +198,8 @@ function CategoryEditorBody({
       ) : null}
       <div className="px-4 pb-8 pt-1">
         <div className="text-xs text-muted">{t.add.icon}</div>
-        <div className="mt-2 space-y-3">
-          {CATEGORY_ICON_GROUPS.map((g) => (
-            <div key={g.id}>
-              <div className="pb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">{t.add.iconGroups[g.id]}</div>
-              <div className="grid grid-cols-7 gap-1.5">
-                {g.icons.map((id) => (
-                  <button
-                    key={id}
-                    type="button"
-                    aria-label={id}
-                    onClick={() => setIcon(id)}
-                    className={cn(
-                      "grid size-10 place-items-center rounded-full bg-elevated",
-                      icon === id && "ring-2 ring-accent text-accent",
-                    )}
-                  >
-                    <CategoryIcon name={id} className="size-4" />
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
+        <div className="mt-2">
+          <IconGrid value={icon} onPick={setIcon} />
         </div>
       </div>
       {initial ? (

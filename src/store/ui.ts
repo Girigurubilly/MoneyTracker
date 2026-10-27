@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import type { Locale, TodayView, TxType } from "@/lib/types";
+import { isCategoryIconName, NAV_SLOTS, type NavSlot } from "@/lib/nav-icons";
+import type { CategoryIconName, Locale, TodayView, TxType } from "@/lib/types";
 import { todayISO } from "@/lib/format";
 import { messages, type Messages } from "@/lib/i18n";
 import {
@@ -26,6 +27,22 @@ import {
 } from "@/lib/theme";
 
 const LOCALE_KEY = "hk-life-money-locale";
+const NAV_ICON_KEY = "hk-life-money-nav-icons";
+
+function readNavIcons(): Partial<Record<NavSlot, CategoryIconName>> {
+  try {
+    const raw = localStorage.getItem(NAV_ICON_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    const out: Partial<Record<NavSlot, CategoryIconName>> = {};
+    for (const slot of NAV_SLOTS) {
+      if (isCategoryIconName(parsed[slot])) out[slot] = parsed[slot];
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
 
 export function readSavedLocale(): Locale {
   try {
@@ -52,6 +69,7 @@ type UiState = {
   infoKey: string | null;
   onboarded: boolean;
   accessMode: AccessMode;
+  navIcons: Partial<Record<NavSlot, CategoryIconName>>;
   setLocale: (l: Locale) => void;
   setTheme: (t: ThemeId) => void;
   setCustomColor: (key: ThemeColorKey, hex: string | undefined) => void;
@@ -76,6 +94,8 @@ type UiState = {
   setInfoKey: (k: string | null) => void;
   setOnboarded: (v: boolean) => void;
   setAccessMode: (mode: AccessMode) => void;
+  setNavIcon: (slot: NavSlot, name: CategoryIconName) => void;
+  resetNavIcons: () => void;
 };
 
 function persistCustom(next: ThemeCustom) {
@@ -106,6 +126,7 @@ export const useUi = create<UiState>((set, get) => ({
   infoKey: null,
   onboarded: typeof window === "undefined" ? false : readOnboarded(),
   accessMode: typeof window === "undefined" ? "standard" : readSavedAccess(),
+  navIcons: typeof window === "undefined" ? {} : readNavIcons(),
   setLocale: (l) => {
     try {
       localStorage.setItem(LOCALE_KEY, l);
@@ -229,6 +250,23 @@ export const useUi = create<UiState>((set, get) => ({
       return;
     }
     set({ accessMode: mode });
+  },
+  setNavIcon: (slot, name) => {
+    const next = { ...get().navIcons, [slot]: name };
+    try {
+      localStorage.setItem(NAV_ICON_KEY, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+    set({ navIcons: next });
+  },
+  resetNavIcons: () => {
+    try {
+      localStorage.removeItem(NAV_ICON_KEY);
+    } catch {
+      /* ignore */
+    }
+    set({ navIcons: {} });
   },
 }));
 
