@@ -3,7 +3,7 @@ import { ChevronRight } from "lucide-react";
 import { RegularEditor } from "@/components/budget";
 import { AmountWithHkd } from "@/components/currency-field";
 import { ScreenHeader } from "@/components/shared";
-import { chargedDayOf, monthlyRegularsNetHkd, regularSettledInMonth } from "@/lib/calc/budget";
+import { chargedDayOf, hkdOfRegular, monthlyRegularsNetHkd, regularSettledInMonth } from "@/lib/calc/budget";
 import { money, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import type { Recurring } from "@/lib/types";
@@ -38,12 +38,21 @@ export function RegularsPlanPage() {
   const income = rows.filter((r) => r.type === "income");
   const expense = rows.filter((r) => r.type === "expense" || r.countsAsExpense);
   const transfer = rows.filter((r) => r.type === "transfer" && !r.countsAsExpense);
+  const incomeHkd = income.reduce((sum, r) => sum + hkdOfRegular(r, rates), 0);
+  const expenseHkd = expense.reduce((sum, r) => sum + hkdOfRegular(r, rates), 0);
   const net = monthlyRegularsNetHkd(rows, rates);
 
-  function section(title: string, list: Recurring[], empty: string) {
+  function section(title: string, list: Recurring[], empty: string, lump?: number, tone?: "income" | "expense") {
     return (
       <section className="pt-4">
-        <h2 className="px-5 pb-2 text-sm font-medium text-muted">{title}</h2>
+        <div className="flex items-baseline justify-between gap-3 px-5 pb-2">
+          <h2 className="text-sm font-medium text-muted">{title}</h2>
+          {list.length && lump != null ? (
+            <span className={cn("text-sm font-semibold tabular-nums", tone === "income" ? "text-income" : tone === "expense" ? "text-expense" : "")}>
+              {money(tone === "expense" ? -lump : lump, "HKD", { sign: true })}
+            </span>
+          ) : null}
+        </div>
         {list.length === 0 ? (
           <p className="px-5 py-2 text-sm text-muted">{empty}</p>
         ) : (
@@ -119,9 +128,19 @@ export function RegularsPlanPage() {
         <div className={cn("mt-1 text-2xl font-semibold tabular-nums", net > 0 ? "text-income" : net < 0 ? "text-expense" : "")}>
           {money(net, "HKD", { sign: true })}
         </div>
+        <div className="mt-3 grid grid-cols-2 gap-3 border-t border-line pt-3">
+          <div>
+            <div className="text-xs text-muted">{t.add.income}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums text-income">{money(incomeHkd, "HKD", { sign: true })}</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted">{t.add.expense}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums text-expense">{money(-expenseHkd, "HKD", { sign: true })}</div>
+          </div>
+        </div>
       </div>
-      {section(t.add.income, income, t.budget.regularsNone)}
-      {section(t.add.expense, expense, t.budget.regularsNone)}
+      {section(t.add.income, income, t.budget.regularsNone, incomeHkd, "income")}
+      {section(t.add.expense, expense, t.budget.regularsNone, expenseHkd, "expense")}
       {transfer.length ? section(t.add.transfer, transfer, "") : null}
       {rows.length === 0 ? (
         <div className="px-5 pt-4">
