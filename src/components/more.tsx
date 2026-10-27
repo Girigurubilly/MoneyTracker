@@ -822,8 +822,8 @@ export function AppearancePage() {
   const fontSize = custom.fontSize ?? "md";
   const radius = custom.radius ?? "regular";
   const motion = custom.motion ?? "soft";
-  const depth = custom.depth ?? (theme === "mist" || theme === "ink" ? "soft" : "flat");
-  const glow = custom.glow ?? (theme === "cyberpunk" ? "soft" : "off");
+  const depth = custom.depth ?? (theme === "dark" || theme === "cyberpunk" || theme === "hongkong" || theme === "normal" ? "flat" : "soft");
+  const glow = custom.glow ?? (theme === "cyberpunk" || theme === "hongkong" ? "soft" : "off");
   const wallpaperRef = useRef<HTMLInputElement>(null);
   const navIcons = useUi((s) => s.navIcons);
   const setNavIcon = useUi((s) => s.setNavIcon);
