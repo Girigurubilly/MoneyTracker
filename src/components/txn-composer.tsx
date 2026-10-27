@@ -4,7 +4,7 @@ import { AmountKeypad } from "@/components/amount-keypad";
 import { AccountSelect } from "@/components/account-select";
 import { WhenPicker } from "@/components/when-picker";
 import { Overlay } from "@/components/shared";
-import { clockNow, formatTypingAmount, whenStamp } from "@/lib/format";
+import { clockNow, formatTypingAmount, money, whenStamp } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { parseMoneyExpr } from "@/lib/money-expr";
 import type { Account, Currency } from "@/lib/types";
@@ -187,8 +187,13 @@ export function AccountLine({
     <div className="flex min-h-12 items-center gap-2 border-b border-line px-4 py-2.5">
       <div className="relative min-w-0 flex-1">
         <div className="text-[11px] font-medium text-muted">{label}</div>
-        <div className="pointer-events-none flex items-center gap-1 truncate text-sm font-medium">
+        <div className="pointer-events-none flex min-w-0 items-center gap-1.5 text-sm font-medium">
           <span className="truncate">{acc ? pickName(locale, acc.name, acc.nameZh) : placeholder}</span>
+          {acc ? (
+            <span className="shrink-0 text-[11px] font-normal tabular-nums text-muted">
+              {t.assets.balance} {money(acc.balance, acc.currency)}
+            </span>
+          ) : null}
           <ChevronRight className="size-4 shrink-0 text-faint" />
         </div>
         <AccountSelect
