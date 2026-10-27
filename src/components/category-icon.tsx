@@ -3,6 +3,23 @@ import {
   AlarmClock,
   Aperture,
   Apple,
+  Atom,
+  BarChart3,
+  ChartCandlestick,
+  ChartLine,
+  Clover,
+  Cpu,
+  Flame,
+  Highlighter,
+  MoreHorizontal,
+  Orbit,
+  PenLine,
+  PieChart,
+  Sailboat,
+  Sprout,
+  Star,
+  WalletCards,
+  WandSparkles,
   Baby,
   Banknote,
   Barcode,
@@ -154,6 +171,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { CategoryIconName } from "@/lib/types";
+import { CATEGORY_ICON_GROUPS } from "@/lib/types";
+import { useT } from "@/store/ui";
 import { cn } from "@/lib/utils";
 
 const MAP: Record<CategoryIconName, LucideIcon> = {
@@ -267,7 +286,7 @@ const MAP: Record<CategoryIconName, LucideIcon> = {
   printer: Printer,
   battery: Battery,
   tablet: Monitor,
-  cpu: Laptop,
+  cpu: Cpu,
   palette: Palette,
   library: Library,
   church: Church,
@@ -311,6 +330,22 @@ const MAP: Record<CategoryIconName, LucideIcon> = {
   parking: ParkingCircle,
   cookie: Cookie,
   soup: Soup,
+  pen: PenLine,
+  highlighter: Highlighter,
+  chart: ChartLine,
+  candle: ChartCandlestick,
+  atom: Atom,
+  orbit: Orbit,
+  flame: Flame,
+  wand: WandSparkles,
+  star: Star,
+  clover: Clover,
+  sprout: Sprout,
+  sailboat: Sailboat,
+  pie: PieChart,
+  bars: BarChart3,
+  cards: WalletCards,
+  more: MoreHorizontal,
 };
 
 export function CategoryIcon({
@@ -322,4 +357,30 @@ export function CategoryIcon({
 }) {
   const Icon = MAP[name] ?? Wallet;
   return <Icon className={cn("size-5", className)} />;
+}
+
+export function IconGrid({ value, onPick }: { value?: CategoryIconName; onPick: (id: CategoryIconName) => void }) {
+  const t = useT();
+  return (
+    <div className="space-y-3">
+      {CATEGORY_ICON_GROUPS.map((g) => (
+        <div key={g.id}>
+          <div className="pb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">{t.add.iconGroups[g.id]}</div>
+          <div className="grid grid-cols-7 gap-1.5">
+            {g.icons.map((id) => (
+              <button
+                key={id}
+                type="button"
+                aria-label={id}
+                onClick={() => onPick(id)}
+                className={cn("grid size-10 place-items-center rounded-full bg-elevated", value === id && "ring-2 ring-accent text-accent")}
+              >
+                <CategoryIcon name={id} className="size-4" />
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
