@@ -29,7 +29,7 @@ import { transactionsToCsv } from "@/lib/derived";
 import { convertBtp, isAppSnapshot, isBtpFile } from "@/lib/import-btp";
 import { CURRENCIES, MONTH_TOTAL_BUDGET_ID, type BudgetTargetMode } from "@/lib/types";
 import { ageFromBirthday } from "@/lib/calc/retirement";
-import { DEFAULT_CONFIRMED_FACTS, buildFcBaseline, renderFcBaselineMarkdown, todayHkt } from "@/lib/calc/fc-baseline";
+import { buildFcBaseline, renderFcBaselineMarkdown, todayHkt } from "@/lib/calc/fc-baseline";
 import { todayISO } from "@/lib/format";
 import { useApp, type AppSnapshot } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
@@ -289,18 +289,16 @@ export function BackupPage() {
   const fcOpenGaps = useApp((s) => s.fcOpenGaps);
   const setFcNotes = useApp((s) => s.setFcNotes);
   const syncPromoFromDeposits = useApp((s) => s.syncPromoFromDeposits);
-  const [factsText, setFactsText] = useState(() => (fcConfirmedFacts.length ? fcConfirmedFacts : DEFAULT_CONFIRMED_FACTS).join("\n"));
   const [gapsText, setGapsText] = useState(() => fcOpenGaps.join("\n"));
 
-  async function persistFcNotes() {
-    const facts = factsText.split("\n").map((l) => l.trim()).filter(Boolean);
+  async function persistGaps() {
     const gaps = gapsText.split("\n").map((l) => l.trim()).filter(Boolean);
-    await setFcNotes(facts, gaps);
+    await setFcNotes(fcConfirmedFacts, gaps);
   }
 
   async function makeFcBaseline() {
     await syncPromoFromDeposits();
-    await persistFcNotes();
+    await persistGaps();
     const s = useApp.getState();
     const asOf = todayHkt();
     const monthCap = s.budgets.find((b) => b.id === MONTH_TOTAL_BUDGET_ID)?.monthly ?? 0;
@@ -463,6 +461,7 @@ export function BackupPage() {
   }, []);
 
   async function beginDrive(action: "save" | "restore" | "sync" | "list") {
+    if (busy) return;
     if (!readGoogleClientId()) {
       toast(t.backup.driveNeedClient);
       return;
@@ -500,118 +499,161 @@ export function BackupPage() {
   return (
     <div className="pb-10">
       <ScreenHeader title={t.more.importBackup} backTo="/more" />
-      <div className="rt-enter">
-      <h2 className="px-5 pb-2 text-sm font-medium text-muted">{t.backup.drive}</h2>
+      <SectionLabel>{t.backup.drive}</SectionLabel>
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.backup.driveHint}</p>
-      <div className="px-5 space-y-3">
+      <div className="px-4">
+        <label htmlFor="backup-pass" className="text-[11px] font-medium text-muted">
+          {t.backup.password}
+        </label>
         <input
+          id="backup-pass"
           value={password}
           onChange={(e) => setPass(e.target.value)}
           type="password"
           autoComplete="off"
-          className="h-11 w-full rounded-lg bg-elevated px-3 text-sm"
+          className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm"
           placeholder={t.backup.password}
         />
-        <p className="text-xs leading-5 text-muted">{t.backup.drivePassHint}</p>
+        <p className="mt-2 text-xs leading-5 text-muted">{t.backup.drivePassHint}</p>
         <button
           type="button"
           disabled={busy}
-          className="tr-press h-11 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent disabled:opacity-60"
+          className="tr-press mt-3 h-11 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent disabled:opacity-60"
           onClick={() => beginDrive("sync")}
         >
           {t.backup.driveSync}
         </button>
+      </div>
+      <div className={cn("mt-3", busy && "pointer-events-none opacity-60")}>
+        <Group>
+          <Row title={t.backup.driveSave} onClick={() => beginDrive("save")} />
+          <Hairline />
+          <Row title={t.backup.driveList} onClick={() => beginDrive("list")} />
+        </Group>
+      </div>
+      {copies ? (
+        <div className="mx-4 mt-3 overflow-hidden rounded-xl bg-elevated">
+          {copies.length ? (
+            copies.map((file, i) => {
+              const when = driveWhen(driveFileInstant(file), locale);
+              return (
+                <div key={file.id} className={i > 0 ? "border-t border-line" : ""}>
+                  <div className="flex items-center justify-between gap-3 px-4 py-3">
+                    <div className="min-w-0">
+                      <div className="text-sm tabular-nums">{when}</div>
+                      {i === 0 ? <div className="text-[11px] text-accent">{t.backup.driveNewest}</div> : null}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      className="tr-press h-9 shrink-0 rounded-lg bg-background px-3 text-xs font-medium disabled:opacity-60"
+                      onClick={() => {
+                        if (!window.confirm(t.backup.driveConfirm.replace("{time}", when))) return;
+                        rememberDrivePick(file.id);
+                        void beginDrive("restore");
+                      }}
+                    >
+                      {t.backup.driveRestoreThis}
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <p className="px-4 py-3 text-sm text-muted">{t.backup.driveMissing}</p>
+          )}
+        </div>
+      ) : null}
+      <div className="px-4 pt-3">
         <button
           type="button"
           disabled={busy}
-          className="tr-press h-11 w-full rounded-xl bg-elevated text-sm disabled:opacity-60"
-          onClick={() => beginDrive("save")}
-        >
-          {t.backup.driveSave}
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          className="tr-press h-11 w-full rounded-xl bg-elevated text-sm disabled:opacity-60"
+          className="tr-press h-11 w-full rounded-xl bg-elevated text-sm text-expense disabled:opacity-60"
           onClick={() => {
+            if (!window.confirm(t.backup.replaceDevice)) return;
             rememberDrivePick("");
             void beginDrive("restore");
           }}
         >
           {t.backup.driveRestore}
         </button>
-        <button
-          type="button"
-          disabled={busy}
-          className="tr-press h-11 w-full rounded-xl bg-elevated text-sm disabled:opacity-60"
-          onClick={() => beginDrive("list")}
-        >
-          {t.backup.driveList}
-        </button>
-        {copies ? (
-          <div className="overflow-hidden rounded-2xl bg-elevated">
-            {copies.length ? (
-              copies.map((file, i) => {
-                const when = driveWhen(driveFileInstant(file), locale);
-                return (
-                  <div key={file.id} className={i > 0 ? "border-t border-line" : ""}>
-                    <div className="flex items-center justify-between gap-3 px-4 py-3">
-                      <div className="min-w-0">
-                        <div className="text-sm tabular-nums">{when}</div>
-                        {i === 0 ? <div className="text-[11px] text-accent">{t.backup.driveNewest}</div> : null}
-                      </div>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        className="tr-press h-9 shrink-0 rounded-lg bg-background px-3 text-xs font-medium disabled:opacity-60"
-                        onClick={() => {
-                          if (!window.confirm(t.backup.driveConfirm.replace("{time}", when))) return;
-                          rememberDrivePick(file.id);
-                          void beginDrive("restore");
-                        }}
-                      >
-                        {t.backup.driveRestoreThis}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <p className="px-4 py-3 text-sm text-muted">{t.backup.driveMissing}</p>
-            )}
-          </div>
-        ) : null}
       </div>
-      </div>
-      <div className="rt-enter-delay">
-      <h2 className="px-5 pb-2 pt-6 text-sm font-medium text-muted">{locale === "zh-HK" ? "本機檔案" : "This device"}</h2>
-      <div className="px-5 space-y-3">
-        <button type="button" className="tr-press h-11 w-full rounded-xl bg-elevated text-sm" onClick={() => downloadBlob("hk-life-money.json", JSON.stringify(exportSnap(), null, 2))}>
-          {t.backup.exportJson}
-        </button>
-        <div className="rounded-2xl bg-elevated p-3 space-y-2">
-          <div className="text-xs font-medium text-muted">{t.backup.baselineFacts}</div>
-          <textarea
-            value={factsText}
-            onChange={(e) => setFactsText(e.target.value)}
-            onBlur={() => void persistFcNotes()}
-            rows={4}
-            className="w-full rounded-lg bg-background px-3 py-2 text-xs leading-5"
-          />
-          <p className="text-[11px] leading-4 text-muted">{t.backup.baselineFactsHint}</p>
-          <div className="pt-1 text-xs font-medium text-muted">{t.backup.baselineGaps}</div>
-          <textarea
-            value={gapsText}
-            onChange={(e) => setGapsText(e.target.value)}
-            onBlur={() => void persistFcNotes()}
-            rows={3}
-            className="w-full rounded-lg bg-background px-3 py-2 text-xs leading-5"
-          />
-          <p className="text-[11px] leading-4 text-muted">{t.backup.baselineGapsHint}</p>
-        </div>
-        <button
-          type="button"
-          className="tr-press h-11 w-full rounded-xl bg-elevated text-sm"
+      <SectionLabel>{t.backup.deviceSection}</SectionLabel>
+      <Group>
+        <Row title={t.backup.exportJson} onClick={() => downloadBlob("hk-life-money.json", JSON.stringify(exportSnap(), null, 2))} />
+        <Hairline />
+        <Row title={t.backup.exportCsv} onClick={() => downloadBlob("hk-life-money.csv", transactionsToCsv(txs), "text/csv")} />
+        <Hairline />
+        <Row
+          title={t.backup.encryptedExport}
+          onClick={() => {
+            void (async () => {
+              if (!password) {
+                toast(t.backup.needPassword);
+                return;
+              }
+              const payload = await encryptSnapshot(JSON.stringify(exportSnap()), password);
+              downloadBlob("hk-life-money.backup.json", payload);
+            })();
+          }}
+        />
+        <Hairline />
+        <Row title={t.backup.restore} subtitle={t.backup.replaceDevice} onClick={() => fileRef.current?.click()} />
+      </Group>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (!file) return;
+          try {
+            const snap = await decodeDriveBody(await file.text(), password.trim() || readDrivePass());
+            if (!window.confirm(t.backup.replaceDevice)) return;
+            await replaceAll(snap);
+            toast(t.backup.restored);
+          } catch {
+            toast(t.backup.badPassword);
+          }
+        }}
+      />
+      <Disclaimer>{t.backup.aes}</Disclaimer>
+
+      <SectionLabel>{t.import.title}</SectionLabel>
+      <Group>
+        <Row title={t.import.btp} subtitle={t.backup.replaceDevice} onClick={() => importRef.current?.click()} />
+      </Group>
+      <input
+        ref={importRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (!file) return;
+          try {
+            const data: unknown = JSON.parse(await file.text());
+            let snap: AppSnapshot;
+            if (isBtpFile(data)) snap = convertBtp(data);
+            else if (isAppSnapshot(data)) snap = data;
+            else throw new Error("format");
+            if (!window.confirm(t.backup.replaceDevice)) return;
+            const toastId = toast.loading(t.import.replacing);
+            await replaceAll(snap);
+            toast.success(`${t.import.btpDone} ${snap.transactions.length}`, { id: toastId });
+          } catch {
+            toast.error(t.import.btpFail);
+          }
+        }}
+      />
+
+      <SectionLabel>{t.backup.baselineSection}</SectionLabel>
+      <Group>
+        <Row
+          title={t.backup.exportBaseline}
           onClick={() => {
             void (async () => {
               const out = await makeFcBaseline();
@@ -621,96 +663,31 @@ export function BackupPage() {
               downloadBlob(`hk-life-fc-baseline-${asOf}.md`, renderFcBaselineMarkdown(snap), "text/markdown");
             })();
           }}
-        >
-          {t.backup.exportBaseline}
-        </button>
-        <button
-          type="button"
-          className="tr-press h-11 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent"
+        />
+        <Hairline />
+        <Row
+          title={t.backup.copyBaselineJson}
           onClick={() => {
             void (async () => {
               const out = await makeFcBaseline();
               if (!out) return;
               const json = JSON.stringify(out.snap, null, 2);
               if (await copyPlainText(json)) toast(t.backup.baselineCopied);
-              else toast(locale === "zh-HK" ? "無法複製" : "Copy failed");
+              else toast(t.backup.copyFailed);
             })();
           }}
-        >
-          {t.backup.copyBaselineJson}
-        </button>
-        <button type="button" className="tr-press h-11 w-full rounded-xl bg-elevated text-sm" onClick={() => downloadBlob("hk-life-money.csv", transactionsToCsv(txs), "text/csv")}>
-          {t.backup.exportCsv}
-        </button>
-        <input value={password} onChange={(e) => setPass(e.target.value)} type="password" autoComplete="off" className="h-11 w-full rounded-lg bg-elevated px-3" placeholder={t.backup.password} />
-        <button
-          type="button"
-          className="tr-press h-11 w-full rounded-xl bg-elevated text-sm"
-          onClick={async () => {
-            if (!password) {
-              toast(t.backup.needPassword);
-              return;
-            }
-            const payload = await encryptSnapshot(JSON.stringify(exportSnap()), password);
-            downloadBlob("hk-life-money.backup.json", payload);
-          }}
-        >
-          {locale === "zh-HK" ? "加密匯出" : "Encrypted export"}
-        </button>
-        <button type="button" className="tr-press h-11 w-full rounded-xl bg-elevated text-sm" onClick={() => fileRef.current?.click()}>
-          {t.backup.restore}
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="application/json,.json"
-          className="hidden"
-          onChange={async (e) => {
-            const file = e.target.files?.[0];
-            e.target.value = "";
-            if (!file) return;
-            try {
-              const snap = await decodeDriveBody(await file.text(), password.trim() || readDrivePass());
-              await replaceAll(snap);
-              toast(t.backup.restored);
-            } catch {
-              toast(t.backup.badPassword);
-            }
-          }}
         />
-      </div>
-      </div>
-      <div className="rt-enter-delay">
-      <h2 className="px-5 pb-2 pt-6 text-sm font-medium text-muted">{t.import.title}</h2>
-      <div className="px-5">
-        <button type="button" className="tr-press h-11 w-full rounded-xl bg-elevated text-sm" onClick={() => importRef.current?.click()}>
-          {t.import.btp}
-        </button>
-        <input
-          ref={importRef}
-          type="file"
-          accept="application/json,.json"
-          className="hidden"
-          onChange={async (e) => {
-            const file = e.target.files?.[0];
-            e.target.value = "";
-            if (!file) return;
-            const toastId = toast.loading(t.import.replacing);
-            try {
-              const data: unknown = JSON.parse(await file.text());
-              let snap: AppSnapshot;
-              if (isBtpFile(data)) snap = convertBtp(data);
-              else if (isAppSnapshot(data)) snap = data;
-              else throw new Error("format");
-              await replaceAll(snap);
-              toast.success(`${t.import.btpDone} ${snap.transactions.length}`, { id: toastId });
-            } catch {
-              toast.error(t.import.btpFail, { id: toastId });
-            }
-          }}
+      </Group>
+      <div className="mx-4 mt-3 rounded-xl bg-elevated p-3">
+        <div className="text-xs font-medium text-muted">{t.backup.baselineGaps}</div>
+        <textarea
+          value={gapsText}
+          onChange={(e) => setGapsText(e.target.value)}
+          onBlur={() => void persistGaps()}
+          rows={3}
+          className="mt-2 w-full rounded-lg bg-background px-3 py-2 text-xs leading-5"
         />
-      </div>
-      <Disclaimer>{t.backup.aes}</Disclaimer>
+        <p className="pt-2 text-[11px] leading-4 text-muted">{t.backup.baselineGapsHint}</p>
       </div>
     </div>
   );

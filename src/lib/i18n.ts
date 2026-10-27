@@ -1317,6 +1317,11 @@ export const messages = {
       driveNewest: "Newest",
       driveRestoreThis: "Restore this copy",
       driveConfirm: "Replace this device with the backup from {time}?",
+      replaceDevice: "Replace every record on this device?",
+      deviceSection: "This device",
+      encryptedExport: "Encrypted export",
+      copyFailed: "Copy failed",
+      baselineSection: "Baseline export",
       synced: "This device now has the latest copy.",
     },
     fx: {
@@ -2687,6 +2692,11 @@ export const messages = {
       driveNewest: "最新",
       driveRestoreThis: "還原呢份",
       driveConfirm: "用 {time} 嘅備份覆蓋呢部裝置？",
+      replaceDevice: "取代呢部機上面全部紀錄？",
+      deviceSection: "本機檔案",
+      encryptedExport: "加密匯出",
+      copyFailed: "無法複製",
+      baselineSection: "基線匯出",
       synced: "呢部裝置而家係最新副本。",
     },
     fx: {
