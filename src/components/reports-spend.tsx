@@ -223,7 +223,7 @@ export function SpendingPage() {
           </button>
         ))}
       </div>
-      <div className="rt-enter mx-4 mt-3 grid grid-cols-3 gap-2">
+      <div className="rt-enter mx-4 mt-3 overflow-hidden rounded-xl bg-elevated">
         <MiniStat label={t.reports.income} value={money(totals.income, "HKD")} tone="income" />
         <MiniStat label={t.reports.expense} value={money(totals.expense, "HKD")} tone="expense" />
         <MiniStat
@@ -278,12 +278,12 @@ export function SpendingPage() {
             if (id !== "spend-slice" && id !== "save-slice" && id !== "income-slice" && id !== "empty") openBucket(id);
           }}
         />
-        <div className="pointer-events-none absolute inset-0 grid place-items-center px-10 text-center">
-          <div>
-            <div className={cn("text-base font-semibold tabular-nums", tab === "both" && netSave < 0 && "text-expense")}>
+        <div className="pointer-events-none absolute inset-[26%] grid place-items-center text-center">
+          <div className="max-w-full">
+            <div className={cn("text-xs font-semibold leading-tight tabular-nums [overflow-wrap:anywhere]", tab === "both" && netSave < 0 && "text-expense")}>
               {money(center, "HKD")}
             </div>
-            <div className="text-xs text-muted">{centerLabel}</div>
+            <div className="mt-0.5 text-[11px] text-muted">{centerLabel}</div>
           </div>
         </div>
       </div>
@@ -336,9 +336,9 @@ export function SpendingPage() {
 
 function MiniStat({ label, value, tone }: { label: string; value: string; tone?: "income" | "expense" }) {
   return (
-    <div className="rounded-xl bg-elevated px-3 py-2.5">
-      <div className="text-[11px] text-muted">{label}</div>
-      <div className={cn("mt-0.5 text-sm font-semibold tabular-nums", tone === "income" && "text-income", tone === "expense" && "text-expense")}>
+    <div className="flex min-w-0 items-baseline justify-between gap-3 border-t border-line px-4 py-2.5 first:border-0">
+      <div className="shrink-0 text-[11px] text-muted">{label}</div>
+      <div className={cn("min-w-0 text-right text-sm font-semibold tabular-nums [overflow-wrap:anywhere]", tone === "income" && "text-income", tone === "expense" && "text-expense")}>
         {value}
       </div>
     </div>
