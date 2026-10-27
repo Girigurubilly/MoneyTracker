@@ -206,33 +206,33 @@ html[data-theme="anime"] {
 
 html[data-theme="cyberpunk"] {
   color-scheme: dark;
-  --font-sans: "Rajdhani", "Segoe UI", "PingFang HK", "Noto Sans TC", system-ui, sans-serif;
-  --font-display: "Rajdhani", "Segoe UI", "PingFang HK", "Noto Sans TC", system-ui, sans-serif;
-  --color-background: #090414;
-  --color-foreground: #d8f3ff;
-  --color-elevated: #140c28;
-  --color-muted: #7aa8c4;
-  --color-faint: #4c6d86;
-  --color-line: #2a1848;
-  --color-accent: #00e5ff;
-  --color-on-accent: #041018;
-  --color-accent-soft: #0b3140;
-  --color-income: #5cff8d;
-  --color-expense: #ff2e97;
-  --color-watch: #ffb703;
-  --color-success-soft: #0d3320;
-  --color-watch-soft: #33280a;
-  --color-expense-soft: #3a1028;
-  --color-ring-track: #2a1848;
-  --color-scrim: rgb(0 0 0 / 0.62);
-  --color-chart-1: #00e5ff;
-  --color-chart-2: #ff2e97;
-  --color-chart-3: #c7ff00;
-  --color-chart-4: #7b61ff;
-  --color-chart-5: #ffb703;
-  --color-chart-6: #39ff14;
-  --color-chart-7: #ff6ec7;
-  --color-chart-8: #00f5d4;
+  --font-sans: Nunito, ui-rounded, "Hiragino Maru Gothic ProN", "PingFang HK", "Noto Sans TC", system-ui, sans-serif;
+  --font-display: Nunito, ui-rounded, "Hiragino Maru Gothic ProN", "PingFang HK", "Noto Sans TC", system-ui, sans-serif;
+  --color-background: #07140c;
+  --color-foreground: #f4fff6;
+  --color-elevated: #102418;
+  --color-muted: #7d9a86;
+  --color-faint: #4d6b58;
+  --color-line: #1a3324;
+  --color-accent: #b6ff6a;
+  --color-on-accent: #06210c;
+  --color-accent-soft: #163218;
+  --color-income: #7dff6a;
+  --color-expense: #ff5a6a;
+  --color-watch: #d6f06a;
+  --color-success-soft: #12321c;
+  --color-watch-soft: #1c2c14;
+  --color-expense-soft: #2c1418;
+  --color-ring-track: #1a3324;
+  --color-scrim: rgb(2 10 6 / 0.66);
+  --color-chart-1: #7dff6a;
+  --color-chart-2: #b6ff6a;
+  --color-chart-3: #3dff9a;
+  --color-chart-4: #ff5a6a;
+  --color-chart-5: #d6f06a;
+  --color-chart-6: #5ee08a;
+  --color-chart-7: #9dffb0;
+  --color-chart-8: #ff8a94;
 }
 
 html[data-theme="shiba"] {
@@ -589,11 +589,18 @@ html[data-theme="dark"][data-depth="soft"] {
 html[data-theme="dark"][data-depth="lifted"] {
   --card-shadow: 0 20px 44px rgb(0 0 0 / 0.48);
 }
-html[data-theme="mist"]:not([data-depth]) :where(.rounded-xl.bg-elevated, .rounded-2xl.bg-elevated, .rounded-3xl.bg-elevated),
-html[data-theme="ink"]:not([data-depth]) :where(.rounded-xl.bg-elevated, .rounded-2xl.bg-elevated, .rounded-3xl.bg-elevated),
-html[data-depth="soft"] :where(.rounded-xl.bg-elevated, .rounded-2xl.bg-elevated, .rounded-3xl.bg-elevated),
-html[data-depth="lifted"] :where(.rounded-xl.bg-elevated, .rounded-2xl.bg-elevated, .rounded-3xl.bg-elevated) {
-  box-shadow: var(--card-shadow);
+html[data-theme="cyberpunk"]:not([data-glow]),
+html[data-glow="soft"] {
+  --card-glow: 0 0 22px color-mix(in srgb, var(--color-accent) 34%, transparent);
+}
+html[data-glow="strong"] {
+  --card-glow: 0 0 40px color-mix(in srgb, var(--color-accent) 58%, transparent);
+}
+html[data-glow="off"] {
+  --card-glow: 0 0 #0000;
+}
+:where(.rounded-xl.bg-elevated, .rounded-2xl.bg-elevated, .rounded-3xl.bg-elevated) {
+  box-shadow: var(--card-shadow, 0 0 #0000), var(--card-glow, 0 0 #0000);
 }
 
 @media (prefers-reduced-motion: no-preference) {

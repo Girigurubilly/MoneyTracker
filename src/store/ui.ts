@@ -16,6 +16,7 @@ import {
   type AccessMode,
   type DepthId,
   type FontId,
+  type GlowId,
   type FontSizeId,
   type MotionId,
   type RadiusId,
@@ -61,6 +62,7 @@ type UiState = {
   setRadius: (id: RadiusId) => void;
   setMotion: (id: MotionId) => void;
   setDepth: (id: DepthId) => void;
+  setGlow: (id: GlowId) => void;
   resetCustomColors: () => void;
   setSelectedDate: (iso: string) => void;
   setTodayView: (v: TodayView) => void;
@@ -176,6 +178,14 @@ export const useUi = create<UiState>((set, get) => ({
     const implied = get().theme === "mist" || get().theme === "ink" ? "soft" : "flat";
     const next = { ...get().customColors, depth: id === implied ? undefined : id };
     if (id === implied) delete next.depth;
+    persistCustom(next);
+    applyTheme(get().theme, next);
+    set({ customColors: next });
+  },
+  setGlow: (id) => {
+    const implied = get().theme === "cyberpunk" ? "soft" : "off";
+    const next = { ...get().customColors, glow: id === implied ? undefined : id };
+    if (id === implied) delete next.glow;
     persistCustom(next);
     applyTheme(get().theme, next);
     set({ customColors: next });
