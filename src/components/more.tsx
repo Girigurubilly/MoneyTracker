@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Archive, BookOpen, CalendarClock, FolderTree, Globe, Palette, PiggyBank, Settings2, ShoppingBag, SlidersHorizontal, TrendingUp, Undo2, Wallet } from "lucide-react";
+import { Archive, BookOpen, CalendarClock, Check, FolderTree, Globe, Palette, PiggyBank, Settings2, ShoppingBag, SlidersHorizontal, TrendingUp, Undo2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
 import { Disclaimer, Group, Hairline, Overlay, Row, ScreenHeader, SectionLabel } from "@/components/shared";
@@ -33,7 +33,7 @@ import { buildFcBaseline, renderFcBaselineMarkdown, todayHkt } from "@/lib/calc/
 import { todayISO } from "@/lib/format";
 import { useApp, type AppSnapshot } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
-import { ACCESS_MODES, THEME_IDS, THEME_PRESETS, FONT_IDS, FONT_SIZE_IDS, normalizeHex, type FontId, type FontSizeId, type ThemeId } from "@/lib/theme";
+import { ACCESS_MODES, FONT_IDS, FONT_SIZE_IDS, FONT_STACKS, MOTION_IDS, RADIUS_IDS, THEME_IDS, THEME_PRESETS, normalizeHex, type FontId, type FontSizeId, type MotionId, type RadiusId, type ThemeId } from "@/lib/theme";
 import { persistPwaIcon, readSavedPwaIcon, resizeImageFile, resizeWallpaperFile } from "@/lib/pwa-icon";
 import { assetUrl } from "@/lib/base";
 import { cn } from "@/lib/utils";
@@ -780,6 +780,8 @@ export function AppearancePage() {
   const setFontSize = useUi((s) => s.setFontSize);
   const setWallpaper = useUi((s) => s.setWallpaper);
   const setWallpaperOpacity = useUi((s) => s.setWallpaperOpacity);
+  const setRadius = useUi((s) => s.setRadius);
+  const setMotion = useUi((s) => s.setMotion);
   const setAccessMode = useUi((s) => s.setAccessMode);
   const accessMode = useUi((s) => s.accessMode);
   const resetCustomColors = useUi((s) => s.resetCustomColors);
@@ -812,10 +814,69 @@ export function AppearancePage() {
   const preset = THEME_PRESETS[theme];
   const fontId = custom.fontId ?? "theme";
   const fontSize = custom.fontSize ?? "md";
+  const radius = custom.radius ?? "regular";
+  const motion = custom.motion ?? "soft";
+  const wallpaperRef = useRef<HTMLInputElement>(null);
+  const radiusLabels: Record<RadiusId, string> = {
+    tight: t.more.shapeTight,
+    regular: t.more.shapeRegular,
+    round: t.more.shapeRound,
+  };
+  const motionLabels: Record<MotionId, string> = {
+    off: t.more.motionOff,
+    soft: t.more.motionSoft,
+    lively: t.more.motionLively,
+  };
   return (
     <div className="pb-10">
       <ScreenHeader title={t.more.appearance} backTo="/more" />
       <p className="px-5 pb-3 text-sm text-muted">{t.more.appearanceHint}</p>
+      <div key={`${theme}-${fontId}-${fontSize}-${radius}-${motion}`} className="ap-preview mx-4 mb-5 overflow-hidden rounded-2xl bg-elevated ring-1 ring-line">
+        <div className="flex items-center justify-between px-4 py-3">
+          <div>
+            <div className="text-[11px] text-muted">{t.more.previewLook}</div>
+            <div className="text-lg font-semibold tabular-nums">HK$12,480</div>
+          </div>
+          <span className="rounded-full bg-accent px-3 py-1 text-xs font-semibold text-on-accent">{t.more.previewSave}</span>
+        </div>
+        <div className="grid grid-cols-2 gap-2 px-4 pb-4">
+          <div className="rounded-xl bg-success-soft px-3 py-2 text-sm text-income">+ HK$8,200</div>
+          <div className="rounded-xl bg-expense-soft px-3 py-2 text-sm text-expense">− HK$1,640</div>
+        </div>
+      </div>
+      <h2 className="px-5 pb-2 text-sm font-medium text-muted">{t.more.shape}</h2>
+      <div className="mx-4 mb-4 grid grid-cols-3 gap-2">
+        {RADIUS_IDS.map((id) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setRadius(id)}
+            className={cn(
+              "tr-press h-11 rounded-xl text-sm font-medium transition",
+              radius === id ? "bg-accent text-on-accent" : "bg-elevated ring-1 ring-line",
+            )}
+          >
+            {radiusLabels[id]}
+          </button>
+        ))}
+      </div>
+      <h2 className="px-5 pb-2 text-sm font-medium text-muted">{t.more.motion}</h2>
+      <div className="mx-4 mb-2 grid grid-cols-3 gap-2">
+        {MOTION_IDS.map((id) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setMotion(id)}
+            className={cn(
+              "tr-press h-11 rounded-xl text-sm font-medium transition",
+              motion === id ? "bg-accent text-on-accent" : "bg-elevated ring-1 ring-line",
+            )}
+          >
+            {motionLabels[id]}
+          </button>
+        ))}
+      </div>
+      <p className="px-5 pb-4 text-xs text-muted">{t.more.motionHint}</p>
       <h2 className="px-5 pb-2 text-sm font-medium text-muted">{t.more.accessMode}</h2>
       <div className="mx-4 mb-5 grid grid-cols-3 gap-2">
         {ACCESS_MODES.map((id) => (
@@ -824,7 +885,7 @@ export function AppearancePage() {
             type="button"
             onClick={() => setAccessMode(id)}
             className={cn(
-              "min-h-16 rounded-2xl px-2 py-3 text-center text-sm font-medium",
+              "tr-press min-h-16 rounded-2xl px-2 py-3 text-center text-sm font-medium transition",
               accessMode === id ? "bg-accent text-on-accent" : "bg-elevated ring-1 ring-line",
             )}
           >
@@ -846,7 +907,10 @@ export function AppearancePage() {
               key={id}
               type="button"
               onClick={() => setTheme(id)}
-              className={cn("overflow-hidden rounded-2xl text-left ring-1", on ? "ring-2 ring-accent" : "ring-line")}
+              className={cn(
+                "tr-press overflow-hidden rounded-2xl text-left ring-1 transition duration-200",
+                on ? "scale-[1.02] ring-2 ring-accent" : "ring-line",
+              )}
             >
               <span
                 className="block h-20 bg-cover bg-center"
@@ -858,8 +922,16 @@ export function AppearancePage() {
               <span className="flex items-center justify-between gap-2 bg-elevated px-3 py-2">
                 <span className="text-sm font-medium">{labels[id]}</span>
                 <span className="flex items-center gap-1">
-                  <span className="size-3 rounded-full" style={{ background: swatch.accent }} />
-                  <span className="size-3 rounded-full" style={{ background: swatch.income }} />
+                  {on ? (
+                    <span className="ap-pop grid size-5 place-items-center rounded-full bg-accent text-on-accent">
+                      <Check className="size-3" />
+                    </span>
+                  ) : (
+                    <>
+                      <span className="size-3 rounded-full" style={{ background: swatch.accent }} />
+                      <span className="size-3 rounded-full" style={{ background: swatch.income }} />
+                    </>
+                  )}
                 </span>
               </span>
             </button>
@@ -873,14 +945,17 @@ export function AppearancePage() {
           <button
             key={id}
             type="button"
-            onClick={() => {
-              if (id === "custom") return;
-              setWallpaper(id);
-            }}
             className={cn(
-              "h-11 rounded-xl text-sm font-medium",
+              "tr-press h-11 rounded-xl text-sm font-medium transition",
               (custom.wallpaperMode ?? "theme") === id ? "bg-accent text-on-accent" : "bg-elevated",
             )}
+            onClick={() => {
+              if (id === "custom") {
+                wallpaperRef.current?.click();
+                return;
+              }
+              setWallpaper(id);
+            }}
           >
             {id === "theme" ? t.more.wallpaperTheme : id === "none" ? t.more.wallpaperNone : t.more.wallpaperCustom}
           </button>
@@ -892,6 +967,7 @@ export function AppearancePage() {
         <label className="mt-3 inline-flex h-11 items-center rounded-xl bg-background px-4 text-sm font-medium ring-1 ring-line">
           {t.more.chooseWallpaper}
           <input
+            ref={wallpaperRef}
             type="file"
             accept="image/jpeg,image/png,image/webp"
             className="hidden"
@@ -931,9 +1007,10 @@ export function AppearancePage() {
                 type="button"
                 onClick={() => setFontId(id)}
                 className={cn(
-                  "h-8 rounded-full px-3 text-sm",
+                  "tr-press h-8 rounded-full px-3 text-sm transition",
                   fontId === id ? "bg-accent text-on-accent" : "bg-background text-foreground ring-1 ring-line",
                 )}
+                style={id === "theme" ? undefined : { fontFamily: FONT_STACKS[id] }}
               >
                 {fontLabels[id]}
               </button>
@@ -950,7 +1027,7 @@ export function AppearancePage() {
                 type="button"
                 onClick={() => setFontSize(id)}
                 className={cn(
-                  "h-11 rounded-xl text-sm font-medium",
+                  "tr-press h-11 rounded-xl text-sm font-medium transition",
                   fontSize === id ? "bg-accent text-on-accent" : "bg-background ring-1 ring-line",
                 )}
               >
@@ -1062,8 +1139,8 @@ function ColorRow({
           className="h-9 w-[5.6rem] rounded-lg bg-background px-2 font-mono text-xs uppercase ring-1 ring-line"
           spellCheck={false}
         />
-        <span className="relative size-10 overflow-hidden rounded-lg ring-1 ring-line">
-          <span className="absolute inset-0" style={{ background: shown }} />
+        <span className="relative size-10 overflow-hidden rounded-lg ring-1 ring-line transition">
+          <span className="absolute inset-0 transition-colors duration-200" style={{ background: shown }} />
           <input
             type="color"
             value={shown}
