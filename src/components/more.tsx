@@ -839,6 +839,7 @@ export function AppearancePage() {
   const themeArt: Partial<Record<ThemeId, string>> = {
     mist: "linear-gradient(135deg,#c8f3d4 0%,#d7ebfb 52%,#ddd4f6 100%)",
     ink: "linear-gradient(135deg,#f3cfcb 0%,#e7f6b0 46%,#171717 100%)",
+    dark: "linear-gradient(145deg,#243038 0%,#3a424c 58%,#2ec9be 100%)",
   };
   return (
     <div className="pb-10">
@@ -1089,6 +1090,8 @@ export function AppearancePage() {
         <ColorRow label={t.more.colorIncome} value={custom.income} fallback={preset.income} onChange={(hex) => setCustomColor("income", hex)} />
         <Hairline />
         <ColorRow label={t.more.colorExpense} value={custom.expense} fallback={preset.expense} onChange={(hex) => setCustomColor("expense", hex)} />
+        <Hairline />
+        <ColorRow label={t.more.colorChart} value={custom.chart} fallback={preset.chart} onChange={(hex) => setCustomColor("chart", hex)} />
       </Group>
       <div className="px-5 pt-4">
         <button type="button" className="h-11 w-full rounded-xl bg-elevated text-sm" onClick={resetCustomColors}>
