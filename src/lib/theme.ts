@@ -109,13 +109,13 @@ export const THEME_PRESETS: Record<
   dark: { background: "#2a3139", foreground: "#f4f7f8", elevated: "#3a424c", muted: "#9aa3ad", accent: "#2ec9be", income: "#c6e15a", expense: "#e15b6c", line: "#4a535e", onAccent: "#102226", chart: "#2ad4c4" },
   mist: { background: "#e4eef0", foreground: "#1c2a33", elevated: "#f7fbfa", muted: "#6f8688", accent: "#2f9d74", income: "#3d8ec4", expense: "#7a68b8", line: "#d3e3e4", onAccent: "#ffffff", chart: "#7dce9a" },
   ink: { background: "#ece8f2", foreground: "#161616", elevated: "#f8f6fb", muted: "#7d7886", accent: "#c6ee55", income: "#161616", expense: "#c45d62", line: "#e3deea", onAccent: "#161616", chart: "#171717" },
-  pinky: { background: "#fdf2f8", foreground: "#4a044e", elevated: "#ffffff", muted: "#a15a86", accent: "#db2777", income: "#0f766e", expense: "#be123c", line: "#f5d0e4", onAccent: "#ffffff", chart: "#f472b6" },
-  anime: { background: "#fff1f5", foreground: "#2b1638", elevated: "#ffffff", muted: "#8b6b90", accent: "#ff5d8f", income: "#2a9d8f", expense: "#e11d48", line: "#ffd6e5", onAccent: "#ffffff", chart: "#ff8fab" },
+  pinky: { background: "#fde8f0", foreground: "#4a2438", elevated: "#fff7fa", muted: "#a56b86", accent: "#e85a8c", income: "#2f9a84", expense: "#c43b5a", line: "#f3d0de", onAccent: "#ffffff", chart: "#f48cb0" },
+  anime: { background: "#f4eef8", foreground: "#2a1838", elevated: "#fff8fc", muted: "#8a7098", accent: "#e85aa0", income: "#3aa89a", expense: "#e14b6a", line: "#eadcf2", onAccent: "#ffffff", chart: "#c9a4ff" },
   cyberpunk: { background: "#07140c", foreground: "#f4fff6", elevated: "#102418", muted: "#7d9a86", accent: "#b6ff6a", income: "#7dff6a", expense: "#ff5a6a", line: "#1a3324", onAccent: "#06210c", chart: "#7dff6a" },
-  shiba: { background: "#fff4e5", foreground: "#4a2a12", elevated: "#fffaf3", muted: "#b07a4a", accent: "#e67a2e", income: "#2f9e6a", expense: "#c2410c", line: "#f0dcc4", onAccent: "#ffffff", chart: "#30d158" },
-  cat: { background: "#f7efe6", foreground: "#3b2a24", elevated: "#fffdf9", muted: "#9c7b6e", accent: "#d97757", income: "#3d8b6e", expense: "#b45309", line: "#eadcd4", onAccent: "#ffffff", chart: "#30d158" },
-  panda: { background: "#f3f6f1", foreground: "#1f2a22", elevated: "#ffffff", muted: "#6f7f72", accent: "#3f7a4e", income: "#3f7a4e", expense: "#b42318", line: "#d7e0d8", onAccent: "#ffffff", chart: "#30d158" },
-  hongkong: { background: "#1a0c10", foreground: "#ffe9c8", elevated: "#2a1218", muted: "#c08a6a", accent: "#e23d3d", income: "#f0c14b", expense: "#ff6b6b", line: "#4a1c24", onAccent: "#ffffff", chart: "#30d158" },
+  shiba: { background: "#fff3e4", foreground: "#3f2914", elevated: "#fffaf3", muted: "#a87848", accent: "#e07a2f", income: "#3d9a62", expense: "#d4532a", line: "#f0dcc4", onAccent: "#ffffff", chart: "#f0a04a" },
+  cat: { background: "#f6efe6", foreground: "#3a2a22", elevated: "#fffdf8", muted: "#9a7b6c", accent: "#e08a4a", income: "#3f8f6e", expense: "#d46a62", line: "#eadcd4", onAccent: "#ffffff", chart: "#7dba8a" },
+  panda: { background: "#eef2ec", foreground: "#1c2420", elevated: "#fbfcfa", muted: "#6d7c72", accent: "#2f6b45", income: "#1f8a62", expense: "#c4473a", line: "#d7e0d6", onAccent: "#ffffff", chart: "#1a1a1a" },
+  hongkong: { background: "#14080e", foreground: "#ffe9c4", elevated: "#241018", muted: "#c49278", accent: "#ff4b5c", income: "#f0c14b", expense: "#ff7ad9", line: "#4a2430", onAccent: "#ffffff", chart: "#ff5a8a" },
 };
 
 export function isThemeId(v: string | null): v is ThemeId {

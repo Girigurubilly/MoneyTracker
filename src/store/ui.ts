@@ -196,7 +196,7 @@ export const useUi = create<UiState>((set, get) => ({
     set({ customColors: next });
   },
   setDepth: (id) => {
-    const implied = get().theme === "mist" || get().theme === "ink" ? "soft" : "flat";
+    const implied = get().theme === "dark" || get().theme === "cyberpunk" || get().theme === "hongkong" || get().theme === "normal" ? "flat" : "soft";
     const next = { ...get().customColors, depth: id === implied ? undefined : id };
     if (id === implied) delete next.depth;
     persistCustom(next);
@@ -204,7 +204,7 @@ export const useUi = create<UiState>((set, get) => ({
     set({ customColors: next });
   },
   setGlow: (id) => {
-    const implied = get().theme === "cyberpunk" ? "soft" : "off";
+    const implied = get().theme === "cyberpunk" || get().theme === "hongkong" ? "soft" : "off";
     const next = { ...get().customColors, glow: id === implied ? undefined : id };
     if (id === implied) delete next.glow;
     persistCustom(next);

@@ -146,59 +146,59 @@ html[data-theme="pinky"] {
   color-scheme: light;
   --font-sans: "Nunito", ui-rounded, "Hiragino Maru Gothic ProN", "PingFang HK", "Noto Sans TC", system-ui, sans-serif;
   --font-display: "Nunito", ui-rounded, "Hiragino Maru Gothic ProN", "PingFang HK", "Noto Sans TC", system-ui, sans-serif;
-  --color-background: #fdf2f8;
-  --color-foreground: #4a044e;
-  --color-elevated: #ffffff;
-  --color-muted: #a15a86;
-  --color-faint: #d8a6c2;
-  --color-line: #f5d0e4;
-  --color-accent: #db2777;
+  --color-background: #fde8f0;
+  --color-foreground: #4a2438;
+  --color-elevated: #fff7fa;
+  --color-muted: #a56b86;
+  --color-faint: #d4a8be;
+  --color-line: #f3d0de;
+  --color-accent: #e85a8c;
   --color-on-accent: #ffffff;
-  --color-accent-soft: #fce7f3;
-  --color-income: #0f766e;
-  --color-expense: #be123c;
-  --color-watch: #c2410c;
-  --color-success-soft: #ccfbf1;
-  --color-watch-soft: #ffedd5;
-  --color-expense-soft: #ffe4e6;
-  --color-ring-track: #f5d0e4;
-  --color-scrim: rgb(74 4 78 / 0.28);
-  --color-chart-1: #f472b6;
+  --color-accent-soft: #fce4ee;
+  --color-income: #2f9a84;
+  --color-expense: #c43b5a;
+  --color-watch: #d4783a;
+  --color-success-soft: #d8f4ee;
+  --color-watch-soft: #ffe8d4;
+  --color-expense-soft: #fde0e6;
+  --color-ring-track: #f3d0de;
+  --color-scrim: rgb(74 36 56 / 0.28);
+  --color-chart-1: #f48cb0;
   --color-chart-2: #c084fc;
-  --color-chart-3: #fb7185;
-  --color-chart-4: #f59e0b;
-  --color-chart-5: #2dd4bf;
-  --color-chart-6: #818cf8;
-  --color-chart-7: #e879f9;
-  --color-chart-8: #fb923c;
+  --color-chart-3: #7dcec4;
+  --color-chart-4: #f0b45a;
+  --color-chart-5: #e85a8c;
+  --color-chart-6: #9aa6f2;
+  --color-chart-7: #f2a0c8;
+  --color-chart-8: #e07a5a;
 }
 
 html[data-theme="anime"] {
   color-scheme: light;
   --font-sans: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "PingFang HK", "Noto Sans TC", system-ui, sans-serif;
   --font-display: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "PingFang HK", "Noto Sans TC", system-ui, sans-serif;
-  --color-background: #fff1f5;
-  --color-foreground: #2b1638;
-  --color-elevated: #ffffff;
-  --color-muted: #8b6b90;
-  --color-faint: #c9adc8;
-  --color-line: #ffd6e5;
-  --color-accent: #ff5d8f;
+  --color-background: #f4eef8;
+  --color-foreground: #2a1838;
+  --color-elevated: #fff8fc;
+  --color-muted: #8a7098;
+  --color-faint: #c4b0cc;
+  --color-line: #eadcf2;
+  --color-accent: #e85aa0;
   --color-on-accent: #ffffff;
-  --color-accent-soft: #ffe4ee;
-  --color-income: #2a9d8f;
-  --color-expense: #e63956;
-  --color-watch: #ef8d32;
+  --color-accent-soft: #f8e4f0;
+  --color-income: #3aa89a;
+  --color-expense: #e14b6a;
+  --color-watch: #e2b15a;
   --color-success-soft: #d8f3ef;
-  --color-watch-soft: #ffe8d2;
-  --color-expense-soft: #ffd9e1;
-  --color-ring-track: #ffd6e5;
-  --color-scrim: rgb(43 22 56 / 0.28);
-  --color-chart-1: #ff8fab;
-  --color-chart-2: #9b8cff;
+  --color-watch-soft: #f8ecd4;
+  --color-expense-soft: #fde0e8;
+  --color-ring-track: #eadcf2;
+  --color-scrim: rgb(42 24 56 / 0.28);
+  --color-chart-1: #c9a4ff;
+  --color-chart-2: #e85aa0;
   --color-chart-3: #7fd8c8;
-  --color-chart-4: #ffd166;
-  --color-chart-5: #ffa07a;
+  --color-chart-4: #e2b15a;
+  --color-chart-5: #ff8fab;
   --color-chart-6: #80d0ff;
   --color-chart-7: #d4a5ff;
   --color-chart-8: #ff6b9d;
@@ -237,59 +237,123 @@ html[data-theme="cyberpunk"] {
 
 html[data-theme="shiba"] {
   color-scheme: light;
-  --color-background: #fff4e5;
-  --color-foreground: #4a2a12;
+  --font-sans: Nunito, ui-rounded, "Hiragino Maru Gothic ProN", "PingFang HK", "Noto Sans TC", system-ui, sans-serif;
+  --font-display: Nunito, ui-rounded, "Hiragino Maru Gothic ProN", "PingFang HK", "Noto Sans TC", system-ui, sans-serif;
+  --color-background: #fff3e4;
+  --color-foreground: #3f2914;
   --color-elevated: #fffaf3;
-  --color-muted: #b07a4a;
-  --color-faint: #c9a07a;
+  --color-muted: #a87848;
+  --color-faint: #c9a888;
   --color-line: #f0dcc4;
-  --color-accent: #e67a2e;
+  --color-accent: #e07a2f;
   --color-on-accent: #ffffff;
   --color-accent-soft: #ffe3cc;
-  --color-income: #2f9e6a;
-  --color-expense: #d4522a;
+  --color-income: #3d9a62;
+  --color-expense: #d4532a;
+  --color-watch: #e0a04a;
+  --color-success-soft: #dcf3e4;
+  --color-watch-soft: #fff0d8;
+  --color-expense-soft: #fde4d8;
+  --color-ring-track: #f0dcc4;
+  --color-scrim: rgb(63 41 20 / 0.28);
+  --color-chart-1: #f0a04a;
+  --color-chart-2: #e07a2f;
+  --color-chart-3: #7dba8a;
+  --color-chart-4: #f2c14a;
+  --color-chart-5: #d4532a;
+  --color-chart-6: #f6c49a;
+  --color-chart-7: #c47a3a;
+  --color-chart-8: #8fbf6a;
 }
 html[data-theme="cat"] {
   color-scheme: light;
-  --color-background: #f7efe6;
-  --color-foreground: #3b2a24;
-  --color-elevated: #fffdf9;
-  --color-muted: #9c7b6e;
+  --font-sans: Nunito, ui-rounded, "Hiragino Maru Gothic ProN", "PingFang HK", "Noto Sans TC", system-ui, sans-serif;
+  --font-display: Nunito, ui-rounded, "Hiragino Maru Gothic ProN", "PingFang HK", "Noto Sans TC", system-ui, sans-serif;
+  --color-background: #f6efe6;
+  --color-foreground: #3a2a22;
+  --color-elevated: #fffdf8;
+  --color-muted: #9a7b6c;
   --color-faint: #c3aaa0;
   --color-line: #eadcd4;
-  --color-accent: #d97757;
+  --color-accent: #e08a4a;
   --color-on-accent: #ffffff;
   --color-accent-soft: #f8e4dc;
-  --color-income: #3d8b6e;
-  --color-expense: #c45c4a;
+  --color-income: #3f8f6e;
+  --color-expense: #d46a62;
+  --color-watch: #d4a05a;
+  --color-success-soft: #dcefe4;
+  --color-watch-soft: #f8ecd8;
+  --color-expense-soft: #f8e0dc;
+  --color-ring-track: #eadcd4;
+  --color-scrim: rgb(58 42 34 / 0.28);
+  --color-chart-1: #7dba8a;
+  --color-chart-2: #e08a4a;
+  --color-chart-3: #f0b7a4;
+  --color-chart-4: #d4a05a;
+  --color-chart-5: #d46a62;
+  --color-chart-6: #a8c4b0;
+  --color-chart-7: #c48a6a;
+  --color-chart-8: #6aa8c4;
 }
 html[data-theme="panda"] {
   color-scheme: light;
-  --color-background: #f3f6f1;
-  --color-foreground: #1f2a22;
-  --color-elevated: #ffffff;
-  --color-muted: #6f7f72;
-  --color-faint: #9aa89c;
+  --font-sans: Nunito, ui-rounded, "Hiragino Maru Gothic ProN", "PingFang HK", "Noto Sans TC", system-ui, sans-serif;
+  --font-display: Nunito, ui-rounded, "Hiragino Maru Gothic ProN", "PingFang HK", "Noto Sans TC", system-ui, sans-serif;
+  --color-background: #eef2ec;
+  --color-foreground: #1c2420;
+  --color-elevated: #fbfcfa;
+  --color-muted: #6d7c72;
+  --color-faint: #a3b0a6;
   --color-line: #d7e0d6;
-  --color-accent: #3f7a4e;
+  --color-accent: #2f6b45;
   --color-on-accent: #ffffff;
   --color-accent-soft: #dce8de;
-  --color-income: #2f7a48;
-  --color-expense: #b42318;
+  --color-income: #1f8a62;
+  --color-expense: #c4473a;
+  --color-watch: #c47a3a;
+  --color-success-soft: #dcefe4;
+  --color-watch-soft: #f3ead8;
+  --color-expense-soft: #f8e0dc;
+  --color-ring-track: #d7e0d6;
+  --color-scrim: rgb(28 36 32 / 0.28);
+  --color-chart-1: #1a1a1a;
+  --color-chart-2: #6fbf7a;
+  --color-chart-3: #2f6b45;
+  --color-chart-4: #c4473a;
+  --color-chart-5: #8aa898;
+  --color-chart-6: #d7e0d6;
+  --color-chart-7: #3d8b6e;
+  --color-chart-8: #e0a070;
 }
 html[data-theme="hongkong"] {
   color-scheme: dark;
-  --color-background: #1a0c10;
-  --color-foreground: #ffe9c8;
-  --color-elevated: #2a1218;
-  --color-muted: #c08a6a;
-  --color-faint: #8a5a48;
-  --color-line: #4a1c24;
-  --color-accent: #e23d3d;
+  --font-sans: "Noto Sans TC", "PingFang HK", "Hiragino Sans", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Noto Sans TC", "PingFang HK", "Hiragino Sans", "Segoe UI", system-ui, sans-serif;
+  --color-background: #14080e;
+  --color-foreground: #ffe9c4;
+  --color-elevated: #241018;
+  --color-muted: #c49278;
+  --color-faint: #8a5c48;
+  --color-line: #4a2430;
+  --color-accent: #ff4b5c;
   --color-on-accent: #ffffff;
-  --color-accent-soft: #3a161c;
+  --color-accent-soft: #3a1620;
   --color-income: #f0c14b;
-  --color-expense: #ff6b6b;
+  --color-expense: #ff7ad9;
+  --color-watch: #f0c14b;
+  --color-success-soft: #2a2414;
+  --color-watch-soft: #332414;
+  --color-expense-soft: #3a1428;
+  --color-ring-track: #4a2430;
+  --color-scrim: rgb(8 2 6 / 0.66);
+  --color-chart-1: #ff5a8a;
+  --color-chart-2: #f0c14b;
+  --color-chart-3: #ff4b5c;
+  --color-chart-4: #ff7ad9;
+  --color-chart-5: #ffb45a;
+  --color-chart-6: #ff8aa0;
+  --color-chart-7: #e23d6a;
+  --color-chart-8: #ffe0a0;
 }
 html[data-theme="mist"] {
   color-scheme: light;
@@ -577,6 +641,11 @@ html[data-radius="round"] :where(.rounded-xl, .rounded-2xl, .rounded-3xl) {
 
 html[data-theme="mist"]:not([data-depth]),
 html[data-theme="ink"]:not([data-depth]),
+html[data-theme="pinky"]:not([data-depth]),
+html[data-theme="anime"]:not([data-depth]),
+html[data-theme="shiba"]:not([data-depth]),
+html[data-theme="cat"]:not([data-depth]),
+html[data-theme="panda"]:not([data-depth]),
 html[data-depth="soft"] {
   --card-shadow: 0 10px 28px rgb(28 40 48 / 0.08);
 }
@@ -590,6 +659,7 @@ html[data-theme="dark"][data-depth="lifted"] {
   --card-shadow: 0 20px 44px rgb(0 0 0 / 0.48);
 }
 html[data-theme="cyberpunk"]:not([data-glow]),
+html[data-theme="hongkong"]:not([data-glow]),
 html[data-glow="soft"] {
   --card-glow: 0 0 22px color-mix(in srgb, var(--color-accent) 34%, transparent);
 }
