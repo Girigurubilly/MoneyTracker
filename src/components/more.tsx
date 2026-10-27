@@ -66,7 +66,7 @@ export function MoreScreen() {
         <>
           <SectionLabel>{t.more.money}</SectionLabel>
           <Group>
-            <Row icon={<Wallet className="size-4" />} title={t.more.budgets} to="/budget" chevron />
+            <Row icon={<Wallet className="size-4" />} title={t.more.regulars} to="/more/regulars" chevron />
             <Hairline />
             <Row icon={<CalendarClock className="size-4" />} title={t.more.adhocPlan} to="/more/adhoc" chevron />
             <Hairline />

@@ -325,7 +325,7 @@ type ScheduleRowModel = {
   amount: number;
   currency: MoneyUnit;
   tone: "income" | "expense" | "plain";
-  to?: "/budget" | "/more/adhoc";
+  to?: "/more/regulars" | "/more/adhoc";
   txId?: string;
 };
 
@@ -365,7 +365,7 @@ function monthSchedule(opts: {
       amount,
       currency: r.currency,
       tone: r.type === "income" ? "income" : spend ? "expense" : "plain",
-      to: "/budget",
+      to: "/more/regulars",
     });
   }
   for (const a of opts.adhoc) {
@@ -446,9 +446,9 @@ function ScheduleRow({ row, onTx }: { row: ScheduleRowModel; onTx: (id: string) 
     </>
   );
   const className = "tr-press flex w-full items-center gap-3 px-5 py-3 text-left";
-  if (row.to === "/budget") {
+  if (row.to === "/more/regulars") {
     return (
-      <Link to="/budget" className={className}>
+      <Link to="/more/regulars" className={className}>
         {body}
       </Link>
     );

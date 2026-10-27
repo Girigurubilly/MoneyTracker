@@ -17,6 +17,7 @@ import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as MoreIndexRouteImport } from './routes/more.index'
 import { Route as MoreAdhocRouteImport } from './routes/more.adhoc'
+import { Route as MoreRegularsRouteImport } from './routes/more.regulars'
 import { Route as MoreAppearanceRouteImport } from './routes/more.appearance'
 import { Route as MoreBackupRouteImport } from './routes/more.backup'
 import { Route as MoreCategoriesRouteImport } from './routes/more.categories'
@@ -88,6 +89,11 @@ const MoreIndexRoute = MoreIndexRouteImport.update({
 const MoreAdhocRoute = MoreAdhocRouteImport.update({
   id: '/adhoc',
   path: '/adhoc',
+  getParentRoute: () => MoreRoute,
+} as any)
+const MoreRegularsRoute = MoreRegularsRouteImport.update({
+  id: '/regulars',
+  path: '/regulars',
   getParentRoute: () => MoreRoute,
 } as any)
 const MoreAppearanceRoute = MoreAppearanceRouteImport.update({
@@ -261,6 +267,7 @@ export interface FileRoutesByFullPath {
   '/onboarding': typeof OnboardingRoute
   '/reports': typeof ReportsRouteWithChildren
   '/more/adhoc': typeof MoreAdhocRoute
+  '/more/regulars': typeof MoreRegularsRoute
   '/more/appearance': typeof MoreAppearanceRoute
   '/more/backup': typeof MoreBackupRoute
   '/more/categories': typeof MoreCategoriesRoute
@@ -301,6 +308,7 @@ export interface FileRoutesByTo {
   '/budget': typeof BudgetRoute
   '/onboarding': typeof OnboardingRoute
   '/more/adhoc': typeof MoreAdhocRoute
+  '/more/regulars': typeof MoreRegularsRoute
   '/more/appearance': typeof MoreAppearanceRoute
   '/more/backup': typeof MoreBackupRoute
   '/more/categories': typeof MoreCategoriesRoute
@@ -342,6 +350,7 @@ export interface FileRoutesById {
   '/onboarding': typeof OnboardingRoute
   '/reports': typeof ReportsRouteWithChildren
   '/more/adhoc': typeof MoreAdhocRoute
+  '/more/regulars': typeof MoreRegularsRoute
   '/more/appearance': typeof MoreAppearanceRoute
   '/more/backup': typeof MoreBackupRoute
   '/more/categories': typeof MoreCategoriesRoute
@@ -386,6 +395,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/reports'
     | '/more/adhoc'
+    | '/more/regulars'
     | '/more/appearance'
     | '/more/backup'
     | '/more/categories'
@@ -426,6 +436,7 @@ export interface FileRouteTypes {
     | '/budget'
     | '/onboarding'
     | '/more/adhoc'
+    | '/more/regulars'
     | '/more/appearance'
     | '/more/backup'
     | '/more/categories'
@@ -466,6 +477,7 @@ export interface FileRouteTypes {
     | '/onboarding'
     | '/reports'
     | '/more/adhoc'
+    | '/more/regulars'
     | '/more/appearance'
     | '/more/backup'
     | '/more/categories'
@@ -566,6 +578,13 @@ declare module '@tanstack/react-router' {
       path: '/adhoc'
       fullPath: '/more/adhoc'
       preLoaderRoute: typeof MoreAdhocRouteImport
+      parentRoute: typeof MoreRoute
+    }
+    '/more/regulars': {
+      id: '/more/regulars'
+      path: '/regulars'
+      fullPath: '/more/regulars'
+      preLoaderRoute: typeof MoreRegularsRouteImport
       parentRoute: typeof MoreRoute
     }
     '/more/appearance': {
@@ -797,6 +816,7 @@ declare module '@tanstack/react-router' {
 
 interface MoreRouteChildren {
   MoreAdhocRoute: typeof MoreAdhocRoute
+  MoreRegularsRoute: typeof MoreRegularsRoute
   MoreAppearanceRoute: typeof MoreAppearanceRoute
   MoreBackupRoute: typeof MoreBackupRoute
   MoreCategoriesRoute: typeof MoreCategoriesRoute
@@ -814,6 +834,7 @@ interface MoreRouteChildren {
 
 const MoreRouteChildren: MoreRouteChildren = {
   MoreAdhocRoute: MoreAdhocRoute,
+  MoreRegularsRoute: MoreRegularsRoute,
   MoreAppearanceRoute: MoreAppearanceRoute,
   MoreBackupRoute: MoreBackupRoute,
   MoreCategoriesRoute: MoreCategoriesRoute,
