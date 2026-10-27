@@ -6,7 +6,8 @@ import {
   periodPostedCashflow,
   worthMoveIsCliff,
 } from "./networth.ts";
-import type { Account, Transaction } from "../types.ts";
+import type { Account, FxRate, Transaction } from "../types.ts";
+import { netCashMovementHkd } from "./ledger.ts";
 
 function tx(partial: Partial<Transaction> & Pick<Transaction, "id" | "type" | "amount" | "date">): Transaction {
   return {
@@ -127,5 +128,53 @@ describe("plain transfers inside the total do not move net worth", () => {
     );
     assert.equal(points.find((p) => p.date === "2026-08-31")?.net, 1_000_000);
     assert.equal(points.find((p) => p.date === "2026-09-30")?.net, 1_000_000);
+  });
+});
+
+describe("net cash movement since month-end", () => {
+  const usd: Account = { ...cash, id: "usd", name: "USD", nameZh: "美元", type: "fx", currency: "USD", balance: 0, group: "cash" };
+  const mortgage: Account = { ...cash, id: "loan", name: "Loan", nameZh: "貸款", type: "mortgage", currency: "HKD", balance: 500_000, group: "housing" };
+  const rates: FxRate[] = [{ currency: "USD", perHkd: 7.8, asOf: "2026-10-01", source: "test" }];
+
+  it("counts income and expense and ignores a matched transfer", () => {
+    const n = netCashMovementHkd(
+      [
+        tx({ id: "in", type: "income", amount: 1000, date: "2026-10-02" }),
+        tx({ id: "out", type: "expense", amount: 400, date: "2026-10-03" }),
+        tx({ id: "move", type: "transfer", amount: 500, date: "2026-10-04", toAccountId: "save", destAmount: 500 }),
+        tx({ id: "old", type: "income", amount: 9000, date: "2026-09-30" }),
+        tx({ id: "plan", type: "income", amount: 8000, date: "2026-10-05", planned: true }),
+      ],
+      [cash, { ...cash, id: "save" }],
+      [],
+      "2026-09-30",
+      "2026-10-27",
+    );
+    assert.equal(n, 600);
+  });
+
+  it("counts only the shortfall when a transfer loses value", () => {
+    const n = netCashMovementHkd(
+      [tx({ id: "fx", type: "transfer", amount: 100, currency: "USD", date: "2026-10-06", accountId: "usd", toAccountId: "cash", destAmount: 770 })],
+      [cash, usd],
+      rates,
+      "2026-09-30",
+      "2026-10-27",
+    );
+    assert.equal(n, -10);
+  });
+
+  it("does not treat mortgage principal as spend when both sides match", () => {
+    const n = netCashMovementHkd(
+      [
+        tx({ id: "p", type: "transfer", amount: 9600, date: "2026-10-01", toAccountId: "loan", destAmount: 9600, countsAsExpense: true }),
+        tx({ id: "i", type: "expense", amount: 4000, date: "2026-10-01" }),
+      ],
+      [cash, mortgage],
+      [],
+      "2026-09-30",
+      "2026-10-27",
+    );
+    assert.equal(n, -4000);
   });
 });

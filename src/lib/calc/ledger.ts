@@ -1,5 +1,5 @@
 import type { Account, FxRate, MoneyUnit, Transaction } from "../types.ts";
-import { convertAmount } from "./fx.ts";
+import { convertAmount, toHkd } from "./fx.ts";
 
 export function isPosted(tx: Transaction): boolean {
   return !tx.planned;
@@ -14,6 +14,44 @@ export function cashflowSide(tx: Transaction): "income" | "expense" | "none" {
   if (tx.type === "income") return "income";
   if (isSpendLike(tx)) return "expense";
   return "none";
+}
+
+/** HKD gained or lost on a transfer. A matched move is 0. A short destination is a loss. */
+export function transferGapHkd(tx: Transaction, accounts: Account[], rates: FxRate[]): number {
+  const srcHkd = accountLegHkd(tx, accounts, rates, tx.accountId, tx.amount);
+  if (!tx.toAccountId) return -srcHkd;
+  const dest = accounts.find((a) => a.id === tx.toAccountId);
+  const destCcy = dest?.currency ?? tx.currency;
+  const destAmt =
+    tx.destAmount != null ? Math.abs(tx.destAmount) : Math.abs(amountInAccount(tx.amount, tx.currency, dest, rates, tx.fxToHkd));
+  const destHkd = Math.abs(toHkd(destAmt, destCcy, rates, destCcy === tx.currency ? tx.fxToHkd : undefined));
+  return destHkd - srcHkd;
+}
+
+function accountLegHkd(tx: Transaction, accounts: Account[], rates: FxRate[], accountId: string, amount: number): number {
+  const acc = accounts.find((a) => a.id === accountId);
+  const ccy = acc?.currency ?? tx.currency;
+  const amt = Math.abs(amountInAccount(amount, tx.currency, acc, rates, tx.fxToHkd));
+  return Math.abs(toHkd(amt, ccy, rates, ccy === tx.currency ? tx.fxToHkd : undefined));
+}
+
+/** Posted income minus posted expense since `afterIso`, plus any transfer shortfall. Plain transfers net to zero. */
+export function netCashMovementHkd(
+  txs: Transaction[],
+  accounts: Account[],
+  rates: FxRate[],
+  afterIso: string,
+  throughIso: string,
+): number {
+  let sum = 0;
+  for (const tx of txs) {
+    if (tx.planned || tx.type === "miles") continue;
+    if (tx.date <= afterIso || tx.date > throughIso) continue;
+    if (tx.type === "income") sum += accountLegHkd(tx, accounts, rates, tx.accountId, tx.amount);
+    else if (tx.type === "expense") sum -= accountLegHkd(tx, accounts, rates, tx.accountId, tx.amount);
+    else if (tx.type === "transfer") sum += transferGapHkd(tx, accounts, rates);
+  }
+  return Math.round(sum * 100) / 100;
 }
 
 export function isDebtAccount(a: Pick<Account, "type">): boolean {

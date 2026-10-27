@@ -25,11 +25,11 @@ import { budgetActuals, committedOutflows, monthEndIso, monthFlow } from "@/lib/
 import { nextTrip, travelSpendYtd, tripCashSpent } from "@/lib/calc/trips";
 import { effectiveRate } from "@/lib/calc/mortgage";
 import { housingStatus, monthlyHousingCost } from "@/lib/calc/housing";
-import { netWorthNow, periodNetWorthPoints } from "@/lib/calc/networth";
+import { netWorthNow } from "@/lib/calc/networth";
 import { useRetirementHeadline } from "@/components/reports-retire";
 import { periodCashflowPoints, periodRange, type PeriodPreset } from "@/lib/calc/period";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
-import { monthKey } from "@/lib/calc/ledger";
+import { monthKey, netCashMovementHkd } from "@/lib/calc/ledger";
 import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 import { cn } from "@/lib/utils";
@@ -138,8 +138,7 @@ export function DashboardPage() {
   const afterCommit = available - next14;
   const nw = netWorthNow(accounts, rates, deposits);
   const prevEnd = monthEndIso(shiftYm(month, -1));
-  const prevWorth = periodNetWorthPoints(accounts, txs, rates, prevEnd, prevEnd, deposits).at(-1)?.net;
-  const nwDelta = prevWorth == null ? 0 : nw.net - prevWorth;
+  const nwDelta = netCashMovementHkd(txs, accounts, rates, prevEnd, today);
   const saveM = flow.income > 0 ? flow.net / flow.income : 0;
   const saveY = ytdFlow.income > 0 ? (ytdFlow.income - ytdFlow.expense) / ytdFlow.income : 0;
   const incomeZero = flow.income <= 0.005;
