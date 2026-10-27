@@ -1,5 +1,5 @@
 /* HK Life Money — cache the app shell so the ledger works offline. */
-const CACHE = "hk-life-money-shell-v9";
+const CACHE = "hk-life-money-shell-v10";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();

@@ -1,6 +1,6 @@
 import { assetUrl } from "./base";
 
-export const THEME_IDS = ["normal", "dark", "pinky", "anime", "cyberpunk", "shiba", "cat", "panda", "hongkong"] as const;
+export const THEME_IDS = ["normal", "dark", "mist", "ink", "pinky", "anime", "cyberpunk", "shiba", "cat", "panda", "hongkong"] as const;
 export type ThemeId = (typeof THEME_IDS)[number];
 
 export const FONT_IDS = ["theme", "system", "nunito", "zen-maru", "rajdhani", "noto", "serif"] as const;
@@ -14,6 +14,9 @@ export type RadiusId = (typeof RADIUS_IDS)[number];
 
 export const MOTION_IDS = ["off", "soft", "lively"] as const;
 export type MotionId = (typeof MOTION_IDS)[number];
+
+export const DEPTH_IDS = ["flat", "soft", "lifted"] as const;
+export type DepthId = (typeof DEPTH_IDS)[number];
 
 export const FONT_SIZE_PX: Record<FontSizeId, string> = {
   sm: "14px",
@@ -50,6 +53,7 @@ export type ThemeCustom = {
   wallpaperOpacity?: number;
   radius?: RadiusId;
   motion?: MotionId;
+  depth?: DepthId;
 };
 
 export const ACCESS_MODES = ["standard", "elderly", "kid"] as const;
@@ -97,6 +101,8 @@ export const THEME_PRESETS: Record<
 > = {
   normal: { background: "#f2f2f7", foreground: "#1c1c1e", elevated: "#ffffff", muted: "#8e8e93", accent: "#007aff", income: "#248a3d", expense: "#d70015", line: "#e5e5ea", onAccent: "#ffffff" },
   dark: { background: "#000000", foreground: "#f5f5f7", elevated: "#1c1c1e", muted: "#98989d", accent: "#0a84ff", income: "#30d158", expense: "#ff453a", line: "#38383a", onAccent: "#ffffff" },
+  mist: { background: "#e4eef0", foreground: "#1c2a33", elevated: "#f7fbfa", muted: "#6f8688", accent: "#2f9d74", income: "#3d8ec4", expense: "#7a68b8", line: "#d3e3e4", onAccent: "#ffffff" },
+  ink: { background: "#ece8f2", foreground: "#161616", elevated: "#f8f6fb", muted: "#7d7886", accent: "#c6ee55", income: "#161616", expense: "#c45d62", line: "#e3deea", onAccent: "#161616" },
   pinky: { background: "#fdf2f8", foreground: "#4a044e", elevated: "#ffffff", muted: "#a15a86", accent: "#db2777", income: "#0f766e", expense: "#be123c", line: "#f5d0e4", onAccent: "#ffffff" },
   anime: { background: "#fff1f5", foreground: "#2b1638", elevated: "#ffffff", muted: "#8b6b90", accent: "#ff5d8f", income: "#2a9d8f", expense: "#e11d48", line: "#ffd6e5", onAccent: "#ffffff" },
   cyberpunk: { background: "#090414", foreground: "#d8f3ff", elevated: "#140c28", muted: "#7aa8c4", accent: "#00e5ff", income: "#5cff8d", expense: "#ff2e97", line: "#2a1848", onAccent: "#041018" },
@@ -124,6 +130,10 @@ export function isRadiusId(v: string | null | undefined): v is RadiusId {
 
 export function isMotionId(v: string | null | undefined): v is MotionId {
   return MOTION_IDS.includes(v as MotionId);
+}
+
+export function isDepthId(v: string | null | undefined): v is DepthId {
+  return DEPTH_IDS.includes(v as DepthId);
 }
 
 export function readSavedTheme(): ThemeId {
@@ -158,6 +168,7 @@ export function readSavedCustom(): ThemeCustom {
       wallpaperOpacity: typeof parsed.wallpaperOpacity === "number" ? parsed.wallpaperOpacity : undefined,
       radius: isRadiusId(parsed.radius) ? parsed.radius : undefined,
       motion: isMotionId(parsed.motion) ? parsed.motion : undefined,
+      depth: isDepthId(parsed.depth) ? parsed.depth : undefined,
     };
   } catch {
     return {};
@@ -173,11 +184,12 @@ export function colorsOnly(custom: ThemeCustom): ThemeCustom {
     wallpaperOpacity: custom.wallpaperOpacity,
     radius: custom.radius,
     motion: custom.motion,
+    depth: custom.depth,
   };
 }
 
 function themeWallpaper(id: ThemeId): string {
-  if (id === "normal") return "none";
+  if (id === "normal" || id === "mist" || id === "ink") return "none";
   return `url("${assetUrl(`wallpapers/${id}.jpg`)}")`;
 }
 
@@ -282,7 +294,7 @@ export function applyTheme(theme: ThemeId, custom: ThemeCustom = {}): void {
   } else if (mode === "custom" && custom.wallpaper) {
     root.setAttribute("data-wallpaper", "custom");
     root.style.setProperty("--app-wallpaper", `url("${custom.wallpaper}")`);
-  } else if (theme === "normal") {
+  } else if (THEME_WALLPAPERS[theme] === "none") {
     root.setAttribute("data-wallpaper", "none");
     root.style.removeProperty("--app-wallpaper");
   } else {
@@ -295,4 +307,7 @@ export function applyTheme(theme: ThemeId, custom: ThemeCustom = {}): void {
   const motion = isMotionId(custom.motion) ? custom.motion : "soft";
   if (motion === "soft") root.removeAttribute("data-motion");
   else root.setAttribute("data-motion", motion);
+  const depth = isDepthId(custom.depth) ? custom.depth : undefined;
+  if (!depth) root.removeAttribute("data-depth");
+  else root.setAttribute("data-depth", depth);
 }
