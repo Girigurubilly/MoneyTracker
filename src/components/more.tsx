@@ -33,7 +33,7 @@ import { buildFcBaseline, renderFcBaselineMarkdown, todayHkt } from "@/lib/calc/
 import { todayISO } from "@/lib/format";
 import { useApp, type AppSnapshot } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
-import { ACCESS_MODES, DEPTH_IDS, FONT_IDS, FONT_SIZE_IDS, FONT_STACKS, MOTION_IDS, RADIUS_IDS, THEME_IDS, THEME_PRESETS, normalizeHex, type DepthId, type FontId, type FontSizeId, type MotionId, type RadiusId, type ThemeId } from "@/lib/theme";
+import { ACCESS_MODES, DEPTH_IDS, FONT_IDS, FONT_SIZE_IDS, FONT_STACKS, GLOW_IDS, MOTION_IDS, RADIUS_IDS, THEME_IDS, THEME_PRESETS, normalizeHex, type DepthId, type FontId, type FontSizeId, type GlowId, type MotionId, type RadiusId, type ThemeId } from "@/lib/theme";
 import { persistPwaIcon, readSavedPwaIcon, resizeImageFile, resizeWallpaperFile } from "@/lib/pwa-icon";
 import { assetUrl } from "@/lib/base";
 import { cn } from "@/lib/utils";
@@ -783,6 +783,7 @@ export function AppearancePage() {
   const setRadius = useUi((s) => s.setRadius);
   const setMotion = useUi((s) => s.setMotion);
   const setDepth = useUi((s) => s.setDepth);
+  const setGlow = useUi((s) => s.setGlow);
   const setAccessMode = useUi((s) => s.setAccessMode);
   const accessMode = useUi((s) => s.accessMode);
   const resetCustomColors = useUi((s) => s.resetCustomColors);
@@ -820,6 +821,7 @@ export function AppearancePage() {
   const radius = custom.radius ?? "regular";
   const motion = custom.motion ?? "soft";
   const depth = custom.depth ?? (theme === "mist" || theme === "ink" ? "soft" : "flat");
+  const glow = custom.glow ?? (theme === "cyberpunk" ? "soft" : "off");
   const wallpaperRef = useRef<HTMLInputElement>(null);
   const radiusLabels: Record<RadiusId, string> = {
     tight: t.more.shapeTight,
@@ -836,10 +838,16 @@ export function AppearancePage() {
     soft: t.more.depthSoft,
     lifted: t.more.depthLifted,
   };
+  const glowLabels: Record<GlowId, string> = {
+    off: t.more.glowOff,
+    soft: t.more.glowSoft,
+    strong: t.more.glowStrong,
+  };
   const themeArt: Partial<Record<ThemeId, string>> = {
     mist: "linear-gradient(135deg,#c8f3d4 0%,#d7ebfb 52%,#ddd4f6 100%)",
     ink: "linear-gradient(135deg,#f3cfcb 0%,#e7f6b0 46%,#171717 100%)",
     dark: "linear-gradient(145deg,#243038 0%,#3a424c 58%,#2ec9be 100%)",
+    cyberpunk: "linear-gradient(160deg,#07140c 0%,#102418 48%,#b6ff6a 100%)",
   };
   return (
     <div className="pb-10">
@@ -908,6 +916,23 @@ export function AppearancePage() {
         ))}
       </div>
       <p className="px-5 pb-4 text-xs text-muted">{t.more.depthHint}</p>
+      <h2 className="px-5 pb-2 text-sm font-medium text-muted">{t.more.glow}</h2>
+      <div className="mx-4 mb-2 grid grid-cols-3 gap-2">
+        {GLOW_IDS.map((id) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setGlow(id)}
+            className={cn(
+              "tr-press h-11 rounded-xl text-sm font-medium transition",
+              glow === id ? "bg-accent text-on-accent" : "bg-elevated ring-1 ring-line",
+            )}
+          >
+            {glowLabels[id]}
+          </button>
+        ))}
+      </div>
+      <p className="px-5 pb-4 text-xs text-muted">{t.more.glowHint}</p>
       <h2 className="px-5 pb-2 text-sm font-medium text-muted">{t.more.accessMode}</h2>
       <div className="mx-4 mb-5 grid grid-cols-3 gap-2">
         {ACCESS_MODES.map((id) => (

@@ -18,6 +18,9 @@ export type MotionId = (typeof MOTION_IDS)[number];
 export const DEPTH_IDS = ["flat", "soft", "lifted"] as const;
 export type DepthId = (typeof DEPTH_IDS)[number];
 
+export const GLOW_IDS = ["off", "soft", "strong"] as const;
+export type GlowId = (typeof GLOW_IDS)[number];
+
 export const FONT_SIZE_PX: Record<FontSizeId, string> = {
   sm: "14px",
   md: "16px",
@@ -55,6 +58,7 @@ export type ThemeCustom = {
   radius?: RadiusId;
   motion?: MotionId;
   depth?: DepthId;
+  glow?: GlowId;
 };
 
 export const ACCESS_MODES = ["standard", "elderly", "kid"] as const;
@@ -107,7 +111,7 @@ export const THEME_PRESETS: Record<
   ink: { background: "#ece8f2", foreground: "#161616", elevated: "#f8f6fb", muted: "#7d7886", accent: "#c6ee55", income: "#161616", expense: "#c45d62", line: "#e3deea", onAccent: "#161616", chart: "#171717" },
   pinky: { background: "#fdf2f8", foreground: "#4a044e", elevated: "#ffffff", muted: "#a15a86", accent: "#db2777", income: "#0f766e", expense: "#be123c", line: "#f5d0e4", onAccent: "#ffffff", chart: "#f472b6" },
   anime: { background: "#fff1f5", foreground: "#2b1638", elevated: "#ffffff", muted: "#8b6b90", accent: "#ff5d8f", income: "#2a9d8f", expense: "#e11d48", line: "#ffd6e5", onAccent: "#ffffff", chart: "#ff8fab" },
-  cyberpunk: { background: "#090414", foreground: "#d8f3ff", elevated: "#140c28", muted: "#7aa8c4", accent: "#00e5ff", income: "#5cff8d", expense: "#ff2e97", line: "#2a1848", onAccent: "#041018", chart: "#00e5ff" },
+  cyberpunk: { background: "#07140c", foreground: "#f4fff6", elevated: "#102418", muted: "#7d9a86", accent: "#b6ff6a", income: "#7dff6a", expense: "#ff5a6a", line: "#1a3324", onAccent: "#06210c", chart: "#7dff6a" },
   shiba: { background: "#fff4e5", foreground: "#4a2a12", elevated: "#fffaf3", muted: "#b07a4a", accent: "#e67a2e", income: "#2f9e6a", expense: "#c2410c", line: "#f0dcc4", onAccent: "#ffffff", chart: "#30d158" },
   cat: { background: "#f7efe6", foreground: "#3b2a24", elevated: "#fffdf9", muted: "#9c7b6e", accent: "#d97757", income: "#3d8b6e", expense: "#b45309", line: "#eadcd4", onAccent: "#ffffff", chart: "#30d158" },
   panda: { background: "#f3f6f1", foreground: "#1f2a22", elevated: "#ffffff", muted: "#6f7f72", accent: "#3f7a4e", income: "#3f7a4e", expense: "#b42318", line: "#d7e0d8", onAccent: "#ffffff", chart: "#30d158" },
@@ -136,6 +140,10 @@ export function isMotionId(v: string | null | undefined): v is MotionId {
 
 export function isDepthId(v: string | null | undefined): v is DepthId {
   return DEPTH_IDS.includes(v as DepthId);
+}
+
+export function isGlowId(v: string | null | undefined): v is GlowId {
+  return GLOW_IDS.includes(v as GlowId);
 }
 
 export function readSavedTheme(): ThemeId {
@@ -172,6 +180,7 @@ export function readSavedCustom(): ThemeCustom {
       radius: isRadiusId(parsed.radius) ? parsed.radius : undefined,
       motion: isMotionId(parsed.motion) ? parsed.motion : undefined,
       depth: isDepthId(parsed.depth) ? parsed.depth : undefined,
+      glow: isGlowId(parsed.glow) ? parsed.glow : undefined,
     };
   } catch {
     return {};
@@ -188,11 +197,12 @@ export function colorsOnly(custom: ThemeCustom): ThemeCustom {
     radius: custom.radius,
     motion: custom.motion,
     depth: custom.depth,
+    glow: custom.glow,
   };
 }
 
 function themeWallpaper(id: ThemeId): string {
-  if (id === "normal" || id === "mist" || id === "ink") return "none";
+  if (id === "normal" || id === "mist" || id === "ink" || id === "cyberpunk") return "none";
   return `url("${assetUrl(`wallpapers/${id}.jpg`)}")`;
 }
 
@@ -313,4 +323,7 @@ export function applyTheme(theme: ThemeId, custom: ThemeCustom = {}): void {
   const depth = isDepthId(custom.depth) ? custom.depth : undefined;
   if (!depth) root.removeAttribute("data-depth");
   else root.setAttribute("data-depth", depth);
+  const glow = isGlowId(custom.glow) ? custom.glow : undefined;
+  if (!glow) root.removeAttribute("data-glow");
+  else root.setAttribute("data-glow", glow);
 }
