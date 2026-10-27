@@ -16,6 +16,8 @@ import {
   type AccessMode,
   type FontId,
   type FontSizeId,
+  type MotionId,
+  type RadiusId,
   type ThemeColorKey,
   type ThemeCustom,
   type ThemeId,
@@ -55,6 +57,8 @@ type UiState = {
   setFontSize: (id: FontSizeId) => void;
   setWallpaper: (mode: "none" | "theme" | "custom", dataUrl?: string) => void;
   setWallpaperOpacity: (n: number) => void;
+  setRadius: (id: RadiusId) => void;
+  setMotion: (id: MotionId) => void;
   resetCustomColors: () => void;
   setSelectedDate: (iso: string) => void;
   setTodayView: (v: TodayView) => void;
@@ -148,6 +152,20 @@ export const useUi = create<UiState>((set, get) => ({
   },
   setWallpaperOpacity: (n) => {
     const next = { ...get().customColors, wallpaperOpacity: clampWallpaperOpacity(n) };
+    persistCustom(next);
+    applyTheme(get().theme, next);
+    set({ customColors: next });
+  },
+  setRadius: (id) => {
+    const next = { ...get().customColors, radius: id === "regular" ? undefined : id };
+    if (id === "regular") delete next.radius;
+    persistCustom(next);
+    applyTheme(get().theme, next);
+    set({ customColors: next });
+  },
+  setMotion: (id) => {
+    const next = { ...get().customColors, motion: id === "soft" ? undefined : id };
+    if (id === "soft") delete next.motion;
     persistCustom(next);
     applyTheme(get().theme, next);
     set({ customColors: next });

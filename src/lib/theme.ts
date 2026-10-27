@@ -9,6 +9,12 @@ export type FontId = (typeof FONT_IDS)[number];
 export const FONT_SIZE_IDS = ["sm", "md", "lg", "xl"] as const;
 export type FontSizeId = (typeof FONT_SIZE_IDS)[number];
 
+export const RADIUS_IDS = ["tight", "regular", "round"] as const;
+export type RadiusId = (typeof RADIUS_IDS)[number];
+
+export const MOTION_IDS = ["off", "soft", "lively"] as const;
+export type MotionId = (typeof MOTION_IDS)[number];
+
 export const FONT_SIZE_PX: Record<FontSizeId, string> = {
   sm: "14px",
   md: "16px",
@@ -42,6 +48,8 @@ export type ThemeCustom = {
   wallpaper?: string;
   wallpaperMode?: "none" | "theme" | "custom";
   wallpaperOpacity?: number;
+  radius?: RadiusId;
+  motion?: MotionId;
 };
 
 export const ACCESS_MODES = ["standard", "elderly", "kid"] as const;
@@ -110,6 +118,14 @@ export function isFontSizeId(v: string | null | undefined): v is FontSizeId {
   return FONT_SIZE_IDS.includes(v as FontSizeId);
 }
 
+export function isRadiusId(v: string | null | undefined): v is RadiusId {
+  return RADIUS_IDS.includes(v as RadiusId);
+}
+
+export function isMotionId(v: string | null | undefined): v is MotionId {
+  return MOTION_IDS.includes(v as MotionId);
+}
+
 export function readSavedTheme(): ThemeId {
   try {
     const v = localStorage.getItem(THEME_KEY);
@@ -140,6 +156,8 @@ export function readSavedCustom(): ThemeCustom {
       wallpaper: typeof parsed.wallpaper === "string" ? parsed.wallpaper : undefined,
       wallpaperMode: parsed.wallpaperMode === "none" || parsed.wallpaperMode === "custom" || parsed.wallpaperMode === "theme" ? parsed.wallpaperMode : undefined,
       wallpaperOpacity: typeof parsed.wallpaperOpacity === "number" ? parsed.wallpaperOpacity : undefined,
+      radius: isRadiusId(parsed.radius) ? parsed.radius : undefined,
+      motion: isMotionId(parsed.motion) ? parsed.motion : undefined,
     };
   } catch {
     return {};
@@ -153,6 +171,8 @@ export function colorsOnly(custom: ThemeCustom): ThemeCustom {
     wallpaper: custom.wallpaper,
     wallpaperMode: custom.wallpaperMode,
     wallpaperOpacity: custom.wallpaperOpacity,
+    radius: custom.radius,
+    motion: custom.motion,
   };
 }
 
@@ -269,4 +289,10 @@ export function applyTheme(theme: ThemeId, custom: ThemeCustom = {}): void {
     root.setAttribute("data-wallpaper", "theme");
     root.style.setProperty("--app-wallpaper", THEME_WALLPAPERS[theme]);
   }
+  const radius = isRadiusId(custom.radius) ? custom.radius : "regular";
+  if (radius === "regular") root.removeAttribute("data-radius");
+  else root.setAttribute("data-radius", radius);
+  const motion = isMotionId(custom.motion) ? custom.motion : "soft";
+  if (motion === "soft") root.removeAttribute("data-motion");
+  else root.setAttribute("data-motion", motion);
 }
