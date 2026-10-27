@@ -14,6 +14,7 @@ import {
   THEME_CUSTOM_KEY,
   THEME_KEY,
   type AccessMode,
+  type DepthId,
   type FontId,
   type FontSizeId,
   type MotionId,
@@ -59,6 +60,7 @@ type UiState = {
   setWallpaperOpacity: (n: number) => void;
   setRadius: (id: RadiusId) => void;
   setMotion: (id: MotionId) => void;
+  setDepth: (id: DepthId) => void;
   resetCustomColors: () => void;
   setSelectedDate: (iso: string) => void;
   setTodayView: (v: TodayView) => void;
@@ -166,6 +168,14 @@ export const useUi = create<UiState>((set, get) => ({
   setMotion: (id) => {
     const next = { ...get().customColors, motion: id === "soft" ? undefined : id };
     if (id === "soft") delete next.motion;
+    persistCustom(next);
+    applyTheme(get().theme, next);
+    set({ customColors: next });
+  },
+  setDepth: (id) => {
+    const implied = get().theme === "mist" || get().theme === "ink" ? "soft" : "flat";
+    const next = { ...get().customColors, depth: id === implied ? undefined : id };
+    if (id === implied) delete next.depth;
     persistCustom(next);
     applyTheme(get().theme, next);
     set({ customColors: next });

@@ -33,7 +33,7 @@ import { buildFcBaseline, renderFcBaselineMarkdown, todayHkt } from "@/lib/calc/
 import { todayISO } from "@/lib/format";
 import { useApp, type AppSnapshot } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
-import { ACCESS_MODES, FONT_IDS, FONT_SIZE_IDS, FONT_STACKS, MOTION_IDS, RADIUS_IDS, THEME_IDS, THEME_PRESETS, normalizeHex, type FontId, type FontSizeId, type MotionId, type RadiusId, type ThemeId } from "@/lib/theme";
+import { ACCESS_MODES, DEPTH_IDS, FONT_IDS, FONT_SIZE_IDS, FONT_STACKS, MOTION_IDS, RADIUS_IDS, THEME_IDS, THEME_PRESETS, normalizeHex, type DepthId, type FontId, type FontSizeId, type MotionId, type RadiusId, type ThemeId } from "@/lib/theme";
 import { persistPwaIcon, readSavedPwaIcon, resizeImageFile, resizeWallpaperFile } from "@/lib/pwa-icon";
 import { assetUrl } from "@/lib/base";
 import { cn } from "@/lib/utils";
@@ -782,6 +782,7 @@ export function AppearancePage() {
   const setWallpaperOpacity = useUi((s) => s.setWallpaperOpacity);
   const setRadius = useUi((s) => s.setRadius);
   const setMotion = useUi((s) => s.setMotion);
+  const setDepth = useUi((s) => s.setDepth);
   const setAccessMode = useUi((s) => s.setAccessMode);
   const accessMode = useUi((s) => s.accessMode);
   const resetCustomColors = useUi((s) => s.resetCustomColors);
@@ -795,6 +796,8 @@ export function AppearancePage() {
     cat: t.more.themeCat,
     panda: t.more.themePanda,
     hongkong: t.more.themeHongkong,
+    mist: t.more.themeMist,
+    ink: t.more.themeInk,
   };
   const fontLabels: Record<FontId, string> = {
     theme: t.more.fontTheme,
@@ -816,6 +819,7 @@ export function AppearancePage() {
   const fontSize = custom.fontSize ?? "md";
   const radius = custom.radius ?? "regular";
   const motion = custom.motion ?? "soft";
+  const depth = custom.depth ?? (theme === "mist" || theme === "ink" ? "soft" : "flat");
   const wallpaperRef = useRef<HTMLInputElement>(null);
   const radiusLabels: Record<RadiusId, string> = {
     tight: t.more.shapeTight,
@@ -826,6 +830,15 @@ export function AppearancePage() {
     off: t.more.motionOff,
     soft: t.more.motionSoft,
     lively: t.more.motionLively,
+  };
+  const depthLabels: Record<DepthId, string> = {
+    flat: t.more.depthFlat,
+    soft: t.more.depthSoft,
+    lifted: t.more.depthLifted,
+  };
+  const themeArt: Partial<Record<ThemeId, string>> = {
+    mist: "linear-gradient(135deg,#c8f3d4 0%,#d7ebfb 52%,#ddd4f6 100%)",
+    ink: "linear-gradient(135deg,#f3cfcb 0%,#e7f6b0 46%,#171717 100%)",
   };
   return (
     <div className="pb-10">
@@ -877,6 +890,23 @@ export function AppearancePage() {
         ))}
       </div>
       <p className="px-5 pb-4 text-xs text-muted">{t.more.motionHint}</p>
+      <h2 className="px-5 pb-2 text-sm font-medium text-muted">{t.more.depth}</h2>
+      <div className="mx-4 mb-2 grid grid-cols-3 gap-2">
+        {DEPTH_IDS.map((id) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setDepth(id)}
+            className={cn(
+              "tr-press h-11 rounded-xl text-sm font-medium transition",
+              depth === id ? "bg-accent text-on-accent" : "bg-elevated ring-1 ring-line",
+            )}
+          >
+            {depthLabels[id]}
+          </button>
+        ))}
+      </div>
+      <p className="px-5 pb-4 text-xs text-muted">{t.more.depthHint}</p>
       <h2 className="px-5 pb-2 text-sm font-medium text-muted">{t.more.accessMode}</h2>
       <div className="mx-4 mb-5 grid grid-cols-3 gap-2">
         {ACCESS_MODES.map((id) => (
@@ -915,7 +945,7 @@ export function AppearancePage() {
               <span
                 className="block h-20 bg-cover bg-center"
                 style={{
-                  backgroundImage: id === "normal" ? "none" : `url("${assetUrl(`wallpapers/${id}.jpg`)}")`,
+                  backgroundImage: themeArt[id] ?? (id === "normal" ? "none" : `url("${assetUrl(`wallpapers/${id}.jpg`)}")`),
                   backgroundColor: swatch.background,
                 }}
               />

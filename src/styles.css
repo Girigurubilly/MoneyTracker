@@ -291,6 +291,62 @@ html[data-theme="hongkong"] {
   --color-income: #f0c14b;
   --color-expense: #ff6b6b;
 }
+html[data-theme="mist"] {
+  color-scheme: light;
+  --font-sans: Nunito, ui-rounded, "Hiragino Maru Gothic ProN", "PingFang HK", "Noto Sans TC", system-ui, sans-serif;
+  --font-display: Nunito, ui-rounded, "Hiragino Maru Gothic ProN", "PingFang HK", "Noto Sans TC", system-ui, sans-serif;
+  --color-background: #e4eef0;
+  --color-foreground: #1c2a33;
+  --color-elevated: #f7fbfa;
+  --color-muted: #6f8688;
+  --color-faint: #a3b8b8;
+  --color-line: #d3e3e4;
+  --color-accent: #2f9d74;
+  --color-on-accent: #ffffff;
+  --color-accent-soft: #d8f3e6;
+  --color-income: #3d8ec4;
+  --color-expense: #7a68b8;
+  --color-success-soft: #d9f6e6;
+  --color-expense-soft: #ece6f8;
+  --color-watch: #c47a3a;
+  --color-watch-soft: #f8ead8;
+  --color-chart-1: #7dce9a;
+  --color-chart-2: #8ebbe4;
+  --color-chart-3: #b7a6e6;
+  --color-chart-4: #f0c27a;
+  --color-chart-5: #6ec8c2;
+  --color-chart-6: #9fd0f2;
+  --color-chart-7: #c8b6f0;
+  --color-chart-8: #f2b4c4;
+}
+html[data-theme="ink"] {
+  color-scheme: light;
+  --font-sans: "Noto Sans TC", "PingFang HK", "Hiragino Sans", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Noto Sans TC", "PingFang HK", "Hiragino Sans", "Segoe UI", system-ui, sans-serif;
+  --color-background: #ece8f2;
+  --color-foreground: #161616;
+  --color-elevated: #f8f6fb;
+  --color-muted: #7d7886;
+  --color-faint: #b3aebc;
+  --color-line: #e3deea;
+  --color-accent: #c6ee55;
+  --color-on-accent: #161616;
+  --color-accent-soft: #eef8c4;
+  --color-income: #161616;
+  --color-expense: #c45d62;
+  --color-success-soft: #e7f6b0;
+  --color-expense-soft: #f6d8d4;
+  --color-watch: #161616;
+  --color-watch-soft: #ece8f2;
+  --color-chart-1: #171717;
+  --color-chart-2: #c6ee55;
+  --color-chart-3: #f0b8b4;
+  --color-chart-4: #8d8d8d;
+  --color-chart-5: #171717;
+  --color-chart-6: #d7ef8a;
+  --color-chart-7: #e7b2ae;
+  --color-chart-8: #4a4a4a;
+}
 
 html[data-wallpaper="theme"] body::before,
 html[data-wallpaper="custom"] body::before {
@@ -517,6 +573,21 @@ html[data-radius="round"] :where(.rounded-md, .rounded-lg) {
 }
 html[data-radius="round"] :where(.rounded-xl, .rounded-2xl, .rounded-3xl) {
   border-radius: 1.75rem;
+}
+
+html[data-theme="mist"]:not([data-depth]),
+html[data-theme="ink"]:not([data-depth]),
+html[data-depth="soft"] {
+  --card-shadow: 0 10px 28px rgb(28 40 48 / 0.08);
+}
+html[data-depth="lifted"] {
+  --card-shadow: 0 18px 44px rgb(20 28 36 / 0.16);
+}
+html[data-theme="mist"]:not([data-depth]) :where(.rounded-xl.bg-elevated, .rounded-2xl.bg-elevated, .rounded-3xl.bg-elevated),
+html[data-theme="ink"]:not([data-depth]) :where(.rounded-xl.bg-elevated, .rounded-2xl.bg-elevated, .rounded-3xl.bg-elevated),
+html[data-depth="soft"] :where(.rounded-xl.bg-elevated, .rounded-2xl.bg-elevated, .rounded-3xl.bg-elevated),
+html[data-depth="lifted"] :where(.rounded-xl.bg-elevated, .rounded-2xl.bg-elevated, .rounded-3xl.bg-elevated) {
+  box-shadow: var(--card-shadow);
 }
 
 @media (prefers-reduced-motion: no-preference) {
