@@ -129,20 +129,55 @@ export function tripForDate(trips: Trip[], date: string, current?: string): stri
   return [...hits].sort((a, b) => a.end.localeCompare(b.end) || a.start.localeCompare(b.start))[0]?.id;
 }
 
-export function applyAutoTrip(tx: Transaction, trips: Trip[]): Transaction {
+/**
+ * Auto-link only travel-themed categories (and spend-like transfers with those cats).
+ * Dining / other themes need an explicit trip pick (tripManual) — matches Travel page note.
+ */
+export function applyAutoTrip(tx: Transaction, trips: Trip[], travelCategoryIds?: Set<string>): Transaction {
   if (tx.tripManual) return tx;
   const eligible = tx.type === "expense" || (tx.type === "transfer" && tx.countsAsExpense);
   if (tx.planned || !eligible) {
     if (tx.tripId && !tx.tripManual) return { ...tx, tripId: undefined };
     return tx;
   }
+  if (travelCategoryIds) {
+    const travelCat = Boolean(tx.categoryId && travelCategoryIds.has(tx.categoryId));
+    if (!travelCat) {
+      if (tx.tripId && !tx.tripManual) return { ...tx, tripId: undefined };
+      return tx;
+    }
+  }
   const id = tripForDate(trips, tx.date, tx.tripId);
   if (id === tx.tripId) return tx;
   return { ...tx, tripId: id };
 }
 
-export function patchAutoTrips(txs: Transaction[], trips: Trip[]): Transaction[] {
-  return txs.map((tx) => applyAutoTrip(tx, trips));
+export function patchAutoTrips(txs: Transaction[], trips: Trip[], travelCategoryIds?: Set<string>): Transaction[] {
+  return txs.map((tx) => applyAutoTrip(tx, trips, travelCategoryIds));
+}
+
+/** Sum of cash budgets for trips overlapping a calendar year (cancelled excluded). */
+export function tripBudgetsForYear(trips: Trip[], year: number): number {
+  const y = String(year);
+  let n = 0;
+  for (const t of trips) {
+    if (t.status === "cancelled") continue;
+    if (!t.start || !t.end) continue;
+    if (t.start.slice(0, 4) > y || t.end.slice(0, 4) < y) continue;
+    n += Math.max(0, t.cashBudget || 0);
+  }
+  return n;
+}
+
+/** Prefer the annual travel budget; when unset, fall back to sum of trip cash budgets. */
+export function effectiveAnnualTravelBudget(
+  annual: number,
+  trips: Trip[],
+  year: number,
+): { budget: number; fromTrips: boolean } {
+  if (annual > 0) return { budget: annual, fromTrips: false };
+  const fromTrips = tripBudgetsForYear(trips, year);
+  return { budget: fromTrips, fromTrips: fromTrips > 0 };
 }
 
 export function tripLinkedTxs(txs: Transaction[], tripId: string): Transaction[] {

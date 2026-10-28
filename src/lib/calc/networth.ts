@@ -141,12 +141,16 @@ function cloneAccounts(accounts: Account[]): Account[] {
 
 export type WorthSnapshot = { month: string; net: number; assets: number; liab: number };
 
-/** Posted income − spend-like outflows in [from, to]. Plain transfers ignored. */
+/** Posted income − spend-like outflows in [from, to]. Plain transfers ignored.
+ *  By default uses each transaction’s frozen fxToHkd. Pass liveFx when reconciling
+ *  against net-worth points (which mark foreign balances at live rates).
+ */
 export function periodPostedCashflow(
   txs: Transaction[],
   rates: FxRate[],
   from: string,
   to: string,
+  opts?: { liveFx?: boolean },
 ): { income: number; expense: number; net: number } {
   let income = 0;
   let expense = 0;
@@ -155,7 +159,8 @@ export function periodPostedCashflow(
     if (!inPeriod(tx.date, from, to)) continue;
     const side = cashflowSide(tx);
     if (side === "none") continue;
-    const hkd = Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
+    const override = opts?.liveFx ? undefined : tx.fxToHkd;
+    const hkd = Math.abs(toHkd(tx.amount, tx.currency, rates, override));
     if (side === "income") income += hkd;
     else expense += hkd;
   }
