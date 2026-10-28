@@ -29,7 +29,7 @@ export function CashflowPage() {
   const income = useMemo(() => periodCategoryTotals(txs, cats, rates, from, to, "income", true), [txs, cats, rates, from, to]);
   const expense = useMemo(() => periodCategoryTotals(txs, cats, rates, from, to, "expense", true), [txs, cats, rates, from, to]);
   const surplus = income.income - expense.expense;
-  const rate = income.income > 0 ? surplus / income.income : 0;
+  const rate = income.income > 0 ? surplus / income.income : null;
   const inRows = topRows(income.rows, 5);
   const outRows = topRows(expense.rows, 6);
   const presets: { id: PeriodPreset; label: string }[] = [
@@ -76,9 +76,16 @@ export function CashflowPage() {
       </div>
 
       <div className="mx-4 mt-4 space-y-3">
-        <Stat label={t.reports.spendCats} value={money(expense.expense, "HKD")} />
+        <Stat label={t.reports.totalSpend} value={money(expense.expense, "HKD")} />
         <Stat label={t.reports.netSurplus} value={money(surplus, "HKD", { sign: true })} tone={surplus >= 0 ? "income" : "expense"} />
-        <Stat label={t.reports.savingsRate} value={pct(rate)} tone={rate >= 0 ? "income" : "expense"} />
+        <Stat
+          label={t.reports.savingsRate}
+          value={rate == null ? "—" : pct(rate)}
+          tone={rate == null ? undefined : rate >= 0 ? "income" : "expense"}
+        />
+        {rate == null && expense.expense > 0.005 ? (
+          <p className="px-1 text-[11px] leading-4 text-faint">{t.reports.savingsRateNoIncome}</p>
+        ) : null}
       </div>
 
       <FlowSankey
@@ -136,6 +143,10 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "in
   );
 }
 
+function sum(xs: number[]): number {
+  return xs.reduce((a, b) => a + b, 0);
+}
+
 function topRows<T extends { value: number; id: string; name: string; nameZh: string }>(rows: T[], n: number): T[] {
   if (rows.length <= n) return rows;
   const head = rows.slice(0, n - 1);
@@ -165,17 +176,26 @@ function FlowSankey({
   surplusLabel: string;
 }) {
   const w = 360;
-  const h = 280;
-  const pad = 8;
-  const bar = 10;
+  const pad = 12;
+  const bar = 12;
   const left = 4;
   const mid1 = 118;
   const mid2 = 168;
   const right = 346;
+  const minUsable = 220;
+  const roughScale = income > 0 ? minUsable / income : 0;
+  const inH0 = inRows.map((r) => Math.max(14, r.value * roughScale));
+  const outH0 = outRows.map((r) => Math.max(14, r.value * roughScale));
+  const needed = Math.max(
+    minUsable,
+    sum(inH0) + Math.max(0, inRows.length - 1) * 8,
+    sum(outH0) + Math.max(0, outRows.length - 1) * 8,
+  );
+  const h = needed + pad * 2 + 28;
   const usable = h - pad * 2;
   const scale = income > 0 ? usable / income : 0;
-  const inH = inRows.map((r) => Math.max(6, r.value * scale));
-  const outH = outRows.map((r) => Math.max(6, r.value * scale));
+  const inH = inRows.map((r) => Math.max(14, r.value * scale));
+  const outH = outRows.map((r) => Math.max(14, r.value * scale));
   const spendH = Math.max(8, expense * scale);
   const saveH = Math.max(surplus > 0 ? 8 : 0, surplus * scale);
   let yIn = pad;
@@ -211,7 +231,7 @@ function FlowSankey({
   let outOff = 0;
   return (
     <div className="mx-2 mt-3 overflow-x-auto">
-      <svg viewBox={`0 0 ${w} ${h}`} className="mx-auto h-[18rem] w-full max-w-lg">
+      <svg viewBox={`0 0 ${w} ${h}`} className="mx-auto w-full max-w-lg" style={{ height: Math.min(420, Math.max(260, h * 0.95)) }}>
         {inNodes.map((n) => {
           const link = ribbon(left + bar, n.y, n.h, mid1, totalY + (n.y - pad) * (totalH / Math.max(usable, 1)), n.h * (totalH / Math.max(yIn - pad, 1)), n.color);
           inOff += n.h;

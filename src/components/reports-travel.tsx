@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Plus, ChevronDown } from "lucide-react";
+import { Plus } from "lucide-react";
 import { InfoButton, Overlay, ProgressRing, ScreenHeader, SectionLabel, BudgetChip, TxGroupedList } from "@/components/shared";
 import { Enter, useCountUp } from "@/components/retire-ux";
 import { ComposerHeader, ComposerShell, LineRow, TextLine, ActiveKeypad } from "@/components/txn-composer";
@@ -9,6 +9,7 @@ import { pickName } from "@/lib/i18n";
 import { toHkd } from "@/lib/calc/fx";
 import { cashflowSide } from "@/lib/calc/ledger";
 import {
+  effectiveAnnualTravelBudget,
   isTripActive,
   travelSpendYtdSplit,
   travelUnlinkedTxs,
@@ -36,7 +37,9 @@ export function TravelPage() {
   const travelIds = useMemo(() => new Set(cats.filter((c) => c.theme === "travel").map((c) => c.id)), [cats]);
   const year = Number(todayISO().slice(0, 4));
   const ytd = travelSpendYtdSplit(txs, year, travelIds, rates);
-  const yearOver = annual > 0 && ytd.total > annual;
+  const annualEff = effectiveAnnualTravelBudget(annual, trips, year);
+  const travelBudget = annualEff.budget;
+  const yearOver = travelBudget > 0 && ytd.total > travelBudget;
   const [adding, setAdding] = useState(false);
   const [editAnnual, setEditAnnual] = useState(false);
   const [showUnlinked, setShowUnlinked] = useState(false);
@@ -46,20 +49,20 @@ export function TravelPage() {
   const [stickyOn, setStickyOn] = useState(false);
   const summaryRef = useRef<HTMLDivElement>(null);
   const unlinked = travelUnlinkedTxs(txs, year, travelIds);
-  const today = todayISO();
-  const grouped = useMemo(() => groupTravelTrips(trips, today, year), [trips, today, year]);
-  const { current, pastThisYear, olderYears, pastCount } = grouped;
+  const visible = trips.filter((tr) => tr.status !== "cancelled");
+  const current = visible.filter((tr) => tr.end >= todayISO());
+  const past = visible.filter((tr) => tr.end < todayISO()).sort((a, b) => b.end.localeCompare(a.end) || b.start.localeCompare(a.start));
   const tripsWithSpend = useMemo(() => {
     const ids = new Set(
       txs
         .filter((tx) => tx.tripId && !tx.planned && tx.type === "expense" && tx.date.startsWith(String(year)))
         .map((tx) => tx.tripId as string),
     );
-    return trips.filter((tr) => tr.status !== "cancelled" && ids.has(tr.id));
-  }, [txs, trips, year]);
+    return visible.filter((tr) => ids.has(tr.id));
+  }, [txs, visible, year]);
   const linkCandidates = useMemo(
-    () => trips.filter((tr) => tr.status !== "cancelled" && isTripActive(tr, today)),
-    [trips, today],
+    () => visible.filter((tr) => isTripActive(tr, todayISO())),
+    [visible],
   );
 
   useEffect(() => {
@@ -80,12 +83,12 @@ export function TravelPage() {
 
   const shownTotal = useCountUp(countReady ? ytd.total : 0, false, 500);
   const shownUnlinked = useCountUp(countReady ? ytd.unlinked : 0, false, 500);
-  const ringPct = annual > 0 ? ytd.total / annual : 0;
+  const ringPct = travelBudget > 0 ? ytd.total / travelBudget : 0;
 
   async function attachTrip(txId: string, tripId: string) {
     const tx = txs.find((row) => row.id === txId);
     if (!tx) return;
-    await updateTx({ ...tx, tripId }, tx);
+    await updateTx({ ...tx, tripId, tripManual: true }, tx);
     setLinkTxId(null);
   }
 
@@ -109,7 +112,7 @@ export function TravelPage() {
           <div className="relative shrink-0">
             <ProgressRing value={ringPct} size={36} stroke={3} tone={yearOver ? "expense" : "income"} />
             <span className="pointer-events-none absolute inset-0 grid place-items-center text-[9px] font-semibold tabular-nums">
-              {annual > 0 ? `${Math.round(ringPct * 100)}%` : "—"}
+              {travelBudget > 0 ? `${Math.round(ringPct * 100)}%` : "—"}
             </span>
           </div>
           <div className="min-w-0 flex-1">
@@ -133,12 +136,21 @@ export function TravelPage() {
               <button type="button" className="tr-press min-w-0 text-left" onClick={() => setEditAnnual(true)}>
                 <div className="text-xs font-medium text-accent">{t.reports.annualTravel}</div>
                 <div className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{money(shownTotal, "HKD")}</div>
-                <div className="mt-0.5 text-xs text-muted">/ {money(annual, "HKD")}</div>
+                <div className="mt-0.5 text-xs text-muted">
+                  {travelBudget > 0 ? (
+                    <>
+                      / {money(travelBudget, "HKD")}
+                      {annualEff.fromTrips ? <span className="text-faint"> · {t.reports.travelBudgetFromTrips}</span> : null}
+                    </>
+                  ) : (
+                    <>/ {t.reports.notSet}</>
+                  )}
+                </div>
               </button>
               <div className="relative shrink-0">
                 <ProgressRing value={ringPct} size={64} stroke={5} tone={yearOver ? "expense" : "income"} draw />
                 <span className="pointer-events-none absolute inset-0 grid place-items-center text-[11px] font-semibold tabular-nums">
-                  {annual > 0 ? `${Math.round(ringPct * 100)}%` : "—"}
+                  {travelBudget > 0 ? `${Math.round(ringPct * 100)}%` : "—"}
                 </span>
               </div>
             </div>
@@ -173,7 +185,7 @@ export function TravelPage() {
               </div>
               <div className="rounded-xl bg-background px-3 py-2">
                 <div className="text-[11px] text-muted">{t.reports.pastTrips}</div>
-                <div className="mt-0.5 text-sm font-semibold tabular-nums">{pastCount}</div>
+                <div className="mt-0.5 text-sm font-semibold tabular-nums">{past.length}</div>
               </div>
             </div>
           </div>
@@ -185,17 +197,14 @@ export function TravelPage() {
         <TripCard key={tr.id} trip={tr} />
       ))}
       {current.length === 0 ? <p className="px-5 py-6 text-center text-sm text-muted">{t.common.none}</p> : null}
-      {pastThisYear.length ? (
+      {past.length ? (
         <>
           <SectionLabel>{t.reports.pastTrips}</SectionLabel>
-          {pastThisYear.map((tr) => (
+          {past.map((tr) => (
             <TripCard key={tr.id} trip={tr} />
           ))}
         </>
       ) : null}
-      {olderYears.map((group) => (
-        <PastYearTrips key={group.year} year={group.year} rows={group.rows} />
-      ))}
 
       <TripEditor key={adding ? "new-trip" : "new-idle"} open={adding} onClose={() => setAdding(false)} />
       <Overlay open={editAnnual} onClose={() => setEditAnnual(false)} title={t.reports.annualTravel}>
@@ -308,55 +317,6 @@ export function TravelPage() {
           )}
         </div>
       </Overlay>
-    </div>
-  );
-}
-
-function byStartAsc(a: Trip, b: Trip): number {
-  return a.start.localeCompare(b.start) || a.end.localeCompare(b.end);
-}
-
-function byEndDesc(a: Trip, b: Trip): number {
-  return b.end.localeCompare(a.end) || b.start.localeCompare(a.start);
-}
-
-function groupTravelTrips(trips: Trip[], today: string, year: number) {
-  const visible = trips.filter((tr) => tr.status !== "cancelled");
-  const yearKey = String(year);
-  const current = visible.filter((tr) => tr.end >= today).sort(byStartAsc);
-  const past = visible.filter((tr) => tr.end < today);
-  const pastThisYear = past.filter((tr) => tr.end.startsWith(yearKey)).sort(byEndDesc);
-  const byYear = new Map<string, Trip[]>();
-  for (const tr of past) {
-    const y = tr.end.slice(0, 4);
-    if (y === yearKey) continue;
-    const list = byYear.get(y) ?? [];
-    list.push(tr);
-    byYear.set(y, list);
-  }
-  const olderYears = [...byYear.entries()]
-    .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([y, rows]) => ({ year: y, rows: rows.sort(byEndDesc) }));
-  return { current, pastThisYear, olderYears, pastCount: past.length };
-}
-
-function PastYearTrips({ year, rows }: { year: string; rows: Trip[] }) {
-  const t = useT();
-  const loc = useUi((s) => s.locale);
-  const [open, setOpen] = useState(false);
-  const label = loc === "zh-HK" ? `${year}年` : year;
-  return (
-    <div>
-      <button type="button" className="tr-press flex w-full items-center justify-between px-5 pb-1 pt-5 text-left" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        <span className="text-sm font-medium text-muted">
-          {t.reports.pastTrips} · {label}
-        </span>
-        <span className="flex items-center gap-1 text-xs text-faint">
-          <span className="tabular-nums">{rows.length}</span>
-          <ChevronDown className={cn("size-4 transition", open && "rotate-180")} />
-        </span>
-      </button>
-      {open ? rows.map((tr) => <TripCard key={tr.id} trip={tr} />) : null}
     </div>
   );
 }

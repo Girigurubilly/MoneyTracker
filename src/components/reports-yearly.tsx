@@ -16,11 +16,11 @@ export function YearlyPage() {
   const locale = useUi((s) => s.locale);
   const plans = useApp((s) => s.yearlyPlans);
   const deposits = useApp((s) => s.deposits);
-  const promos = useApp((s) => s.promoSavings);
   const rates = useApp((s) => s.fxRates);
   const txs = useApp((s) => s.transactions);
   const cats = useApp((s) => s.categories);
   const recurring = useApp((s) => s.recurring);
+  const adhoc = useApp((s) => s.adhocBudgets);
   const budgets = useApp((s) => s.budgets);
   const setYearlyCell = useApp((s) => s.setYearlyCell);
   const setYearlyDefaultsYear = useApp((s) => s.setYearlyDefaultsYear);
@@ -49,7 +49,7 @@ export function YearlyPage() {
     monthCap,
     recurring,
     isNextYear ? "" : today,
-    promos,
+    adhoc,
   );
   const months = locale === "zh-HK" ? MONTHS_ZH : MONTHS_EN;
   const markdown = useMemo(
@@ -231,9 +231,13 @@ export function YearlyPage() {
         </div>
       </Enter>
 
-      <button type="button" className="tr-press mx-4 mb-2 text-left text-xs leading-5 text-muted underline-offset-2 hover:underline" onClick={() => setHint(true)}>
-        {t.reports.yearlyPastHint.slice(0, 48)}…
-      </button>
+      <div className="mx-4 mb-3 rounded-xl bg-elevated px-3 py-3">
+        <div className="text-[11px] font-medium text-accent">{t.reports.yearlyHowTitle}</div>
+        <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.yearlyRulesBlurb}</p>
+        <button type="button" className="tr-press mt-2 text-left text-[11px] font-medium text-accent underline-offset-2 hover:underline" onClick={() => setHint(true)}>
+          {t.reports.yearlyRulesMore}
+        </button>
+      </div>
 
       <ReportAiButton onClick={() => setAi(true)} />
       {ai ? (

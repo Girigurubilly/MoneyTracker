@@ -9,6 +9,7 @@ import {
   Home,
   Landmark,
   LayoutDashboard,
+  LineChart,
   Plane,
   Receipt,
   Scale,
@@ -22,14 +23,14 @@ import { money, pct, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { monthKeysBack, monthLabel } from "@/lib/derived";
 import { budgetActuals, committedOutflows, monthEndIso, monthFlow } from "@/lib/calc/budget";
-import { nextTrip, travelSpendYtd, tripCashSpent } from "@/lib/calc/trips";
+import { effectiveAnnualTravelBudget, nextTrip, travelSpendYtd, tripCashSpent } from "@/lib/calc/trips";
 import { effectiveRate } from "@/lib/calc/mortgage";
 import { housingStatus, monthlyHousingCost } from "@/lib/calc/housing";
-import { netWorthNow } from "@/lib/calc/networth";
+import { netWorthNow, periodNetWorthPoints } from "@/lib/calc/networth";
 import { useRetirementHeadline } from "@/components/reports-retire";
 import { periodCashflowPoints, periodRange, type PeriodPreset } from "@/lib/calc/period";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
-import { monthKey, netCashMovementHkd } from "@/lib/calc/ledger";
+import { monthKey } from "@/lib/calc/ledger";
 import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 import { cn } from "@/lib/utils";
@@ -56,6 +57,7 @@ export function ReportsHub() {
     { to: "/reports/trends", title: t.reports.trends, icon: TrendingUp, modes: ["standard", "elderly"] },
     { to: "/reports/compare", title: t.reports.yearCompare, icon: GitCompare, modes: ["standard"] },
     { to: "/reports/balance", title: t.reports.balance, icon: Scale, modes: ["standard", "elderly"] },
+    { to: "/reports/worth", title: t.reports.worthTrend, icon: LineChart, modes: ["standard", "elderly"] },
     { to: "/reports/deposits", title: t.reports.deposits, icon: Landmark, modes: ["standard", "elderly"] },
     { to: "/reports/prices", title: t.prices.title, icon: BadgeDollarSign, modes: ["standard", "elderly"] },
     { to: "/reports/yearly", title: t.reports.yearly, icon: CalendarRange, modes: ["standard"] },
@@ -65,7 +67,7 @@ export function ReportsHub() {
   ].filter((it) => it.modes.includes(access));
   const groups = [
     { id: "flow", title: t.reports.groupFlow, items: items.filter((it) => ["/reports/dashboard", "/reports/spending", "/reports/cashflow", "/reports/trends", "/reports/compare"].includes(it.to)) },
-    { id: "save", title: t.reports.groupSave, items: items.filter((it) => ["/reports/balance", "/reports/deposits", "/reports/prices", "/reports/yearly"].includes(it.to)) },
+    { id: "save", title: t.reports.groupSave, items: items.filter((it) => ["/reports/balance", "/reports/worth", "/reports/deposits", "/reports/prices", "/reports/yearly"].includes(it.to)) },
     { id: "life", title: t.reports.groupLife, items: items.filter((it) => ["/reports/living", "/reports/travel", "/reports/retirement"].includes(it.to)) },
   ].filter((g) => g.items.length);
   return (
@@ -116,6 +118,8 @@ export function DashboardPage() {
   const houseStatus = housingStatus(m);
   const travelIds = new Set(cats.filter((c) => c.theme === "travel").map((c) => c.id));
   const ytd = travelSpendYtd(txs, Number(today.slice(0, 4)), travelIds, rates);
+  const annualEff = effectiveAnnualTravelBudget(annual, trips, Number(today.slice(0, 4)));
+  const travelBudget = annualEff.budget;
   const nxt = nextTrip(trips, today);
   const nxtSpent = nxt ? tripCashSpent(txs, nxt.id, rates, adhoc) : 0;
   const month = monthKey(today);
@@ -138,14 +142,15 @@ export function DashboardPage() {
   const afterCommit = available - next14;
   const nw = netWorthNow(accounts, rates, deposits);
   const prevEnd = monthEndIso(shiftYm(month, -1));
-  const nwDelta = netCashMovementHkd(txs, accounts, rates, prevEnd, today);
+  const prevWorth = periodNetWorthPoints(accounts, txs, rates, prevEnd, prevEnd, deposits).at(-1)?.net;
+  const nwDelta = prevWorth == null ? 0 : nw.net - prevWorth;
   const saveM = flow.income > 0 ? flow.net / flow.income : 0;
   const saveY = ytdFlow.income > 0 ? (ytdFlow.income - ytdFlow.expense) / ytdFlow.income : 0;
   const incomeZero = flow.income <= 0.005;
   const ledgerLive =
     txs.some((tx) => !tx.planned) ||
     accounts.some((a) => a.type !== "miles" && a.currency !== "MILES" && Math.abs(a.balance) > 0.005);
-  const yearTravelPct = annual > 0 ? ytd / annual : 0;
+  const yearTravelPct = travelBudget > 0 ? ytd / travelBudget : 0;
   const tripPct = nxt && nxt.cashBudget > 0 ? nxtSpent / nxt.cashBudget : 0;
   const shownAvail = useCountUp(available, false, 420);
   const monthTitle = monthLabel(month, loc);
@@ -184,6 +189,7 @@ export function DashboardPage() {
                 </span>
               ) : null}
             </div>
+            <p className="mt-1.5 text-[11px] leading-4 text-faint">{t.reports.availableActOn}</p>
           </button>
           <div className="mt-3 border-t border-line pt-1">
             <DashRow label={t.reports.mtdVsBudget} value={cap ? `${money(spent, "HKD")} / ${money(cap, "HKD")}` : money(spent, "HKD")} />
@@ -230,11 +236,11 @@ export function DashboardPage() {
             <div className="flex items-start justify-between gap-2">
               <h2 className="text-base font-semibold">{t.reports.travel}</h2>
               <div className="flex items-center gap-2">
-                {ledgerLive && annual > 0 ? <BudgetChip over={ytd > annual} /> : <span className="text-xs font-medium text-muted">{t.reports.notSet}</span>}
+                {ledgerLive && travelBudget > 0 ? <BudgetChip over={ytd > travelBudget} /> : <span className="text-xs font-medium text-muted">{t.reports.notSet}</span>}
                 <div className="relative shrink-0">
-                  <ProgressRing value={yearTravelPct} size={36} stroke={3} tone={ytd > annual && annual > 0 ? "expense" : "income"} draw />
+                  <ProgressRing value={yearTravelPct} size={36} stroke={3} tone={ytd > travelBudget && travelBudget > 0 ? "expense" : "income"} draw />
                   <span className="pointer-events-none absolute inset-0 grid place-items-center text-[9px] font-semibold tabular-nums">
-                    {annual > 0 ? `${Math.round(yearTravelPct * 100)}%` : "—"}
+                    {travelBudget > 0 ? `${Math.round(yearTravelPct * 100)}%` : "—"}
                   </span>
                 </div>
               </div>
@@ -243,7 +249,11 @@ export function DashboardPage() {
               <div className="text-xs text-muted">{t.reports.travelYtd}</div>
               <div className="mt-1 text-base font-semibold tabular-nums leading-snug">
                 {money(ytd, "HKD")}
-                <span className="text-sm font-normal text-muted"> / {money(annual, "HKD")}</span>
+                <span className="text-sm font-normal text-muted">
+                  {" "}
+                  / {travelBudget > 0 ? money(travelBudget, "HKD") : t.reports.notSet}
+                  {annualEff.fromTrips ? <span className="text-faint"> · {t.reports.travelBudgetFromTrips}</span> : null}
+                </span>
               </div>
             </div>
             <div className="mt-2 flex justify-end">
@@ -252,7 +262,7 @@ export function DashboardPage() {
           </Link>
           <button type="button" className="tr-press mt-2 w-full rounded-lg bg-background px-3 py-2 text-left text-[11px] leading-4 text-muted" onClick={() => setExplain("travel")}>
             <span className="font-medium text-[var(--color-foreground)]">
-              {t.reports.travelYearUsed.replace("{pct}", annual > 0 ? `${Math.round(yearTravelPct * 100)}%` : "—")}
+              {t.reports.travelYearUsed.replace("{pct}", travelBudget > 0 ? `${Math.round(yearTravelPct * 100)}%` : "—")}
             </span>
             {nxt ? (
               <>
