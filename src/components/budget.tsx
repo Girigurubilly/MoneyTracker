@@ -437,7 +437,10 @@ function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recur
           </span>
         ) : null}
       </div>
-      <div className="flex items-center justify-end px-5 pb-1 pt-1">
+      <div className="flex items-center justify-end gap-4 px-5 pb-1 pt-1">
+        <Link to="/more/regulars" className="flex min-h-11 items-center text-xs font-medium text-accent">
+          {t.budget.manageRegulars}
+        </Link>
         <button type="button" onClick={onAdd} className="flex min-h-11 items-center px-1 text-sm font-medium text-accent">
           {t.budget.addRegular}
         </button>
@@ -979,7 +982,7 @@ function AdhocEditorBody({
   );
 }
 
-function RegularEditor({ open, initial, onClose }: { open: boolean; initial: Recurring | null; onClose: () => void }) {
+export function RegularEditor({ open, initial, onClose }: { open: boolean; initial: Recurring | null; onClose: () => void }) {
   return (
     <Overlay open={open} onClose={onClose} variant="page">
       {open ? <RegularEditorBody key={initial?.id ?? "new"} initial={initial} onClose={onClose} /> : null}
