@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ChevronRight } from "lucide-react";
 import { ScreenHeader } from "@/components/shared";
 import { ReportAiButton, ReportAiSheet } from "@/components/report-ai-sheet";
@@ -21,8 +21,8 @@ export function YearComparePage() {
   const rates = useApp((s) => s.fxRates);
   const plans = useApp((s) => s.yearlyPlans);
   const deposits = useApp((s) => s.deposits);
-  const promos = useApp((s) => s.promoSavings);
   const recurring = useApp((s) => s.recurring);
+  const adhoc = useApp((s) => s.adhocBudgets);
   const budgets = useApp((s) => s.budgets);
   const today = todayISO();
   const [mode, setMode] = useState<YearCompareMode>("same-stage");
@@ -38,9 +38,9 @@ export function YearComparePage() {
   const proj = useMemo(
     () =>
       projected
-        ? yearProjectionCompare(plans, deposits, rates, txs, cats, recurring, today, monthCap, promos)
+        ? yearProjectionCompare(plans, deposits, rates, txs, cats, recurring, today, monthCap, adhoc)
         : null,
-    [projected, plans, deposits, rates, txs, cats, recurring, today, monthCap, promos],
+    [projected, plans, deposits, rates, txs, cats, recurring, today, monthCap, adhoc],
   );
 
   const data = useMemo(
@@ -278,6 +278,7 @@ export function YearComparePage() {
                 formatter={(value) => money(Number(value) || 0, "HKD")}
                 contentStyle={{ background: "var(--color-elevated)", border: "1px solid var(--color-line)", borderRadius: 12 }}
               />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
               <Bar dataKey="thisYear" name={thisCol} fill="var(--color-accent)" radius={[4, 4, 0, 0]} />
               <Bar dataKey="lastYear" name={lastCol} fill="var(--color-muted)" radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -287,6 +288,7 @@ export function YearComparePage() {
         <p className="px-5 py-8 text-center text-sm text-muted">{t.reports.noTransactions}</p>
       )}
 
+      <p className="px-5 pt-1 text-[11px] leading-4 text-faint">{t.reports.comparePctDashHint}</p>
       <div className="px-5 pt-2">
         {(projected ? (proj?.rows ?? []) : data.rows).map((r) => {
           const tone = r.delta > 0 ? "text-expense" : r.delta < 0 ? "text-income" : "text-muted";

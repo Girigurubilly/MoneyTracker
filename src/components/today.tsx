@@ -219,7 +219,10 @@ function TodayBody() {
             {onThisMonth ? (
               <>
                 <div className="mx-4 mb-2 rounded-xl bg-elevated px-4 py-1">
-                  <SummaryRow label={t.today.remainingBudget} value={money(stats.remainingBudget, "HKD")} />
+                  <SummaryRow
+                    label={t.today.remainingBudget}
+                    value={target > 0 ? money(stats.remainingBudget, "HKD") : "—"}
+                  />
                   <SummaryRow label={t.today.remainingDisc} value={money(stats.remainingDisc, "HKD")} info="disc" />
                 </div>
                 <p className="px-5 pb-2 text-xs text-faint">{t.today.guidance}</p>
@@ -325,7 +328,7 @@ type ScheduleRowModel = {
   amount: number;
   currency: MoneyUnit;
   tone: "income" | "expense" | "plain";
-  to?: "/more/regulars" | "/more/adhoc";
+  to?: "/budget" | "/more/adhoc";
   txId?: string;
 };
 
@@ -365,7 +368,7 @@ function monthSchedule(opts: {
       amount,
       currency: r.currency,
       tone: r.type === "income" ? "income" : spend ? "expense" : "plain",
-      to: "/more/regulars",
+      to: "/budget",
     });
   }
   for (const a of opts.adhoc) {
@@ -446,9 +449,9 @@ function ScheduleRow({ row, onTx }: { row: ScheduleRowModel; onTx: (id: string) 
     </>
   );
   const className = "tr-press flex w-full items-center gap-3 px-5 py-3 text-left";
-  if (row.to === "/more/regulars") {
+  if (row.to === "/budget") {
     return (
-      <Link to="/more/regulars" className={className}>
+      <Link to="/budget" className={className}>
         {body}
       </Link>
     );

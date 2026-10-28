@@ -21,7 +21,7 @@ import {
 } from "@/components/txn-composer";
 import { asOfForMonth, adhocTotal, budgetActuals, chargedDayOf, forecastTone, monthlyRegularsNetHkd, regularSettledInMonth } from "@/lib/calc/budget";
 import { WhenField } from "@/components/when-picker";
-import { travelSpendYtd, isTripActive } from "@/lib/calc/trips";
+import { effectiveAnnualTravelBudget, travelSpendYtd, isTripActive } from "@/lib/calc/trips";
 import { monthKey } from "@/lib/calc/ledger";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
 import type { AdhocBudget, Budget, Currency, Recurring, TxType, WishItem } from "@/lib/types";
@@ -46,6 +46,7 @@ export function BudgetScreen() {
   const adhocRows = useApp((s) => s.adhocBudgets);
   const targetMode = useApp((s) => s.budgetTargetMode);
   const annual = useApp((s) => s.annualTravelBudget);
+  const trips = useApp((s) => s.trips);
   const updateBudget = useApp((s) => s.updateBudget);
   const deleteBudget = useApp((s) => s.deleteBudget);
   const today = todayISO();
@@ -70,7 +71,10 @@ export function BudgetScreen() {
   const categoryActuals = actuals.filter((b) => b.id !== MONTH_TOTAL_BUDGET_ID);
   const travelIds = new Set(categories.filter((c) => c.theme === "travel").map((c) => c.id));
   const spent = travelSpendYtd(txs, Number(month.slice(0, 4)), travelIds, rates);
-  const travelPct = annual > 0 ? spent / annual : 0;
+  const travelYear = Number(month.slice(0, 4));
+  const annualEff = effectiveAnnualTravelBudget(annual, trips, travelYear);
+  const travelBudget = annualEff.budget;
+  const travelPct = travelBudget > 0 ? spent / travelBudget : 0;
   const travelTone = forecastTone(travelPct);
   const [editCap, setEditCap] = useState(false);
   const [capDraft, setCapDraft] = useState("");
@@ -129,15 +133,21 @@ export function BudgetScreen() {
         </div>
         <div className="mt-3 flex flex-wrap items-baseline gap-x-1 text-sm font-medium">
           <span>{t.budget.remaining}:</span>
-          <span className="tabular-nums">{money(monthRemain, "HKD")}</span>
-          <span className="text-xs font-normal text-muted">
-            {daysRemaining > 0 ? `· ${daysRemaining} ${t.budget.daysLeft}` : `· ${t.budget.lastDay}`}
-          </span>
+          <span className="tabular-nums">{monthCap > 0 ? money(monthRemain, "HKD") : "—"}</span>
+          {monthCap > 0 ? (
+            <span className="text-xs font-normal text-muted">
+              {daysRemaining > 0 ? `· ${daysRemaining} ${t.budget.daysLeft}` : `· ${t.budget.lastDay}`}
+            </span>
+          ) : (
+            <span className="text-xs font-normal text-muted">· {t.budget.noCapSet}</span>
+          )}
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <div className="rounded-xl bg-accent-soft px-3 py-3">
             <div className="text-[11px] font-medium leading-4 text-accent">{t.budget.dailyAllowed}</div>
-            <div className="mt-1 text-lg font-semibold leading-tight tabular-nums text-accent">{money(dailyAllowed, "HKD")}</div>
+            <div className="mt-1 text-lg font-semibold leading-tight tabular-nums text-accent">
+              {monthCap > 0 ? money(dailyAllowed, "HKD") : "—"}
+            </div>
           </div>
           <div className="rounded-xl px-3 py-3 ring-1 ring-line">
             <div className="text-[11px] font-medium leading-4 text-muted">{t.budget.avgDaily}</div>
@@ -251,7 +261,10 @@ export function BudgetScreen() {
         </div>
         <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
           <span className="text-xl font-semibold tabular-nums">{money(spent, "HKD")}</span>
-          <span className="text-sm text-muted">/ {money(annual, "HKD")}</span>
+          <span className="text-sm text-muted">
+            / {travelBudget > 0 ? money(travelBudget, "HKD") : "—"}
+            {annualEff.fromTrips ? <span className="text-faint"> · {t.reports.travelBudgetFromTrips}</span> : null}
+          </span>
         </div>
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ring-track">
           <div
@@ -424,10 +437,7 @@ function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recur
           </span>
         ) : null}
       </div>
-      <div className="flex items-center justify-end gap-4 px-5 pb-1 pt-1">
-        <Link to="/more/regulars" className="flex min-h-11 items-center text-xs font-medium text-accent">
-          {t.budget.manageRegulars}
-        </Link>
+      <div className="flex items-center justify-end px-5 pb-1 pt-1">
         <button type="button" onClick={onAdd} className="flex min-h-11 items-center px-1 text-sm font-medium text-accent">
           {t.budget.addRegular}
         </button>
@@ -969,7 +979,7 @@ function AdhocEditorBody({
   );
 }
 
-export function RegularEditor({ open, initial, onClose }: { open: boolean; initial: Recurring | null; onClose: () => void }) {
+function RegularEditor({ open, initial, onClose }: { open: boolean; initial: Recurring | null; onClose: () => void }) {
   return (
     <Overlay open={open} onClose={onClose} variant="page">
       {open ? <RegularEditorBody key={initial?.id ?? "new"} initial={initial} onClose={onClose} /> : null}

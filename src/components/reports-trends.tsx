@@ -123,9 +123,9 @@ export function TrendsPage() {
         {t.reports.excludeTax}
       </button>
       <div className="mx-4 mt-4 grid grid-cols-2 gap-2">
-        <Mini label={t.reports.avgSpend} value={money(avg, "HKD")} />
+        <Mini label={t.reports.avgSpendPerMonth} value={money(avg, "HKD")} />
         <Mini label={t.reports.lastMonthSpend} value={money(last, "HKD")} />
-        <Mini label={t.reports.catGrowth} value={pctSigned(growth)} tone={growth <= 0 ? "income" : "expense"} />
+        <Mini label={t.reports.spendWindowChange} value={pctSigned(growth)} tone={growth <= 0 ? "income" : "expense"} />
         <Mini label={t.reports.peakDay} value={peakDay ? peakDay.slice(8) : "—"} />
       </div>
       <div className="mt-4 h-64 px-1">
