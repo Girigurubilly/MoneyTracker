@@ -158,6 +158,7 @@ describe("budget formulas", () => {
     assert.equal(reservedRegulars(recurring, [], "2026-08-15"), 300);
     assert.equal(adhocTotal(adhoc, "2026-08", []), 50);
     assert.equal(reservedAdhoc(adhoc, "2026-08", [], "2026-08-15"), 40);
+  });
 
   it("monthly regulars net totals income minus expense", () => {
     const recurring: Recurring[] = [
