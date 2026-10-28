@@ -9,7 +9,7 @@ import {
   Home,
   Landmark,
   LayoutDashboard,
-  LineChart,
+  
   Plane,
   Receipt,
   Scale,
@@ -26,11 +26,11 @@ import { budgetActuals, committedOutflows, monthEndIso, monthFlow } from "@/lib/
 import { effectiveAnnualTravelBudget, nextTrip, travelSpendYtd, tripCashSpent } from "@/lib/calc/trips";
 import { effectiveRate } from "@/lib/calc/mortgage";
 import { housingStatus, monthlyHousingCost } from "@/lib/calc/housing";
-import { netWorthNow, periodNetWorthPoints } from "@/lib/calc/networth";
+import { netWorthNow } from "@/lib/calc/networth";
 import { useRetirementHeadline } from "@/components/reports-retire";
 import { periodCashflowPoints, periodRange, type PeriodPreset } from "@/lib/calc/period";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
-import { monthKey } from "@/lib/calc/ledger";
+import { monthKey, netCashMovementHkd } from "@/lib/calc/ledger";
 import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 import { cn } from "@/lib/utils";
@@ -57,7 +57,6 @@ export function ReportsHub() {
     { to: "/reports/trends", title: t.reports.trends, icon: TrendingUp, modes: ["standard", "elderly"] },
     { to: "/reports/compare", title: t.reports.yearCompare, icon: GitCompare, modes: ["standard"] },
     { to: "/reports/balance", title: t.reports.balance, icon: Scale, modes: ["standard", "elderly"] },
-    { to: "/reports/worth", title: t.reports.worthTrend, icon: LineChart, modes: ["standard", "elderly"] },
     { to: "/reports/deposits", title: t.reports.deposits, icon: Landmark, modes: ["standard", "elderly"] },
     { to: "/reports/prices", title: t.prices.title, icon: BadgeDollarSign, modes: ["standard", "elderly"] },
     { to: "/reports/yearly", title: t.reports.yearly, icon: CalendarRange, modes: ["standard"] },
@@ -67,7 +66,7 @@ export function ReportsHub() {
   ].filter((it) => it.modes.includes(access));
   const groups = [
     { id: "flow", title: t.reports.groupFlow, items: items.filter((it) => ["/reports/dashboard", "/reports/spending", "/reports/cashflow", "/reports/trends", "/reports/compare"].includes(it.to)) },
-    { id: "save", title: t.reports.groupSave, items: items.filter((it) => ["/reports/balance", "/reports/worth", "/reports/deposits", "/reports/prices", "/reports/yearly"].includes(it.to)) },
+    { id: "save", title: t.reports.groupSave, items: items.filter((it) => ["/reports/balance", "/reports/deposits", "/reports/prices", "/reports/yearly"].includes(it.to)) },
     { id: "life", title: t.reports.groupLife, items: items.filter((it) => ["/reports/living", "/reports/travel", "/reports/retirement"].includes(it.to)) },
   ].filter((g) => g.items.length);
   return (
@@ -142,8 +141,7 @@ export function DashboardPage() {
   const afterCommit = available - next14;
   const nw = netWorthNow(accounts, rates, deposits);
   const prevEnd = monthEndIso(shiftYm(month, -1));
-  const prevWorth = periodNetWorthPoints(accounts, txs, rates, prevEnd, prevEnd, deposits).at(-1)?.net;
-  const nwDelta = prevWorth == null ? 0 : nw.net - prevWorth;
+  const nwDelta = netCashMovementHkd(txs, accounts, rates, prevEnd, today);
   const saveM = flow.income > 0 ? flow.net / flow.income : 0;
   const saveY = ytdFlow.income > 0 ? (ytdFlow.income - ytdFlow.expense) / ytdFlow.income : 0;
   const incomeZero = flow.income <= 0.005;

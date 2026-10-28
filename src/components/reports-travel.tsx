@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
+import { Plus, ChevronDown } from "lucide-react";
 import { InfoButton, Overlay, ProgressRing, ScreenHeader, SectionLabel, BudgetChip, TxGroupedList } from "@/components/shared";
 import { Enter, useCountUp } from "@/components/retire-ux";
 import { ComposerHeader, ComposerShell, LineRow, TextLine, ActiveKeypad } from "@/components/txn-composer";
@@ -9,7 +9,6 @@ import { pickName } from "@/lib/i18n";
 import { toHkd } from "@/lib/calc/fx";
 import { cashflowSide } from "@/lib/calc/ledger";
 import {
-  effectiveAnnualTravelBudget,
   isTripActive,
   travelSpendYtdSplit,
   travelUnlinkedTxs,
@@ -49,20 +48,20 @@ export function TravelPage() {
   const [stickyOn, setStickyOn] = useState(false);
   const summaryRef = useRef<HTMLDivElement>(null);
   const unlinked = travelUnlinkedTxs(txs, year, travelIds);
-  const visible = trips.filter((tr) => tr.status !== "cancelled");
-  const current = visible.filter((tr) => tr.end >= todayISO());
-  const past = visible.filter((tr) => tr.end < todayISO()).sort((a, b) => b.end.localeCompare(a.end) || b.start.localeCompare(a.start));
+  const today = todayISO();
+  const grouped = useMemo(() => groupTravelTrips(trips, today, year), [trips, today, year]);
+  const { current, pastThisYear, olderYears, pastCount } = grouped;
   const tripsWithSpend = useMemo(() => {
     const ids = new Set(
       txs
         .filter((tx) => tx.tripId && !tx.planned && tx.type === "expense" && tx.date.startsWith(String(year)))
         .map((tx) => tx.tripId as string),
     );
-    return visible.filter((tr) => ids.has(tr.id));
-  }, [txs, visible, year]);
+    return trips.filter((tr) => tr.status !== "cancelled" && ids.has(tr.id));
+  }, [txs, trips, year]);
   const linkCandidates = useMemo(
-    () => visible.filter((tr) => isTripActive(tr, todayISO())),
-    [visible],
+    () => trips.filter((tr) => tr.status !== "cancelled" && isTripActive(tr, today)),
+    [trips, today],
   );
 
   useEffect(() => {
@@ -137,14 +136,8 @@ export function TravelPage() {
                 <div className="text-xs font-medium text-accent">{t.reports.annualTravel}</div>
                 <div className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{money(shownTotal, "HKD")}</div>
                 <div className="mt-0.5 text-xs text-muted">
-                  {travelBudget > 0 ? (
-                    <>
-                      / {money(travelBudget, "HKD")}
-                      {annualEff.fromTrips ? <span className="text-faint"> · {t.reports.travelBudgetFromTrips}</span> : null}
-                    </>
-                  ) : (
-                    <>/ {t.reports.notSet}</>
-                  )}
+                  / {travelBudget > 0 ? money(travelBudget, "HKD") : t.reports.notSet}
+                  {annualEff.fromTrips ? <span className="text-faint"> · {t.reports.travelBudgetFromTrips}</span> : null}
                 </div>
               </button>
               <div className="relative shrink-0">
@@ -185,7 +178,7 @@ export function TravelPage() {
               </div>
               <div className="rounded-xl bg-background px-3 py-2">
                 <div className="text-[11px] text-muted">{t.reports.pastTrips}</div>
-                <div className="mt-0.5 text-sm font-semibold tabular-nums">{past.length}</div>
+                <div className="mt-0.5 text-sm font-semibold tabular-nums">{pastCount}</div>
               </div>
             </div>
           </div>
@@ -197,14 +190,17 @@ export function TravelPage() {
         <TripCard key={tr.id} trip={tr} />
       ))}
       {current.length === 0 ? <p className="px-5 py-6 text-center text-sm text-muted">{t.common.none}</p> : null}
-      {past.length ? (
+      {pastThisYear.length ? (
         <>
           <SectionLabel>{t.reports.pastTrips}</SectionLabel>
-          {past.map((tr) => (
+          {pastThisYear.map((tr) => (
             <TripCard key={tr.id} trip={tr} />
           ))}
         </>
       ) : null}
+      {olderYears.map((group) => (
+        <PastYearTrips key={group.year} year={group.year} rows={group.rows} />
+      ))}
 
       <TripEditor key={adding ? "new-trip" : "new-idle"} open={adding} onClose={() => setAdding(false)} />
       <Overlay open={editAnnual} onClose={() => setEditAnnual(false)} title={t.reports.annualTravel}>
@@ -317,6 +313,55 @@ export function TravelPage() {
           )}
         </div>
       </Overlay>
+    </div>
+  );
+}
+
+function byStartAsc(a: Trip, b: Trip): number {
+  return a.start.localeCompare(b.start) || a.end.localeCompare(b.end);
+}
+
+function byEndDesc(a: Trip, b: Trip): number {
+  return b.end.localeCompare(a.end) || b.start.localeCompare(a.start);
+}
+
+function groupTravelTrips(trips: Trip[], today: string, year: number) {
+  const visible = trips.filter((tr) => tr.status !== "cancelled");
+  const yearKey = String(year);
+  const current = visible.filter((tr) => tr.end >= today).sort(byStartAsc);
+  const past = visible.filter((tr) => tr.end < today);
+  const pastThisYear = past.filter((tr) => tr.end.startsWith(yearKey)).sort(byEndDesc);
+  const byYear = new Map<string, Trip[]>();
+  for (const tr of past) {
+    const y = tr.end.slice(0, 4);
+    if (y === yearKey) continue;
+    const list = byYear.get(y) ?? [];
+    list.push(tr);
+    byYear.set(y, list);
+  }
+  const olderYears = [...byYear.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([y, rows]) => ({ year: y, rows: rows.sort(byEndDesc) }));
+  return { current, pastThisYear, olderYears, pastCount: past.length };
+}
+
+function PastYearTrips({ year, rows }: { year: string; rows: Trip[] }) {
+  const t = useT();
+  const loc = useUi((s) => s.locale);
+  const [open, setOpen] = useState(false);
+  const label = loc === "zh-HK" ? `${year}年` : year;
+  return (
+    <div>
+      <button type="button" className="tr-press flex w-full items-center justify-between px-5 pb-1 pt-5 text-left" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <span className="text-sm font-medium text-muted">
+          {t.reports.pastTrips} · {label}
+        </span>
+        <span className="flex items-center gap-1 text-xs text-faint">
+          <span className="tabular-nums">{rows.length}</span>
+          <ChevronDown className={cn("size-4 transition", open && "rotate-180")} />
+        </span>
+      </button>
+      {open ? rows.map((tr) => <TripCard key={tr.id} trip={tr} />) : null}
     </div>
   );
 }

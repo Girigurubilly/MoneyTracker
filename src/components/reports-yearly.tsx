@@ -21,6 +21,7 @@ export function YearlyPage() {
   const cats = useApp((s) => s.categories);
   const recurring = useApp((s) => s.recurring);
   const adhoc = useApp((s) => s.adhocBudgets);
+  const promos = useApp((s) => s.promoSavings);
   const budgets = useApp((s) => s.budgets);
   const setYearlyCell = useApp((s) => s.setYearlyCell);
   const setYearlyDefaultsYear = useApp((s) => s.setYearlyDefaultsYear);
@@ -49,6 +50,7 @@ export function YearlyPage() {
     monthCap,
     recurring,
     isNextYear ? "" : today,
+    promos,
     adhoc,
   );
   const months = locale === "zh-HK" ? MONTHS_ZH : MONTHS_EN;
