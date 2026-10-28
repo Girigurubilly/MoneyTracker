@@ -9,6 +9,7 @@ import { pickName } from "@/lib/i18n";
 import { toHkd } from "@/lib/calc/fx";
 import { cashflowSide } from "@/lib/calc/ledger";
 import {
+  effectiveAnnualTravelBudget,
   isTripActive,
   travelSpendYtdSplit,
   travelUnlinkedTxs,
