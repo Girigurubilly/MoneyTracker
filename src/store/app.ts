@@ -53,6 +53,7 @@ import {
 import { applyAutoTrip, patchAutoTrips } from "@/lib/calc/trips";
 import { readTripEditedAt, readTripLibrary, writeTripLibrary } from "@/lib/trip-library";
 import { netWorthNow } from "@/lib/calc/networth";
+import { marathonMonthlyInterest } from "@/lib/calc/marathon";
 import { fetchLiveFx } from "@/lib/calc/fx";
 import { applyHoldingBalances, assignHoldingBook, mergeHoldings, parseHoldingsFile } from "@/lib/holdings";
 import { extractPromoDeposits, migrateBalanceBasis } from "@/lib/calc/fc-baseline";
@@ -105,10 +106,6 @@ function idb() {
   const d = getDb();
   if (!d) throw new Error("IndexedDB unavailable");
   return d;
-}
-
-function travelCategoryIds(get: () => AppState): Set<string> {
-  return new Set(get().categories.filter((c) => c.theme === "travel").map((c) => c.id));
 }
 
 async function persistTripLinks(get: () => AppState, set: (p: Partial<AppState>) => void) {
@@ -188,6 +185,7 @@ type Dispatchers = {
   deleteDeposit: (id: string) => Promise<void>;
   upsertPromoSaving: (row: PromoSaving) => Promise<void>;
   deletePromoSaving: (id: string) => Promise<void>;
+  flushWorthSnapshots: () => Promise<void>;
   setFcNotes: (confirmedFacts: string[], openGaps: string[]) => Promise<void>;
   syncPromoFromDeposits: () => Promise<void>;
   setYearlyCell: (year: number, month0: number, field: "salary" | "other" | "expense", value: number) => Promise<void>;
@@ -449,7 +447,7 @@ function interestTxFromDeposit(d: TimeSaving, today: string, existing?: Transact
 
 async function syncLinkedInterest(get: () => AppState, d: TimeSaving) {
   const today = todayISO();
-  const existing = get().transactions.find((t) => t.depositId === d.id);
+  const existing = get().transactions.find((t) => t.depositId === d.id && !t.promoId);
   const categoryId = resolveDepositCategoryId(get().categories, get().depositCategoryId);
   const next = interestTxFromDeposit(d, today, existing, categoryId);
   if (!next) {
@@ -458,6 +456,58 @@ async function syncLinkedInterest(get: () => AppState, d: TimeSaving) {
   }
   if (existing) await get().updateTransaction({ ...existing, ...next, id: existing.id }, existing);
   else await get().addTransaction(next);
+}
+
+const promoSyncTail = new Map<string, Promise<void>>();
+
+async function syncPromoInterest(get: () => AppState, row: PromoSaving) {
+  if (!row.accountId) return;
+  const today = todayISO();
+  const months = marathonMonthlyInterest(row.residualHkd, row.rateSchedule);
+  const adjustments = new Map((row.interestAdjustments ?? []).map((item) => [item.month, item.amount]));
+  const categoryId = resolveDepositCategoryId(get().categories, get().depositCategoryId);
+  const name = (row.nameZh || row.name || "Marathon").trim();
+  const currency = row.currency ?? "HKD";
+  const wanted = new Set<string>();
+  for (const month of months) {
+    const amount = adjustments.has(month.month) ? Number(adjustments.get(month.month)) : month.interest;
+    const existing =
+      get().transactions.find((t) => t.depositId === `${row.id}:${month.month}`) ??
+      get().transactions.find((t) => t.promoId === row.id && t.date.slice(0, 7) === month.month);
+    if (!(amount > 0)) {
+      if (existing?.planned) await get().deleteTransaction(existing.id);
+      continue;
+    }
+    wanted.add(month.month);
+    const next: Transaction = {
+      id: existing?.id ?? nid(),
+      type: "income",
+      amount,
+      currency,
+      accountId: row.accountId,
+      categoryId: categoryId || existing?.categoryId || "interest-inc",
+      date: existing && !existing.planned ? existing.date : month.date,
+      payee: `${name} interest`,
+      payeeZh: `${name} 利息`,
+      planned: existing && !existing.planned ? false : month.date > today,
+      depositId: `${row.id}:${month.month}`,
+      promoId: row.id,
+    };
+    if (existing) await get().updateTransaction({ ...existing, ...next, id: existing.id }, existing);
+    else await get().addTransaction(next);
+  }
+  for (const old of get().transactions.filter((t) => t.promoId === row.id)) {
+    const accrual = old.depositId?.startsWith(`${row.id}:`) ? old.depositId.slice(row.id.length + 1) : old.date.slice(0, 7);
+    if (wanted.has(accrual)) continue;
+    if (old.planned) await get().deleteTransaction(old.id);
+  }
+}
+
+function queuePromoInterest(get: () => AppState, row: PromoSaving) {
+  const prev = promoSyncTail.get(row.id) ?? Promise.resolve();
+  const run = prev.catch(() => undefined).then(() => syncPromoInterest(get, row));
+  promoSyncTail.set(row.id, run);
+  return run;
 }
 
 function scheduledFromRegular(r: Recurring, month: string, today: string, existingId?: string): Transaction {
@@ -820,6 +870,11 @@ async function reconcileLinkedMonthSpendCap(data: {
 
 let fxInflight: Promise<void> | null = null;
 let quoteInflight: Promise<number> | null = null;
+
+
+function travelCategoryIds(get: () => AppState): Set<string> {
+  return new Set(get().categories.filter((c) => c.theme === "travel").map((c) => c.id));
+}
 
 export const useApp = create<AppState>((set, get) => ({
   ready: false,
@@ -1287,10 +1342,19 @@ export const useApp = create<AppState>((set, get) => ({
         ? get().promoSavings.map((p) => (p.id === row.id ? row : p))
         : [...get().promoSavings, row],
     });
+    await queuePromoInterest(get, row);
   },
   deletePromoSaving: async (id) => {
+    const linked = get().transactions.filter((t) => t.promoId === id);
     await idb().promoSavings.delete(id);
     set({ promoSavings: get().promoSavings.filter((p) => p.id !== id) });
+    for (const tx of linked) {
+      if (tx.planned) await get().deleteTransaction(tx.id);
+    }
+  },
+  flushWorthSnapshots: async () => {
+    await idb().snapshots.clear();
+    set({ snapshots: [] });
   },
   setFcNotes: async (confirmedFacts, openGaps) => {
     await writeMeta({ fcConfirmedFacts: confirmedFacts, fcOpenGaps: openGaps }, get());
