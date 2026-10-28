@@ -380,6 +380,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
             currency={currency}
             active={field === "amount"}
             onFocusAmount={() => setField("amount")}
+            asOf={date}
           />
           <AccountLine
             accounts={accounts}
@@ -395,11 +396,12 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
             currency={destCcy}
             active={field === "dest"}
             onFocusAmount={() => setField("dest")}
+            asOf={date}
           />
         </>
       ) : (
         <>
-          <AccountLine accounts={accounts} value={accountId} onChange={setAccountId} placeholder={t.add.account} />
+          <AccountLine accounts={accounts} value={accountId} onChange={setAccountId} placeholder={t.add.account} asOf={date} />
           {type !== "miles" ? (
             <LineRow
               leading={
@@ -449,6 +451,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
             value={toAccountId || destDefault}
             onChange={setToAccountId}
             placeholder={t.add.mortgageTo}
+            asOf={date}
           />
         </>
       ) : null}

@@ -116,6 +116,28 @@ export function balanceDeltas(
   return [{ accountId: tx.accountId, delta: -srcAmt }];
 }
 
+export function accountBalanceAsOf(
+  accountId: string,
+  accounts: Account[],
+  txs: Transaction[],
+  rates: FxRate[],
+  iso: string,
+  excludeTxId?: string,
+): number {
+  const acc = accounts.find((a) => a.id === accountId);
+  if (!acc) return 0;
+  let bal = acc.balance;
+  for (const tx of txs) {
+    if (tx.planned) continue;
+    const drop = tx.id === excludeTxId || tx.date > iso;
+    if (!drop) continue;
+    for (const row of balanceDeltas(tx, accounts, rates)) {
+      if (row.accountId === accountId) bal -= row.delta;
+    }
+  }
+  return Math.round(bal * 100) / 100;
+}
+
 export function applyDeltas(
   accounts: Account[],
   deltas: { accountId: string; delta: number }[],

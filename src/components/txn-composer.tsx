@@ -7,8 +7,10 @@ import { Overlay } from "@/components/shared";
 import { clockNow, formatTypingAmount, money, whenStamp } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { parseMoneyExpr } from "@/lib/money-expr";
+import { accountBalanceAsOf, isDebtAccount } from "@/lib/calc/ledger";
 import type { Account, Currency } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 
 export type AmountField = "amount" | "dest" | "principal" | "interest";
@@ -167,6 +169,8 @@ export function AccountLine({
   currency,
   active,
   onFocusAmount,
+  asOf,
+  excludeTxId,
 }: {
   accounts: Account[];
   value: string;
@@ -178,11 +182,26 @@ export function AccountLine({
   currency?: string;
   active?: boolean;
   onFocusAmount?: () => void;
+  asOf?: string;
+  excludeTxId?: string;
 }) {
   const t = useT();
   const locale = useUi((s) => s.locale);
+  const txs = useApp((s) => s.transactions);
+  const rates = useApp((s) => s.fxRates);
+  const ledgerAccounts = useApp((s) => s.accounts);
   const acc = accounts.find((a) => a.id === value);
   const label = role || t.add.accountRow;
+  const shown = acc
+    ? asOf
+      ? accountBalanceAsOf(acc.id, ledgerAccounts, txs, rates, asOf, excludeTxId)
+      : acc.balance
+    : 0;
+  const balanceText = acc
+    ? isDebtAccount(acc) && shown < 0
+      ? `${t.assets.owed} ${money(Math.abs(shown), acc.currency)}`
+      : `${t.assets.balance} ${money(shown, acc.currency)}`
+    : "";
   return (
     <div className="flex min-h-12 items-center gap-2 border-b border-line px-4 py-2.5">
       <div className="relative min-w-0 flex-1">
@@ -191,7 +210,7 @@ export function AccountLine({
           <span className="truncate">{acc ? pickName(locale, acc.name, acc.nameZh) : placeholder}</span>
           {acc ? (
             <span className="shrink-0 text-[11px] font-normal tabular-nums text-muted">
-              {t.assets.balance} {money(acc.balance, acc.currency)}
+              {balanceText}
             </span>
           ) : null}
           <ChevronRight className="size-4 shrink-0 text-faint" />

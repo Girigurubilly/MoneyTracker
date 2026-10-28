@@ -44,9 +44,9 @@ export function monthFlow(
 }
 
 export function chargedDayOf(r: Recurring): number {
-  if (r.chargedDay && r.chargedDay >= 1 && r.chargedDay <= 28) return r.chargedDay;
+  if (r.chargedDay && r.chargedDay >= 1 && r.chargedDay <= 31) return Math.round(r.chargedDay);
   const d = Number(r.nextDate.slice(8, 10));
-  return Number.isFinite(d) && d >= 1 ? Math.min(28, d) : 1;
+  return Number.isFinite(d) && d >= 1 ? Math.min(31, d) : 1;
 }
 
 export function isExpenseRegular(r: Recurring): boolean {
@@ -80,7 +80,12 @@ export function regularSettledInMonth(r: Recurring, txs: Transaction[], month: s
     } else if (t.recurringId === r.id) {
       return true;
     }
-    return t.type === r.type && t.accountId === r.accountId && Math.abs(t.amount - r.amount) < 0.01 && t.date === iso;
+    if (t.type !== r.type || t.accountId !== r.accountId || Math.abs(t.amount - r.amount) >= 0.01) return false;
+    if (t.date === iso) return true;
+    // A charge set near month-end is stored as that day, but the bank often posts on the 29th–31st.
+    const due = chargedDayOf(r);
+    const postedDay = Number(t.date.slice(8, 10));
+    return monthly && due >= 28 && postedDay >= due && postedDay <= 31;
   });
 }
 

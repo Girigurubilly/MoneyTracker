@@ -510,8 +510,8 @@ function queuePromoInterest(get: () => AppState, row: PromoSaving) {
   return run;
 }
 
-function scheduledFromRegular(r: Recurring, month: string, today: string, existingId?: string): Transaction {
-  const iso = chargedIso(month, chargedDayOf(r));
+function scheduledFromRegular(r: Recurring, month: string, today: string, existingId?: string, date?: string): Transaction {
+  const iso = date ?? chargedIso(month, chargedDayOf(r));
   return {
     id: existingId ?? nid(),
     type: r.type,
@@ -532,12 +532,22 @@ function scheduledFromRegular(r: Recurring, month: string, today: string, existi
 }
 
 async function upsertScheduledFor(r: Recurring) {
-  if (r.frequency !== "monthly") return;
   const today = todayISO();
+  const txs = await idb().transactions.toArray();
+  if (r.frequency !== "monthly") {
+    if (!r.nextDate || r.nextDate <= today) return;
+    const existing = txs.find((t) => t.recurringId === r.id && t.date === r.nextDate);
+    if (existing) return;
+    const similar = txs.find(
+      (t) => !t.planned && t.type === r.type && t.accountId === r.accountId && Math.abs(t.amount - r.amount) < 0.01 && t.date === r.nextDate,
+    );
+    if (similar) return;
+    await idb().transactions.add(scheduledFromRegular(r, r.nextDate.slice(0, 7), today, undefined, r.nextDate));
+    return;
+  }
   const month = today.slice(0, 7);
   const iso = chargedIso(month, chargedDayOf(r));
   if (iso < today) return;
-  const txs = await idb().transactions.toArray();
   const existing = txs.find((t) => t.recurringId === r.id && t.date.startsWith(month));
   if (existing && !existing.planned) return;
   if (!existing) {
@@ -556,6 +566,20 @@ async function upsertScheduledFor(r: Recurring) {
   else await idb().transactions.add(tx);
 }
 
+function advanceNonMonthly(r: Recurring, from: string): string | null {
+  if (r.frequency === "monthly") return null;
+  const [y, m, d] = from.split("-").map(Number);
+  if (!y || !m) return null;
+  if (r.frequency === "weekly") {
+    const dt = new Date(y, m - 1, (d || 1) + 7);
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+  }
+  const add = r.frequency === "quarterly" ? 3 : r.frequency === "yearly" ? 12 : 0;
+  if (!add) return null;
+  const dt = new Date(y, m - 1 + add, 1);
+  return chargedIso(`${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`, d || 1);
+}
+
 async function postDuePlanned() {
   const now = new Date();
   const txs = await idb().transactions.toArray();
@@ -563,11 +587,22 @@ async function postDuePlanned() {
   if (!due.length) return false;
   let accounts = await idb().accounts.toArray();
   const rates = await idb().fxRates.toArray();
-  await idb().transaction("rw", [idb().transactions, idb().accounts, idb().mortgage], async () => {
+  const regulars = await idb().recurring.toArray();
+  await idb().transaction("rw", [idb().transactions, idb().accounts, idb().mortgage, idb().recurring], async () => {
     for (const tx of due) {
       const posted = { ...tx, planned: false };
       accounts = applyDeltas(accounts, balanceDeltas(posted, accounts, rates));
       await idb().transactions.put(posted);
+      if (tx.recurringId) {
+        const rec = regulars.find((r) => r.id === tx.recurringId);
+        const nextDate = rec ? advanceNonMonthly(rec, tx.date) : null;
+        if (rec && nextDate) {
+          const patched = { ...rec, nextDate };
+          const at = regulars.findIndex((r) => r.id === rec.id);
+          if (at >= 0) regulars[at] = patched;
+          await idb().recurring.put(patched);
+        }
+      }
     }
     for (const a of accounts) await idb().accounts.put(a);
     const m = (await idb().mortgage.toArray())[0] ?? null;
@@ -912,12 +947,13 @@ export const useApp = create<AppState>((set, get) => ({
   realizePlanned: async () => {
     const posted = await postDuePlanned();
     if (!posted) return;
-    const [transactions, accounts, mortgage] = await Promise.all([
+    const [transactions, accounts, mortgage, recurring] = await Promise.all([
       idb().transactions.toArray(),
       idb().accounts.toArray(),
       idb().mortgage.toArray(),
+      idb().recurring.toArray(),
     ]);
-    set({ transactions, accounts, mortgage: mortgage[0] ?? null });
+    set({ transactions, accounts, mortgage: mortgage[0] ?? null, recurring });
   },
   hydrate: async () => {
     try {
@@ -1008,6 +1044,15 @@ export const useApp = create<AppState>((set, get) => ({
       if (mortgage) await idb().mortgage.put(mortgage);
     });
     set({ transactions: [tx, ...get().transactions], accounts, mortgage, lastPostedTxId: tx.id });
+    if (!tx.planned && tx.recurringId) {
+      const rec = get().recurring.find((r) => r.id === tx.recurringId);
+      const nextDate = rec ? advanceNonMonthly(rec, tx.date) : null;
+      if (rec && nextDate && nextDate !== rec.nextDate) {
+        const patched = { ...rec, nextDate };
+        await idb().recurring.put(patched);
+        set({ recurring: get().recurring.map((r) => (r.id === patched.id ? patched : r)) });
+      }
+    }
     return tx;
   },
 
@@ -1036,7 +1081,7 @@ export const useApp = create<AppState>((set, get) => ({
     if (next.recurringId) {
       const rec = get().recurring.find((r) => r.id === next.recurringId);
       if (rec) {
-        const chargedDay = Math.min(28, Math.max(1, Number(next.date.slice(8, 10)) || chargedDayOf(rec)));
+        const chargedDay = Math.min(31, Math.max(1, Number(next.date.slice(8, 10)) || chargedDayOf(rec)));
         const patched = {
           ...rec,
           type: next.type,

@@ -84,12 +84,12 @@ export function SpendingPage() {
     tab === "both" && !focusParent
       ? netSave >= 0
         ? [
-            { id: "spend-slice", name: t.reports.expense, nameZh: t.reports.expense, value: totals.expense, colorIndex: 0 },
-            { id: "save-slice", name: t.reports.netSurplus, nameZh: t.reports.netSurplus, value: netSave, colorIndex: 2 },
+            { id: "spend-slice", name: t.reports.expense, nameZh: t.reports.expense, value: totals.expense, colorIndex: 3 },
+            { id: "save-slice", name: t.reports.netSurplus, nameZh: t.reports.netSurplus, value: netSave, colorIndex: 0 },
           ].filter((r) => r.value > 0)
         : [
-            { id: "income-slice", name: t.reports.income, nameZh: t.reports.income, value: totals.income, colorIndex: 2 },
-            { id: "spend-slice", name: t.reports.expense, nameZh: t.reports.expense, value: totals.expense, colorIndex: 0 },
+            { id: "income-slice", name: t.reports.income, nameZh: t.reports.income, value: totals.income, colorIndex: 0 },
+            { id: "spend-slice", name: t.reports.expense, nameZh: t.reports.expense, value: totals.expense, colorIndex: 3 },
           ].filter((r) => r.value > 0)
       : null;
   const pieRows = bothPie ?? view.rows;

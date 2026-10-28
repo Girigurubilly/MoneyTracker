@@ -64,7 +64,8 @@ export function money(
   opts?: { sign?: boolean },
 ): string {
   if (unit === "MILES") {
-    const n = Math.round(amount).toLocaleString("en-HK");
+    const n = Math.abs(Math.round(amount)).toLocaleString("en-HK");
+    if (amount < 0) return `−${n}`;
     return opts?.sign && amount > 0 ? `+${n}` : n;
   }
   const abs = Math.abs(amount);

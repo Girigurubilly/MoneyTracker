@@ -19,7 +19,7 @@ import {
   SelectLine,
   TextLine,
 } from "@/components/txn-composer";
-import { asOfForMonth, adhocTotal, budgetActuals, chargedDayOf, forecastTone, monthlyRegularsNetHkd, regularSettledInMonth } from "@/lib/calc/budget";
+import { asOfForMonth, adhocTotal, budgetActuals, chargedDayOf, chargedIso, forecastTone, monthlyRegularsNetHkd, regularSettledInMonth } from "@/lib/calc/budget";
 import { WhenField } from "@/components/when-picker";
 import { effectiveAnnualTravelBudget, travelSpendYtd, isTripActive } from "@/lib/calc/trips";
 import { monthKey } from "@/lib/calc/ledger";
@@ -409,17 +409,111 @@ function dayPart(isoOrDay: string | number, locale: string): string {
   return locale === "zh-HK" ? `${day}日` : `Day ${day}`;
 }
 
-function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recurring) => void }) {
+function freqLabel(frequency: Recurring["frequency"], t: ReturnType<typeof useT>): string {
+  if (frequency === "weekly") return t.budget.freqWeekly;
+  if (frequency === "quarterly") return t.budget.freqQuarterly;
+  if (frequency === "yearly") return t.budget.freqYearly;
+  return "";
+}
+
+export function RegularRow({ r, onEdit, showType }: { r: Recurring; onEdit: (r: Recurring) => void; showType?: boolean }) {
   const t = useT();
   const locale = useUi((s) => s.locale);
-  const recurring = useApp((s) => s.recurring);
   const rates = useApp((s) => s.fxRates);
   const txs = useApp((s) => s.transactions);
+  const accounts = useApp((s) => s.accounts);
+  const addTx = useApp((s) => s.addTransaction);
   const todayIso = todayISO();
   const month = todayIso.slice(0, 7);
   const today = Number(todayIso.slice(8, 10));
+  const day = r.frequency === "monthly" ? chargedDayOf(r) : Number(r.nextDate.slice(8, 10)) || chargedDayOf(r);
+  const settledIso = r.frequency === "monthly" ? chargedIso(month, day) : r.nextDate;
+  const posted = regularSettledInMonth(r, txs, month, settledIso);
+  const due = r.frequency === "monthly" ? day <= today : r.nextDate <= todayIso;
+  const signed = r.type === "income" ? r.amount : r.type === "expense" || r.countsAsExpense ? -r.amount : r.amount;
+  const badgeClass = posted ? "bg-success-soft text-income" : due ? "bg-watch-soft text-watch" : "bg-accent-soft text-accent";
+  const badgeLabel =
+    r.type === "income"
+      ? posted
+        ? t.add.received
+        : due
+          ? t.budget.dueNotPosted
+          : t.budget.upcomingIncome
+      : posted
+        ? t.budget.charged
+        : due
+          ? t.budget.dueNotPosted
+          : t.budget.upcomingStatus;
+  const acc = accounts.find((a) => a.id === r.accountId);
+  const freq = freqLabel(r.frequency, t);
+  const kind =
+    r.type === "income" ? t.add.income : r.type === "transfer" ? (r.countsAsExpense ? `${t.add.transfer} · ${t.add.principal}` : t.add.transfer) : t.add.expense;
+
+  async function postCharge() {
+    const when = r.frequency === "monthly" ? chargedIso(month, chargedDayOf(r)) : r.nextDate <= todayIso ? r.nextDate : todayIso;
+    await addTx({
+      type: r.type,
+      amount: r.amount,
+      currency: r.currency,
+      accountId: r.accountId,
+      toAccountId: r.toAccountId,
+      destAmount: r.type === "transfer" ? (r.destAmount ?? r.amount) : undefined,
+      categoryId: r.categoryId,
+      date: when,
+      payee: r.label,
+      payeeZh: r.labelZh,
+      planned: false,
+      recurringId: r.id,
+      countsAsExpense: r.countsAsExpense,
+      housing: r.housing,
+    });
+    toast(t.add.savedToast);
+  }
+
+  return (
+    <div className="flex items-stretch border-t border-line first:border-0">
+      <button type="button" className="min-w-0 flex-1 px-4 py-3 text-left" onClick={() => onEdit(r)}>
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="break-words text-sm font-medium">{pickName(locale, r.label, r.labelZh)}</div>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <span className="text-xs text-muted">
+                {dayPart(r.frequency === "monthly" ? day : settledIso, locale)}
+                {showType ? ` · ${kind}` : ""}
+                {acc ? ` · ${pickName(locale, acc.name, acc.nameZh)}` : ""}
+                {freq ? ` · ${freq}` : ""}
+              </span>
+              <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", badgeClass)}>{badgeLabel}</span>
+            </div>
+          </div>
+          <AmountWithHkd
+            amount={signed}
+            currency={r.currency}
+            rates={rates}
+            sign
+            className={cn(
+              "shrink-0 text-sm font-semibold",
+              r.type === "income" ? "text-income" : r.type === "expense" || r.countsAsExpense ? "text-expense" : undefined,
+            )}
+          />
+          <ChevronRight className="mt-0.5 size-4 shrink-0 text-faint" />
+        </div>
+      </button>
+      {due && !posted ? (
+        <button type="button" className="tr-press shrink-0 border-l border-line px-3 text-xs font-semibold text-accent" onClick={() => void postCharge()}>
+          {t.budget.postCharge}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recurring) => void }) {
+  const t = useT();
+  const recurring = useApp((s) => s.recurring);
+  const rates = useApp((s) => s.fxRates);
   const rows = recurring
-    .filter((r) => r.frequency === "monthly" && r.type !== "miles")
+    .filter((r) => r.type !== "miles")
     .sort((a, b) => chargedDayOf(a) - chargedDayOf(b) || a.label.localeCompare(b.label));
   const lump = monthlyRegularsNetHkd(recurring, rates);
   return (
@@ -448,59 +542,9 @@ function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recur
       <p className="px-5 pb-2 text-xs text-faint">{t.budget.regularsHint}</p>
       {rows.length === 0 ? null : (
         <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
-          {rows.map((r) => {
-            const day = chargedDayOf(r);
-            const iso = `${month}-${String(day).padStart(2, "0")}`;
-            const posted = regularSettledInMonth(r, txs, month, iso);
-            const due = day <= today;
-            const signed = r.type === "income" ? r.amount : r.type === "expense" || r.countsAsExpense ? -r.amount : r.amount;
-            const badgeClass = posted
-              ? "bg-success-soft text-income"
-              : due
-                ? "bg-watch-soft text-watch"
-                : "bg-accent-soft text-accent";
-            const badgeLabel =
-              r.type === "income"
-                ? posted
-                  ? t.add.received
-                  : due
-                    ? t.budget.dueNotPosted
-                    : t.budget.upcomingIncome
-                : posted
-                  ? t.budget.charged
-                  : due
-                    ? t.budget.dueNotPosted
-                    : t.budget.upcomingStatus;
-            return (
-              <button key={r.id} type="button" className="w-full border-t border-line px-4 py-3 text-left first:border-0" onClick={() => onEdit(r)}>
-                <div className="flex items-start gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="break-words text-sm font-medium">{pickName(locale, r.label, r.labelZh)}</div>
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                      <span className="text-xs text-muted">
-                        {dayPart(day, locale)}
-                        {` · ${r.type === "income" ? t.add.income : r.type === "transfer" ? (r.countsAsExpense ? `${t.add.transfer} · ${t.add.principal}` : t.add.transfer) : t.add.expense}`}
-                      </span>
-                      <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", badgeClass)}>
-                        {badgeLabel}
-                      </span>
-                    </div>
-                  </div>
-                  <AmountWithHkd
-                    amount={signed}
-                    currency={r.currency}
-                    rates={rates}
-                    sign
-                    className={cn(
-                      "shrink-0 text-sm font-semibold",
-                      r.type === "income" ? "text-income" : r.type === "expense" || r.countsAsExpense ? "text-expense" : undefined,
-                    )}
-                  />
-                  <ChevronRight className="mt-0.5 size-4 shrink-0 text-faint" />
-                </div>
-              </button>
-            );
-          })}
+          {rows.map((r) => (
+            <RegularRow key={r.id} r={r} onEdit={onEdit} showType />
+          ))}
         </div>
       )}
     </div>
@@ -1038,7 +1082,7 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
 
   async function save() {
     const n = name.trim();
-    const d = Math.min(28, Math.max(1, Number(day) || 1));
+    const d = Math.min(31, Math.max(1, Number(day) || 1));
     const next = `2026-08-${String(d).padStart(2, "0")}`;
     if (showSplit && splitMortgage) {
       const p = resolveAmountInput(principalAmt);
@@ -1059,7 +1103,7 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
         toAccountId: dest,
         destAmount: autoDestAmount(p, currency, destCcy, rates) || p,
         categoryId: pCat?.id,
-        frequency: "monthly",
+        frequency: initial?.frequency && initial.frequency !== "monthly" ? initial.frequency : "monthly",
         nextDate: next,
         chargedDay: d,
         living: true,
@@ -1075,7 +1119,7 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
         currency,
         accountId,
         categoryId: iCat?.id,
-        frequency: "monthly",
+        frequency: initial?.frequency && initial.frequency !== "monthly" ? initial.frequency : "monthly",
         nextDate: next,
         chargedDay: d,
         living: true,
@@ -1106,7 +1150,7 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
         toAccountId: ruled.toAccountId,
         destAmount: ruled.destAmount,
         categoryId: ruled.categoryId,
-        frequency: "monthly",
+        frequency: initial?.frequency && initial.frequency !== "monthly" ? initial.frequency : "monthly",
         nextDate: next,
         chargedDay: d,
         living,
@@ -1221,7 +1265,7 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
           <AccountLine accounts={accounts} value={toAccountId} onChange={setToAccountId} placeholder={t.add.mortgageTo} />
         </>
       ) : null}
-      <SelectLine label={t.budget.chargedDay} value={day} onChange={setDay} options={Array.from({ length: 28 }, (_, i) => ({ id: String(i + 1), label: String(i + 1) }))} />
+      <SelectLine label={t.budget.chargedDay} value={day} onChange={setDay} options={Array.from({ length: 31 }, (_, i) => ({ id: String(i + 1), label: String(i + 1) }))} />
       <ExtraIconBar
         housingOn={living}
         splitOn={splitMortgage}

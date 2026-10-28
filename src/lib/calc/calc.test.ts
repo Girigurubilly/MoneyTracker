@@ -739,6 +739,12 @@ describe("settled regulars", () => {
     assert.equal(regularSettledInMonth(salary, [posted], "2026-10", "2026-10-28"), true);
     assert.equal(regularSettledInMonth(salary, [{ ...posted, planned: true }], "2026-10", "2026-10-28"), false);
     assert.equal(regularSettledInMonth(salary, [tx({ id: "t2", type: "income", amount: 72000, date: "2026-09-28", recurringId: "r-pay" })], "2026-10", "2026-10-28"), false);
+    assert.equal(
+      regularSettledInMonth(salary, [tx({ id: "t3", type: "income", amount: 72000, date: "2026-10-31", accountId: "cash" })], "2026-10", "2026-10-28"),
+      true,
+    );
+    const mid = rec({ id: "r-mid", type: "expense", amount: 100, chargedDay: 15, accountId: "cash" });
+    assert.equal(regularSettledInMonth(mid, [tx({ id: "t4", type: "expense", amount: 100, date: "2026-10-31", accountId: "cash" })], "2026-10", "2026-10-15"), false);
   });
 
   it("counts a regular once, and skips it after it is paid", () => {

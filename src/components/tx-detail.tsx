@@ -342,6 +342,8 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
               currency={currency}
               active={field === "amount"}
               onFocusAmount={() => setField("amount")}
+              asOf={date}
+              excludeTxId={tx.id}
             />
             <AccountLine
               accounts={accounts}
@@ -357,11 +359,13 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
               currency={destCcy}
               active={field === "dest"}
               onFocusAmount={() => setField("dest")}
+              asOf={date}
+              excludeTxId={tx.id}
             />
           </>
         ) : (
           <>
-            {moneyTx ? <AccountLine accounts={accounts} value={accountId} onChange={setAccountId} placeholder={t.add.account} /> : null}
+            {moneyTx ? <AccountLine accounts={accounts} value={accountId} onChange={setAccountId} placeholder={t.add.account} asOf={date} excludeTxId={tx.id} /> : null}
             {type !== "miles" ? (
               <LineRow
                 leading={
@@ -388,7 +392,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
           <>
             <LineRow label={t.add.principal} amount={principal} currency={currency} active={field === "principal"} onFocusAmount={() => setField("principal")} />
             <LineRow label={t.add.interest} amount={interest} currency={currency} active={field === "interest"} onFocusAmount={() => setField("interest")} />
-            <AccountLine accounts={accounts} value={toAccountId} onChange={setToAccountId} placeholder={t.add.mortgageTo} />
+            <AccountLine accounts={accounts} value={toAccountId} onChange={setToAccountId} placeholder={t.add.mortgageTo} asOf={date} excludeTxId={tx.id} />
           </>
         ) : null}
         <DatePaidRow date={date} time={time} paid={paid} paidLabel={type === "income" ? t.add.received : undefined} onDate={setDate} onTime={setTime} onPaid={setPaid} />

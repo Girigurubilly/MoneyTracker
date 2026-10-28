@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { formatTypingAmount } from "./format.ts";
+import { formatTypingAmount, money } from "./format.ts";
 
 describe("formatTypingAmount", () => {
   it("groups a plain amount and shows the currency", () => {
@@ -17,5 +17,9 @@ describe("formatTypingAmount", () => {
   });
   it("leaves miles without a unit", () => {
     assert.equal(formatTypingAmount("1200", "MILES"), "1,200");
+  });
+  it("keeps a minus on miles", () => {
+    assert.equal(money(-1200, "MILES"), "−1,200");
+    assert.equal(money(1200, "MILES", { sign: true }), "+1,200");
   });
 });
