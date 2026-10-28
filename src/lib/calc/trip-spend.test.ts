@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { travelSpendYtd, travelSpendYtdSplit, travelUnlinkedTxs, tripCashSpent, tripMoneySplit } from "./trips.ts";
-import type { AdhocBudget, Transaction } from "../types.ts";
+import { applyAutoTrip, effectiveAnnualTravelBudget, travelSpendYtd, travelSpendYtdSplit, travelUnlinkedTxs, tripCashSpent, tripMoneySplit } from "./trips.ts";
+import type { AdhocBudget, Transaction, Trip } from "../types.ts";
 
 describe("trip spend", () => {
   it("counts an unpaid trip cost and skips one already posted", () => {
@@ -34,5 +34,30 @@ describe("trip spend", () => {
       travelUnlinkedTxs(txs, 2026, travelIds).map((tx) => tx.id),
       ["a"],
     );
+  });
+
+  it("auto-links only travel-themed categories inside trip dates", () => {
+    const trips = [{ id: "t1", name: "Osaka", nameZh: "大阪", start: "2026-04-01", end: "2026-04-05", cashBudget: 5000, status: "planning" }] as Trip[];
+    const travelIds = new Set(["flights", "hotels"]);
+    const flight = {
+      id: "f", type: "expense", amount: 100, currency: "HKD", date: "2026-04-02", categoryId: "flights", planned: false,
+    } as Transaction;
+    const dinner = {
+      id: "d", type: "expense", amount: 80, currency: "HKD", date: "2026-04-02", categoryId: "dining", planned: false,
+    } as Transaction;
+    assert.equal(applyAutoTrip(flight, trips, travelIds).tripId, "t1");
+    assert.equal(applyAutoTrip(dinner, trips, travelIds).tripId, undefined);
+    // Without the allow-list, legacy behaviour still date-matches (callers must pass ids).
+    assert.equal(applyAutoTrip(dinner, trips).tripId, "t1");
+  });
+
+  it("falls back to trip cash budgets when annual travel budget is unset", () => {
+    const trips = [
+      { id: "a", name: "A", nameZh: "A", start: "2026-03-01", end: "2026-03-05", cashBudget: 3000, status: "planning" },
+      { id: "b", name: "B", nameZh: "B", start: "2026-08-01", end: "2026-08-10", cashBudget: 2000, status: "planning" },
+      { id: "c", name: "C", nameZh: "C", start: "2025-12-01", end: "2025-12-05", cashBudget: 9000, status: "planning" },
+    ] as Trip[];
+    assert.deepEqual(effectiveAnnualTravelBudget(0, trips, 2026), { budget: 5000, fromTrips: true });
+    assert.deepEqual(effectiveAnnualTravelBudget(12000, trips, 2026), { budget: 12000, fromTrips: false });
   });
 });

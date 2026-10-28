@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Link, Navigate, useRouterState } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
+import { BarChart3, Bone, Building2, Cat, Cpu, Fish, Heart, Home, Landmark, Leaf, Moon, MoreHorizontal, PawPrint, PieChart, Plus, Sparkles, TreePine, Wallet, WalletCards } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
@@ -8,8 +8,6 @@ import { useT, useUi, readOnboarded } from "@/store/ui";
 import { isDarkTheme } from "@/lib/theme";
 import { applyPwaIcon, readSavedPwaIcon } from "@/lib/pwa-icon";
 import { Overlay } from "@/components/shared";
-import { CategoryIcon } from "@/components/category-icon";
-import { defaultNavIcons, type NavSlot } from "@/lib/nav-icons";
 import { AddFlow } from "@/components/add-sheet";
 import { SearchFlow } from "@/components/search-sheet";
 import { TxDetail } from "@/components/tx-detail";
@@ -199,16 +197,31 @@ function Nav() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const access = useUi((s) => s.accessMode);
   const theme = useUi((s) => s.theme);
-  const navIcons = useUi((s) => s.navIcons);
-  const defaults = defaultNavIcons(theme);
-  const iconFor = (slot: NavSlot) => navIcons[slot] ?? defaults[slot];
+  const pack =
+    theme === "shiba"
+      ? { today: PawPrint, assets: Bone, budget: Heart, reports: Home, more: MoreHorizontal }
+      : theme === "cat"
+        ? { today: Cat, assets: Fish, budget: Heart, reports: Home, more: MoreHorizontal }
+        : theme === "panda"
+          ? { today: Leaf, assets: TreePine, budget: Heart, reports: Home, more: MoreHorizontal }
+          : theme === "hongkong"
+            ? { today: Landmark, assets: Building2, budget: PieChart, reports: BarChart3, more: MoreHorizontal }
+            : theme === "anime"
+              ? { today: Sparkles, assets: Heart, budget: PieChart, reports: BarChart3, more: MoreHorizontal }
+              : theme === "pinky"
+                ? { today: Heart, assets: WalletCards, budget: PieChart, reports: BarChart3, more: MoreHorizontal }
+                : theme === "cyberpunk"
+                  ? { today: Cpu, assets: WalletCards, budget: PieChart, reports: BarChart3, more: MoreHorizontal }
+                  : theme === "dark"
+                    ? { today: Moon, assets: WalletCards, budget: PieChart, reports: BarChart3, more: MoreHorizontal }
+                    : { today: Wallet, assets: WalletCards, budget: PieChart, reports: BarChart3, more: MoreHorizontal };
   const all = [
-    { to: "/", slot: "today" as const, label: t.nav.today, match: (p: string) => p === "/" },
-    { to: "/assets", slot: "assets" as const, label: t.nav.assets, match: (p: string) => p.startsWith("/assets") },
-    { to: "/budget", slot: "budget" as const, label: t.nav.budget, match: (p: string) => p.startsWith("/budget") },
-    { to: "/reports", slot: "reports" as const, label: t.nav.reports, match: (p: string) => p.startsWith("/reports") },
-    { to: "/more", slot: "more" as const, label: t.nav.more, match: (p: string) => p.startsWith("/more") },
-  ];
+    { to: "/", label: t.nav.today, icon: pack.today, match: (p: string) => p === "/" },
+    { to: "/assets", label: t.nav.assets, icon: pack.assets, match: (p: string) => p.startsWith("/assets") },
+    { to: "/budget", label: t.nav.budget, icon: pack.budget, match: (p: string) => p.startsWith("/budget") },
+    { to: "/reports", label: t.nav.reports, icon: pack.reports, match: (p: string) => p.startsWith("/reports") },
+    { to: "/more", label: t.nav.more, icon: pack.more, match: (p: string) => p.startsWith("/more") },
+  ] as const;
   const items = access === "kid" ? all.filter((it) => it.to !== "/reports") : all;
   const cols = items.length === 4 ? "grid-cols-4" : items.length === 3 ? "grid-cols-3" : "grid-cols-5";
   return (
@@ -217,7 +230,7 @@ function Nav() {
         <div className={cn("mx-auto grid max-w-lg", cols)}>
           {items.map((it) => (
             <Link key={it.to} to={it.to} className={cn("flex h-16 flex-col items-center justify-center gap-0.5 text-xs", access === "elderly" && "h-[4.5rem] text-sm", it.match(path) ? "text-accent" : "text-muted")}>
-              <CategoryIcon name={iconFor(it.slot)} className={access === "elderly" ? "size-6" : "size-5"} />
+              <it.icon className={access === "elderly" ? "size-6" : "size-5"} />
               {it.label}
             </Link>
           ))}
@@ -227,7 +240,7 @@ function Nav() {
         <div className="mb-6 text-lg font-semibold">{t.app}</div>
         {items.map((it) => (
           <Link key={it.to} to={it.to} className={cn("flex items-center gap-2 rounded-lg px-3 py-2 text-sm", it.match(path) ? "bg-accent-soft text-accent" : "text-muted")}>
-            <CategoryIcon name={iconFor(it.slot)} className="size-4" />
+            <it.icon className="size-4" />
             {it.label}
           </Link>
         ))}
@@ -247,8 +260,8 @@ function InfoDialog() {
       zh: "剩餘預算 = 開支上限 − 本月已花費 − 扣帳日尚未到的每月定期與本月臨時。每日尚可花費把該金額除以今天之後的剩餘日數（月末當日則用剩餘金額）。",
     },
     disc: {
-      en: "Projected avg daily spend = (spending so far − posted regulars/ad-hoc whose charged day has already passed) ÷ day of month. No transaction matching.",
-      zh: "預計每日平均開支 =（已花費 − 已入帳的定期／臨時）÷ 本月第幾天。以扣帳日判斷，不對賬交易。",
+      en: "Expected still to go = reserved monthly regulars and this-month holds still due after today, plus projected non-regular spend for the remaining days (pace from posted non-regular so far). This is not the same as Remaining budget (cap − spent − holds).",
+      zh: "預計尚待開支 = 今天之後仍未到期嘅每月定期同本月臨時，再加按已入帳非定期推算嘅餘下日子開支。同「剩餘預算」（上限 − 已花 − 預留）唔係同一個數。",
     },
     cap: {
       en: "Reserved = monthly regulars and this-month holds whose charged day is still after today. Posted regulars/ad-hoc = those whose charged day is today or earlier. Headline = spending so far + reserved + projected avg daily × days left. Projected non-regular (full month) = (spending so far − posted regulars/ad-hoc) + avg daily × days left.",
@@ -263,8 +276,8 @@ function InfoDialog() {
       zh: "收入同而家開支：有人手填就用你填嘅數，否則用近 12 個月帳本平均。退休後冇薪金。頂部黏住條係官方路徑結論。",
     },
     trip: {
-      en: "Annual travel = travel-category spends plus anything linked to a trip this year ÷ your annual budget. The linked / unlinked split explains why the ring can be higher than trip cards. Trip meals: use Travel → Meals, or link Dining out to a trip.",
-      zh: "全年旅遊 = 本年旅遊分類開支加已掛旅程嘅開支 ÷ 你設嘅全年預算。「已掛／未掛」解釋點解環形圖可以高過旅程卡。旅途用餐請用「旅遊・旅途用餐」，或者將飲食掛到旅程。",
+      en: "Annual travel = travel-category spends plus anything linked to a trip this year ÷ your annual budget (or the sum of trip cash budgets when annual is unset). Only travel-themed categories auto-link by date; Dining needs an explicit trip link. Trip meals: use Travel → Meals, or link Dining out to a trip.",
+      zh: "全年旅遊 = 本年旅遊分類開支加已掛旅程嘅開支 ÷ 你設嘅全年預算（未設時用各旅程現金預算總和）。只有旅遊主題分類會按日期自動掛旅程；飲食要人手掛。旅途用餐請用「旅遊・旅途用餐」，或者將飲食掛到旅程。",
     },
   };
   const body = key ? copy[key] : null;
