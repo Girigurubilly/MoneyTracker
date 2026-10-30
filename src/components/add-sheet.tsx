@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Overlay } from "@/components/shared";
 import { CategoryIcon } from "@/components/category-icon";
@@ -13,7 +13,7 @@ import {
   type AmountField,
   type ExtraPanel,
 } from "@/components/txn-composer";
-import { asFiat, autoDestAmount } from "@/components/currency-field";
+import { accountFiat, asFiat, autoDestAmount } from "@/components/currency-field";
 import { todayISO, clockNow, dateRangeLabel } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { defaultMortgageAccountId, moneyAccountsForPicker } from "@/lib/accounts";
@@ -105,21 +105,31 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
   const addTransaction = useApp((s) => s.addTransaction);
   const transactions = useApp((s) => s.transactions);
   const moneyAccounts = moneyAccountsForPicker(accounts, { kid });
+  const presetAccount = useUi((s) => s.addAccountId);
   const pickWallet = useUi((s) => s.openOctopus);
+  const initialAccountId =
+    presetAccount && moneyAccounts.some((a) => a.id === presetAccount) ? presetAccount : (moneyAccounts[0]?.id ?? "");
   const [type, setType] = useState<TxType>(initialType);
   const [amount, setAmount] = useState("");
-  const [currency, setCurrency] = useState<Currency>(defaultCurrency);
+  const [currency, setCurrency] = useState<Currency>(
+    () => accountFiat(accounts.find((a) => a.id === initialAccountId)?.currency) ?? defaultCurrency,
+  );
   const [destAmount, setDestAmount] = useState("");
   const [destLocked, setDestLocked] = useState(false);
   const [date, setDate] = useState(selectedDate || todayISO());
   const [time, setTime] = useState(clockNow);
-  const [accountId, setAccountId] = useState(moneyAccounts[0]?.id ?? "");
+  const [accountId, setAccountId] = useState(initialAccountId);
+  const currencyManual = useRef(false);
   const [toAccountId, setToAccountId] = useState(
     moneyAccounts.find((a) => a.id !== moneyAccounts[0]?.id)?.id ?? defaultMortgageAccountId(accounts) ?? "",
   );
   const [categoryId, setCategoryId] = useState("");
   const [tripId, setTripId] = useState(() => tripForDate(trips, selectedDate || todayISO()) ?? "");
   const tripTouched = useRef(false);
+  useEffect(() => {
+    if (tripTouched.current) return;
+    setTripId(tripForDate(trips, date) ?? "");
+  }, [trips, date]);
   const [payee, setPayee] = useState("");
   const noteDismissed = useRef(false);
   const noteSuggestions = useMemo(
@@ -155,6 +165,26 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
     }
   }, [type, categoryId, noteSuggestions]);
 
+  function currencyForAccount(id: string): Currency | null {
+    if (type === "miles") return null;
+    return accountFiat(accounts.find((a) => a.id === id)?.currency);
+  }
+
+  function chooseAccount(id: string) {
+    currencyManual.current = false;
+    setAccountId(id);
+    const next = currencyForAccount(id);
+    if (!next) return;
+    setCurrency(next);
+    setDestLocked(false);
+  }
+
+  useLayoutEffect(() => {
+    if (currencyManual.current || type === "miles") return;
+    const next = accountFiat(accounts.find((a) => a.id === accountId)?.currency);
+    if (next) setCurrency((cur) => (cur === next ? cur : next));
+  }, [accountId, categoryId, type, accounts]);
+
   function changeType(next: TxType) {
     setType(next);
     if (next === "miles" || next === "transfer") {
@@ -182,7 +212,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
       setDoSplit(false);
     }
     const def = resolvedDefaultAccountId(c, categories);
-    if (def && accounts.some((a) => a.id === def)) setAccountId(def);
+    if (def && accounts.some((a) => a.id === def)) chooseAccount(def);
   }
 
   function onPickerClose() {
@@ -280,7 +310,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
             planned,
             milesType: type === "miles" ? "earn" : undefined,
             tripId: type === "expense" && tripId ? tripId : undefined,
-            tripManual: tripTouched.current,
+            tripManual: tripTouched.current || Boolean(type === "expense" && tripId),
             housing,
             adhoc: type === "expense" ? adhoc : false,
           },
@@ -362,6 +392,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
           currency={field === "dest" ? destCcy : currency}
           onCurrency={(c) => {
             if (field === "dest") return;
+            currencyManual.current = true;
             setCurrency(c);
             setDestLocked(false);
           }}
@@ -373,7 +404,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
           <AccountLine
             accounts={accounts}
             value={accountId}
-            onChange={setAccountId}
+            onChange={chooseAccount}
             placeholder={t.add.fromAccount}
             role={t.add.fromAccount}
             amount={amount}
@@ -401,7 +432,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
         </>
       ) : (
         <>
-          <AccountLine accounts={accounts} value={accountId} onChange={setAccountId} placeholder={t.add.account} asOf={date} />
+          <AccountLine accounts={accounts} value={accountId} onChange={chooseAccount} placeholder={t.add.account} asOf={date} />
           {type !== "miles" ? (
             <LineRow
               leading={
@@ -502,7 +533,7 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
         noteSuggestions={type === "expense" ? noteSuggestions : []}
         tripValue={tripId}
         tripOptions={trips
-          .filter((tr) => tr.status !== "cancelled" && (isTripActive(tr, todayISO()) || tripCoversDate(tr, selectedDate || todayISO())))
+          .filter((tr) => tr.status !== "cancelled" && (tripCoversDate(tr, date) || isTripActive(tr, todayISO()) || tr.id === tripId))
           .map((tr) => {
           const today = todayISO();
           const name = pickName(locale, tr.name, tr.nameZh);

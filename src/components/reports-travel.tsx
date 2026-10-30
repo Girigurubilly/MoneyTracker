@@ -3,9 +3,10 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { Plus, ChevronDown } from "lucide-react";
 import { InfoButton, Overlay, ProgressRing, ScreenHeader, SectionLabel, BudgetChip, TxGroupedList } from "@/components/shared";
 import { Enter, useCountUp } from "@/components/retire-ux";
-import { ComposerHeader, ComposerShell, LineRow, TextLine, ActiveKeypad } from "@/components/txn-composer";
+import { ComposerHeader, ComposerShell, DateField, LineRow, TextLine, ActiveKeypad } from "@/components/txn-composer";
 import { dateRangeLabel, formatTypingAmount, money, shortDate, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
+import { travelThemedIds } from "@/lib/categories";
 import { toHkd } from "@/lib/calc/fx";
 import { cashflowSide } from "@/lib/calc/ledger";
 import {
@@ -34,7 +35,7 @@ export function TravelPage() {
   const setAnnual = useApp((s) => s.setAnnualTravel);
   const updateTx = useApp((s) => s.updateTransaction);
   const setTx = useUi((s) => s.setTxDetailId);
-  const travelIds = useMemo(() => new Set(cats.filter((c) => c.theme === "travel").map((c) => c.id)), [cats]);
+  const travelIds = useMemo(() => travelThemedIds(cats), [cats]);
   const year = Number(todayISO().slice(0, 4));
   const ytd = travelSpendYtdSplit(txs, year, travelIds, rates);
   const annualEff = effectiveAnnualTravelBudget(annual, trips, year);
@@ -733,11 +734,11 @@ function TripEditor({
             <TextLine value={dest} onChange={setDest} label={t.reports.destination} placeholder={locale === "zh-HK" ? "例如 Osaka" : "e.g. Osaka"} />
             <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
               <span className="text-sm text-muted">{t.reports.tripStart}</span>
-              <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
+              <DateField value={start} onChange={setStart} className="justify-end" />
             </div>
             <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
               <span className="text-sm text-muted">{t.reports.tripEnd}</span>
-              <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
+              <DateField value={end} onChange={setEnd} className="justify-end" />
             </div>
             <LineRow label={t.reports.cashBudget} amount={budget} currency="HKD" active={field === "amount"} onFocusAmount={() => setField("amount")} />
             <LineRow label={t.reports.monthlyCash} amount={monthly} currency="HKD" active={field === "dest"} onFocusAmount={() => setField("dest")} />

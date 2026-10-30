@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { ChevronDown, Plus, Trash2 } from "lucide-react";
 import { ConfigNullNum } from "@/components/retire-ux";
+import { DateField } from "@/components/txn-composer";
 import { emptyLifePlan, mergeLifePlan } from "@/lib/calc/life-plan";
 import type { LifePlanSpendingStage, RetirementLifePlan } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -202,7 +203,7 @@ function DateRow({ label, value, onChange }: { label: string; value: string | nu
   return (
     <label className="flex min-h-11 items-center justify-between gap-3 px-4">
       <span className="text-sm">{label}</span>
-      <input type="date" value={value ?? ""} onChange={(e) => onChange(e.target.value || null)} className="h-11 max-w-[11.5rem] rounded-md bg-background px-2 text-sm outline-none" />
+      <DateField value={value ?? ""} onChange={(next) => onChange(next || null)} className="justify-end" />
     </label>
   );
 }

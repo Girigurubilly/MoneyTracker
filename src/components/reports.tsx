@@ -22,6 +22,7 @@ import { Enter, useCountUp } from "@/components/retire-ux";
 import { money, pct, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { monthKeysBack, monthLabel } from "@/lib/derived";
+import { travelThemedIds } from "@/lib/categories";
 import { budgetActuals, committedOutflows, monthEndIso, monthFlow } from "@/lib/calc/budget";
 import { effectiveAnnualTravelBudget, nextTrip, travelSpendYtd, tripCashSpent } from "@/lib/calc/trips";
 import { effectiveRate } from "@/lib/calc/mortgage";
@@ -115,7 +116,7 @@ export function DashboardPage() {
   const today = todayISO();
   const cost = monthlyHousingCost(txs, rec, cats, rates, today);
   const houseStatus = housingStatus(m);
-  const travelIds = new Set(cats.filter((c) => c.theme === "travel").map((c) => c.id));
+  const travelIds = travelThemedIds(cats);
   const ytd = travelSpendYtd(txs, Number(today.slice(0, 4)), travelIds, rates);
   const annualEff = effectiveAnnualTravelBudget(annual, trips, Number(today.slice(0, 4)));
   const travelBudget = annualEff.budget;

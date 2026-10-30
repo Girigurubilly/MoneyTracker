@@ -106,9 +106,9 @@ export const THEME_PRESETS: Record<
   Record<ThemeColorKey, string>
 > = {
   normal: { background: "#f2f2f7", foreground: "#1c1c1e", elevated: "#ffffff", muted: "#8e8e93", accent: "#007aff", income: "#248a3d", expense: "#d70015", line: "#e5e5ea", onAccent: "#ffffff", chart: "#30d158" },
-  dark: { background: "#2a3139", foreground: "#f4f7f8", elevated: "#3a424c", muted: "#9aa3ad", accent: "#2ec9be", income: "#c6e15a", expense: "#e15b6c", line: "#4a535e", onAccent: "#102226", chart: "#2ad4c4" },
-  mist: { background: "#e4eef0", foreground: "#1c2a33", elevated: "#f7fbfa", muted: "#6f8688", accent: "#2f9d74", income: "#3d8ec4", expense: "#7a68b8", line: "#d3e3e4", onAccent: "#ffffff", chart: "#7dce9a" },
-  ink: { background: "#ece8f2", foreground: "#161616", elevated: "#f8f6fb", muted: "#7d7886", accent: "#c6ee55", income: "#161616", expense: "#c45d62", line: "#e3deea", onAccent: "#161616", chart: "#171717" },
+  dark: { background: "#1e252c", foreground: "#f4f7f8", elevated: "#3c4a59", muted: "#c5ced6", accent: "#2ec9be", income: "#c6e15a", expense: "#e15b6c", line: "#4a535e", onAccent: "#102226", chart: "#2ad4c4" },
+  mist: { background: "#e4eef0", foreground: "#1c2a33", elevated: "#f7fbfa", muted: "#4a6264", accent: "#147a56", income: "#165684", expense: "#c4475a", line: "#d3e3e4", onAccent: "#ffffff", chart: "#7dce9a" },
+  ink: { background: "#ece8f2", foreground: "#161616", elevated: "#f8f6fb", muted: "#7d7886", accent: "#c6ee55", income: "#1f7a46", expense: "#c45d62", line: "#e3deea", onAccent: "#161616", chart: "#1f7a46" },
   pinky: { background: "#fde8f0", foreground: "#4a2438", elevated: "#fff7fa", muted: "#a56b86", accent: "#e85a8c", income: "#2f9a84", expense: "#c43b5a", line: "#f3d0de", onAccent: "#ffffff", chart: "#f48cb0" },
   anime: { background: "#f4eef8", foreground: "#2a1838", elevated: "#fff8fc", muted: "#8a7098", accent: "#e85aa0", income: "#3aa89a", expense: "#e14b6a", line: "#eadcf2", onAccent: "#ffffff", chart: "#c9a4ff" },
   cyberpunk: { background: "#07140c", foreground: "#f4fff6", elevated: "#102418", muted: "#7d9a86", accent: "#b6ff6a", income: "#7dff6a", expense: "#ff5a6a", line: "#1a3324", onAccent: "#06210c", chart: "#7dff6a" },

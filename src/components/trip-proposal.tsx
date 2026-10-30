@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Overlay } from "@/components/shared";
-import { AmountWithHkd } from "@/components/currency-field";
+import { AmountWithHkd, accountFiat } from "@/components/currency-field";
 import { CategoryIcon } from "@/components/category-icon";
 import { CategoryPicker } from "@/components/category-picker";
 import { AccountPicker } from "@/components/account-select";
 import { clockNow, dateRangeLabel, todayISO } from "@/lib/format";
 import { WhenField } from "@/components/when-picker";
-import { categoryPath, resolvedDefaultAccountId } from "@/lib/categories";
+import { categoryPath, isTravelThemed, resolvedDefaultAccountId } from "@/lib/categories";
 import { pickName } from "@/lib/i18n";
 import { asMoneyCurrency, carriedTrip, categoryFromSpendHint, linkFromHash, plannerTripUrl, proposalFromHash, type TripSpendItem } from "@/lib/trip-link";
 import { CURRENCIES, type Category, type MoneyUnit } from "@/lib/types";
@@ -72,7 +72,7 @@ export function TripProposal() {
     setTripPick(null);
     const accountId = remembered(ACCOUNT_KEY);
     const fallbackCategory =
-      remembered(CATEGORY_KEY) || categories.find((c) => c.kind === "expense" && c.theme === "travel")?.id || "";
+      remembered(CATEGORY_KEY) || categories.find((c) => c.kind === "expense" && isTravelThemed(c, categories))?.id || "";
     setRows(
       parsed.items.map((item) => ({
         ...item,
@@ -109,7 +109,7 @@ export function TripProposal() {
       accounts.find((a) => a.currency !== "MILES")?.id ||
       "";
     const fallbackCategory =
-      remembered(CATEGORY_KEY) || categories.find((c) => c.kind === "expense" && c.theme === "travel")?.id || "";
+      remembered(CATEGORY_KEY) || categories.find((c) => c.kind === "expense" && isTravelThemed(c, categories))?.id || "";
     setRows((list) =>
       list.map((row) => ({
         ...row,
@@ -131,9 +131,12 @@ export function TripProposal() {
     const id = pickCat;
     if (!id) return;
     const accountId = resolvedDefaultAccountId(c, categories);
+    const acc = accountId ? accounts.find((a) => a.id === accountId) : undefined;
+    const nextCcy = acc ? accountFiat(acc.currency) : null;
     patch(id, {
       categoryId: c?.id ?? "",
-      ...(accountId && accounts.some((a) => a.id === accountId) ? { accountId } : {}),
+      ...(acc ? { accountId: acc.id } : {}),
+      ...(nextCcy ? { currency: nextCcy } : {}),
     });
     setPickCat("");
   }

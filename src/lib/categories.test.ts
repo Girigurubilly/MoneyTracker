@@ -10,6 +10,7 @@ import {
   mortgageEntryKind,
   pickerGroups,
   taxCategoryIds,
+  travelCategoryPatch,
 } from "./categories.ts";
 import type { Category } from "./types.ts";
 
@@ -82,6 +83,60 @@ describe("mortgage category matching", () => {
     const family = cat({ id: "family", name: "家用", nameZh: "家用", parentId: "p-housing", special: "none" });
     assert.equal(isHousingCategory(mgmt, [housing, mgmt, family]), true);
     assert.equal(isHousingCategory(family, [housing, mgmt, family]), false);
+  });
+});
+
+describe("travel category seed", () => {
+  const seed = [
+    cat({ id: "p-travel", name: "Travel", nameZh: "旅遊", theme: "travel", icon: "plane" }),
+    cat({ id: "flights", name: "Flights", nameZh: "機票", theme: "travel", icon: "plane", parentId: "p-travel" }),
+    cat({ id: "hotels", name: "Hotels", nameZh: "酒店", theme: "travel", icon: "building", parentId: "p-travel" }),
+    cat({ id: "travel-meals", name: "Meals", nameZh: "旅途用餐", theme: "travel", icon: "utensils", parentId: "p-travel" }),
+  ];
+
+  it("does not add a second 旅遊 tree when the user already has one", () => {
+    const mine = cat({ id: "my-travel", name: "旅遊", nameZh: "旅遊", icon: "plane" });
+    const air = cat({ id: "my-air", name: "機票", nameZh: "機票", parentId: "my-travel", icon: "plane" });
+    const stay = cat({ id: "my-hotel", name: "酒店", nameZh: "酒店", parentId: "my-travel", icon: "building" });
+    const patch = travelCategoryPatch([mine, air, stay], seed);
+    assert.deepEqual(patch.add, []);
+    assert.deepEqual(patch.removeIds, []);
+  });
+
+  it("drops an unused built-in copy and keeps the user's 旅遊", () => {
+    const mine = cat({ id: "my-travel", name: "旅遊", nameZh: "旅遊", icon: "plane" });
+    const air = cat({ id: "my-air", name: "機票", nameZh: "機票", parentId: "my-travel", icon: "plane" });
+    const builtin = seed.map((c) => ({ ...c }));
+    const patch = travelCategoryPatch([mine, air, ...builtin], seed);
+    assert.deepEqual(patch.add, []);
+    assert.deepEqual(patch.removeIds.sort(), ["flights", "hotels", "p-travel", "travel-meals"].sort());
+  });
+
+  it("keeps the built-in list when a transaction already uses it", () => {
+    const patch = travelCategoryPatch(seed, seed, new Set(["flights"]));
+    assert.deepEqual(patch.add, []);
+    assert.deepEqual(patch.removeIds, []);
+  });
+
+  it("leaves a marked travel category alone and drops an unused built-in copy", () => {
+    const mine = cat({ id: "holiday", name: "假期", nameZh: "假期", theme: "travel", icon: "plane" });
+    const mineAir = cat({ id: "holiday-air", name: "機票", nameZh: "機票", parentId: "holiday", icon: "plane" });
+    const patch = travelCategoryPatch([mine, mineAir, ...seed], seed);
+    assert.deepEqual(patch.add, []);
+    assert.deepEqual(patch.removeIds.sort(), ["flights", "hotels", "p-travel", "travel-meals"].sort());
+  });
+
+  it("does not refill subcategories under a travel category", () => {
+    const mine = cat({ id: "holiday", name: "假期", nameZh: "假期", theme: "travel", icon: "plane" });
+    const patch = travelCategoryPatch([mine], seed);
+    assert.deepEqual(patch.add, []);
+    assert.deepEqual(patch.removeIds, []);
+  });
+
+  it("still seeds travel when the book has none", () => {
+    const food = cat({ id: "p-food", name: "Food", nameZh: "飲食" });
+    const patch = travelCategoryPatch([food], seed);
+    assert.deepEqual(patch.add.map((c) => c.id), ["p-travel", "flights", "hotels", "travel-meals"]);
   });
 });
 

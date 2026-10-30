@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Delete } from "lucide-react";
 import { CURRENCIES, type Currency } from "@/lib/types";
 import { applyPadKey } from "@/lib/money-expr";
@@ -17,6 +18,7 @@ export function AmountKeypad({
   function press(key: string) {
     onChange(applyPadKey(value, key));
   }
+  const currencyArmed = useRef(false);
 
   return (
     <div className="border-t border-line bg-background px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
@@ -28,18 +30,30 @@ export function AmountKeypad({
         <PadKey onClick={() => press("2")}>2</PadKey>
         <PadKey onClick={() => press("3")}>3</PadKey>
         {onCurrency && currency ? (
-          <select
-            aria-label="currency"
-            value={currency}
-            onChange={(e) => onCurrency(e.target.value as Currency)}
-            className="h-14 appearance-none rounded-lg bg-elevated text-center text-sm font-semibold"
-          >
-            {CURRENCIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+          <div className="relative h-14">
+            <div className="pointer-events-none grid h-14 place-items-center rounded-lg bg-elevated text-sm font-semibold">{currency}</div>
+            <select
+              aria-label="currency"
+              value={currency}
+              onPointerDown={() => {
+                currencyArmed.current = true;
+              }}
+              onKeyDown={() => {
+                currencyArmed.current = true;
+              }}
+              onChange={(e) => {
+                if (!currencyArmed.current) return;
+                onCurrency(e.target.value as Currency);
+              }}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            >
+              {CURRENCIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
         ) : (
           <PadKey tone="fn" disabled>
             {currency ?? "HKD"}

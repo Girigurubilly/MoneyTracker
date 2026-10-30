@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Area, AreaChart, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Hairline, InfoButton, ScreenHeader, SectionLabel } from "@/components/shared";
+import { DateField } from "@/components/txn-composer";
 import { LifeYearList } from "@/components/life-year-list";
 import { LifePlanSetup } from "@/components/life-plan-setup";
 import { ReportAiSheet } from "@/components/report-ai-sheet";
@@ -568,14 +569,13 @@ export function RetirementPage() {
           <div className="px-4 pt-3 text-sm font-medium">{t.reports.goalsTitle}</div>
           <label className="flex min-h-11 items-center justify-between gap-3 px-4">
             <span className="text-sm">{t.reports.birthday}</span>
-            <input
-              type="date"
+            <DateField
               value={base.birthday ?? ""}
-              onChange={(e) => {
-                const birthday = e.target.value || undefined;
+              onChange={(value) => {
+                const birthday = value || undefined;
                 persist({ birthday, currentAge: birthday ? ageFromBirthday(birthday, todayISO()) : base.currentAge });
               }}
-              className="h-11 max-w-[11.5rem] bg-transparent text-right text-sm text-accent outline-none"
+              className="justify-end"
             />
           </label>
           {!base.birthday ? (

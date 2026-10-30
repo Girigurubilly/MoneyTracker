@@ -1,7 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { ImportPage } from "@/components/more";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/more/import")({
   ssr: false,
-  component: ImportPage,
+  component: () => <Navigate to="/more/backup" replace />,
 });

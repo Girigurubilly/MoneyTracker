@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { CategoryIcon } from "@/components/category-icon";
 import { CategoryPicker, TypeSwitch } from "@/components/category-picker";
 import { Overlay } from "@/components/shared";
-import { asFiat, autoDestAmount } from "@/components/currency-field";
+import { accountFiat, asFiat, autoDestAmount } from "@/components/currency-field";
 import {
   AccountLine,
   ActiveKeypad,
@@ -93,6 +93,15 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
   const destN = destLocked ? Number(destAmount) || 0 : autoDest;
   const activeTrips = trips.filter((tr) => isTripActive(tr, todayISO()) || tr.id === tx.tripId);
 
+  function chooseAccount(id: string) {
+    setAccountId(id);
+    if (type === "miles") return;
+    const next = accountFiat(accounts.find((a) => a.id === id)?.currency);
+    if (!next) return;
+    setCurrency(next);
+    setDestLocked(false);
+  }
+
   function changeType(next: TxType) {
     setType(next);
     if (next === "transfer") {
@@ -116,7 +125,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
       setDoSplit(false);
     }
     const def = resolvedDefaultAccountId(c, categories);
-    if (def && accounts.some((a) => a.id === def)) setAccountId(def);
+    if (def && accounts.some((a) => a.id === def)) chooseAccount(def);
   }
 
   async function save() {
@@ -335,7 +344,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
             <AccountLine
               accounts={accounts}
               value={accountId}
-              onChange={setAccountId}
+              onChange={chooseAccount}
               placeholder={t.add.fromAccount}
               role={t.add.fromAccount}
               amount={amount}
@@ -365,7 +374,7 @@ function TxDetailBody({ tx, onClose }: { tx: Transaction; onClose: () => void })
           </>
         ) : (
           <>
-            {moneyTx ? <AccountLine accounts={accounts} value={accountId} onChange={setAccountId} placeholder={t.add.account} asOf={date} excludeTxId={tx.id} /> : null}
+            {moneyTx ? <AccountLine accounts={accounts} value={accountId} onChange={chooseAccount} placeholder={t.add.account} asOf={date} excludeTxId={tx.id} /> : null}
             {type !== "miles" ? (
               <LineRow
                 leading={

@@ -145,9 +145,8 @@ export function dateRangeLabel(start: string, end: string, locale: Locale): stri
     if (ys === ye) return `${ms}月${ds}日 → ${me}月${de}日`;
     return `${ys}年${ms}月${ds}日 → ${ye}年${me}月${de}日`;
   }
-  const s = `${ds}/${ms}${ys === ye ? "" : `/${ys}`}`;
-  const e = `${de}/${me}/${ye}`;
-  return `${s} → ${e}`;
+  if (ys === ye) return `${ds}/${ms} → ${de}/${me}`;
+  return `${ds}/${ms}/${ys} → ${de}/${me}/${ye}`;
 }
 
 export function shortDate(iso: string, locale: Locale): string {

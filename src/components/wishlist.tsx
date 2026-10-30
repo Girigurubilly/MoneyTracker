@@ -94,7 +94,7 @@ export function WishlistBlock({ compact }: { compact?: boolean }) {
                       className="tr-press grid size-11 shrink-0 place-items-center text-muted"
                       onClick={() => setEditing(it)}
                     >
-                      <Pencil className="size-4" />
+                      <Pencil className="size-5" />
                     </button>
                     <button
                       type="button"

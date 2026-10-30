@@ -93,10 +93,13 @@ export function TodayScreen() {
               href={plannerTripUrl(covering, { day: selected })}
               target="_blank"
               rel="noopener noreferrer"
-              className="tr-press inline-flex min-h-11 items-center gap-2 text-sm text-muted"
+              className="tr-press inline-flex min-h-11 items-center gap-2 py-1 text-sm text-muted"
             >
-              <MapPinned className="size-4 text-accent" strokeWidth={1.7} />
-              {t.today.openPlan}
+              <MapPinned className="size-4 shrink-0 text-accent" strokeWidth={1.7} />
+              <span>
+                <span className="block">{t.today.openPlan}</span>
+                <span className="block text-[11px] leading-4 text-faint">{t.today.plannerLeave}</span>
+              </span>
             </a>
           </div>
         </div>

@@ -98,7 +98,8 @@ html[data-access="elderly"] select {
   min-height: 2.75rem;
 }
 html[data-access="kid"] {
-  --color-accent: #ff7a59;
+  --color-accent: #9a3412;
+  --color-on-accent: #ffffff;
   font-size: 19px;
 }
 html[data-access="kid"] button,
@@ -115,10 +116,10 @@ html[data-theme="dark"] {
   color-scheme: dark;
   --font-sans: "SF Pro Text", "PingFang HK", "Noto Sans TC", "Segoe UI", system-ui, sans-serif;
   --font-display: "SF Pro Display", "PingFang HK", "Noto Sans TC", "Segoe UI", system-ui, sans-serif;
-  --color-background: #2a3139;
+  --color-background: #1e252c;
   --color-foreground: #f4f7f8;
-  --color-elevated: #3a424c;
-  --color-muted: #9aa3ad;
+  --color-elevated: #3c4a59;
+  --color-muted: #c5ced6;
   --color-faint: #6e7882;
   --color-line: #4a535e;
   --color-accent: #2ec9be;
@@ -226,13 +227,13 @@ html[data-theme="cyberpunk"] {
   --color-ring-track: #1a3324;
   --color-scrim: rgb(2 10 6 / 0.66);
   --color-chart-1: #7dff6a;
-  --color-chart-2: #b6ff6a;
-  --color-chart-3: #3dff9a;
+  --color-chart-2: #3ee0ff;
+  --color-chart-3: #d6f06a;
   --color-chart-4: #ff5a6a;
-  --color-chart-5: #d6f06a;
-  --color-chart-6: #5ee08a;
-  --color-chart-7: #9dffb0;
-  --color-chart-8: #ff8a94;
+  --color-chart-5: #c084fc;
+  --color-chart-6: #ffb45a;
+  --color-chart-7: #5ee0c8;
+  --color-chart-8: #ff7ad9;
 }
 
 html[data-theme="shiba"] {
@@ -362,18 +363,19 @@ html[data-theme="mist"] {
   --color-background: #e4eef0;
   --color-foreground: #1c2a33;
   --color-elevated: #f7fbfa;
-  --color-muted: #6f8688;
-  --color-faint: #a3b8b8;
+  --color-muted: #4a6264;
+  --color-faint: #556e70;
   --color-line: #d3e3e4;
-  --color-accent: #2f9d74;
+  --color-accent: #147a56;
   --color-on-accent: #ffffff;
   --color-accent-soft: #d8f3e6;
-  --color-income: #3d8ec4;
-  --color-expense: #7a68b8;
+  --color-income: #165684;
+  --color-expense: #c4475a;
   --color-success-soft: #d9f6e6;
-  --color-expense-soft: #ece6f8;
-  --color-watch: #c47a3a;
+  --color-expense-soft: #f8e0e4;
+  --color-watch: #9a5b00;
   --color-watch-soft: #f8ead8;
+  --color-ring-track: #b7c8c9;
   --color-chart-1: #7dce9a;
   --color-chart-2: #8ebbe4;
   --color-chart-3: #b7a6e6;
@@ -396,26 +398,27 @@ html[data-theme="ink"] {
   --color-accent: #c6ee55;
   --color-on-accent: #161616;
   --color-accent-soft: #eef8c4;
-  --color-income: #161616;
+  --color-income: #1f7a46;
   --color-expense: #c45d62;
   --color-success-soft: #e7f6b0;
   --color-expense-soft: #f6d8d4;
-  --color-watch: #161616;
-  --color-watch-soft: #ece8f2;
-  --color-chart-1: #171717;
+  --color-watch: #9a5b00;
+  --color-watch-soft: #f4ead4;
+  --color-ring-track: #c9bfd6;
+  --color-chart-1: #1f7a46;
   --color-chart-2: #c6ee55;
-  --color-chart-3: #f0b8b4;
-  --color-chart-4: #8d8d8d;
-  --color-chart-5: #171717;
-  --color-chart-6: #d7ef8a;
-  --color-chart-7: #e7b2ae;
-  --color-chart-8: #4a4a4a;
+  --color-chart-3: #c45d62;
+  --color-chart-4: #3d6b8c;
+  --color-chart-5: #e0a24a;
+  --color-chart-6: #7a68b8;
+  --color-chart-7: #2f9d8f;
+  --color-chart-8: #d46a3a;
 }
 
-html[data-wallpaper="theme"] body::before,
-html[data-wallpaper="custom"] body::before {
+html[data-wallpaper="theme"] .app-shell::before,
+html[data-wallpaper="custom"] .app-shell::before {
   content: "";
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
@@ -424,6 +427,17 @@ html[data-wallpaper="custom"] body::before {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
+}
+
+html[data-wallpaper="theme"] .app-shell > *,
+html[data-wallpaper="custom"] .app-shell > * {
+  position: relative;
+  z-index: 1;
+}
+
+input.hk-date-proxy::-webkit-calendar-picker-indicator {
+  display: none;
+  -webkit-appearance: none;
 }
 
 html[data-font="system"] {
@@ -651,6 +665,9 @@ html[data-depth="soft"] {
 }
 html[data-depth="lifted"] {
   --card-shadow: 0 18px 44px rgb(20 28 36 / 0.16);
+}
+html[data-theme="dark"]:not([data-depth]) {
+  --card-shadow: 0 0 0 1px rgb(255 255 255 / 0.14), 0 12px 28px rgb(0 0 0 / 0.45);
 }
 html[data-theme="dark"][data-depth="soft"] {
   --card-shadow: 0 12px 28px rgb(0 0 0 / 0.32);

@@ -156,7 +156,7 @@ export function RetirementAccountsPage() {
                     <div className="mt-1 text-xs tabular-nums text-muted">{accountLine(a, t)}</div>
                   </div>
                   <span className="grid size-11 shrink-0 place-items-center text-muted" aria-hidden>
-                    <Pencil className="size-4" />
+                    <Pencil className="size-5" />
                   </span>
                 </button>
               </div>
@@ -546,7 +546,7 @@ function HkIncomeSection() {
                     {a.kind === "oaa" ? <div className="mt-1 text-[11px] text-muted">{t.reports.sampleAmount}</div> : null}
                   </div>
                   <span className="grid size-11 shrink-0 place-items-center text-muted" aria-hidden>
-                    <Pencil className="size-4" />
+                    <Pencil className="size-5" />
                   </span>
                 </button>
               </div>

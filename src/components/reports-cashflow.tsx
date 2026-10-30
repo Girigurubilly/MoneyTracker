@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { ScreenHeader } from "@/components/shared";
+import { DateField } from "@/components/txn-composer";
 import { money, pct, shortDate, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { periodCategoryTotals, periodRange, type PeriodPreset } from "@/lib/calc/period";
@@ -48,7 +49,7 @@ export function CashflowPage() {
         <label className="border-r border-line px-4 py-3">
           <div className="text-xs text-muted">{t.reports.start}</div>
           {preset === "custom" ? (
-            <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="mt-1 w-full bg-transparent text-sm outline-none" />
+            <DateField value={customFrom} onChange={setCustomFrom} className="mt-1" />
           ) : (
             <div className="mt-1 text-sm">{shortDate(from, locale)}</div>
           )}
@@ -56,7 +57,7 @@ export function CashflowPage() {
         <label className="px-4 py-3">
           <div className="text-xs text-muted">{t.reports.end}</div>
           {preset === "custom" ? (
-            <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="mt-1 w-full bg-transparent text-sm outline-none" />
+            <DateField value={customTo} onChange={setCustomTo} className="mt-1" />
           ) : (
             <div className="mt-1 text-sm">{shortDate(to, locale)}</div>
           )}

@@ -63,6 +63,7 @@ type UiState = {
   firstDayOfWeek: 0 | 1;
   addOpen: boolean;
   addType: TxType | null;
+  addAccountId: string | null;
   addOctopus: boolean;
   searchOpen: boolean;
   txDetailId: string | null;
@@ -85,7 +86,7 @@ type UiState = {
   setSelectedDate: (iso: string) => void;
   setTodayView: (v: TodayView) => void;
   openAddPicker: () => void;
-  openAdd: (t: TxType) => void;
+  openAdd: (t: TxType, accountId?: string) => void;
   openOctopus: () => void;
   closeAdd: () => void;
   closeOctopus: () => void;
@@ -120,6 +121,7 @@ export const useUi = create<UiState>((set, get) => ({
   firstDayOfWeek: 0,
   addOpen: false,
   addType: null,
+  addAccountId: null,
   addOctopus: false,
   searchOpen: false,
   txDetailId: null,
@@ -213,15 +215,20 @@ export const useUi = create<UiState>((set, get) => ({
   },
   resetCustomColors: () => {
     persistCustom({});
-    applyTheme(get().theme, {});
-    set({ customColors: {} });
+    try {
+      localStorage.setItem(THEME_KEY, "normal");
+    } catch {
+      /* ignore */
+    }
+    applyTheme("normal", {});
+    set({ theme: "normal", customColors: {} });
   },
   setSelectedDate: (iso) => set({ selectedDate: iso }),
   setTodayView: (v) => set({ todayView: v }),
-  openAddPicker: () => set({ addOpen: true, addType: null, addOctopus: false }),
-  openAdd: (t) => set({ addOpen: true, addType: t, addOctopus: false }),
+  openAddPicker: () => set({ addOpen: true, addType: null, addAccountId: null, addOctopus: false }),
+  openAdd: (t, accountId) => set({ addOpen: true, addType: t, addAccountId: accountId ?? null, addOctopus: false }),
   openOctopus: () => set((s) => ({ addOpen: true, addType: s.addType ?? "expense", addOctopus: true })),
-  closeAdd: () => set({ addOpen: false, addType: null, addOctopus: false }),
+  closeAdd: () => set({ addOpen: false, addType: null, addAccountId: null, addOctopus: false }),
   closeOctopus: () => set({ addOctopus: false }),
   setSearchOpen: (v) => set({ searchOpen: v }),
   setTxDetailId: (id) => set({ txDetailId: id }),

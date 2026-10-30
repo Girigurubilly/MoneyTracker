@@ -33,22 +33,14 @@ import {
   accounts as seedAccounts,
   allowances as seedAllowances,
   budgets as seedBudgets,
+  buildSample,
   categories as seedCategories,
-  fxRates as seedFx,
   goals as seedGoals,
   mortgage as seedMortgage,
   oneOffs as seedOneOffs,
-  recurring as seedRecurring,
   retirement as seedRetirement,
-  transactions as seedTx,
-  trips as seedTrips,
-  deposits as seedDeposits,
-  promoSavings as seedPromo,
-  holdings as seedHoldings,
-  yearlyPlans as seedYearly,
   wishlist as seedWishlist,
   annualTravelBudget as seedTravelBudget,
-  netWorthSeries as seedNw,
 } from "@/lib/mock";
 import { applyAutoTrip, patchAutoTrips } from "@/lib/calc/trips";
 import { readTripEditedAt, readTripLibrary, writeTripLibrary } from "@/lib/trip-library";
@@ -60,7 +52,7 @@ import { extractPromoDeposits, migrateBalanceBasis } from "@/lib/calc/fc-baselin
 import { clearHoldingMoveCache, fetchHoldingQuotes, inferredQuoteCurrency, quoteKey, quoteToCurrency } from "@/lib/quotes";
 import { chargedDayOf, chargedIso, inferLivingRegular, isExpenseRegular } from "@/lib/calc/budget";
 import { emptyYearlyPlan, linkedMonthSpendCap } from "@/lib/calc/deposits";
-import { isMortgageInterestCategory, isMortgagePrincipalCategory, missingMortgageLeaf } from "@/lib/categories";
+import { isMortgageInterestCategory, isMortgagePrincipalCategory, missingMortgageLeaf, travelCategoryPatch, travelThemedIds } from "@/lib/categories";
 import { accountsInGroup, countCashInNetWorth, nextSortOrder } from "@/lib/accounts";
 import { applyTxRules } from "@/lib/tx-rules";
 import { applyDeltas, balanceDeltas, monthKey } from "@/lib/calc/ledger";
@@ -185,7 +177,6 @@ type Dispatchers = {
   deleteDeposit: (id: string) => Promise<void>;
   upsertPromoSaving: (row: PromoSaving) => Promise<void>;
   deletePromoSaving: (id: string) => Promise<void>;
-  flushWorthSnapshots: () => Promise<void>;
   setFcNotes: (confirmedFacts: string[], openGaps: string[]) => Promise<void>;
   syncPromoFromDeposits: () => Promise<void>;
   setYearlyCell: (year: number, month0: number, field: "salary" | "other" | "expense", value: number) => Promise<void>;
@@ -341,51 +332,61 @@ const emptyRetirement = {
   travelInRetirement: 0,
 };
 
-const defaultOaa: Allowance = {
-  id: "oaa",
-  label: "Old Age Allowance",
-  labelZh: "生果金",
-  monthly: 1620,
-  startAge: 70,
-  kind: "oaa",
-  inflationAdjusted: true,
-};
+const DEMO_REV = "2";
+const DEMO_REV_KEY = "hk-life-money-demo-rev";
+const BLANK_KEY = "hk-life-money-blank";
 
-const defaultCash: Account = {
-  id: "cash-hkd",
-  name: "Cash",
-  nameZh: "現金",
-  type: "cash",
-  currency: "HKD",
-  balance: 0,
-  includeInNetWorth: true,
-  group: "cash",
-  balanceBasis: "unverified",
-};
+function wantsBlankBook(): boolean {
+  try {
+    return localStorage.getItem(BLANK_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markDemoReady(): void {
+  try {
+    localStorage.setItem(DEMO_REV_KEY, DEMO_REV);
+    localStorage.removeItem(BLANK_KEY);
+    localStorage.setItem("hk-life-money-onboarded", "1");
+  } catch {
+    /* ignore */
+  }
+}
+
+function markBlankBook(): void {
+  try {
+    localStorage.setItem(BLANK_KEY, "1");
+  } catch {
+    /* ignore */
+  }
+}
 
 async function seedDb() {
+  const sample = buildSample();
   const ret = { id: "base", ...seedRetirement };
   await idb().transaction("rw", idb().tables, async () => {
     await Promise.all(idb().tables.map((t) => t.clear()));
     await idb().accounts.bulkAdd(seedAccounts);
     await idb().categories.bulkAdd(seedCategories);
-    await idb().transactions.bulkAdd(seedTx);
-    await idb().recurring.bulkAdd(seedRecurring);
+    await idb().transactions.bulkAdd(sample.transactions);
+    await idb().recurring.bulkAdd(sample.recurring);
     await idb().budgets.bulkAdd(seedBudgets);
-    await idb().trips.bulkAdd(seedTrips);
+    await idb().trips.bulkAdd(sample.trips);
     await idb().goals.bulkAdd(seedGoals);
     await idb().mortgage.add(seedMortgage);
     await idb().retirement.add(ret);
     await idb().allowances.bulkAdd(seedAllowances);
     await idb().oneOffs.bulkAdd(seedOneOffs);
-    await idb().deposits.bulkAdd(seedDeposits);
-    await idb().promoSavings.bulkAdd(seedPromo);
-    await idb().holdings.bulkAdd(seedHoldings);
-    await idb().yearlyPlans.bulkAdd(seedYearly);
+    await idb().deposits.bulkAdd(sample.deposits);
+    await idb().promoSavings.bulkAdd(sample.promoSavings);
+    await idb().holdings.bulkAdd(sample.holdings);
+    await idb().yearlyPlans.bulkAdd(sample.yearlyPlans);
     await idb().wishlist.bulkAdd(seedWishlist);
-    await idb().fxRates.bulkAdd(seedFx);
+    await idb().adhocBudgets.bulkAdd(sample.adhocBudgets);
+    await idb().fxRates.bulkAdd(sample.fxRates);
     await idb().snapshots.bulkAdd(
-      seedNw.map((s) => ({ month: s.month, net: s.value, assets: s.value + 2_858_240, liab: 2_858_240 })),
+      sample.netWorthSeries.map((s) => ({ month: s.month, net: s.value, assets: s.value + 2_858_240, liab: 2_858_240 })),
     );
     await idb().meta.put({
       key: "settings",
@@ -395,15 +396,15 @@ async function seedDb() {
       defaultCurrency: "HKD",
     });
   });
+  markDemoReady();
 }
 
 async function seedSkeleton() {
+  const sample = buildSample();
   await idb().transaction("rw", idb().tables, async () => {
     await Promise.all(idb().tables.map((t) => t.clear()));
-    await idb().accounts.bulkAdd([defaultCash]);
     await idb().categories.bulkAdd(seedCategories);
-    await idb().fxRates.bulkAdd(seedFx);
-    await idb().allowances.bulkAdd([defaultOaa]);
+    await idb().fxRates.bulkAdd(sample.fxRates);
     await idb().retirement.add(emptyRetirement);
     await idb().budgets.add({
       id: MONTH_TOTAL_BUDGET_ID,
@@ -724,23 +725,28 @@ async function syncRegularSchedules() {
 
 async function ensureTravelCategories() {
   const cats = await idb().categories.toArray();
-  let travel =
-    cats.find((c) => c.id === "p-travel") ??
-    cats.find((c) => !c.parentId && c.theme === "travel");
-  if (!travel) {
-    const row = seedCategories.find((c) => c.id === "p-travel");
-    if (row) {
+  const [txs, recurring, budgets, adhoc, wishes, meta] = await Promise.all([
+    idb().transactions.toArray(),
+    idb().recurring.toArray(),
+    idb().budgets.toArray(),
+    idb().adhocBudgets.toArray(),
+    idb().wishlist.toArray(),
+    idb().meta.get("settings"),
+  ]);
+  const used = new Set<string>();
+  for (const row of [...txs, ...recurring, ...budgets, ...adhoc, ...wishes]) {
+    if (row.categoryId) used.add(row.categoryId);
+  }
+  if (meta?.depositCategoryId) used.add(meta.depositCategoryId);
+  const { add, removeIds } = travelCategoryPatch(cats, seedCategories, used);
+  if (!add.length && !removeIds.length) return;
+  await idb().transaction("rw", idb().categories, async () => {
+    for (const id of removeIds) await idb().categories.delete(id);
+    for (const row of add) {
+      if (await idb().categories.get(row.id)) continue;
       await idb().categories.add(row);
-      travel = row;
     }
-  }
-  const parentId = travel?.id ?? "p-travel";
-  const need = seedCategories.filter(
-    (c) => c.parentId === "p-travel" && !cats.some((x) => x.id === c.id),
-  );
-  for (const row of need) {
-    await idb().categories.add({ ...row, parentId });
-  }
+  });
 }
 
 async function ensureMortgageCategories() {
@@ -908,7 +914,7 @@ let quoteInflight: Promise<number> | null = null;
 
 
 function travelCategoryIds(get: () => AppState): Set<string> {
-  return new Set(get().categories.filter((c) => c.theme === "travel").map((c) => c.id));
+  return new Set(travelThemedIds(get().categories));
 }
 
 export const useApp = create<AppState>((set, get) => ({
@@ -936,7 +942,7 @@ export const useApp = create<AppState>((set, get) => ({
   retirementAssetAccess: [],
   lifePlan: null,
   lastPostedTxId: null as string | null,
-  fxRates: seedFx,
+  fxRates: buildSample().fxRates,
   snapshots: [],
   annualTravelBudget: seedTravelBudget,
   defaultCurrency: "HKD",
@@ -964,9 +970,21 @@ export const useApp = create<AppState>((set, get) => ({
       }
       const n = await idb().accounts.count();
       const catN = await idb().categories.count();
-      if (n === 0 && catN === 0) await seedSkeleton();
-      else {
-        if (n === 0) await idb().accounts.add(defaultCash);
+      const txN = await idb().transactions.count();
+      const ids = n ? ((await idb().accounts.toCollection().primaryKeys()) as string[]) : [];
+      let demoRev = "";
+      try {
+        demoRev = localStorage.getItem(DEMO_REV_KEY) || "";
+      } catch {
+        /* ignore */
+      }
+      const builtinDemo = ids.includes("bochk");
+      const emptyBook = n === 0 && txN === 0;
+      if (!wantsBlankBook() && (emptyBook || (builtinDemo && demoRev !== DEMO_REV))) {
+        await seedDb();
+      } else if (n === 0 && catN === 0) {
+        await seedSkeleton();
+      } else {
         if (catN === 0) await idb().categories.bulkAdd(seedCategories);
         try {
           await ensureMortgageCategories();
@@ -997,8 +1015,9 @@ export const useApp = create<AppState>((set, get) => ({
         /* keep the saved accounts */
       }
       if (!data.fxRates.length) {
-        await idb().fxRates.bulkPut(seedFx);
-        data.fxRates = seedFx;
+        const fallbackFx = buildSample().fxRates;
+        await idb().fxRates.bulkPut(fallbackFx);
+        data.fxRates = fallbackFx;
       }
       const linked = await reconcileLinkedMonthSpendCap(data);
       data.budgets = linked.budgets;
@@ -1210,8 +1229,32 @@ export const useApp = create<AppState>((set, get) => ({
     set({ categories: [...get().categories, c] });
   },
   updateCategory: async (c) => {
+    const prev = get().categories;
+    const touched: Category[] = [c];
+    let next = prev.map((x) => (x.id === c.id ? c : x));
+    if (!c.parentId && c.theme === "travel") {
+      next = next.map((x) => {
+        if (x.parentId !== c.id || x.theme === "travel") return x;
+        const row = { ...x, theme: "travel" as const };
+        touched.push(row);
+        return row;
+      });
+      const used = new Set<string>();
+      for (const row of [...get().transactions, ...get().recurring, ...get().budgets, ...get().adhocBudgets, ...get().wishlist]) {
+        if (row.categoryId) used.add(row.categoryId);
+      }
+      if (get().depositCategoryId) used.add(get().depositCategoryId);
+      const { removeIds } = travelCategoryPatch(next, seedCategories, used);
+      if (removeIds.length) next = next.filter((x) => !removeIds.includes(x.id));
+      await idb().transaction("rw", idb().categories, async () => {
+        for (const row of touched) await idb().categories.put(row);
+        for (const id of removeIds) await idb().categories.delete(id);
+      });
+      set({ categories: next });
+      return;
+    }
     await idb().categories.put(c);
-    set({ categories: get().categories.map((x) => (x.id === c.id ? c : x)) });
+    set({ categories: next });
   },
   deleteCategory: async (id) => {
     const prev = get().categories;
@@ -1397,10 +1440,6 @@ export const useApp = create<AppState>((set, get) => ({
       if (tx.planned) await get().deleteTransaction(tx.id);
     }
   },
-  flushWorthSnapshots: async () => {
-    await idb().snapshots.clear();
-    set({ snapshots: [] });
-  },
   setFcNotes: async (confirmedFacts, openGaps) => {
     await writeMeta({ fcConfirmedFacts: confirmedFacts, fcOpenGaps: openGaps }, get());
     set({ fcConfirmedFacts: confirmedFacts, fcOpenGaps: openGaps });
@@ -1560,7 +1599,7 @@ export const useApp = create<AppState>((set, get) => ({
       await bulkChunk((rows) => idb().retirementAccounts.bulkAdd(rows), snap.retirementAccounts ?? []);
       await bulkChunk((rows) => idb().retirementAssetAccess.bulkAdd(rows), snap.retirementAssetAccess ?? []);
       await bulkChunk((rows) => idb().lifePlans.bulkAdd(rows), snap.lifePlan ?? []);
-      await idb().fxRates.bulkPut(snap.fxRates.length ? snap.fxRates : seedFx);
+      await idb().fxRates.bulkPut(snap.fxRates.length ? snap.fxRates : buildSample().fxRates);
       if (snap.snapshots.length) await idb().snapshots.bulkPut(snap.snapshots);
       await idb().meta.put({
         key: "settings",
@@ -1632,6 +1671,7 @@ export const useApp = create<AppState>((set, get) => ({
     set({ ...data, ready: true });
   },
   clearAll: async () => {
+    markBlankBook();
     await seedSkeleton();
     const data = await loadAll();
     set({ ...data, ready: true });

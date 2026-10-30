@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Hairline, InfoButton, Overlay, ProgressRing, ScreenHeader, SectionLabel, TxGroupedList } from "@/components/shared";
-import { ActiveKeypad, LineRow } from "@/components/txn-composer";
-import { money, todayISO } from "@/lib/format";
+import { ActiveKeypad, DateField, LineRow } from "@/components/txn-composer";
+import { money, shortDate, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import {
   formatRatePct,
@@ -88,6 +88,14 @@ export function LivingPage() {
           </div>
         }
       />
+      {!m ? (
+        <div className="rt-enter mx-4 mb-3 rounded-2xl bg-elevated px-4 py-5 text-center">
+          <p className="text-sm leading-5 text-muted">{t.reports.housingEmpty}</p>
+          <button type="button" className="tr-press mt-3 h-11 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={() => setEdit(true)}>
+            {t.reports.updateMortgage}
+          </button>
+        </div>
+      ) : null}
       <div className="rt-enter mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -162,7 +170,7 @@ export function LivingPage() {
             <Hairline />
             <Kv label={t.reports.originalLoan} value={money(m.original || m.outstanding, "HKD")} />
             <Hairline />
-            <Kv label={t.reports.loanStart} value={m.startDate || "—"} />
+            <Kv label={t.reports.loanStart} value={m.startDate ? shortDate(m.startDate, locale) : "—"} />
             <Hairline />
             <Kv label={t.reports.owedBank} value={money(m.outstanding, "HKD")} />
             <Hairline />
@@ -339,7 +347,7 @@ function MortgageEditor({ open, onClose }: { open: boolean; onClose: () => void 
   const [linkedSavingsId, setLinkedSavingsId] = useState(m?.rateLinkedSavingsAccountId ?? "");
   const [day, setDay] = useState(String(m?.paymentDay ?? 1));
   const [override, setOverride] = useState(m?.paymentOverride ? String(m.paymentOverride) : "");
-  const [field, setField] = useState<"amount" | "dest" | "principal">("dest");
+  const [field, setField] = useState<"amount" | "dest" | "principal" | null>(null);
   const today = todayISO();
   const preview = remainingFromStart(
     { startDate, remainingMonths: Number(termYears) * 12 || 240, termYears: Number(termYears) || undefined, paymentDay: Number(day) || 1 },
@@ -389,12 +397,14 @@ function MortgageEditor({ open, onClose }: { open: boolean; onClose: () => void 
           <label className="block py-2 text-xs text-muted">
             {t.reports.loan}
             <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground">
+              <option value="">{t.common.none}</option>
               {loans.map((a) => (
                 <option key={a.id} value={a.id}>
                   {pickName(locale, a.name, a.nameZh)}
                 </option>
               ))}
             </select>
+            {loans.length === 0 ? <span className="mt-1 block text-[11px] leading-4 text-muted">{t.reports.loanAccountMissing}</span> : null}
           </label>
           <label className="block py-2 text-xs text-muted">
             {t.reports.rateLinkedSavings}
@@ -411,7 +421,7 @@ function MortgageEditor({ open, onClose }: { open: boolean; onClose: () => void 
           <LineRow label={t.reports.originalLoan} amount={original} currency="HKD" active={field === "amount"} onFocusAmount={() => setField("amount")} />
           <label className="block py-2 text-xs text-muted">
             {t.reports.loanStart}
-            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
+            <DateField value={startDate} onChange={setStartDate} className="mt-1" />
             {!startDate ? <span className="mt-1 block text-[11px] text-watch">{t.reports.loanStartNeeded}</span> : null}
           </label>
           <LineRow label={t.reports.owedBank} amount={outstanding} currency="HKD" active={field === "dest"} onFocusAmount={() => setField("dest")} />
@@ -472,22 +482,30 @@ function MortgageEditor({ open, onClose }: { open: boolean; onClose: () => void 
           />
         </div>
         <div className="sticky bottom-0 z-10 border-t border-line bg-background">
-          <ActiveKeypad
-            field={field === "principal" ? "principal" : field === "amount" ? "amount" : "dest"}
-            amount={original}
-            dest={outstanding}
-            principal={override}
-            interest=""
-            setAmount={setOriginal}
-            setDest={setOutstanding}
-            setPrincipal={setOverride}
-            setInterest={() => undefined}
-            currency="HKD"
-          />
-          <button
-            type="button"
-            className="tr-press mx-4 mb-[max(0.75rem,env(safe-area-inset-bottom))] mt-2 h-12 w-[calc(100%-2rem)] rounded-xl bg-accent text-sm font-semibold text-on-accent"
-            onClick={async () => {
+          {field ? (
+            <ActiveKeypad
+              field={field === "principal" ? "principal" : field === "amount" ? "amount" : "dest"}
+              amount={original}
+              dest={outstanding}
+              principal={override}
+              interest=""
+              setAmount={setOriginal}
+              setDest={setOutstanding}
+              setPrincipal={setOverride}
+              setInterest={() => undefined}
+              currency="HKD"
+            />
+          ) : null}
+          <div className="flex gap-2 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
+            {field ? (
+              <button type="button" className="tr-press h-12 flex-1 rounded-xl bg-elevated text-sm font-medium" onClick={() => setField(null)}>
+                {t.common.done}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="tr-press h-12 flex-1 rounded-xl bg-accent text-sm font-semibold text-on-accent"
+              onClick={async () => {
               const p = Number(pRate) / 100;
               const sp = Number(spread) / 100;
               const fx = Number(fixed) / 100;
@@ -518,6 +536,7 @@ function MortgageEditor({ open, onClose }: { open: boolean; onClose: () => void 
           >
             {t.add.save}
           </button>
+          </div>
         </div>
       </div>
     </Overlay>

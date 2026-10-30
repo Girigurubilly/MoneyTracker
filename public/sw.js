@@ -1,5 +1,5 @@
-/* HK Life Money — cache the app shell so the ledger works offline. */
-const CACHE = "hk-life-money-shell-v21";
+/* HK Life Money — offline fallback. Network first so a new version is what you see. */
+const CACHE = "hk-life-money-shell-v22";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -42,15 +42,14 @@ self.addEventListener("fetch", (event) => {
   }
 
   event.respondWith(
-    caches.match(req).then((hit) => {
-      if (hit) return hit;
-      return fetch(req).then((res) => {
-        if (res.ok) {
+    fetch(req)
+      .then((res) => {
+        if (res.ok && res.type === "basic") {
           const copy = res.clone();
           void caches.open(CACHE).then((c) => c.put(req, copy));
         }
         return res;
-      });
-    }),
+      })
+      .catch(async () => (await caches.match(req)) || Response.error()),
   );
 });

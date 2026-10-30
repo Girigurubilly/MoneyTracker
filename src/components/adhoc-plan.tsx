@@ -148,9 +148,6 @@ export function AdhocPlanPage() {
           <h2 className="min-w-0 text-sm font-medium text-muted">
             {t.budget.adhoc} · {monthLabel(thisMonth, locale)}
           </h2>
-          <button type="button" className="shrink-0 text-sm font-medium text-accent" onClick={() => openAdd(thisMonth)}>
-            {t.budget.addShort}
-          </button>
         </div>
         <MonthRows
           rows={groups.current}

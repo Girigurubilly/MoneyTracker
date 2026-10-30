@@ -4,7 +4,7 @@ import { AmountKeypad } from "@/components/amount-keypad";
 import { AccountSelect } from "@/components/account-select";
 import { WhenPicker } from "@/components/when-picker";
 import { Overlay } from "@/components/shared";
-import { clockNow, formatTypingAmount, money, whenStamp } from "@/lib/format";
+import { clockNow, formatTypingAmount, money, shortDate, whenStamp } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { parseMoneyExpr } from "@/lib/money-expr";
 import { accountBalanceAsOf, isDebtAccount } from "@/lib/calc/ledger";
@@ -236,6 +236,35 @@ export function AccountLine({
   );
 }
 
+export function DateField({
+  value,
+  onChange,
+  className,
+}: {
+  value: string;
+  onChange: (iso: string) => void;
+  className?: string;
+}) {
+  const t = useT();
+  const locale = useUi((s) => s.locale);
+  return (
+    <div className={cn("relative flex h-11 min-w-0 items-center", className)}>
+      <span className="pointer-events-none truncate text-sm font-medium tabular-nums text-accent">
+        {value ? shortDate(value, locale) : t.common.pickDate}
+      </span>
+      <input
+        type="date"
+        lang={locale === "zh-HK" ? "zh-HK" : "en-HK"}
+        aria-label={t.common.pickDate}
+        title={t.common.pickDate}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="hk-date-proxy absolute inset-0 cursor-pointer opacity-0"
+      />
+    </div>
+  );
+}
+
 export function DatePaidRow({
   date,
   time,
@@ -265,7 +294,7 @@ export function DatePaidRow({
             {whenStamp(date, clock, locale)}
           </button>
         ) : (
-          <input type="date" value={date} onChange={(e) => onDate(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
+          <DateField value={date} onChange={onDate} className="h-10" />
         )}
         <button
           type="button"
@@ -359,7 +388,11 @@ export function ExtraIconBar({
           </IconBtn>
         ) : null}
         {showTrip ? (
-          <IconBtn active={tripOn || extra === "trip"} label={t.add.trip} onClick={() => toggle("trip")}>
+          <IconBtn
+            active={tripOn || extra === "trip"}
+            label={tripOptions?.find((o) => o.id === tripValue)?.label.split(" · ")[0] || t.add.trip}
+            onClick={() => toggle("trip")}
+          >
             <Plane className="size-5" />
           </IconBtn>
         ) : null}

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { Overlay, ScreenHeader, TxGroupedList } from "@/components/shared";
+import { DateField } from "@/components/txn-composer";
 import { SpendBriefButton } from "@/components/spend-brief";
 import { prefersReducedMotion } from "@/components/retire-ux";
 import { money, shortDate, todayISO } from "@/lib/format";
@@ -107,7 +108,9 @@ export function SpendingPage() {
     : tab === "income"
       ? t.reports.income
       : tab === "both"
-        ? t.reports.netSurplus
+        ? netSave < 0
+          ? t.reports.netDeficit
+          : t.reports.netSurplus
         : t.reports.expense;
   const donut = (pieRows.length ? pieRows : [{ id: "empty", value: 1, name: "—", nameZh: "—", colorIndex: 0 }]).filter(
     (r) => Number(r.value) > 0,
@@ -149,12 +152,7 @@ export function SpendingPage() {
         <label className="bg-elevated px-4 py-3">
           <div className="text-xs text-muted">{t.reports.start}</div>
           {preset === "custom" ? (
-            <input
-              type="date"
-              value={customFrom}
-              onChange={(e) => setCustomFrom(e.target.value)}
-              className="mt-1 w-full bg-transparent text-sm font-medium tabular-nums text-accent outline-none"
-            />
+            <DateField value={customFrom} onChange={setCustomFrom} className="mt-1" />
           ) : (
             <button
               type="button"
@@ -172,12 +170,7 @@ export function SpendingPage() {
         <label className="bg-elevated px-4 py-3">
           <div className="text-xs text-muted">{t.reports.end}</div>
           {preset === "custom" ? (
-            <input
-              type="date"
-              value={customTo}
-              onChange={(e) => setCustomTo(e.target.value)}
-              className="mt-1 w-full bg-transparent text-sm font-medium tabular-nums text-accent outline-none"
-            />
+            <DateField value={customTo} onChange={setCustomTo} className="mt-1" />
           ) : (
             <button
               type="button"

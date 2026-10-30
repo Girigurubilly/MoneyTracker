@@ -247,7 +247,7 @@ export function HoldingsPage() {
                     <div className="text-sm font-semibold tabular-nums">{money(h.quantity * (h.lastPrice || 0), h.currency)}</div>
                   </div>
                   <button type="button" className="tr-press grid size-11 shrink-0 place-items-center text-muted" onClick={() => setEditing(h)} aria-label={t.common.edit}>
-                    <Pencil className="size-4" />
+                    <Pencil className="size-5" />
                   </button>
                 </div>
               </div>

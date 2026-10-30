@@ -4,6 +4,7 @@ import { Overlay } from "@/components/shared";
 import { CategoryIcon } from "@/components/category-icon";
 import { CategoryPicker } from "@/components/category-picker";
 import { AccountSelect } from "@/components/account-select";
+import { DateField } from "@/components/txn-composer";
 import { moneyAccountsForPicker } from "@/lib/accounts";
 import { categoryPath } from "@/lib/categories";
 import { parseApplePayText, type ApplePayDraft } from "@/lib/apple-pay";
@@ -221,7 +222,7 @@ export function ApplePayImport({ onClose }: { onClose: () => void }) {
               />
               <div className="flex items-center justify-between gap-2 py-1">
                 <span className="text-xs text-muted">{t.add.date}</span>
-                <input type="date" value={r.date} onChange={(e) => patch(r.id, { date: e.target.value })} className="h-9 bg-transparent text-sm text-accent outline-none" />
+                <DateField value={r.date} onChange={(date) => patch(r.id, { date })} className="justify-end" />
               </div>
               <div className="flex items-center justify-between gap-2 py-1">
                 <span className="text-xs text-muted">{t.add.account}</span>

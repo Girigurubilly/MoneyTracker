@@ -5,9 +5,10 @@ import { toast } from "sonner";
 import { InfoButton, Overlay, ScreenHeader, StatusChip } from "@/components/shared";
 import { CategoryPicker, TypeSwitch } from "@/components/category-picker";
 import { CategoryIcon } from "@/components/category-icon";
-import { AmountWithHkd, asFiat, autoDestAmount } from "@/components/currency-field";
+import { AmountWithHkd, accountFiat, asFiat, autoDestAmount } from "@/components/currency-field";
 import { money, pct, todayISO, clockNow } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
+import { travelThemedIds } from "@/lib/categories";
 import { resolveAmountInput } from "@/lib/money-expr";
 import {
   AccountLine,
@@ -69,7 +70,7 @@ export function BudgetScreen() {
   const monthRatio = monthCap > 0 ? monthSpent / monthCap : 0;
   const monthTone = forecastTone(monthCap > 0 ? monthUsed / monthCap : 0);
   const categoryActuals = actuals.filter((b) => b.id !== MONTH_TOTAL_BUDGET_ID);
-  const travelIds = new Set(categories.filter((c) => c.theme === "travel").map((c) => c.id));
+  const travelIds = travelThemedIds(categories);
   const spent = travelSpendYtd(txs, Number(month.slice(0, 4)), travelIds, rates);
   const travelYear = Number(month.slice(0, 4));
   const annualEff = effectiveAnnualTravelBudget(annual, trips, travelYear);
@@ -228,6 +229,31 @@ export function BudgetScreen() {
       </div>
 
       {kid ? null : (
+        <Link to="/reports/travel" className="mx-4 mt-4 block rounded-xl bg-elevated px-4 py-4">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-sm text-muted">{t.budget.annualTravel}</span>
+            <ChevronRight className="size-4 shrink-0 text-faint" />
+          </div>
+          <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
+            <span className="text-xl font-semibold tabular-nums">{money(spent, "HKD")}</span>
+            <span className="text-sm text-muted">
+              / {travelBudget > 0 ? money(travelBudget, "HKD") : "—"}
+              {annualEff.fromTrips ? <span className="text-faint"> · {t.reports.travelBudgetFromTrips}</span> : null}
+            </span>
+          </div>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ring-track">
+            <div
+              className={cn(
+                "h-full rounded-full",
+                travelTone === "expense" ? "bg-expense" : travelTone === "watch" ? "bg-watch" : "bg-income",
+              )}
+              style={{ width: `${Math.min(100, travelPct * 100)}%` }}
+            />
+          </div>
+        </Link>
+      )}
+
+      {kid ? null : (
         <AdhocBlock
           month={month}
           onAdd={() => {
@@ -251,31 +277,6 @@ export function BudgetScreen() {
           setRegOpen(true);
         }}
       />
-
-      {kid ? null : (
-        <>
-      <Link to="/reports/travel" className="mx-4 mt-3 block rounded-xl bg-elevated px-4 py-4">
-        <div className="flex items-start justify-between gap-2">
-          <span className="text-sm text-muted">{t.budget.annualTravel}</span>
-          <ChevronRight className="size-4 shrink-0 text-faint" />
-        </div>
-        <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
-          <span className="text-xl font-semibold tabular-nums">{money(spent, "HKD")}</span>
-          <span className="text-sm text-muted">
-            / {travelBudget > 0 ? money(travelBudget, "HKD") : "—"}
-            {annualEff.fromTrips ? <span className="text-faint"> · {t.reports.travelBudgetFromTrips}</span> : null}
-          </span>
-        </div>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ring-track">
-          <div
-            className={cn(
-              "h-full rounded-full",
-              travelTone === "expense" ? "bg-expense" : travelTone === "watch" ? "bg-watch" : "bg-income",
-            )}
-            style={{ width: `${Math.min(100, travelPct * 100)}%` }}
-          />
-        </div>
-      </Link>
 
       <h2 className="px-5 pb-1 pt-6 text-sm font-medium text-muted">{t.budget.byCategory}</h2>
       {categoryActuals.length === 0 ? <p className="px-5 py-4 text-sm text-muted">{t.common.none}</p> : null}
@@ -321,9 +322,7 @@ export function BudgetScreen() {
         );
       })}
 
-      <WishlistBlock compact />
-        </>
-      )}
+      {kid ? null : <WishlistBlock compact />}
 
       <Overlay open={editCap} onClose={() => setEditCap(false)} title={t.budget.monthlyTotal}>
         <div className="px-5 pb-8">
@@ -596,9 +595,11 @@ function AdhocBlock({
         <Link to="/more/adhoc" className="flex min-h-11 items-center text-xs font-medium text-accent">
           {t.budget.manageAdhoc}
         </Link>
-        <button type="button" onClick={onAdd} className="flex min-h-11 items-center px-1 text-sm font-medium text-accent">
-          {t.budget.addShort}
-        </button>
+        {rows.length ? (
+          <button type="button" onClick={onAdd} className="flex min-h-11 items-center px-1 text-sm font-medium text-accent">
+            {t.budget.addShort}
+          </button>
+        ) : null}
       </div>
       <p className="px-5 pb-2 text-xs text-faint">{t.budget.adhocHint}</p>
       {rows.length === 0 ? (
@@ -756,7 +757,11 @@ function PostAdhocBody({ item, onClose }: { item: AdhocBudget; onClose: () => vo
           />
         </div>
         <div className="px-4 pt-3 text-xs text-muted">{t.budget.postAdhocFrom}</div>
-        <AccountLine accounts={moneyAccounts} value={accountId} onChange={setAccountId} placeholder={t.add.account} />
+        <AccountLine accounts={moneyAccounts} value={accountId} onChange={(id) => {
+          setAccountId(id);
+          const next = accountFiat(accounts.find((a) => a.id === id)?.currency);
+          if (next) setCurrency(next);
+        }} placeholder={t.add.account} />
         {cat ? (
           <div className="flex items-center gap-3 border-b border-line px-4 py-3 text-sm">
             <span className="grid size-8 place-items-center rounded-full bg-elevated">
@@ -906,6 +911,11 @@ function AdhocEditorBody({
         onSelect={(c) => {
           setCategoryId(c?.id ?? "");
           setPickCat(false);
+          const def = resolvedDefaultAccountId(c, categories);
+          if (!def || !accounts.some((a) => a.id === def)) return;
+          setAccountId(def);
+          const next = accountFiat(accounts.find((a) => a.id === def)?.currency);
+          if (next) setCurrency(next);
         }}
       />
     );
@@ -999,7 +1009,11 @@ function AdhocEditorBody({
           <p className="mt-2 text-[11px] leading-4 text-faint">{postNow ? t.budget.postNowHint : t.budget.budgetOnlyHint}</p>
         </div>
       ) : null}
-      <AccountLine accounts={moneyAccounts} value={accountId} onChange={setAccountId} placeholder={t.add.account} role={t.budget.expectedAccount} />
+        <AccountLine accounts={moneyAccounts} value={accountId} onChange={(id) => {
+          setAccountId(id);
+          const next = accountFiat(accounts.find((a) => a.id === id)?.currency);
+          if (next) setCurrency(next);
+        }} placeholder={t.add.account} role={t.budget.expectedAccount} />
       <p className="px-4 pb-2 text-[11px] leading-4 text-faint">{t.budget.expectedAccountHint}</p>
       {initial ? (
         <>
@@ -1185,7 +1199,14 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
           const nextKind = mortgageEntryKind(c, categories);
           setSplitMortgage(alreadySplit || canSplitMortgage(nextKind));
           const def = resolvedDefaultAccountId(c, categories);
-          if (def && accounts.some((a) => a.id === def)) setAccountId(def);
+          if (def && accounts.some((a) => a.id === def)) {
+            setAccountId(def);
+            const next = accountFiat(accounts.find((a) => a.id === def)?.currency);
+            if (next) {
+              setCurrency(next);
+              setDestLocked(false);
+            }
+          }
         }}
       />
     );
@@ -1220,7 +1241,14 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
       <TextLine value={name} onChange={setName} placeholder={t.budget.regularName} />
       {kind === "transfer" ? (
         <>
-          <AccountLine accounts={accounts} value={accountId} onChange={setAccountId} placeholder={t.add.fromAccount} role={t.add.fromAccount} amount={amount} currency={currency} active={field === "amount"} onFocusAmount={() => setField("amount")} />
+          <AccountLine accounts={accounts} value={accountId} onChange={(id) => {
+            setAccountId(id);
+            const next = accountFiat(accounts.find((a) => a.id === id)?.currency);
+            if (next) {
+              setCurrency(next);
+              setDestLocked(false);
+            }
+          }} placeholder={t.add.fromAccount} role={t.add.fromAccount} amount={amount} currency={currency} active={field === "amount"} onFocusAmount={() => setField("amount")} />
           <AccountLine
             accounts={accounts}
             value={toAccountId}
@@ -1239,7 +1267,14 @@ function RegularEditorBody({ initial, onClose }: { initial: Recurring | null; on
         </>
       ) : (
         <>
-          <AccountLine accounts={accounts} value={accountId} onChange={setAccountId} placeholder={t.add.account} />
+          <AccountLine accounts={accounts} value={accountId} onChange={(id) => {
+            setAccountId(id);
+            const next = accountFiat(accounts.find((a) => a.id === id)?.currency);
+            if (next) {
+              setCurrency(next);
+              setDestLocked(false);
+            }
+          }} placeholder={t.add.account} />
           <LineRow
             leading={
               cat ? (

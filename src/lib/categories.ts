@@ -86,6 +86,102 @@ export function missingMortgageLeaf(categories: Category[], kind: "principal" | 
   return !categories.some((c) => c.id === id);
 }
 
+const TRAVEL_ROOT_NAMES = new Set(["travel", "旅遊", "旅行"]);
+
+function normLabel(s: string | undefined): string {
+  return (s ?? "").trim().toLowerCase().replace(/\s+/g, "");
+}
+
+function isTravelRoot(c: Category): boolean {
+  if (c.parentId || c.kind !== "expense") return false;
+  if (c.theme === "travel") return true;
+  return TRAVEL_ROOT_NAMES.has(normLabel(c.name)) || TRAVEL_ROOT_NAMES.has(normLabel(c.nameZh));
+}
+
+function sameLabel(a: Category, b: Category): boolean {
+  const names = new Set([normLabel(a.name), normLabel(a.nameZh)].filter(Boolean));
+  return [normLabel(b.name), normLabel(b.nameZh)].some((n) => n && names.has(n));
+}
+
+/**
+ * Add the built-in travel list only when the book has no travel category.
+ * A main category set to the Travel life area (or named 旅遊 / 旅行 / Travel)
+ * is enough — its subcategories are not replaced, and an unused built-in copy is removed.
+ */
+export function travelCategoryPatch(
+  cats: Category[],
+  seed: Category[],
+  used: ReadonlySet<string> = new Set(),
+): { add: Category[]; removeIds: string[] } {
+  const seedParent = seed.find((c) => c.id === "p-travel");
+  const seedChildren = seed.filter((c) => c.parentId === "p-travel");
+  const seedChildIds = new Set(seedChildren.map((c) => c.id));
+  const roots = cats.filter(isTravelRoot);
+
+  function kidCount(id: string): number {
+    return cats.filter((c) => c.parentId === id).length;
+  }
+  function rank(root: Category): number {
+    const kids = cats.filter((c) => c.parentId === root.id);
+    const usedHere = used.has(root.id) || kids.some((k) => used.has(k.id));
+    const ownKids = kids.filter((k) => !seedChildIds.has(k.id)).length;
+    if (usedHere) return 100 + ownKids;
+    if (root.id !== "p-travel") return 50 + kidCount(root.id);
+    return kidCount(root.id);
+  }
+
+  const keeper = [...roots].sort((a, b) => rank(b) - rank(a))[0];
+  const add: Category[] = [];
+  const removeIds: string[] = [];
+
+  if (!keeper) {
+    if (seedParent && !cats.some((c) => c.id === seedParent.id)) add.push(seedParent);
+    for (const row of seedChildren) {
+      if (cats.some((c) => c.id === row.id || sameLabel(c, row))) continue;
+      add.push(row);
+    }
+    return { add, removeIds };
+  }
+
+  const children = cats.filter((c) => c.parentId === keeper.id);
+  for (const row of seedChildren) {
+    const copy = children.find((c) => c.id === row.id);
+    if (!copy) continue;
+    const twin = children.some((c) => c.id !== row.id && sameLabel(c, row));
+    if (twin && !used.has(row.id)) removeIds.push(row.id);
+  }
+
+  for (const root of roots) {
+    if (root.id === keeper.id || root.id !== "p-travel") continue;
+    const kids = cats.filter((c) => c.parentId === root.id);
+    if (kids.some((k) => !seedChildIds.has(k.id))) continue;
+    const ids = [root.id, ...kids.map((k) => k.id)];
+    if (ids.some((id) => used.has(id))) continue;
+    for (const id of ids) if (!removeIds.includes(id)) removeIds.push(id);
+  }
+
+  return { add, removeIds };
+}
+
+/** True when this category, or a parent main category, is marked as the travel life area. */
+export function isTravelThemed(c: Category, categories: Category[]): boolean {
+  if (c.theme === "travel") return true;
+  let parentId = c.parentId;
+  const seen = new Set<string>();
+  while (parentId && !seen.has(parentId)) {
+    seen.add(parentId);
+    const parent = categories.find((x) => x.id === parentId);
+    if (!parent) return false;
+    if (parent.theme === "travel") return true;
+    parentId = parent.parentId;
+  }
+  return false;
+}
+
+export function travelThemedIds(categories: Category[]): Set<string> {
+  return new Set(categories.filter((c) => isTravelThemed(c, categories)).map((c) => c.id));
+}
+
 export function isMortgageSplitCategory(c: Category | undefined, categories: Category[] = []): boolean {
   if (!c) return false;
   const s = resolvedSpecial(c, categories);

@@ -150,6 +150,14 @@ function CategoryEditorBody({
           ]}
         />
       ) : null}
+      {!parentId && kind === "expense" ? (
+        <RuleCheck
+          checked={theme === "travel"}
+          onChange={(on) => setTheme(on ? "travel" : "living")}
+          label={t.add.travelMain}
+          hint={t.add.travelMainHint}
+        />
+      ) : null}
       <SelectLine
         label={t.add.catTheme}
         value={theme}

@@ -11,7 +11,7 @@ import { toHkd } from "@/lib/calc/fx";
 import { inclusiveDays, marathonInterest, marathonMonthlyInterest, scbMarathonTiers, type MarathonTier } from "@/lib/calc/marathon";
 import { copyPlainText, sharePlainText } from "@/lib/copy-text";
 import { monthLabel } from "@/lib/derived";
-import { money, todayISO } from "@/lib/format";
+import { money, shortDate, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { resolveAmountInput } from "@/lib/money-expr";
 import { CURRENCIES, type Currency, type PromoAccessibility, type PromoSaving, type TimeSaving } from "@/lib/types";
@@ -20,11 +20,18 @@ import {
   ActiveKeypad,
   ComposerHeader,
   ComposerShell,
+  DateField,
   LineRow,
   SelectLine,
 } from "@/components/txn-composer";
 import { useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
+
+function formatSynced(iso: string, locale: string): string {
+  const d = new Date(iso);
+  if (!iso || Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString(locale === "zh-HK" ? "zh-HK" : "en-HK", { dateStyle: "medium", timeStyle: "short" });
+}
 
 function newId(): string {
   return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `id-${Date.now()}`;
@@ -193,8 +200,10 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
               const adj = p.interestAdjustments?.find((item) => item.month === month.month);
               return sum + (adj ? adj.amount : month.interest);
             }, 0);
-            const from = [...p.rateSchedule].map((step) => step.from).filter(Boolean).sort()[0] ?? "—";
-            const to = [...p.rateSchedule].map((step) => step.to).filter(Boolean).sort().at(-1) ?? "—";
+            const fromRaw = [...p.rateSchedule].map((step) => step.from).filter(Boolean).sort()[0];
+            const toRaw = [...p.rateSchedule].map((step) => step.to).filter(Boolean).sort().at(-1);
+            const from = fromRaw ? shortDate(fromRaw, locale) : "—";
+            const to = toRaw ? shortDate(toRaw, locale) : "—";
             return (
               <div key={p.id}>
                 <Hairline />
@@ -260,7 +269,7 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
                           <span className={`text-xs font-medium ${tone}`}>{rm}</span>
                         </div>
                         <div className="mt-1 text-xs text-muted">
-                          {money(r.amount, r.currency)} · {r.startDate} → {r.endDate}
+                          {money(r.amount, r.currency)} · {r.startDate ? shortDate(r.startDate, locale) : "—"} → {r.endDate ? shortDate(r.endDate, locale) : "—"}
                         </div>
                         {uncoveredIds.has(r.id) ? (
                           <div className="mt-1 text-[11px] leading-4 text-watch">{t.reports.depositNotCovered}</div>
@@ -285,7 +294,7 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
         })
       )}
 
-      {note || lastFx ? <p className="px-5 pt-3 text-xs text-muted">{note || lastFx}</p> : null}
+      {note || lastFx ? <p className="px-5 pt-3 text-xs text-muted">{note || (lastFx ? formatSynced(lastFx, locale) : "")}</p> : null}
 
       <DepositEditor
         key={editing === "new" ? "new" : editing?.id ?? "closed"}
@@ -495,11 +504,11 @@ function DepositEditor({ open, initial, onClose }: { open: boolean; initial: Tim
         </div>
         <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
           <span className="text-sm text-muted">{t.reports.startDate}</span>
-          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
+          <DateField value={startDate} onChange={setStartDate} className="justify-end" />
         </div>
         <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
           <span className="text-sm text-muted">{t.reports.endDate}</span>
-          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-10 bg-transparent text-sm text-accent outline-none" />
+          <DateField value={endDate} onChange={setEndDate} className="justify-end" />
         </div>
         <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
           <span className="text-sm text-muted">{t.reports.ratePct}</span>
@@ -645,21 +654,11 @@ function PromoEditor({ open, initial, onClose }: { open: boolean; initial: Promo
                 </div>
                 <label className="flex min-h-11 items-center justify-between gap-3 px-4">
                   <span className="text-sm text-muted">{t.reports.startDate}</span>
-                  <input
-                    type="date"
-                    value={tier.from}
-                    onChange={(e) => patchTier(tier.id, { from: e.target.value })}
-                    className="h-11 max-w-[11.5rem] bg-transparent text-right text-sm text-accent outline-none"
-                  />
+                  <DateField value={tier.from} onChange={(from) => patchTier(tier.id, { from })} className="justify-end" />
                 </label>
                 <label className="flex min-h-11 items-center justify-between gap-3 px-4">
                   <span className="text-sm text-muted">{t.reports.endDate}</span>
-                  <input
-                    type="date"
-                    value={tier.to}
-                    onChange={(e) => patchTier(tier.id, { to: e.target.value })}
-                    className="h-11 max-w-[11.5rem] bg-transparent text-right text-sm text-accent outline-none"
-                  />
+                  <DateField value={tier.to} onChange={(to) => patchTier(tier.id, { to })} className="justify-end" />
                 </label>
                 <div className="flex min-h-11 items-center justify-between gap-3 px-4 pb-3">
                   <label className="flex items-center gap-2 text-sm">

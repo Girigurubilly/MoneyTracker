@@ -1,7 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { HistoryPage } from "@/components/reports";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/reports/history")({
   ssr: false,
-  component: HistoryPage,
+  component: () => <Navigate to="/reports/balance" replace />,
 });

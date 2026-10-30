@@ -243,8 +243,8 @@ export function CategoryPicker({
                     </span>
                   </BudgetRing>
                   {editMode ? (
-                    <span className="absolute -right-0.5 -top-0.5 grid size-5 place-items-center rounded-full bg-accent text-on-accent">
-                      <Pencil className="size-3" />
+                    <span className="absolute -right-1 -top-1 grid size-6 place-items-center rounded-full bg-accent text-on-accent">
+                      <Pencil className="size-3.5" />
                     </span>
                   ) : null}
                 </span>

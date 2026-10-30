@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Archive, BookOpen, CalendarClock, Check, FolderTree, Globe, Palette, PiggyBank, Settings2, ShoppingBag, SlidersHorizontal, TrendingUp, Undo2, Wallet } from "lucide-react";
+import { Archive, BookOpen, CalendarClock, Check, FolderTree, Globe, Home, Palette, PiggyBank, Plane, Settings2, ShoppingBag, SlidersHorizontal, TrendingUp, Undo2, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
 import { CategoryIcon, IconGrid } from "@/components/category-icon";
 import { Disclaimer, Group, Hairline, Overlay, Row, ScreenHeader, SectionLabel } from "@/components/shared";
+import { DateField } from "@/components/txn-composer";
 import { defaultNavIcons, NAV_SLOTS, type NavSlot } from "@/lib/nav-icons";
 import { CurrencySelect } from "@/components/currency-field";
 import { CategoryPicker } from "@/components/category-picker";
@@ -77,6 +78,10 @@ export function MoreScreen() {
             <Row icon={<PiggyBank className="size-4" />} title={t.more.retireAccounts} to="/more/retirement-accounts" chevron />
             <Hairline />
             <Row icon={<PiggyBank className="size-4" />} title={t.more.deposits} to="/more/deposits" chevron />
+            <Hairline />
+            <Row icon={<Home className="size-4" />} title={t.reports.living} to="/reports/living" chevron />
+            <Hairline />
+            <Row icon={<Plane className="size-4" />} title={t.reports.travel} to="/reports/travel" chevron />
             <Hairline />
             <Row icon={<Globe className="size-4" />} title={t.more.fx} to="/more/fx" chevron />
           </Group>
@@ -599,7 +604,9 @@ export function BackupPage() {
             })();
           }}
         />
-        <Hairline />
+      </Group>
+      <SectionLabel>{t.backup.dangerSection}</SectionLabel>
+      <Group>
         <Row title={t.backup.restore} subtitle={t.backup.replaceDevice} onClick={() => fileRef.current?.click()} />
       </Group>
       <input
@@ -652,7 +659,9 @@ export function BackupPage() {
         }}
       />
 
-      <SectionLabel>{t.backup.baselineSection}</SectionLabel>
+      <details className="mx-4 mt-8">
+        <summary className="cursor-pointer text-xs font-medium text-muted">{t.backup.advanced}</summary>
+        <div className="pt-3">
       <Group>
         <Row
           title={t.backup.exportBaseline}
@@ -680,7 +689,7 @@ export function BackupPage() {
           }}
         />
       </Group>
-      <div className="mx-4 mt-3 rounded-xl bg-elevated p-3">
+      <div className="mx-0 mt-3 rounded-xl bg-elevated p-3">
         <div className="text-xs font-medium text-muted">{t.backup.baselineGaps}</div>
         <textarea
           value={gapsText}
@@ -691,6 +700,8 @@ export function BackupPage() {
         />
         <p className="pt-2 text-[11px] leading-4 text-muted">{t.backup.baselineGapsHint}</p>
       </div>
+        </div>
+      </details>
     </div>
   );
 }
@@ -760,12 +771,7 @@ export function SetupPage() {
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.more.birthdayHint}</p>
       <label className="mx-4 flex items-center justify-between rounded-2xl bg-elevated px-4 py-3">
         <span className="text-sm">{t.reports.birthday}</span>
-        <input
-          type="date"
-          value={birthday}
-          onChange={(e) => persistBirthday(e.target.value)}
-          className="h-10 bg-transparent text-sm text-accent outline-none"
-        />
+        <DateField value={birthday} onChange={persistBirthday} className="justify-end" />
       </label>
       {birthday ? <p className="px-5 pt-2 text-xs text-muted">{t.reports.currentAge}: {ageFromBirthday(birthday, todayISO())}</p> : null}
     </div>
@@ -1275,7 +1281,8 @@ export function OtherSettingsPage() {
         <button type="button" className="mt-3 h-12 w-full rounded-xl bg-elevated text-sm font-medium" onClick={() => setConfirm("sample")}>
           {t.more.sample}
         </button>
-        <button type="button" className="mt-3 h-12 w-full rounded-xl bg-elevated text-sm font-medium text-expense" onClick={() => setConfirm("clear")}>
+        <p className="pb-2 pt-6 text-xs font-medium text-expense">{t.backup.dangerSection}</p>
+        <button type="button" className="h-12 w-full rounded-xl bg-elevated text-sm font-medium text-expense" onClick={() => setConfirm("clear")}>
           {t.more.clear}
         </button>
       </div>

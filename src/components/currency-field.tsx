@@ -11,6 +11,12 @@ export function asFiat(unit: MoneyUnit, fallback: Currency = "HKD"): Currency {
   return unit === "MILES" ? fallback : unit;
 }
 
+/** Fiat currency of an account, or null for miles / missing (caller keeps the current unit). */
+export function accountFiat(unit: MoneyUnit | undefined): Currency | null {
+  if (!unit || unit === "MILES") return null;
+  return unit;
+}
+
 export function hkdSupplement(
   amount: number,
   currency: MoneyUnit,

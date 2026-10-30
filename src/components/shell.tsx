@@ -27,19 +27,30 @@ export function AppGate({ children }: { children: ReactNode }) {
   const theme = useUi((s) => s.theme);
   const access = useUi((s) => s.accessMode);
 
+  const search = useRouterState({ select: (s) => s.location.search }) as { replay?: boolean | string };
+  const replay = search?.replay === true || search?.replay === "1" || search?.replay === "true";
+
   useEffect(() => {
-    void hydrate();
-    setOnboarded(readOnboarded());
+    void (async () => {
+      await hydrate();
+      setOnboarded(readOnboarded());
+    })();
     applyPwaIcon(readSavedPwaIcon());
     if ("serviceWorker" in navigator) {
       void navigator.serviceWorker.register(assetUrl("sw.js")).catch(() => undefined);
     }
   }, [hydrate, setOnboarded]);
 
-  if (!onboarded && path !== "/onboarding") {
+  const onboardedNow = onboarded || (ready && readOnboarded());
+
+  if (!ready) {
+    return <div className="grid min-h-dvh place-items-center text-sm text-muted">HK Life Money</div>;
+  }
+  if (!onboardedNow && path !== "/onboarding") {
     return <Navigate to="/onboarding" search={{ replay: false }} replace />;
   }
   if (path === "/onboarding") {
+    if (onboardedNow && !replay) return <Navigate to="/" replace />;
     return (
       <>
         {children}
@@ -47,14 +58,11 @@ export function AppGate({ children }: { children: ReactNode }) {
       </>
     );
   }
-  if (!ready) {
-    return <div className="grid min-h-dvh place-items-center text-sm text-muted">HK Life Money</div>;
-  }
   const onToday = path === "/";
   return (
     <div
       className={cn(
-        "mx-auto min-h-dvh max-w-lg bg-background/80 lg:max-w-none lg:pb-0",
+        "app-shell relative mx-auto min-h-dvh max-w-lg overflow-x-hidden bg-background lg:max-w-none lg:pb-0",
         onToday
           ? access === "elderly"
             ? "pb-[calc(4.5rem+2.25rem+env(safe-area-inset-bottom))]"

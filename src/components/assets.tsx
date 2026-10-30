@@ -160,6 +160,14 @@ export function AssetsScreen() {
           <AssetBriefButton className="tr-press flex h-11 w-full items-center justify-center rounded-xl bg-elevated text-sm font-medium" />
         </div>
       )}
+      {visible.length === 0 ? (
+        <div className="mx-4 mb-5 rounded-2xl bg-elevated px-4 py-6 text-center">
+          <p className="text-sm leading-5 text-muted">{t.assets.noAccounts}</p>
+          <button type="button" className="tr-press mt-3 h-11 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={() => setEditingId("new")}>
+            {t.assets.addAccount}
+          </button>
+        </div>
+      ) : null}
       {groups.map((g) => {
         const rows = accountsInGroup(visible, g.id);
         const depositRows = g.id === "cash" && !kid ? outsideDeposits : [];
@@ -354,6 +362,7 @@ function AccountDetail({
   const t = useT();
   const locale = useUi((s) => s.locale);
   const setTx = useUi((s) => s.setTxDetailId);
+  const openAdd = useUi((s) => s.openAdd);
   const txs = useApp((s) => s.transactions);
   const rates = useApp((s) => s.fxRates);
   if (!account) return null;
@@ -391,6 +400,13 @@ function AccountDetail({
           <AmountWithHkd amount={account.balance} currency={account.currency} rates={rates} align="start" className="text-2xl font-semibold" />
         </div>
         {account.hidden ? <div className="mt-1 text-xs text-muted">{t.assets.hidden}</div> : null}
+        <button
+          type="button"
+          className="tr-press mt-3 h-11 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent"
+          onClick={() => openAdd(account.currency === "MILES" || account.type === "miles" ? "miles" : "expense", account.id)}
+        >
+          {t.assets.addTx}
+        </button>
       </div>
       <TxGroupedList txs={rows} onClick={(tx) => setTx(tx.id)} empty={t.assets.noTransactions} showMonthTotal accountId={account.id} />
     </Overlay>
