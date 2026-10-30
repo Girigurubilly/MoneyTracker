@@ -1,9 +1,25 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { applyAutoTrip, effectiveAnnualTravelBudget, travelSpendYtd, travelSpendYtdSplit, travelUnlinkedTxs, tripCashSpent, tripMoneySplit } from "./trips.ts";
+import { applyAutoTrip, effectiveAnnualTravelBudget, travelSpendYtd, travelSpendYtdSplit, travelUnlinkedTxs, tripCashSpent, tripDayIndex, tripDaySpent, tripMoneySplit } from "./trips.ts";
 import type { AdhocBudget, Transaction, Trip } from "../types.ts";
 
 describe("trip spend", () => {
+  it("sums posted trip expense for one day only", () => {
+    const txs = [
+      { id: "a", type: "expense", tripId: "osaka", amount: 100, currency: "HKD", date: "2026-04-02", planned: false },
+      { id: "b", type: "expense", tripId: "osaka", amount: 30, currency: "HKD", date: "2026-04-02", planned: true },
+      { id: "c", type: "expense", tripId: "kyoto", amount: 7, currency: "HKD", date: "2026-04-02", planned: false },
+      { id: "d", type: "income", tripId: "osaka", amount: 5, currency: "HKD", date: "2026-04-02", planned: false },
+      { id: "e", type: "expense", tripId: "osaka", amount: 9, currency: "HKD", date: "2026-04-03", planned: false },
+    ] as Transaction[];
+    assert.equal(tripDaySpent(txs, "osaka", "2026-04-02", []), 100);
+  });
+
+  it("indexes trip days inclusively", () => {
+    assert.deepEqual(tripDayIndex({ start: "2026-03-30", end: "2026-04-02" }, "2026-04-01"), { day: 3, total: 4 });
+    assert.deepEqual(tripDayIndex({ start: "2026-04-02", end: "2026-04-02" }, "2026-04-02"), { day: 1, total: 1 });
+  });
+
   it("counts an unpaid trip cost and skips one already posted", () => {
     const txs = [
       { id: "t", type: "expense", tripId: "osaka", amount: 100, currency: "HKD", date: "2026-04-02", planned: false },

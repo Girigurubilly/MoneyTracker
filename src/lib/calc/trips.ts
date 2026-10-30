@@ -31,6 +31,24 @@ export function tripMoneySplit(txs: Transaction[], tripId: string, rates: FxRate
   return { paid, scheduled, total: paid + scheduled };
 }
 
+/** Posted (not planned) trip-linked expense on one date, in HKD — same basis as tripMoneySplit.paid. */
+export function tripDaySpent(txs: Transaction[], tripId: string, iso: string, rates: FxRate[]): number {
+  let n = 0;
+  for (const tx of txs) {
+    if (tx.tripId !== tripId || tx.type !== "expense" || tx.planned || tx.date !== iso) continue;
+    n += Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
+  }
+  return n;
+}
+
+/** 1-based day index of iso within the trip, and trip length in days. */
+export function tripDayIndex(t: Pick<Trip, "start" | "end">, iso: string): { day: number; total: number } {
+  const ms = (d: string) => Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)) - 1, Number(d.slice(8, 10)));
+  const total = Math.max(1, Math.round((ms(t.end) - ms(t.start)) / 86400000) + 1);
+  const day = Math.min(total, Math.max(1, Math.round((ms(iso) - ms(t.start)) / 86400000) + 1));
+  return { day, total };
+}
+
 export function tripCashSpent(txs: Transaction[], tripId: string, rates: FxRate[], adhoc: AdhocBudget[] = []): number {
   return tripMoneySplit(txs, tripId, rates, adhoc).total;
 }

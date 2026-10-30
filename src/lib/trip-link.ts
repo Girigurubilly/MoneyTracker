@@ -55,10 +55,15 @@ export function plannerTripUrl(
   return `${PLANNER_URL}?${q.toString()}`;
 }
 
-export function tripCovering(trips: Trip[], iso: string): Trip | undefined {
+/** All non-cancelled trips covering a date, planner-linked first, then latest start. */
+export function tripsCovering(trips: Trip[], iso: string): Trip[] {
   const hits = trips.filter((trip) => trip.status !== "cancelled" && trip.start <= iso && iso <= trip.end);
   hits.sort((a, b) => Number(Boolean(b.plannerId)) - Number(Boolean(a.plannerId)) || b.start.localeCompare(a.start));
-  return hits[0];
+  return hits;
+}
+
+export function tripCovering(trips: Trip[], iso: string): Trip | undefined {
+  return tripsCovering(trips, iso)[0];
 }
 
 export function carriedTrip(
