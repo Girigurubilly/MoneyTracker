@@ -429,8 +429,8 @@ html[data-wallpaper="custom"] .app-shell::before {
   background-repeat: no-repeat;
 }
 
-html[data-wallpaper="theme"] .app-shell > *,
-html[data-wallpaper="custom"] .app-shell > * {
+html[data-wallpaper="theme"] .app-shell > .app-main,
+html[data-wallpaper="custom"] .app-shell > .app-main {
   position: relative;
   z-index: 1;
 }

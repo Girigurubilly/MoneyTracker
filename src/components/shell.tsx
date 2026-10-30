@@ -62,7 +62,7 @@ export function AppGate({ children }: { children: ReactNode }) {
   return (
     <div
       className={cn(
-        "app-shell relative mx-auto min-h-dvh max-w-lg overflow-x-hidden bg-background lg:max-w-none lg:pb-0",
+        "app-shell relative mx-auto min-h-dvh max-w-lg bg-background lg:max-w-none lg:pb-0",
         onToday
           ? access === "elderly"
             ? "pb-[calc(4.5rem+2.25rem+env(safe-area-inset-bottom))]"
@@ -72,7 +72,7 @@ export function AppGate({ children }: { children: ReactNode }) {
             : "pb-[calc(4rem+1rem+env(safe-area-inset-bottom))]",
       )}
     >
-      <div className="lg:ml-56">{children}</div>
+      <div className="app-main overflow-x-hidden lg:ml-56">{children}</div>
       <AddFab />
       <Nav />
       <AddFlow />
