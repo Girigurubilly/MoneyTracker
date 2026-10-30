@@ -1,7 +1,7 @@
-import { ChevronLeft, ChevronRight, ChevronDown, MapPinned, Plus, Search, Wallet } from "lucide-react";
+import { ArrowUpRight, ChevronLeft, ChevronRight, ChevronDown, MapPinned, Plus, Search, Wallet } from "lucide-react";
 import { Hairline, InfoButton, ProgressRing, SectionLabel, TransactionRow } from "@/components/shared";
 import { AmountWithHkd } from "@/components/currency-field";
-import { dateRangeLabel, longDate, money, monthGrid, monthTitle, shiftMonth, todayISO, weekdayLabels } from "@/lib/format";
+import { dateRangeLabel, longDate, mdLabel, money, monthGrid, monthTitle, shiftMonth, todayISO, weekdayLabels } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { Link } from "@tanstack/react-router";
 import { activityDates, plannedIso, monthStats } from "@/lib/derived";
@@ -12,7 +12,9 @@ import { cashflowSide } from "@/lib/calc/ledger";
 import type { AdhocBudget, Locale, MoneyUnit, Recurring, Transaction } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
-import { plannerTripUrl, tripCovering } from "@/lib/trip-link";
+import { plannerTripUrl, tripsCovering } from "@/lib/trip-link";
+import { tripBudgetUsed, tripDayIndex, tripDaySpent, tripMoneySplit } from "@/lib/calc/trips";
+import type { Trip } from "@/lib/types";
 import { useT, useUi, readSavedLocale } from "@/store/ui";
 import { useEffect, useState } from "react";
 
@@ -26,7 +28,7 @@ export function TodayScreen() {
   const setSearch = useUi((s) => s.setSearchOpen);
   const today = todayISO();
   const trips = useApp((s) => s.trips);
-  const covering = tripCovering(trips, selected);
+  const covering = tripsCovering(trips, selected);
   const onThisMonth = selected.slice(0, 7) === today.slice(0, 7);
 
   useEffect(() => {
@@ -73,39 +75,109 @@ export function TodayScreen() {
           </button>
         </div>
       </header>
-      {covering ? (
-        <div className="rt-enter mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
-          <Link
-            to="/reports/travel/$id"
-            params={{ id: covering.id }}
-            className="tr-press flex min-h-11 items-center justify-between gap-3 px-4 py-3"
-          >
-            <div className="min-w-0">
-              <div className="truncate text-sm font-semibold">
-                {t.today.onTripToday.replace("{name}", pickName(locale, covering.name, covering.nameZh))}
-              </div>
-              <div className="text-xs text-muted">{dateRangeLabel(covering.start, covering.end, locale)}</div>
-            </div>
-            <span className="shrink-0 text-xs font-medium text-accent">{t.reports.openTripDetail}</span>
-          </Link>
-          <div className="border-t border-line px-4 py-2">
-            <a
-              href={plannerTripUrl(covering, { day: selected })}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="tr-press inline-flex min-h-11 items-center gap-2 py-1 text-sm text-muted"
-            >
-              <MapPinned className="size-4 shrink-0 text-accent" strokeWidth={1.7} />
-              <span>
-                <span className="block">{t.today.openPlan}</span>
-                <span className="block text-[11px] leading-4 text-faint">{t.today.plannerLeave}</span>
-              </span>
-            </a>
-          </div>
+      {covering.length ? (
+        <div className="mb-3 space-y-2">
+          {covering.map((trip) => (
+            <ActiveTripCard key={trip.id} trip={trip} day={selected} />
+          ))}
         </div>
       ) : null}
       <TodayBody />
     </div>
+  );
+}
+
+function ActiveTripCard({ trip, day }: { trip: Trip; day: string }) {
+  const t = useT();
+  const locale = useUi((s) => s.locale);
+  const txs = useApp((s) => s.transactions);
+  const rates = useApp((s) => s.fxRates);
+  const adhoc = useApp((s) => s.adhocBudgets);
+  const name = pickName(locale, trip.name, trip.nameZh);
+  const split = tripMoneySplit(txs, trip.id, rates, adhoc);
+  const daySpent = tripDaySpent(txs, trip.id, day, rates);
+  const budget = Math.max(0, trip.cashBudget || 0);
+  const used = tripBudgetUsed(split.total, budget);
+  const hasBudget = budget > 0;
+  const over = hasBudget && split.total > budget;
+  const tone = over ? "expense" : hasBudget && used.pct > 0.9 ? "watch" : "income";
+  const pct = Math.round(used.pct * 100);
+  const { day: dayNo, total: dayTotal } = tripDayIndex(trip, day);
+  const linked = Boolean(trip.plannerId);
+  const dayLabel = day === todayISO() ? t.today.tripSpentToday : t.today.tripSpentOn.replace("{date}", mdLabel(day, locale));
+  return (
+    <section className="rt-enter mx-4 overflow-hidden rounded-2xl bg-elevated" aria-label={t.today.onTripToday.replace("{name}", name)}>
+      <div className="flex items-start justify-between gap-2 pl-4 pr-2 pt-2">
+        <div className="min-w-0 flex-1 pt-1.5">
+          <div className="truncate text-sm font-semibold">{t.today.onTripToday.replace("{name}", name)}</div>
+          <div className="truncate text-xs text-muted">
+            {dateRangeLabel(trip.start, trip.end, locale)} · {t.today.tripDayOf.replace("{day}", String(dayNo)).replace("{total}", String(dayTotal))}
+          </div>
+        </div>
+        <a
+          href={plannerTripUrl(trip, { day, pick: !linked })}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={t.today.tripPlannerAria.replace("{name}", name)}
+          title={t.today.plannerLeave}
+          className="tr-press inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full px-2.5 text-xs font-medium text-accent"
+        >
+          <MapPinned className="size-4" strokeWidth={1.7} />
+          <span>{t.today.tripPlannerShort}</span>
+          <ArrowUpRight className="size-3.5 opacity-70" strokeWidth={1.8} />
+        </a>
+      </div>
+      <div className="flex items-center gap-4 px-4 pb-3 pt-2">
+        <div className="relative shrink-0" role="img" aria-label={hasBudget ? t.today.tripUsedAria.replace("{pct}", String(pct)) : t.today.tripNoBudget}>
+          <ProgressRing
+            value={hasBudget ? split.paid / budget : 0}
+            extra={hasBudget ? split.scheduled / budget : 0}
+            size={64}
+            stroke={5}
+            tone={tone}
+            draw
+          />
+          <span
+            className={cn(
+              "pointer-events-none absolute inset-0 grid place-items-center text-xs font-semibold tabular-nums",
+              over ? "text-expense" : hasBudget ? "" : "text-faint",
+            )}
+          >
+            {hasBudget ? `${pct}%` : "—"}
+          </span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="min-w-0">
+              <div className="truncate text-[11px] text-muted">{dayLabel}</div>
+              <div className="truncate text-base font-semibold tabular-nums">{money(daySpent, "HKD")}</div>
+            </div>
+            <div className="min-w-0">
+              <div className="truncate text-[11px] text-muted">{t.today.tripSpentTotal}</div>
+              <div className="truncate text-base font-semibold tabular-nums">{money(split.paid, "HKD")}</div>
+            </div>
+          </div>
+          <div className={cn("mt-1 text-xs", over ? "text-expense" : "text-muted")}>
+            {hasBudget
+              ? (over ? t.today.tripBudgetOver : t.today.tripBudgetLeft)
+                  .replace("{amount}", money(Math.abs(used.remaining), "HKD"))
+                  .replace("{budget}", money(budget, "HKD"))
+              : t.today.tripNoBudget}
+            {split.scheduled > 0 ? (
+              <span className="text-watch"> · {t.today.tripScheduledExtra.replace("{amount}", money(split.scheduled, "HKD"))}</span>
+            ) : null}
+          </div>
+        </div>
+      </div>
+      <Link
+        to="/reports/travel/$id"
+        params={{ id: trip.id }}
+        className="tr-press flex min-h-11 items-center justify-between gap-3 border-t border-line px-4 text-sm font-medium text-accent"
+      >
+        <span>{t.today.tripDetail}</span>
+        <ChevronRight className="size-4" strokeWidth={1.8} />
+      </Link>
+    </section>
   );
 }
 
