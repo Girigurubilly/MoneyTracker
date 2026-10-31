@@ -415,7 +415,7 @@ function insights(b: SpendBrief): string[] {
   );
   if (b.hideAdhoc) {
     lines.push(
-      `“Hide one-offs / 唔計一次性” is ON. ${b.adhoc.excludedCount} one-off expense(s) totalling HKD ${b.adhoc.excludedAmount.toLocaleString("en-HK")} are excluded from every figure below (${pct(b.adhoc.shareOfSpendIfIncluded)} of unfiltered spend).`,
+      `“Exclude one-offs / 唔計一次性” is ON. ${b.adhoc.excludedCount} one-off expense(s) totalling HKD ${b.adhoc.excludedAmount.toLocaleString("en-HK")} are excluded from every figure below (${pct(b.adhoc.shareOfSpendIfIncluded)} of unfiltered spend).`,
     );
   } else if (b.adhoc.includedCount) {
     lines.push(
@@ -472,7 +472,7 @@ export function renderSpendBriefMarkdown(b: SpendBrief): string {
     "# HK Life Money — period income & expense brief",
     `Generated: ${b.generatedAt}`,
     `As of: ${b.today} (HKD). Window: ${b.from} → ${b.to} (${b.presetLabel}, ${b.days} days).`,
-    `Filters: hide one-offs / 唔計一次性 = ${b.hideAdhoc ? "ON" : "OFF"}. Parent groups ${b.mergeParents ? "merged on screen" : "shown as leaves on screen"}; this file always lists parent groups plus children.`,
+    `Filters: exclude one-offs / 唔計一次性 = ${b.hideAdhoc ? "ON" : "OFF"}. Parent groups ${b.mergeParents ? "merged on screen" : "shown as leaves on screen"}; this file always lists parent groups plus children.`,
     "",
     "Planning illustration from on-device ledger data. Combine with the asset-status export and the retirement / FIRE export. Not advice.",
     "",

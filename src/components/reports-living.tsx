@@ -162,7 +162,7 @@ export function LivingPage() {
 
       {m ? (
         <>
-          <SectionLabel>{locale === "zh-HK" ? "按揭" : "Mortgage"}</SectionLabel>
+          <SectionLabel>{t.reports.mortgageSection}</SectionLabel>
           <div className="mx-4 rounded-xl bg-elevated px-4">
             <Kv label={t.reports.linkedProperty} value={property ? pickName(locale, property.name, property.nameZh) : "—"} />
             <Hairline />
@@ -445,11 +445,11 @@ function MortgageEditor({ open, onClose }: { open: boolean; onClose: () => void 
             <div className="mt-0.5 text-base font-semibold tabular-nums">{money(liveInstallment, "HKD")}</div>
           </div>
           <label className="block py-2 text-xs text-muted">
-            {locale === "zh-HK" ? "利率類型" : "Rate type"}
+            {t.reports.rateType}
             <select value={type} onChange={(e) => setType(e.target.value as Mortgage["type"])} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground">
               <option value="p">P</option>
               <option value="h">H</option>
-              <option value="fixed">{locale === "zh-HK" ? "固定" : "Fixed"}</option>
+              <option value="fixed">{t.reports.rateFixed}</option>
             </select>
           </label>
           {type === "fixed" ? (
@@ -464,17 +464,17 @@ function MortgageEditor({ open, onClose }: { open: boolean; onClose: () => void 
                 <input inputMode="decimal" value={pRate} onChange={(e) => setPRate(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
               </label>
               <label className="block py-2 text-xs text-muted">
-                {locale === "zh-HK" ? "息差 (%)" : "Spread (%)"}
+                {t.reports.spread}
                 <input inputMode="decimal" value={spread} onChange={(e) => setSpread(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
               </label>
             </div>
           )}
           <label className="block py-2 text-xs text-muted">
-            {locale === "zh-HK" ? "供款日" : "Payment day"}
+            {t.reports.paymentDay}
             <input inputMode="numeric" value={day} onChange={(e) => setDay(e.target.value)} className="mt-1 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-foreground" />
           </label>
           <LineRow
-            label={`${t.reports.installment} (${locale === "zh-HK" ? "可覆寫" : "optional override"})`}
+            label={`${t.reports.installment} (${t.reports.optionalOverride})`}
             amount={override}
             currency="HKD"
             active={field === "principal"}

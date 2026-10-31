@@ -65,7 +65,7 @@ describe("spend brief", () => {
     assert.ok(food!.children.some((c) => c.id === "dining" && c.amount === 1_400));
     const md = renderSpendBriefMarkdown(brief);
     assert.match(md, /period income & expense brief/);
-    assert.match(md, /hide one-offs \/ 唔計一次性 = OFF/);
+    assert.match(md, /exclude one-offs \/ 唔計一次性 = OFF/);
     assert.match(md, /Gadgets \/ 電子/);
     assert.match(md, /Apple/);
     assert.match(md, /key,income,spend,net/);
@@ -94,7 +94,7 @@ describe("spend brief", () => {
     assert.equal(food?.largest[0]?.payee, "Wellcome");
     assert.equal(brief.topExpenses.some((x) => x.payee === "Apple"), false);
     const md = renderSpendBriefMarkdown(brief);
-    assert.match(md, /hide one-offs \/ 唔計一次性 = ON/);
+    assert.match(md, /exclude one-offs \/ 唔計一次性 = ON/);
     assert.match(md, /One-offs excluded: 1 txs, 18000/);
     assert.doesNotMatch(md, /Apple/);
   });
