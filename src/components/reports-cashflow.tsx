@@ -78,7 +78,7 @@ export function CashflowPage() {
 
       <div className="mx-4 mt-4 space-y-3">
         <Stat label={t.reports.totalSpend} value={money(expense.expense, "HKD")} />
-        <Stat label={t.reports.netSurplus} value={money(surplus, "HKD", { sign: true })} tone={surplus >= 0 ? "income" : "expense"} />
+        <Stat label={surplus < 0 ? t.reports.netDeficit : t.reports.netSurplus} value={money(surplus, "HKD", { sign: true })} tone={surplus >= 0 ? "income" : "expense"} />
         <Stat
           label={t.reports.savingsRate}
           value={rate == null ? "—" : pct(rate)}

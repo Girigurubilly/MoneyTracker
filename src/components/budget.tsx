@@ -133,11 +133,11 @@ export function BudgetScreen() {
           <InfoButton k="cap" />
         </div>
         <div className="mt-3 flex flex-wrap items-baseline gap-x-1 text-sm font-medium">
-          <span>{t.budget.remaining}:</span>
+          <span>{t.budget.leftToSpend}:</span>
           <span className="tabular-nums">{monthCap > 0 ? money(monthRemain, "HKD") : "—"}</span>
           {monthCap > 0 ? (
             <span className="text-xs font-normal text-muted">
-              {daysRemaining > 0 ? `· ${daysRemaining} ${t.budget.daysLeft}` : `· ${t.budget.lastDay}`}
+              {daysRemaining > 0 ? `· ${t.budget.daysLeft.replace("{n}", String(daysRemaining))}` : `· ${t.budget.lastDay}`}
             </span>
           ) : (
             <span className="text-xs font-normal text-muted">· {t.budget.noCapSet}</span>
@@ -211,10 +211,7 @@ export function BudgetScreen() {
               <span className="shrink-0 tabular-nums">{money(reserved + reservedA, "HKD")}</span>
             </div>
             <div className="flex items-baseline justify-between gap-3">
-              <span>
-                {t.budget.dueNotPosted}
-                <span className="text-faint"> · {t.budget.postedRegulars}</span>
-              </span>
+              <span>{t.budget.dueNotPostedBoth}</span>
               <span className="shrink-0 tabular-nums">{money(Math.max(0, realized - monthSpent), "HKD")}</span>
             </div>
             <div className="flex items-baseline justify-between gap-3">

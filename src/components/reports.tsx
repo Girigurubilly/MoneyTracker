@@ -146,6 +146,7 @@ export function DashboardPage() {
   const saveM = flow.income > 0 ? flow.net / flow.income : 0;
   const saveY = ytdFlow.income > 0 ? (ytdFlow.income - ytdFlow.expense) / ytdFlow.income : 0;
   const incomeZero = flow.income <= 0.005;
+  const ytdIncomeZero = ytdFlow.income <= 0.005;
   const ledgerLive =
     txs.some((tx) => !tx.planned) ||
     accounts.some((a) => a.type !== "miles" && a.currency !== "MILES" && Math.abs(a.balance) > 0.005);
@@ -172,23 +173,18 @@ export function DashboardPage() {
         <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated p-4">
           <button type="button" className="tr-press w-full text-left" onClick={() => setExplain("available")}>
             <div className="text-xs font-medium text-accent">
-              {t.reports.availableSpend}
+              {cap > 0 ? t.reports.availableSpend : t.reports.incomeLeft}
               <span className="ml-1 font-normal text-muted">· {monthTitle}</span>
             </div>
             <div className={cn("mt-1 text-3xl font-semibold tabular-nums tracking-tight", shownAvail >= 0 ? "text-income" : "text-expense")}>
               {money(shownAvail, "HKD", { sign: true })}
             </div>
-            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
-              <span>
-                {t.reports.budgetRemain} {money(available, "HKD", { sign: true })}
-              </span>
-              {next14 > 0.005 ? (
-                <span>
-                  {t.reports.afterCommitments} {money(afterCommit, "HKD", { sign: true })}
-                </span>
-              ) : null}
-            </div>
-            <p className="mt-1.5 text-[11px] leading-4 text-faint">{t.reports.availableActOn}</p>
+            {next14 > 0.005 ? (
+              <div className="mt-2 text-[11px] text-muted">
+                {t.reports.afterCommitments} {money(afterCommit, "HKD", { sign: true })}
+              </div>
+            ) : null}
+            <p className="mt-1.5 text-[11px] leading-4 text-faint">{cap > 0 ? t.reports.availableActOn : t.reports.noCapNote}</p>
           </button>
           <div className="mt-3 border-t border-line pt-1">
             <DashRow label={t.reports.mtdVsBudget} value={cap ? `${money(spent, "HKD")} / ${money(cap, "HKD")}` : money(spent, "HKD")} />
@@ -203,7 +199,9 @@ export function DashboardPage() {
             </button>
             <button type="button" className="tr-press flex w-full items-start justify-between gap-3 py-2.5 text-left" onClick={() => setExplain("saveYtd")}>
               <span className="text-xs text-muted">{t.reports.saveRateYtdPosted}</span>
-              <span className="max-w-[58%] text-right text-sm font-semibold tabular-nums">{pct(saveY)}</span>
+              <span className="max-w-[58%] text-right text-sm font-semibold tabular-nums">
+                {ytdIncomeZero ? <span className="text-muted">— · {t.reports.noIncomeYtd}</span> : pct(saveY)}
+              </span>
             </button>
           </div>
         </div>

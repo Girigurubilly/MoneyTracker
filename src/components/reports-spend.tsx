@@ -220,7 +220,7 @@ export function SpendingPage() {
         <MiniStat label={t.reports.income} value={money(totals.income, "HKD")} tone="income" />
         <MiniStat label={t.reports.expense} value={money(totals.expense, "HKD")} tone="expense" />
         <MiniStat
-          label={t.reports.netSurplus}
+          label={netSave < 0 ? t.reports.netDeficit : t.reports.netSurplus}
           value={money(netSave, "HKD", { sign: true })}
           tone={netSave >= 0 ? "income" : "expense"}
         />
