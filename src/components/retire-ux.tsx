@@ -152,7 +152,7 @@ export function RetireAgeSlider({
           <button
             type="button"
             className="tr-press grid size-9 place-items-center rounded-lg bg-background text-lg font-medium"
-            aria-label="−"
+            aria-label={`${t.common.decrease} ${t.reports.retireAge}`}
             onClick={() => onDraft(Math.max(min, value - 1))}
           >
             −
@@ -161,7 +161,7 @@ export function RetireAgeSlider({
           <button
             type="button"
             className="tr-press grid size-9 place-items-center rounded-lg bg-background text-lg font-medium"
-            aria-label="+"
+            aria-label={`${t.common.increase} ${t.reports.retireAge}`}
             onClick={() => onDraft(Math.min(max, value + 1))}
           >
             +

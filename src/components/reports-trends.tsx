@@ -188,11 +188,11 @@ export function TrendsPage() {
       <div className="flex items-center justify-between px-5 pt-5">
         <h2 className="text-sm font-medium text-muted">{t.reports.heatmap}</h2>
         <div className="flex items-center gap-1">
-          <button type="button" className="grid size-9 place-items-center text-accent" onClick={() => setHeatMonth(shiftMonth(heatMonth, -1))} aria-label="prev">
+          <button type="button" className="grid size-9 place-items-center text-accent" onClick={() => setHeatMonth(shiftMonth(heatMonth, -1))} aria-label={t.common.prevMonth}>
             <ChevronLeft className="size-5" />
           </button>
           <span className="min-w-[6.5rem] text-center text-sm tabular-nums">{heatMonth}</span>
-          <button type="button" className="grid size-9 place-items-center text-accent" onClick={() => setHeatMonth(shiftMonth(heatMonth, 1))} aria-label="next">
+          <button type="button" className="grid size-9 place-items-center text-accent" onClick={() => setHeatMonth(shiftMonth(heatMonth, 1))} aria-label={t.common.nextMonth}>
             <ChevronRight className="size-5" />
           </button>
         </div>

@@ -337,10 +337,10 @@ function AccountCard({
             ))}
             <option value="fx">{t.assets.foreign}</option>
           </select>
-          <button type="button" aria-label="up" disabled={!canUp} className="tr-press grid size-8 place-items-center text-accent disabled:text-faint" onClick={() => void move(a.id, -1)}>
+          <button type="button" aria-label={t.common.moveUp} disabled={!canUp} className="tr-press grid size-8 place-items-center text-accent disabled:text-faint" onClick={() => void move(a.id, -1)}>
             <ChevronUp className="size-5" />
           </button>
-          <button type="button" aria-label="down" disabled={!canDown} className="tr-press grid size-8 place-items-center text-accent disabled:text-faint" onClick={() => void move(a.id, 1)}>
+          <button type="button" aria-label={t.common.moveDown} disabled={!canDown} className="tr-press grid size-8 place-items-center text-accent disabled:text-faint" onClick={() => void move(a.id, 1)}>
             <ChevronDown className="size-5" />
           </button>
         </div>
