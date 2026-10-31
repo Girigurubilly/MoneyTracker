@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { CategoryPicker } from "@/components/category-picker";
 import { CategoryIcon } from "@/components/category-icon";
@@ -8,7 +8,8 @@ import { money, todayISO, clockNow } from "@/lib/format";
 import { resolveAmountInput } from "@/lib/money-expr";
 import { moneyAccountsForPicker } from "@/lib/accounts";
 import { applyTxRules } from "@/lib/tx-rules";
-import { captureFxToHkd } from "@/lib/calc/fx";
+import { captureFxToHkd, toHkd } from "@/lib/calc/fx";
+import { cn } from "@/lib/utils";
 import { categoryPath } from "@/lib/categories";
 import { WhenField } from "@/components/when-picker";
 import type { Category, Currency, WishCard, WishItem } from "@/lib/types";
@@ -35,9 +36,12 @@ export function WishlistPage() {
   );
 }
 
-export function WishlistBlock({ compact }: { compact?: boolean }) {
+export function WishlistBlock({ compact, collapsible }: { compact?: boolean; collapsible?: boolean }) {
   const t = useT();
   const items = useApp((s) => s.wishlist);
+  const rates = useApp((s) => s.fxRates);
+  const [collapsed, setCollapsed] = useState(Boolean(collapsible));
+  const totalHkd = items.reduce((sum, it) => sum + toHkd(it.price, it.currency, rates), 0);
   const defaultCurrency = useApp((s) => s.defaultCurrency);
   const add = useApp((s) => s.addWishItem);
   const update = useApp((s) => s.updateWishItem);
@@ -50,13 +54,32 @@ export function WishlistBlock({ compact }: { compact?: boolean }) {
     <div>
       {!compact ? null : (
         <div className="flex items-center justify-between px-5 pb-1 pt-6">
-          <h2 className="text-sm font-medium text-muted">{t.wish.title}</h2>
+          {collapsible ? (
+            <h2 className="min-w-0 text-sm font-medium text-muted">
+              <button
+                type="button"
+                onClick={() => setCollapsed((c) => !c)}
+                aria-expanded={!collapsed}
+                className="flex min-h-11 min-w-0 items-center gap-2 text-left"
+              >
+                <ChevronDown className={cn("size-4 shrink-0 text-faint motion-safe:transition-transform motion-safe:duration-200", collapsed && "-rotate-90")} />
+                <span>{t.wish.title}</span>
+                {items.length ? (
+                  <span className="text-xs font-semibold tabular-nums text-muted">
+                    {items.length} · {money(totalHkd, "HKD")}
+                  </span>
+                ) : null}
+              </button>
+            </h2>
+          ) : (
+            <h2 className="text-sm font-medium text-muted">{t.wish.title}</h2>
+          )}
           <button type="button" className="tr-press inline-flex min-h-11 items-center text-sm font-medium text-accent" onClick={() => setEditing("new")}>
             {t.wish.add}
           </button>
         </div>
       )}
-      {items.length === 0 ? (
+      {collapsible && collapsed ? null : items.length === 0 ? (
         <div className="rt-enter mx-4 rounded-2xl bg-elevated px-4 py-6 text-center">
           <p className="text-sm font-medium">{t.wish.empty}</p>
           <p className="mt-1 text-xs leading-5 text-muted">{t.wish.emptyHint}</p>

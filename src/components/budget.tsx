@@ -203,6 +203,21 @@ export function BudgetScreen() {
         ) : null}
       </section>
 
+      {/* Scheduled one-offs this month come first */}
+      {kid ? null : (
+        <AdhocBlock
+          month={month}
+          onAdd={() => {
+            setEditingAdhoc(null);
+            setAdhocOpen(true);
+          }}
+          onEdit={(a) => {
+            setEditingAdhoc(a);
+            setAdhocOpen(true);
+          }}
+        />
+      )}
+
       {/* Category budgets — what each cap is tracking this month */}
       <SectionHead
         title={t.budget.byCategory}
@@ -265,20 +280,6 @@ export function BudgetScreen() {
         </Link>
       )}
 
-      {kid ? null : (
-        <AdhocBlock
-          month={month}
-          onAdd={() => {
-            setEditingAdhoc(null);
-            setAdhocOpen(true);
-          }}
-          onEdit={(a) => {
-            setEditingAdhoc(a);
-            setAdhocOpen(true);
-          }}
-        />
-      )}
-
       <RegularsBlock
         onAdd={() => {
           setEditingReg(null);
@@ -290,7 +291,7 @@ export function BudgetScreen() {
         }}
       />
 
-      {kid ? null : <WishlistBlock compact />}
+      {kid ? null : <WishlistBlock compact collapsible />}
 
       <Overlay open={editCap} onClose={() => setEditCap(false)} title={t.budget.monthlyTotal}>
         <div className="px-5 pb-8">
@@ -371,12 +372,34 @@ function BreakRow({ label, value }: { label: string; value: number }) {
   );
 }
 
-function SectionHead({ title, total, action }: { title: string; total?: React.ReactNode; action?: React.ReactNode }) {
+function SectionHead({
+  title,
+  total,
+  action,
+  collapsed,
+  onToggle,
+}: {
+  title: string;
+  total?: React.ReactNode;
+  action?: React.ReactNode;
+  collapsed?: boolean;
+  onToggle?: () => void;
+}) {
   return (
     <div className="flex min-h-11 items-center justify-between gap-3 px-5 pt-5">
-      <h2 className="flex min-w-0 items-baseline gap-2 text-sm font-medium text-muted">
-        <span>{title}</span>
-        {total}
+      <h2 className="min-w-0 text-sm font-medium text-muted">
+        {onToggle ? (
+          <button type="button" onClick={onToggle} aria-expanded={!collapsed} className="flex min-h-11 min-w-0 items-center gap-2 text-left">
+            <ChevronDown className={cn("size-4 shrink-0 text-faint motion-safe:transition-transform motion-safe:duration-200", collapsed && "-rotate-90")} />
+            <span>{title}</span>
+            {total}
+          </button>
+        ) : (
+          <span className="flex items-baseline gap-2">
+            <span>{title}</span>
+            {total}
+          </span>
+        )}
       </h2>
       {action ? <div className="flex shrink-0 items-center gap-3">{action}</div> : null}
     </div>
@@ -700,10 +723,13 @@ function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recur
     .filter((r) => r.type !== "miles")
     .sort((a, b) => chargedDayOf(a) - chargedDayOf(b) || a.label.localeCompare(b.label));
   const lump = monthlyRegularsNetHkd(recurring, rates);
+  const [collapsed, setCollapsed] = useState(true);
   return (
     <div>
       <SectionHead
         title={t.budget.monthlyRegulars}
+        collapsed={collapsed}
+        onToggle={() => setCollapsed((c) => !c)}
         total={
           rows.length ? (
             <span className={cn("text-xs font-semibold tabular-nums", lump > 0 ? "text-income" : lump < 0 ? "text-expense" : "text-muted")}>
@@ -723,9 +749,9 @@ function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recur
           </>
         }
       />
-      {rows.length === 0 ? <p className="px-5 pb-1 text-xs text-faint">{t.budget.regularsNone}</p> : null}
-      {rows.length === 0 ? null : (
-        <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
+      {collapsed ? null : rows.length === 0 ? <p className="px-5 pb-1 text-xs text-faint">{t.budget.regularsNone}</p> : null}
+      {collapsed || rows.length === 0 ? null : (
+        <div className="rt-enter mx-4 overflow-hidden rounded-xl bg-elevated">
           {rows.map((r) => (
             <RegularRow key={r.id} r={r} onEdit={onEdit} showType />
           ))}
