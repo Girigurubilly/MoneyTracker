@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Plus, ChevronRight, ChevronDown, Pencil, Wallet } from "lucide-react";
-import { Link } from "@tanstack/react-router";
+import { Plus, ChevronRight, ChevronDown } from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { InfoButton, Overlay, ScreenHeader } from "@/components/shared";
+import { InfoButton, Overlay, ScreenHeader, StatusChip } from "@/components/shared";
 import { CategoryPicker, TypeSwitch } from "@/components/category-picker";
 import { CategoryIcon } from "@/components/category-icon";
 import { AmountWithHkd, accountFiat, asFiat, autoDestAmount } from "@/components/currency-field";
@@ -20,7 +20,7 @@ import {
   SelectLine,
   TextLine,
 } from "@/components/txn-composer";
-import { asOfForMonth, adhocTotal, budgetActuals, chargedDayOf, chargedIso, forecastTone, monthlyRegularsNetHkd, regularSettledInMonth, spentInMonth } from "@/lib/calc/budget";
+import { asOfForMonth, adhocTotal, budgetActuals, chargedDayOf, chargedIso, forecastTone, monthlyRegularsNetHkd, regularSettledInMonth } from "@/lib/calc/budget";
 import { WhenField } from "@/components/when-picker";
 import { effectiveAnnualTravelBudget, travelSpendYtd, isTripActive } from "@/lib/calc/trips";
 import { monthKey } from "@/lib/calc/ledger";
@@ -49,6 +49,7 @@ export function BudgetScreen() {
   const annual = useApp((s) => s.annualTravelBudget);
   const trips = useApp((s) => s.trips);
   const updateBudget = useApp((s) => s.updateBudget);
+  const deleteBudget = useApp((s) => s.deleteBudget);
   const today = todayISO();
   const month = monthKey(today);
   const asOf = asOfForMonth(month, today);
@@ -66,8 +67,8 @@ export function BudgetScreen() {
   const monthCap = storedTotal?.monthly ?? 0;
   const monthUsed = storedTotal?.expected ?? monthSpent + reserved + (targetMode === "regular" ? 0 : reservedA) + projectedRemain;
   const monthRemain = storedTotal?.remaining ?? monthCap - monthSpent - reserved - (targetMode === "regular" ? 0 : reservedA);
+  const monthRatio = monthCap > 0 ? monthSpent / monthCap : 0;
   const monthTone = forecastTone(monthCap > 0 ? monthUsed / monthCap : 0);
-  const heldInBar = reserved + (targetMode === "regular" ? 0 : reservedA);
   const categoryActuals = actuals.filter((b) => b.id !== MONTH_TOTAL_BUDGET_ID);
   const travelIds = travelThemedIds(categories);
   const spent = travelSpendYtd(txs, Number(month.slice(0, 4)), travelIds, rates);
@@ -82,128 +83,177 @@ export function BudgetScreen() {
   const [editingReg, setEditingReg] = useState<Recurring | null>(null);
   const [adhocOpen, setAdhocOpen] = useState(false);
   const [editingAdhoc, setEditingAdhoc] = useState<AdhocBudget | null>(null);
-  const [catOpen, setCatOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
+  const [addCat, setAddCat] = useState("");
+  const [addAmt, setAddAmt] = useState("");
   const [showBreakdown, setShowBreakdown] = useState(false);
-
-  function openCap() {
-    setCapDraft(String(monthCap || ""));
-    setEditCap(true);
-  }
-  function openCategoryBudget(b: Budget | null) {
-    setEditingBudget(b);
-    setCatOpen(true);
-  }
+  const navigate = useNavigate();
 
   return (
     <div className="pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
-      <ScreenHeader title={t.budget.title} large />
-
-      {/* Month summary — one hero number, one bar, two supporting tiles */}
-      <section className="rt-enter mx-4 rounded-xl bg-elevated px-4 py-4">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-sm text-muted">{monthCap > 0 ? t.budget.leftToSpend : t.budget.spent}</span>
+      <ScreenHeader
+        title={t.budget.title}
+        large
+        right={
+          <button
+            type="button"
+            aria-label={t.budget.addCategoryBudget}
+            onClick={() => {
+              setEditingBudget(null);
+              setAddCat("");
+              setAddAmt("");
+              setAddOpen(true);
+            }}
+            className="grid size-11 place-items-center text-accent"
+          >
+            <Plus className="size-6" />
+          </button>
+        }
+      />
+      <p className="px-5 pb-3 text-xs text-muted">{t.budget.soft}</p>
+      <div className="rt-enter mx-4 rounded-xl bg-elevated px-4 py-4">
+        <div className="flex items-start justify-between gap-2">
+          <button
+            type="button"
+            className="tr-press min-w-0 flex-1 text-left"
+            onClick={() => {
+              setCapDraft(String(monthCap || ""));
+              setEditCap(true);
+            }}
+          >
+            <span className="text-sm text-muted">{t.budget.spent}</span>
+            <div className="mt-1 text-3xl font-semibold tabular-nums tracking-tight">{money(monthSpent, "HKD")}</div>
+            <div className="mt-1 flex flex-wrap items-baseline gap-x-1 text-sm text-muted">
+              <span>{t.budget.expectedMonth}:</span>
+              <span className="font-medium text-foreground tabular-nums">{money(monthUsed, "HKD")}</span>
+              <span className="text-faint">/ {monthCap > 0 ? money(monthCap, "HKD") : "—"}</span>
+            </div>
+            <p className="mt-1 text-[11px] leading-4 text-faint">{t.budget.linkedYearlyExpense}</p>
+          </button>
           <InfoButton k="cap" />
         </div>
-        <div
-          className={cn(
-            "text-3xl font-semibold tabular-nums tracking-tight",
-            monthCap > 0 && monthRemain < 0 && "text-expense",
+        <div className="mt-3 flex flex-wrap items-baseline gap-x-1 text-sm font-medium">
+          <span>{t.budget.remaining}:</span>
+          <span className="tabular-nums">{monthCap > 0 ? money(monthRemain, "HKD") : "—"}</span>
+          {monthCap > 0 ? (
+            <span className="text-xs font-normal text-muted">
+              {daysRemaining > 0 ? `· ${daysRemaining} ${t.budget.daysLeft}` : `· ${t.budget.lastDay}`}
+            </span>
+          ) : (
+            <span className="text-xs font-normal text-muted">· {t.budget.noCapSet}</span>
           )}
-        >
-          {money(monthCap > 0 ? monthRemain : monthSpent, "HKD")}
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="rounded-xl bg-accent-soft px-3 py-3">
+            <div className="text-[11px] font-medium leading-4 text-accent">{t.budget.dailyAllowed}</div>
+            <div className="mt-1 text-lg font-semibold leading-tight tabular-nums text-accent">
+              {monthCap > 0 ? money(dailyAllowed, "HKD") : "—"}
+            </div>
+          </div>
+          <div className="rounded-xl px-3 py-3 ring-1 ring-line">
+            <div className="text-[11px] font-medium leading-4 text-muted">{t.budget.avgDaily}</div>
+            <div className="mt-1 text-lg font-semibold leading-tight tabular-nums">{money(avgDaily, "HKD")}</div>
+          </div>
         </div>
         {monthCap > 0 ? (
-          <>
-            <button
-              type="button"
-              onClick={openCap}
-              className="tr-press mt-1 flex min-h-8 flex-wrap items-center gap-x-1 text-left text-sm text-muted"
-            >
-              <span>
-                {t.budget.spent} <span className="tabular-nums text-foreground">{money(monthSpent, "HKD")}</span>
-              </span>
-              <span className="text-faint">/</span>
-              <span className="tabular-nums">{money(monthCap, "HKD")}</span>
-              <Pencil className="size-3 text-faint" aria-label={t.budget.editCap} />
-            </button>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ring-track">
+          <div className="mt-2">
+            <div className="h-1.5 overflow-hidden rounded-full bg-ring-track">
               <div className="flex h-full w-full">
                 <div
-                  className={cn("h-full motion-safe:transition-[width] motion-safe:duration-300", toneBg(monthTone))}
+                  className={cn(
+                    "h-full transition-[width] duration-200",
+                    monthTone === "expense" ? "bg-expense" : monthTone === "watch" ? "bg-watch" : "bg-income",
+                  )}
                   style={{ width: `${Math.min(100, (monthSpent / monthCap) * 100)}%` }}
+                  title={t.budget.barPosted}
                 />
                 <div
-                  className="h-full bg-accent/40 motion-safe:transition-[width] motion-safe:duration-300"
-                  style={{ width: `${Math.min(Math.max(0, 100 - (monthSpent / monthCap) * 100), (heldInBar / monthCap) * 100)}%` }}
+                  className="h-full bg-accent/40 transition-[width] duration-200"
+                  style={{
+                    width: `${Math.min(
+                      Math.max(0, 100 - (monthSpent / monthCap) * 100),
+                      ((reserved + (targetMode === "regular" ? 0 : reservedA)) / monthCap) * 100,
+                    )}%`,
+                  }}
+                  title={t.budget.barReserved}
                 />
               </div>
             </div>
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted">
+            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted">
               <span>
-                <span className={cn("mr-1 inline-block size-1.5 rounded-full align-middle", toneBg(monthTone))} />
+                <span className="mr-1 inline-block size-1.5 rounded-full bg-income align-middle" />
                 {t.budget.barPosted}
               </span>
-              {heldInBar > 0 ? (
-                <span>
-                  <span className="mr-1 inline-block size-1.5 rounded-full bg-accent/40 align-middle" />
-                  {t.budget.barReserved}
-                </span>
-              ) : null}
-              <span className="ml-auto text-faint">
-                {daysRemaining > 0 ? t.budget.daysLeft.replace("{n}", String(daysRemaining)) : t.budget.lastDay}
+              <span>
+                <span className="mr-1 inline-block size-1.5 rounded-full bg-accent/40 align-middle" />
+                {t.budget.barReserved}
               </span>
-            </div>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={openCap}
-            className="tr-press mt-3 inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-accent-soft text-sm font-semibold text-accent"
-          >
-            <Plus className="size-4" />
-            {t.budget.setCap}
-          </button>
-        )}
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          {monthCap > 0 ? (
-            <div className="rounded-xl bg-accent-soft px-3 py-2.5">
-              <div className="text-[11px] font-medium leading-4 text-accent">{t.budget.dailyAllowed}</div>
-              <div className="mt-0.5 text-base font-semibold leading-tight tabular-nums text-accent">{money(dailyAllowed, "HKD")}</div>
-            </div>
-          ) : (
-            <div className="rounded-xl px-3 py-2.5 ring-1 ring-line">
-              <div className="text-[11px] font-medium leading-4 text-muted">{t.budget.avgDaily}</div>
-              <div className="mt-0.5 text-base font-semibold leading-tight tabular-nums">{money(avgDaily, "HKD")}</div>
-            </div>
-          )}
-          <div className="rounded-xl px-3 py-2.5 ring-1 ring-line">
-            <div className="text-[11px] font-medium leading-4 text-muted">{t.budget.expectedMonth}</div>
-            <div className={cn("mt-0.5 text-base font-semibold leading-tight tabular-nums", monthCap > 0 && monthTone !== "income" && toneText(monthTone))}>
-              {money(monthUsed, "HKD")}
+              <span className="text-faint">{t.budget.barExpected}</span>
             </div>
           </div>
-        </div>
+        ) : null}
         <button
           type="button"
-          aria-expanded={showBreakdown}
-          className="mt-2 flex min-h-9 w-full items-center justify-center gap-1 text-xs font-medium text-accent"
+          className="mt-3 flex w-full items-center justify-center gap-1 text-xs font-medium text-accent"
           onClick={() => setShowBreakdown((v) => !v)}
         >
           {showBreakdown ? t.budget.hideBreakdown : t.budget.showBreakdown}
-          <ChevronDown className={cn("size-3.5 motion-safe:transition", showBreakdown && "rotate-180")} />
+          <ChevronDown className={cn("size-3.5 transition", showBreakdown && "rotate-180")} />
         </button>
         {showBreakdown ? (
-          <div className="rt-enter mt-1 space-y-1.5 text-xs text-muted">
-            <BreakRow label={t.today.reservedRegulars} value={reserved + reservedA} />
-            <BreakRow label={t.budget.dueNotPostedBoth} value={Math.max(0, realized - monthSpent)} />
-            <BreakRow label={`${t.budget.projected} · ${t.budget.atPace}`} value={projected} />
-            {monthCap > 0 ? <BreakRow label={t.budget.avgDaily} value={avgDaily} /> : null}
+          <div className="mt-2 space-y-1.5 text-xs text-muted">
+            <div className="flex items-baseline justify-between gap-3">
+              <span>{t.budget.spent}</span>
+              <span className="shrink-0 tabular-nums">{money(monthSpent, "HKD")}</span>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <span>{t.today.reservedRegulars}</span>
+              <span className="shrink-0 tabular-nums">{money(reserved + reservedA, "HKD")}</span>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <span>
+                {t.budget.dueNotPosted}
+                <span className="text-faint"> · {t.budget.postedRegulars}</span>
+              </span>
+              <span className="shrink-0 tabular-nums">{money(Math.max(0, realized - monthSpent), "HKD")}</span>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <span>
+                {t.budget.projected}
+                <span className="text-faint"> · {t.budget.atPace}</span>
+              </span>
+              <span className="shrink-0 tabular-nums">{money(projected, "HKD")}</span>
+            </div>
           </div>
         ) : null}
-      </section>
+      </div>
 
-      {/* Scheduled one-offs this month come first */}
+      {kid ? null : (
+        <Link to="/reports/travel" className="mx-4 mt-4 block rounded-xl bg-elevated px-4 py-4">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-sm text-muted">{t.budget.annualTravel}</span>
+            <ChevronRight className="size-4 shrink-0 text-faint" />
+          </div>
+          <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
+            <span className="text-xl font-semibold tabular-nums">{money(spent, "HKD")}</span>
+            <span className="text-sm text-muted">
+              / {travelBudget > 0 ? money(travelBudget, "HKD") : "—"}
+              {annualEff.fromTrips ? <span className="text-faint"> · {t.reports.travelBudgetFromTrips}</span> : null}
+            </span>
+          </div>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ring-track">
+            <div
+              className={cn(
+                "h-full rounded-full",
+                travelTone === "expense" ? "bg-expense" : travelTone === "watch" ? "bg-watch" : "bg-income",
+              )}
+              style={{ width: `${Math.min(100, travelPct * 100)}%` }}
+            />
+          </div>
+        </Link>
+      )}
+
       {kid ? null : (
         <AdhocBlock
           month={month}
@@ -218,68 +268,6 @@ export function BudgetScreen() {
         />
       )}
 
-      {/* Category budgets — what each cap is tracking this month */}
-      <SectionHead
-        title={t.budget.byCategory}
-        action={
-          <button
-            type="button"
-            onClick={() => openCategoryBudget(null)}
-            className="flex min-h-11 items-center gap-1 px-1 text-sm font-medium text-accent"
-          >
-            <Plus className="size-4" />
-            {t.budget.addShort}
-          </button>
-        }
-      />
-      {categoryActuals.length === 0 ? (
-        <div className="mx-4 rounded-xl bg-elevated px-4 py-5 text-center">
-          <p className="text-sm text-muted">{t.budget.catEmpty}</p>
-          <button
-            type="button"
-            onClick={() => openCategoryBudget(null)}
-            className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-on-accent"
-          >
-            {t.budget.addCategoryBudget}
-          </button>
-        </div>
-      ) : (
-        <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
-          {categoryActuals.map((b) => (
-            <CategoryBudgetRow
-              key={b.id}
-              row={b}
-              onEdit={() =>
-                openCategoryBudget(
-                  budgets.find((x) => x.id === b.id) ?? { id: b.id, label: b.label, labelZh: b.labelZh, monthly: b.monthly, spent: 0, categoryId: b.categoryId },
-                )
-              }
-            />
-          ))}
-        </div>
-      )}
-
-      {kid ? null : (
-        <Link to="/reports/travel" className="tr-press mx-4 mt-3 block rounded-xl bg-elevated px-4 py-3">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-medium">{t.budget.annualTravel}</span>
-            <span className="flex items-center gap-1 text-xs text-muted">
-              <span className="tabular-nums">
-                {money(spent, "HKD")} / {travelBudget > 0 ? money(travelBudget, "HKD") : "—"}
-              </span>
-              <ChevronRight className="size-4 shrink-0 text-faint" />
-            </span>
-          </div>
-          {annualEff.fromTrips ? <div className="mt-0.5 text-[11px] text-faint">{t.reports.travelBudgetFromTrips}</div> : null}
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ring-track">
-            <div
-              className={cn("h-full rounded-full motion-safe:transition-[width] motion-safe:duration-300", toneBg(travelTone))}
-              style={{ width: `${Math.min(100, travelPct * 100)}%` }}
-            />
-          </div>
-        </Link>
-      )}
-
       <RegularsBlock
         onAdd={() => {
           setEditingReg(null);
@@ -291,22 +279,74 @@ export function BudgetScreen() {
         }}
       />
 
-      {kid ? null : <WishlistBlock compact collapsible />}
+      <h2 className="px-5 pb-1 pt-6 text-sm font-medium text-muted">{t.budget.byCategory}</h2>
+      {categoryActuals.length === 0 ? <p className="px-5 py-4 text-sm text-muted">{t.common.none}</p> : null}
+      {categoryActuals.map((b) => {
+        const ratio = b.ratio;
+        const tone = forecastTone(ratio);
+        const status = tone === "income" ? "on-track" : tone === "watch" ? "watch" : "at-risk";
+        const src = budgets.find((x) => x.id === b.id);
+        return (
+          <div key={b.id} className="w-full px-5 py-3 text-left">
+            <button
+              type="button"
+              className="w-full text-left"
+              onClick={() => {
+                const categoryId = src?.categoryId ?? b.categoryId;
+                if (!categoryId) {
+                  setEditingBudget(src ?? { id: b.id, label: b.label, labelZh: b.labelZh, monthly: b.monthly, spent: 0, categoryId: b.categoryId });
+                  setAddCat("");
+                  setAddAmt(String(src?.monthly ?? b.monthly ?? ""));
+                  setAddOpen(true);
+                  return;
+                }
+                void navigate({ to: "/reports/spending", search: { category: categoryId } });
+              }}
+            >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="break-words text-sm">{pickName(locale, b.label, b.labelZh)}</div>
+                <div className="mt-0.5 break-words text-xs text-muted">
+                  {money(b.spent, "HKD")} / {money(b.monthly, "HKD")} · {pct(ratio)} {t.budget.used}
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <StatusChip status={status} />
+                <ChevronRight className="size-4 text-faint" />
+              </div>
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ring-track">
+              <div
+                className={cn(
+                  "h-full rounded-full",
+                  tone === "expense" ? "bg-expense" : tone === "watch" ? "bg-watch" : "bg-income",
+                )}
+                style={{ width: `${Math.min(100, ratio * 100)}%` }}
+              />
+            </div>
+            </button>
+            <button
+              type="button"
+              className="mt-1 text-xs font-medium text-muted"
+              onClick={() => {
+                setEditingBudget(src ?? { id: b.id, label: b.label, labelZh: b.labelZh, monthly: b.monthly, spent: 0, categoryId: b.categoryId });
+                setAddCat(src?.categoryId ?? b.categoryId ?? "");
+                setAddAmt(String(src?.monthly ?? b.monthly ?? ""));
+                setAddOpen(true);
+              }}
+            >
+              {t.tx.edit}
+            </button>
+          </div>
+        );
+      })}
+
+      {kid ? null : <WishlistBlock compact />}
 
       <Overlay open={editCap} onClose={() => setEditCap(false)} title={t.budget.monthlyTotal}>
         <div className="px-5 pb-8">
-          <label className="flex h-12 items-center gap-2 rounded-lg bg-elevated px-3">
-            <span className="text-sm text-muted">HK$</span>
-            <input
-              inputMode="decimal"
-              value={capDraft}
-              onChange={(e) => setCapDraft(e.target.value)}
-              className="h-full min-w-0 flex-1 bg-transparent text-lg font-semibold tabular-nums outline-none"
-              placeholder="0"
-              aria-label={t.budget.monthlyTotal}
-            />
-          </label>
-          <p className="mt-2 text-xs leading-5 text-muted">{t.budget.capSheetHint}</p>
+          <input inputMode="decimal" value={capDraft} onChange={(e) => setCapDraft(e.target.value)} className="h-11 w-full rounded-lg bg-elevated px-3" />
+          <p className="mt-2 text-xs leading-5 text-muted">{t.budget.linkedYearlyExpense}</p>
           <button
             type="button"
             className="mt-4 h-12 w-full rounded-xl bg-accent font-semibold text-on-accent"
@@ -315,7 +355,7 @@ export function BudgetScreen() {
                 id: MONTH_TOTAL_BUDGET_ID,
                 label: "Monthly total",
                 labelZh: "本月總額",
-                monthly: Math.max(0, resolveAmountInput(capDraft)),
+                monthly: Number(capDraft) || 0,
                 spent: 0,
               });
               setEditCap(false);
@@ -326,286 +366,57 @@ export function BudgetScreen() {
         </div>
       </Overlay>
 
-      <Overlay
-        open={catOpen}
-        onClose={() => {
-          setCatOpen(false);
-          setEditingBudget(null);
-        }}
-        title={editingBudget ? t.budget.editCategoryBudget : t.budget.addCategoryBudget}
-      >
-        {catOpen ? (
-          <CategoryBudgetForm
-            key={editingBudget?.id ?? "new"}
-            initial={editingBudget}
-            month={month}
-            onDone={() => {
-              setCatOpen(false);
+      <Overlay open={addOpen} onClose={() => { setAddOpen(false); setEditingBudget(null); }} title={editingBudget ? t.tx.edit : t.budget.addCategoryBudget}>
+        <div className="px-5 pb-8">
+          <select value={addCat} onChange={(e) => setAddCat(e.target.value)} className="h-11 w-full rounded-lg bg-elevated px-3">
+            <option value="">{t.budget.noCategory}</option>
+            {categories
+              .filter((c) => c.kind === "expense")
+              .map((c) => (
+                <option key={c.id} value={c.id}>
+                  {pickName(locale, c.name, c.nameZh)}
+                </option>
+              ))}
+          </select>
+          <input inputMode="decimal" value={addAmt} onChange={(e) => setAddAmt(e.target.value)} className="mt-3 h-11 w-full rounded-lg bg-elevated px-3" placeholder={t.add.amount} />
+          <button
+            type="button"
+            className="mt-4 h-12 w-full rounded-xl bg-accent font-semibold text-on-accent"
+            onClick={async () => {
+              const cat = categories.find((c) => c.id === addCat);
+              await updateBudget({
+                id: editingBudget?.id ?? `b-${newId().slice(0, 8)}`,
+                categoryId: cat?.id,
+                label: cat?.name ?? editingBudget?.label ?? "Budget",
+                labelZh: cat?.nameZh ?? editingBudget?.labelZh ?? "預算",
+                monthly: Number(addAmt) || 0,
+                spent: 0,
+              });
+              setAddOpen(false);
               setEditingBudget(null);
             }}
-          />
-        ) : null}
+          >
+            {t.add.save}
+          </button>
+          {editingBudget && editingBudget.id !== MONTH_TOTAL_BUDGET_ID ? (
+            <button
+              type="button"
+              className="mt-2 h-12 w-full text-sm text-expense"
+              onClick={async () => {
+                await deleteBudget(editingBudget.id);
+                toast(t.tx.deleted);
+                setAddOpen(false);
+                setEditingBudget(null);
+              }}
+            >
+              {t.tx.delete}
+            </button>
+          ) : null}
+        </div>
       </Overlay>
 
       <RegularEditor open={regOpen} initial={editingReg} onClose={() => { setRegOpen(false); setEditingReg(null); }} />
       <AdhocEditor open={adhocOpen} initial={editingAdhoc} month={month} onClose={() => { setAdhocOpen(false); setEditingAdhoc(null); }} />
-    </div>
-  );
-}
-
-type Tone = "income" | "watch" | "expense";
-
-function toneBg(tone: Tone): string {
-  return tone === "expense" ? "bg-expense" : tone === "watch" ? "bg-watch" : "bg-income";
-}
-
-function toneText(tone: Tone): string {
-  return tone === "expense" ? "text-expense" : tone === "watch" ? "text-watch" : "text-income";
-}
-
-function BreakRow({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <span>{label}</span>
-      <span className="shrink-0 tabular-nums">{money(value, "HKD")}</span>
-    </div>
-  );
-}
-
-function SectionHead({
-  title,
-  total,
-  action,
-  collapsed,
-  onToggle,
-}: {
-  title: string;
-  total?: React.ReactNode;
-  action?: React.ReactNode;
-  collapsed?: boolean;
-  onToggle?: () => void;
-}) {
-  return (
-    <div className="flex min-h-11 items-center justify-between gap-3 px-5 pt-5">
-      <h2 className="min-w-0 text-sm font-medium text-muted">
-        {onToggle ? (
-          <button type="button" onClick={onToggle} aria-expanded={!collapsed} className="flex min-h-11 min-w-0 items-center gap-2 text-left">
-            <ChevronDown className={cn("size-4 shrink-0 text-faint motion-safe:transition-transform motion-safe:duration-200", collapsed && "-rotate-90")} />
-            <span>{title}</span>
-            {total}
-          </button>
-        ) : (
-          <span className="flex items-baseline gap-2">
-            <span>{title}</span>
-            {total}
-          </span>
-        )}
-      </h2>
-      {action ? <div className="flex shrink-0 items-center gap-3">{action}</div> : null}
-    </div>
-  );
-}
-
-function CategoryBudgetRow({
-  row,
-  onEdit,
-}: {
-  row: Budget & { spent: number; remaining: number; ratio: number };
-  onEdit: () => void;
-}) {
-  const t = useT();
-  const locale = useUi((s) => s.locale);
-  const categories = useApp((s) => s.categories);
-  const cat = row.categoryId ? categories.find((c) => c.id === row.categoryId) : undefined;
-  const linked = Boolean(row.categoryId || row.theme);
-  const tone = forecastTone(row.ratio);
-  const over = row.remaining < 0;
-  const name = cat ? categoryPath(cat, categories, locale) : pickName(locale, row.label, row.labelZh);
-  return (
-    <button type="button" className="tr-press block w-full border-t border-line px-4 py-3 text-left first:border-0" onClick={onEdit}>
-      <div className="flex items-center gap-3">
-        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-background">
-          {cat ? <CategoryIcon name={cat.icon} /> : <Wallet className="size-4 text-muted" />}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="min-w-0 break-words text-sm font-medium">{name}</span>
-            {linked ? (
-              <span className={cn("shrink-0 text-sm font-semibold tabular-nums", over ? "text-expense" : tone === "watch" ? "text-watch" : undefined)}>
-                {over ? t.budget.overBy.replace("{amt}", money(-row.remaining, "HKD")) : t.budget.leftAmt.replace("{amt}", money(row.remaining, "HKD"))}
-              </span>
-            ) : null}
-          </div>
-          {linked ? (
-            <>
-              <div className="mt-0.5 flex items-baseline justify-between gap-2 text-xs text-muted">
-                <span className="tabular-nums">
-                  {money(row.spent, "HKD")} / {money(row.monthly, "HKD")}
-                </span>
-                <span className="tabular-nums">{pct(row.ratio)}</span>
-              </div>
-              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-ring-track">
-                <div
-                  className={cn("h-full rounded-full motion-safe:transition-[width] motion-safe:duration-300", toneBg(tone))}
-                  style={{ width: `${Math.min(100, row.ratio * 100)}%` }}
-                />
-              </div>
-            </>
-          ) : (
-            <div className="mt-0.5 text-xs text-watch">{t.budget.unlinked}</div>
-          )}
-        </div>
-        <ChevronRight className="size-4 shrink-0 text-faint" />
-      </div>
-    </button>
-  );
-}
-
-function shiftMonth(month: string, delta: number): string {
-  const [y, m] = month.split("-").map(Number);
-  const d = new Date(y, m - 1 + delta, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function CategoryBudgetForm({ initial, month, onDone }: { initial: Budget | null; month: string; onDone: () => void }) {
-  const t = useT();
-  const locale = useUi((s) => s.locale);
-  const budgets = useApp((s) => s.budgets);
-  const categories = useApp((s) => s.categories);
-  const txs = useApp((s) => s.transactions);
-  const rates = useApp((s) => s.fxRates);
-  const updateBudget = useApp((s) => s.updateBudget);
-  const deleteBudget = useApp((s) => s.deleteBudget);
-  const [catId, setCatId] = useState(initial?.categoryId ?? "");
-  const [amt, setAmt] = useState(initial?.monthly ? String(initial.monthly) : "");
-  const taken = new Set(budgets.filter((b) => b.categoryId && b.id !== initial?.id).map((b) => b.categoryId as string));
-  const expenseCats = categories.filter((c) => c.kind === "expense");
-  const parents = expenseCats.filter((c) => !c.parentId || c.parentId === c.id || !expenseCats.some((p) => p.id === c.parentId));
-  const options = parents.flatMap((p) => [
-    { c: p, label: pickName(locale, p.name, p.nameZh) },
-    ...expenseCats
-      .filter((c) => c.parentId === p.id && c.id !== p.id)
-      .map((c) => ({ c, label: `${pickName(locale, p.name, p.nameZh)} › ${pickName(locale, c.name, c.nameZh)}` })),
-  ]);
-  const cat = categories.find((c) => c.id === catId);
-  const hasSubs = cat ? categories.some((c) => c.parentId === cat.id && c.id !== cat.id) : false;
-  const thisMonth = cat ? spentInMonth(txs, month, rates, { categoryId: cat.id, categories }) : 0;
-  const avg3 = cat
-    ? [1, 2, 3].reduce((s, n) => s + spentInMonth(txs, shiftMonth(month, -n), rates, { categoryId: cat.id, categories }), 0) / 3
-    : 0;
-  const capN = resolveAmountInput(amt);
-
-  async function save() {
-    if (!cat) {
-      toast(t.budget.needCategory);
-      return;
-    }
-    if (!(capN > 0)) {
-      toast(t.budget.needCap);
-      return;
-    }
-    await updateBudget({
-      id: initial?.id ?? `b-${newId().slice(0, 8)}`,
-      categoryId: cat.id,
-      theme: undefined,
-      label: cat.name,
-      labelZh: cat.nameZh,
-      monthly: capN,
-      spent: 0,
-    });
-    toast(t.add.savedToast);
-    onDone();
-  }
-
-  return (
-    <div className="px-5 pb-8">
-      <label className="block text-xs font-medium text-muted" htmlFor="cb-cat">
-        {t.budget.categoryLabel}
-      </label>
-      <div className="mt-1 flex h-12 items-center gap-2 rounded-lg bg-elevated px-3">
-        {cat ? <CategoryIcon name={cat.icon} /> : null}
-        <select
-          id="cb-cat"
-          value={catId}
-          onChange={(e) => setCatId(e.target.value)}
-          className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none"
-        >
-          <option value="">{t.add.pickCategory}</option>
-          {options.map(({ c, label }) => (
-            <option key={c.id} value={c.id} disabled={taken.has(c.id)}>
-              {taken.has(c.id) ? `${label} · ${t.budget.alreadySet}` : label}
-            </option>
-          ))}
-        </select>
-      </div>
-      {hasSubs ? <p className="mt-1 text-[11px] leading-4 text-faint">{t.budget.includesSubs}</p> : null}
-
-      <label className="mt-4 block text-xs font-medium text-muted" htmlFor="cb-amt">
-        {t.budget.monthlyCap}
-      </label>
-      <div className="mt-1 flex h-12 items-center gap-2 rounded-lg bg-elevated px-3">
-        <span className="text-sm text-muted">HK$</span>
-        <input
-          id="cb-amt"
-          inputMode="decimal"
-          value={amt}
-          onChange={(e) => setAmt(e.target.value)}
-          className="h-full min-w-0 flex-1 bg-transparent text-lg font-semibold tabular-nums outline-none"
-          placeholder="0"
-        />
-      </div>
-
-      {cat ? (
-        <div className="rt-enter mt-3 space-y-1.5 rounded-xl px-3 py-3 text-xs text-muted ring-1 ring-line">
-          <div className="flex items-baseline justify-between gap-3">
-            <span>{t.budget.spentThisMonth}</span>
-            <span className="tabular-nums text-foreground">{money(thisMonth, "HKD")}</span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span>{t.budget.avg3m}</span>
-            <span className="flex items-center gap-2">
-              <span className="tabular-nums text-foreground">{money(avg3, "HKD")}</span>
-              {avg3 > 0 ? (
-                <button
-                  type="button"
-                  className="min-h-8 rounded-full bg-accent-soft px-2.5 text-[11px] font-medium text-accent"
-                  onClick={() => setAmt(String(Math.ceil(avg3 / 10) * 10))}
-                >
-                  {t.budget.useThis}
-                </button>
-              ) : null}
-            </span>
-          </div>
-          {capN > 0 ? (
-            <div className="pt-1">
-              <div className="h-1.5 overflow-hidden rounded-full bg-ring-track">
-                <div
-                  className={cn("h-full rounded-full motion-safe:transition-[width] motion-safe:duration-300", toneBg(forecastTone(thisMonth / capN)))}
-                  style={{ width: `${Math.min(100, (thisMonth / capN) * 100)}%` }}
-                />
-              </div>
-              <div className="mt-1 text-right tabular-nums">{pct(thisMonth / capN)}</div>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      <button type="button" className="mt-4 h-12 w-full rounded-xl bg-accent font-semibold text-on-accent" onClick={() => void save()}>
-        {t.add.save}
-      </button>
-      {initial && initial.id !== MONTH_TOTAL_BUDGET_ID ? (
-        <button
-          type="button"
-          className="mt-2 h-12 w-full text-sm text-expense"
-          onClick={async () => {
-            await deleteBudget(initial.id);
-            toast(t.tx.deleted);
-            onDone();
-          }}
-        >
-          {t.tx.delete}
-        </button>
-      ) : null}
     </div>
   );
 }
@@ -723,35 +534,32 @@ function RegularsBlock({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: Recur
     .filter((r) => r.type !== "miles")
     .sort((a, b) => chargedDayOf(a) - chargedDayOf(b) || a.label.localeCompare(b.label));
   const lump = monthlyRegularsNetHkd(recurring, rates);
-  const [collapsed, setCollapsed] = useState(true);
   return (
-    <div>
-      <SectionHead
-        title={t.budget.monthlyRegulars}
-        collapsed={collapsed}
-        onToggle={() => setCollapsed((c) => !c)}
-        total={
-          rows.length ? (
-            <span className={cn("text-xs font-semibold tabular-nums", lump > 0 ? "text-income" : lump < 0 ? "text-expense" : "text-muted")}>
-              {money(lump, "HKD", { sign: true })}
-            </span>
-          ) : null
-        }
-        action={
-          <>
-            <Link to="/more/regulars" className="flex min-h-11 items-center text-xs font-medium text-accent">
-              {t.budget.manageRegulars}
-            </Link>
-            <button type="button" onClick={onAdd} aria-label={t.budget.addRegular} className="flex min-h-11 items-center gap-1 px-1 text-sm font-medium text-accent">
-              <Plus className="size-4" />
-              {t.budget.addShort}
-            </button>
-          </>
-        }
-      />
-      {collapsed ? null : rows.length === 0 ? <p className="px-5 pb-1 text-xs text-faint">{t.budget.regularsNone}</p> : null}
-      {collapsed || rows.length === 0 ? null : (
-        <div className="rt-enter mx-4 overflow-hidden rounded-xl bg-elevated">
+    <div className="pt-4">
+      <div className="flex items-baseline justify-between gap-3 px-5">
+        <h2 className="text-sm font-medium text-muted">{t.budget.monthlyRegulars}</h2>
+        {rows.length ? (
+          <span
+            className={cn(
+              "text-sm font-semibold tabular-nums",
+              lump > 0 ? "text-income" : lump < 0 ? "text-expense" : "text-muted",
+            )}
+          >
+            {money(lump, "HKD", { sign: true })}
+          </span>
+        ) : null}
+      </div>
+      <div className="flex items-center justify-end gap-4 px-5 pb-1 pt-1">
+        <Link to="/more/regulars" className="flex min-h-11 items-center text-xs font-medium text-accent">
+          {t.budget.manageRegulars}
+        </Link>
+        <button type="button" onClick={onAdd} className="flex min-h-11 items-center px-1 text-sm font-medium text-accent">
+          {t.budget.addRegular}
+        </button>
+      </div>
+      <p className="px-5 pb-2 text-xs text-faint">{t.budget.regularsHint}</p>
+      {rows.length === 0 ? null : (
+        <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
           {rows.map((r) => (
             <RegularRow key={r.id} r={r} onEdit={onEdit} showType />
           ))}
@@ -795,27 +603,27 @@ function AdhocBlock({
     .sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label));
   const lump = adhocTotal(rows, month, rates);
   return (
-    <div>
-      <SectionHead
-        title={t.budget.adhoc}
-        total={rows.length ? <span className="text-xs font-semibold tabular-nums text-expense">{money(-lump, "HKD", { sign: true })}</span> : null}
-        action={
-          <>
-            <Link to="/more/adhoc" className="flex min-h-11 items-center text-xs font-medium text-accent">
-              {t.budget.manageAdhoc}
-            </Link>
-            {rows.length ? (
-              <button type="button" onClick={onAdd} aria-label={t.budget.addAdhoc} className="flex min-h-11 items-center gap-1 px-1 text-sm font-medium text-accent">
-                <Plus className="size-4" />
-                {t.budget.addShort}
-              </button>
-            ) : null}
-          </>
-        }
-      />
+    <div className="pt-4">
+      <div className="flex items-baseline justify-between gap-3 px-5">
+        <h2 className="text-sm font-medium text-muted">{t.budget.adhoc}</h2>
+        {rows.length ? (
+          <span className="text-sm font-semibold tabular-nums text-expense">{money(-lump, "HKD", { sign: true })}</span>
+        ) : null}
+      </div>
+      <div className="flex items-center justify-end gap-4 px-5 pb-1 pt-1">
+        <Link to="/more/adhoc" className="flex min-h-11 items-center text-xs font-medium text-accent">
+          {t.budget.manageAdhoc}
+        </Link>
+        {rows.length ? (
+          <button type="button" onClick={onAdd} className="flex min-h-11 items-center px-1 text-sm font-medium text-accent">
+            {t.budget.addShort}
+          </button>
+        ) : null}
+      </div>
+      <p className="px-5 pb-2 text-xs text-faint">{t.budget.adhocHint}</p>
       {rows.length === 0 ? (
         <div className="mx-4 rounded-xl bg-elevated px-4 py-5 text-center">
-          <p className="text-sm text-muted">{t.budget.adhocHint}</p>
+          <p className="text-sm text-muted">{t.budget.adhocNone}</p>
           <button
             type="button"
             onClick={onAdd}

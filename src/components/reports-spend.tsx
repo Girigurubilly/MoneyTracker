@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
+import { useSearch } from "@tanstack/react-router";
 import { Overlay, ScreenHeader, TxGroupedList } from "@/components/shared";
 import { DateField } from "@/components/txn-composer";
 import { SpendBriefButton } from "@/components/spend-brief";
@@ -47,6 +48,24 @@ export function SpendingPage() {
   const [customTo, setCustomTo] = useState(today);
   const [openId, setOpenId] = useState<string | null>(null);
   const [focusParent, setFocusParent] = useState<string | null>(null);
+  const picked = useRef("");
+  const search = useSearch({ strict: false }) as { category?: string };
+  const category = search.category || "";
+  useEffect(() => {
+    if (!category || picked.current === category || !cats.length) return;
+    const cat = cats.find((c) => c.id === category);
+    if (!cat) return;
+    picked.current = category;
+    setTab(cat.kind === "income" ? "income" : "expense");
+    const hasKids = cats.some((c) => c.parentId === cat.id);
+    if (hasKids) {
+      setFocusParent(cat.id);
+      setOpenId(null);
+      return;
+    }
+    if (cat.parentId) setFocusParent(cat.parentId);
+    setOpenId(cat.id);
+  }, [category, cats]);
   const kid = useUi((s) => s.accessMode) === "kid";
   const range = periodRange(preset, today, customFrom, customTo);
   const from = preset === "custom" ? customFrom : range.from;
@@ -94,7 +113,11 @@ export function SpendingPage() {
           ].filter((r) => r.value > 0)
       : null;
   const pieRows = bothPie ?? view.rows;
-  const openRow = view.rows.find((r) => r.id === openId) ?? totals.rows.find((r) => r.id === openId) ?? null;
+  const asked = openId ? cats.find((c) => c.id === openId) : undefined;
+  const openRow =
+    view.rows.find((r) => r.id === openId) ??
+    totals.rows.find((r) => r.id === openId) ??
+    (asked ? { id: asked.id, name: asked.name, nameZh: asked.nameZh, value: 0, colorIndex: 0 } : null);
   const focusCat = cats.find((c) => c.id === focusParent);
   const center = focusParent
     ? view.rows.reduce((s, r) => s + r.value, 0)
@@ -220,7 +243,7 @@ export function SpendingPage() {
         <MiniStat label={t.reports.income} value={money(totals.income, "HKD")} tone="income" />
         <MiniStat label={t.reports.expense} value={money(totals.expense, "HKD")} tone="expense" />
         <MiniStat
-          label={netSave < 0 ? t.reports.netDeficit : t.reports.netSurplus}
+          label={t.reports.netSurplus}
           value={money(netSave, "HKD", { sign: true })}
           tone={netSave >= 0 ? "income" : "expense"}
         />
