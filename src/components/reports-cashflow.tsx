@@ -93,6 +93,7 @@ export function CashflowPage() {
         incomeLabel={t.reports.flowIncome}
         spendLabel={t.reports.totalSpend}
         surplusLabel={t.reports.surplusSaved}
+        deficitLabel={t.reports.flowDeficit}
         inRows={inRows.map((r, i) => ({ name: pickName(locale, r.name, r.nameZh), value: r.value, color: IN_COLORS[i % IN_COLORS.length] }))}
         outRows={outRows.map((r, i) => ({ name: pickName(locale, r.name, r.nameZh), value: r.value, color: OUT_COLORS[i % OUT_COLORS.length] }))}
         income={income.income}
@@ -157,6 +158,21 @@ function topRows<T extends { value: number; id: string; name: string; nameZh: st
 
 type FlowRow = { name: string; value: number; color: string };
 
+const FLOW_FONT = 11;
+
+/** Rough text width at FLOW_FONT so long names can be clipped with an ellipsis. */
+function clipLabel(text: string, maxPx: number): string {
+  let w = 0;
+  let out = "";
+  for (const ch of text) {
+    const cw = /[\u2E80-\uFFEF]/.test(ch) ? FLOW_FONT : FLOW_FONT * 0.58;
+    if (w + cw > maxPx) return `${out.trimEnd()}…`;
+    w += cw;
+    out += ch;
+  }
+  return out;
+}
+
 function FlowSankey({
   inRows,
   outRows,
@@ -166,6 +182,7 @@ function FlowSankey({
   incomeLabel,
   spendLabel,
   surplusLabel,
+  deficitLabel,
 }: {
   inRows: FlowRow[];
   outRows: FlowRow[];
@@ -175,28 +192,33 @@ function FlowSankey({
   incomeLabel: string;
   spendLabel: string;
   surplusLabel: string;
+  deficitLabel: string;
 }) {
   const w = 360;
-  const pad = 12;
+  const pad = 18;
   const bar = 12;
   const left = 4;
   const mid1 = 118;
   const mid2 = 168;
   const right = 346;
+  const minNode = 16;
   const minUsable = 220;
-  const roughScale = income > 0 ? minUsable / income : 0;
-  const inH0 = inRows.map((r) => Math.max(14, r.value * roughScale));
-  const outH0 = outRows.map((r) => Math.max(14, r.value * roughScale));
+  // Display only: when spend is higher than income, the gap is drawn as money taken from savings.
+  const deficit = Math.max(0, expense - income);
+  const base = Math.max(income, expense);
+  const roughScale = base > 0 ? minUsable / base : 0;
+  const inH0 = inRows.map((r) => Math.max(minNode, r.value * roughScale));
+  const outH0 = outRows.map((r) => Math.max(minNode, r.value * roughScale));
   const needed = Math.max(
     minUsable,
     sum(inH0) + Math.max(0, inRows.length - 1) * 8,
     sum(outH0) + Math.max(0, outRows.length - 1) * 8,
   );
-  const h = needed + pad * 2 + 28;
-  const usable = h - pad * 2;
-  const scale = income > 0 ? usable / income : 0;
-  const inH = inRows.map((r) => Math.max(14, r.value * scale));
-  const outH = outRows.map((r) => Math.max(14, r.value * scale));
+  const h = needed + pad * 2 + 32;
+  const usable = h - pad * 2 - 20;
+  const scale = base > 0 ? usable / base : 0;
+  const inH = inRows.map((r) => Math.max(minNode, r.value * scale));
+  const outH = outRows.map((r) => Math.max(minNode, r.value * scale));
   const spendH = Math.max(8, expense * scale);
   const saveH = Math.max(surplus > 0 ? 8 : 0, surplus * scale);
   let yIn = pad;
@@ -207,6 +229,8 @@ function FlowSankey({
   });
   const totalY = pad;
   const totalH = Math.max(12, income * scale);
+  const deficitH = deficit > 0 ? Math.max(8, deficit * scale) : 0;
+  const deficitY = totalY + totalH;
   const spendY = pad;
   const saveY = spendY + spendH + 10;
   let yOut = pad;
@@ -215,6 +239,7 @@ function FlowSankey({
     yOut += outH[i] + 6;
     return { ...r, y, h: outH[i] };
   });
+  const incomeToSpend = Math.min(totalH, deficit > 0 ? totalH : spendH + 4);
 
   function ribbon(x0: number, y0: number, h0: number, x1: number, y1: number, h1: number, color: string) {
     const c0 = x0 + (x1 - x0) * 0.45;
@@ -228,38 +253,46 @@ function FlowSankey({
     );
   }
 
-  let inOff = 0;
   let outOff = 0;
   return (
     <div className="mx-2 mt-3 overflow-x-auto">
-      <svg viewBox={`0 0 ${w} ${h}`} className="mx-auto w-full max-w-lg" style={{ height: Math.min(420, Math.max(260, h * 0.95)) }}>
+      <svg viewBox={`0 0 ${w} ${h}`} className="mx-auto w-full max-w-lg" style={{ height: Math.min(460, Math.max(280, h * 0.95)) }}>
         {inNodes.map((n) => {
           const link = ribbon(left + bar, n.y, n.h, mid1, totalY + (n.y - pad) * (totalH / Math.max(usable, 1)), n.h * (totalH / Math.max(yIn - pad, 1)), n.color);
-          inOff += n.h;
           return (
             <g key={n.name}>
               {link}
               <rect x={left} y={n.y} width={bar} height={n.h} rx={3} fill={n.color} />
-              <text x={left + bar + 4} y={n.y + Math.min(n.h, 14)} fill="var(--color-muted)" fontSize="8">
-                {n.name}
+              <text x={left + bar + 4} y={n.y + Math.min(n.h, FLOW_FONT + 2)} fill="var(--color-muted)" fontSize={FLOW_FONT}>
+                <title>{n.name}</title>
+                {clipLabel(n.name, mid1 - left - bar - 10)}
               </text>
             </g>
           );
         })}
-        {ribbon(mid1 + bar, totalY, Math.min(totalH, spendH + 4), mid2, spendY, spendH, "#c4a4a0")}
+        {ribbon(mid1 + bar, totalY, incomeToSpend, mid2, spendY, deficit > 0 ? Math.min(spendH, totalH) : spendH, "#c4a4a0")}
+        {deficit > 0 ? ribbon(mid1 + bar, deficitY, deficitH, mid2, spendY + Math.min(spendH, totalH), Math.max(4, spendH - Math.min(spendH, totalH)), "#d9a441") : null}
         {surplus > 0 ? ribbon(mid1 + bar, totalY + Math.min(totalH, spendH + 4), Math.max(4, totalH - spendH), mid2, saveY, saveH, "#3d9a6a") : null}
         <rect x={mid1} y={totalY} width={bar} height={totalH} rx={3} fill="#9ec0ff" />
-        <text x={mid1 - 2} y={Math.max(12, totalY - 4)} fill="var(--color-muted)" fontSize="8" textAnchor="end">
+        <text x={mid1 - 2} y={Math.max(FLOW_FONT + 1, totalY - 5)} fill="var(--color-muted)" fontSize={FLOW_FONT} textAnchor="end">
           {incomeLabel}
         </text>
+        {deficit > 0 ? (
+          <>
+            <rect x={mid1} y={deficitY} width={bar} height={deficitH} rx={3} fill="#d9a441" />
+            <text x={mid1 + bar / 2} y={deficitY + deficitH + FLOW_FONT + 3} fill="var(--color-muted)" fontSize={FLOW_FONT} textAnchor="middle">
+              {deficitLabel}
+            </text>
+          </>
+        ) : null}
         <rect x={mid2} y={spendY} width={bar} height={spendH} rx={3} fill="#e8b4b0" />
-        <text x={mid2 + bar / 2} y={Math.max(12, spendY - 4)} fill="var(--color-muted)" fontSize="8" textAnchor="middle">
+        <text x={mid2 + bar / 2} y={Math.max(FLOW_FONT + 1, spendY - 5)} fill="var(--color-muted)" fontSize={FLOW_FONT} textAnchor="start">
           {spendLabel}
         </text>
         {surplus > 0 ? (
           <>
             <rect x={mid2} y={saveY} width={bar} height={saveH} rx={3} fill="#3d9a6a" />
-            <text x={mid2 + bar / 2} y={saveY + saveH + 11} fill="var(--color-muted)" fontSize="8" textAnchor="middle">
+            <text x={mid2 + bar / 2} y={saveY + saveH + FLOW_FONT + 3} fill="var(--color-muted)" fontSize={FLOW_FONT} textAnchor="middle">
               {surplusLabel}
             </text>
           </>
@@ -273,8 +306,9 @@ function FlowSankey({
             <g key={n.name}>
               {ribbon(mid2 + bar, sy, Math.max(4, sh), right - bar, n.y, n.h, n.color)}
               <rect x={right - bar} y={n.y} width={bar} height={n.h} rx={3} fill={n.color} />
-              <text x={right - bar - 4} y={n.y + Math.min(n.h, 12)} fill="var(--color-muted)" fontSize="8" textAnchor="end">
-                {n.name}
+              <text x={right - bar - 4} y={n.y + Math.min(n.h, FLOW_FONT + 1)} fill="var(--color-muted)" fontSize={FLOW_FONT} textAnchor="end">
+                <title>{n.name}</title>
+                {clipLabel(n.name, right - bar - mid2 - bar - 14)}
               </text>
             </g>
           );

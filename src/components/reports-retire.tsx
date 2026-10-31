@@ -678,7 +678,7 @@ export function RetirementPage() {
               <div className={cn("text-2xl font-semibold tabular-nums", shownGap < 0 ? "text-expense" : "text-income")}>
                 {money(shownGap, "HKD", { sign: true })}
               </div>
-              <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.surplusHint}</p>
+              <p className="mt-1 text-[11px] leading-4 text-muted">{story.gap < 0 ? t.reports.surplusHintNeg : t.reports.surplusHintPos}</p>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <div className="rounded-xl bg-background px-3 py-2">
                   <div className="text-[11px] text-muted">{t.reports.spendRetired}</div>
