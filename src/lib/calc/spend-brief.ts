@@ -415,14 +415,14 @@ function insights(b: SpendBrief): string[] {
   );
   if (b.hideAdhoc) {
     lines.push(
-      `“Hide ad-hoc / 唔計臨時大額” is ON. ${b.adhoc.excludedCount} ad-hoc expense(s) totalling HKD ${b.adhoc.excludedAmount.toLocaleString("en-HK")} are excluded from every figure below (${pct(b.adhoc.shareOfSpendIfIncluded)} of unfiltered spend).`,
+      `“Hide one-offs / 唔計一次性” is ON. ${b.adhoc.excludedCount} one-off expense(s) totalling HKD ${b.adhoc.excludedAmount.toLocaleString("en-HK")} are excluded from every figure below (${pct(b.adhoc.shareOfSpendIfIncluded)} of unfiltered spend).`,
     );
   } else if (b.adhoc.includedCount) {
     lines.push(
-      `Ad-hoc / 臨時大額 spend is included: ${b.adhoc.includedCount} tx(s), HKD ${b.adhoc.includedAmount.toLocaleString("en-HK")} (${pct(b.adhoc.shareOfSpendIfIncluded)} of spend).`,
+      `One-off / 一次性 spend is included: ${b.adhoc.includedCount} tx(s), HKD ${b.adhoc.includedAmount.toLocaleString("en-HK")} (${pct(b.adhoc.shareOfSpendIfIncluded)} of spend).`,
     );
   } else {
-    lines.push("No ad-hoc / 臨時大額 expenses in this window.");
+    lines.push("No one-off / 一次性 expenses in this window.");
   }
   lines.push(
     `Pace: about HKD ${f.dailySpend.toLocaleString("en-HK")} spend/day, HKD ${f.monthlySpend.toLocaleString("en-HK")} / 30.4-day month. ${f.txCountExpense} expense txs (avg ticket ${f.avgExpenseTicket.toLocaleString("en-HK")}, median ${f.medianExpenseTicket.toLocaleString("en-HK")}).`,
@@ -434,7 +434,7 @@ function insights(b: SpendBrief): string[] {
   if (b.topExpenses[0]) {
     const x = b.topExpenses[0];
     lines.push(
-      `Single largest expense: ${x.date} ${x.payee} ${x.category} HKD ${x.amount.toLocaleString("en-HK")}${x.adhoc ? " (ad-hoc)" : ""}.`,
+      `Single largest expense: ${x.date} ${x.payee} ${x.category} HKD ${x.amount.toLocaleString("en-HK")}${x.adhoc ? " (one-off)" : ""}.`,
     );
   }
   if (b.payees[0] && b.payees[0].share >= 0.15) {
@@ -472,7 +472,7 @@ export function renderSpendBriefMarkdown(b: SpendBrief): string {
     "# HK Life Money — period income & expense brief",
     `Generated: ${b.generatedAt}`,
     `As of: ${b.today} (HKD). Window: ${b.from} → ${b.to} (${b.presetLabel}, ${b.days} days).`,
-    `Filters: hide ad-hoc / 唔計臨時大額 = ${b.hideAdhoc ? "ON" : "OFF"}. Parent groups ${b.mergeParents ? "merged on screen" : "shown as leaves on screen"}; this file always lists parent groups plus children.`,
+    `Filters: hide one-offs / 唔計一次性 = ${b.hideAdhoc ? "ON" : "OFF"}. Parent groups ${b.mergeParents ? "merged on screen" : "shown as leaves on screen"}; this file always lists parent groups plus children.`,
     "",
     "Planning illustration from on-device ledger data. Combine with the asset-status export and the retirement / FIRE export. Not advice.",
     "",
@@ -490,8 +490,8 @@ export function renderSpendBriefMarkdown(b: SpendBrief): string {
     `- Median expense ticket: ${b.flow.medianExpenseTicket}`,
     `- Recurring-linked spend: ${b.recurringSpend.amount} (${b.recurringSpend.count} txs, ${pct(b.recurringSpend.share)})`,
     `- One-off spend: ${b.oneOffSpend.amount} (${b.oneOffSpend.count} txs, ${pct(b.oneOffSpend.share)})`,
-    `- Ad-hoc excluded: ${b.adhoc.excludedCount} txs, ${b.adhoc.excludedAmount}`,
-    `- Ad-hoc included: ${b.adhoc.includedCount} txs, ${b.adhoc.includedAmount} (${pct(b.adhoc.shareOfSpendIfIncluded)} of unfiltered spend)`,
+    `- One-offs excluded: ${b.adhoc.excludedCount} txs, ${b.adhoc.excludedAmount}`,
+    `- One-offs included: ${b.adhoc.includedCount} txs, ${b.adhoc.includedAmount} (${pct(b.adhoc.shareOfSpendIfIncluded)} of unfiltered spend)`,
     "",
     `## ${b.grain === "day" ? "Daily" : "Monthly"} cash movement`,
     "key,income,spend,net",
@@ -541,7 +541,7 @@ export function renderSpendBriefMarkdown(b: SpendBrief): string {
     ...(b.fireKinds.length ? b.fireKinds.map((t) => `- ${t.kind}: ${t.amount} (${pct(t.share)})`) : ["(none)"]),
     "",
     "## How to use with an LLM",
-    "Paste this markdown together with: (1) Assets → Status for AI, (2) Reports → Retirement → Export for AI. Ask for: whether this period’s saving rate is enough for the retirement target, which categories are flexible vs core, whether ad-hoc spikes distort the picture, and a concrete next-month allocation. Treat figures as an illustration from this device only.",
+    "Paste this markdown together with: (1) Assets → Status for AI, (2) Reports → Retirement → Export for AI. Ask for: whether this period’s saving rate is enough for the retirement target, which categories are flexible vs core, whether one-off spikes distort the picture, and a concrete next-month allocation. Treat figures as an illustration from this device only.",
   );
   return lines.join("\n");
 }

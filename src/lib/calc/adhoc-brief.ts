@@ -49,7 +49,7 @@ export function renderAdhocBriefMarkdown(input: {
     byMonth.set(key, list);
   }
   const lines = [
-    `# Ad-hoc payments`,
+    `# One-off payments`,
     ``,
     `- As of: ${today}`,
     `- Currency of totals: HKD`,
@@ -64,6 +64,6 @@ export function renderAdhocBriefMarkdown(input: {
   for (const [key, list] of byMonth) {
     lines.push(`## ${key}${key === month ? " (current month)" : ""}`, ``, `| When | Item | Category | Amount | Currency | HKD | Status | Trip | Account |`, `| --- | --- | --- | ---: | --- | ---: | --- | --- | --- |`, ...list, ``);
   }
-  if (!rows.length) lines.push(`No ad-hoc payments.`, ``);
+  if (!rows.length) lines.push(`No one-off payments.`, ``);
   return lines.join("\n");
 }
