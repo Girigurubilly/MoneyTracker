@@ -37,7 +37,6 @@ export function WishlistPage() {
 
 export function WishlistBlock({ compact }: { compact?: boolean }) {
   const t = useT();
-  const locale = useUi((s) => s.locale);
   const items = useApp((s) => s.wishlist);
   const defaultCurrency = useApp((s) => s.defaultCurrency);
   const add = useApp((s) => s.addWishItem);
@@ -85,7 +84,7 @@ export function WishlistBlock({ compact }: { compact?: boolean }) {
                       <div className="truncate text-sm font-medium">{it.name}</div>
                       <div className="mt-0.5 text-xs tabular-nums text-muted">
                         {money(it.price, it.currency)}
-                        {notes ? (locale === "zh-HK" ? ` · ${notes} 張卡` : ` · ${notes} cards`) : ""}
+                        {notes ? ` · ${t.wish.cardsCount.replace("{n}", String(notes))}` : ""}
                       </div>
                     </button>
                     <button

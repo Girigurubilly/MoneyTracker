@@ -221,7 +221,7 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
                       <span className="text-income">+{money(months.length ? booked : est.total, ccy)}</span>
                     </div>
                   </button>
-                  <button type="button" className="grid size-11 shrink-0 place-items-center text-expense" onClick={() => void deletePromoSaving(p.id)} aria-label={locale === "zh-HK" ? "刪除" : "Delete"}>
+                  <button type="button" className="grid size-11 shrink-0 place-items-center text-expense" onClick={() => void deletePromoSaving(p.id)} aria-label={t.common.delete}>
                     <Trash2 className="size-4" />
                   </button>
                 </div>
@@ -281,7 +281,7 @@ export function DepositsPage({ backTo = "/reports" }: { backTo?: "/reports" | "/
                           <span>{money((r.amount || 0) + (r.interest || 0), r.currency)}</span>
                         </div>
                       </button>
-                      <button type="button" className="grid size-11 shrink-0 place-items-center text-expense" onClick={() => void deleteDeposit(r.id)} aria-label={locale === "zh-HK" ? "刪除" : "Delete"}>
+                      <button type="button" className="grid size-11 shrink-0 place-items-center text-expense" onClick={() => void deleteDeposit(r.id)} aria-label={t.common.delete}>
                         <Trash2 className="size-4" />
                       </button>
                     </div>
@@ -498,7 +498,7 @@ function DepositEditor({ open, initial, onClose }: { open: boolean; initial: Tim
           <input
             value={bank}
             onChange={(e) => setBank(e.target.value)}
-            placeholder="Marathon / 馬拉松"
+            placeholder={t.reports.promoNamePlaceholder}
             className="h-10 w-[55%] bg-transparent text-right text-sm text-accent outline-none"
           />
         </div>
@@ -553,11 +553,10 @@ function dayAfter(iso: string): string {
 
 function PromoEditor({ open, initial, onClose }: { open: boolean; initial: PromoSaving | null; onClose: () => void }) {
   const t = useT();
-  const locale = useUi((s) => s.locale);
   const accounts = useApp((s) => s.accounts);
   const upsertPromoSaving = useApp((s) => s.upsertPromoSaving);
   const picker = moneyAccountsForPicker(accounts);
-  const defaultName = locale === "zh-HK" ? "渣打馬拉松" : "SCB Marathon";
+  const defaultName = t.reports.promoDefaultName;
   const seeded = initial
     ? initial.rateSchedule.map((step, index) => ({ id: `tier-${index + 1}`, from: step.from, to: step.to, rate: step.rate }))
     : scbMarathonTiers("HKD");

@@ -659,7 +659,6 @@ function TripEditor({
   onDeleted?: () => void;
 }) {
   const t = useT();
-  const locale = useUi((s) => s.locale);
   const add = useApp((s) => s.addTrip);
   const update = useApp((s) => s.updateTrip);
   const today = todayISO();
@@ -731,7 +730,7 @@ function TripEditor({
         >
           <div className="rt-enter space-y-0">
             <TextLine value={name} onChange={setName} label={t.reports.tripName} placeholder={t.budget.customName} />
-            <TextLine value={dest} onChange={setDest} label={t.reports.destination} placeholder={locale === "zh-HK" ? "例如 Osaka" : "e.g. Osaka"} />
+            <TextLine value={dest} onChange={setDest} label={t.reports.destination} placeholder={t.reports.destinationPlaceholder} />
             <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
               <span className="text-sm text-muted">{t.reports.tripStart}</span>
               <DateField value={start} onChange={setStart} className="justify-end" />
@@ -742,7 +741,7 @@ function TripEditor({
             </div>
             <LineRow label={t.reports.cashBudget} amount={budget} currency="HKD" active={field === "amount"} onFocusAmount={() => setField("amount")} />
             <LineRow label={t.reports.monthlyCash} amount={monthly} currency="HKD" active={field === "dest"} onFocusAmount={() => setField("dest")} />
-            <TextLine value={plannerId} onChange={setPlannerId} label={t.reports.plannerId} placeholder={locale === "zh-HK" ? "選填" : "Optional"} />
+            <TextLine value={plannerId} onChange={setPlannerId} label={t.reports.plannerId} placeholder={t.reports.optionalPlaceholder} />
             <p className="px-4 py-2 text-xs leading-5 text-muted">{t.reports.plannerHint}</p>
             {trip ? (
               <a

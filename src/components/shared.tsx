@@ -366,7 +366,7 @@ export function TransactionRow({ tx, onClick, showDate }: { tx: Transaction; onC
         <div className="truncate text-xs text-muted">
           {meta}
           {showDate ? ` · ${tx.date}` : ""}
-          {tx.planned ? (locale === "zh-HK" ? " · 計劃" : " · planned") : ""}
+          {tx.planned ? ` · ${t.today.scheduled}` : ""}
           {tx.planned && tx.time ? ` · ${whenStamp(tx.date, tx.time, locale).split(" ").slice(1).join(" ")}` : ""}
         </div>
       </div>
