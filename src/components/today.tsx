@@ -295,9 +295,11 @@ function TodayBody() {
               <>
                 <div className="mx-4 mb-2 rounded-xl bg-elevated px-4 py-1">
                   <SummaryRow
-                    label={t.today.remainingBudget}
+                    label={target > 0 ? t.today.remainingBudget : `${t.today.remainingBudget} · ${t.budget.noCapSet}`}
                     value={target > 0 ? money(stats.remainingBudget, "HKD") : "—"}
+                    info="daily"
                   />
+                  {target > 0 ? <SummaryRow label={`${t.today.dailySpend} · ${t.budget.daysLeft.replace("{n}", String(stats.daily.daysLeft))}`} value={money(stats.daily.daily, "HKD")} /> : null}
                   <SummaryRow label={t.today.remainingDisc} value={money(stats.remainingDisc, "HKD")} info="disc" />
                 </div>
                 <p className="px-5 pb-2 text-xs text-faint">{t.today.guidance}</p>

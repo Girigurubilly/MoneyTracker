@@ -44,11 +44,12 @@ export function ScreenHeader({
 }
 
 function BackControl({ backTo, onBack }: { backTo?: string; onBack?: () => void }) {
+  const t = useT();
   const navigate = useNavigate();
   return (
     <button
       type="button"
-      aria-label="Back"
+      aria-label={t.common.back}
       className="grid size-11 shrink-0 place-items-center text-accent"
       onClick={() => {
         if (onBack) {
@@ -188,9 +189,10 @@ export function Segmented<T extends string>({
 }
 
 export function InfoButton({ k }: { k: string }) {
+  const t = useT();
   const set = useUi((s) => s.setInfoKey);
   return (
-    <button type="button" aria-label="info" onClick={() => set(k)} className="grid size-8 place-items-center text-faint">
+    <button type="button" aria-label={t.common.moreInfo} onClick={() => set(k)} className="grid size-8 place-items-center text-faint">
       <Info className="size-4" />
     </button>
   );

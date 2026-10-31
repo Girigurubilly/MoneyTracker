@@ -3,6 +3,7 @@ import { Delete } from "lucide-react";
 import { CURRENCIES, type Currency } from "@/lib/types";
 import { applyPadKey } from "@/lib/money-expr";
 import { cn } from "@/lib/utils";
+import { useT } from "@/store/ui";
 
 export function AmountKeypad({
   value,
@@ -15,6 +16,7 @@ export function AmountKeypad({
   currency?: Currency;
   onCurrency?: (c: Currency) => void;
 }) {
+  const t = useT();
   function press(key: string) {
     onChange(applyPadKey(value, key));
   }
@@ -33,7 +35,7 @@ export function AmountKeypad({
           <div className="relative h-14">
             <div className="pointer-events-none grid h-14 place-items-center rounded-lg bg-elevated text-sm font-semibold">{currency}</div>
             <select
-              aria-label="currency"
+              aria-label={t.common.currency}
               value={currency}
               onPointerDown={() => {
                 currencyArmed.current = true;
