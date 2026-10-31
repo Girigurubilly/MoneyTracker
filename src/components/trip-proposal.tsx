@@ -46,6 +46,7 @@ function remember(key: string, value: string) {
 export function TripProposal() {
   const t = useT();
   const addAdhoc = useApp((s) => s.addAdhocBudget);
+  const addTransaction = useApp((s) => s.addTransaction);
   const updateTrip = useApp((s) => s.updateTrip);
   const accounts = useApp((s) => s.accounts);
   const categories = useApp((s) => s.categories);
@@ -56,6 +57,7 @@ export function TripProposal() {
   const [pickCat, setPickCat] = useState("");
   const [pickAccount, setPickAccount] = useState("");
   const [done, setDone] = useState(false);
+  const [postedCount, setPostedCount] = useState(0);
   const [backUrl, setBackUrl] = useState("");
   const [tripName, setTripName] = useState("");
   const [tripId, setTripId] = useState("");
@@ -155,6 +157,8 @@ export function TripProposal() {
     const guess = carriedTrip(trips, { trip: tripName, tripId, bookId, items: picked });
     const matched = trips.find((trip) => trip.id === (tripPick ?? guess?.id ?? ""));
     const expenseCats = categories.filter((c) => c.kind === "expense");
+    const today = todayISO();
+    let posted = 0;
     for (const row of picked) {
       const categoryId = expenseCats.some((c) => c.id === row.categoryId) ? row.categoryId : undefined;
       const accountId = accounts.some((a) => a.id === row.accountId) ? row.accountId : "";
@@ -164,6 +168,7 @@ export function TripProposal() {
       }
       remember(ACCOUNT_KEY, accountId);
       if (categoryId) remember(CATEGORY_KEY, categoryId);
+      const postToday = row.date === today;
       await addAdhoc({
         id: newId(),
         label: row.label,
@@ -176,12 +181,32 @@ export function TripProposal() {
         categoryId,
         accountId,
         tripId: matched?.id,
+        ...(postToday ? { paidOn: today } : {}),
       });
+      if (postToday) {
+        await addTransaction({
+          type: "expense",
+          date: today,
+          time: row.time,
+          amount: row.amount,
+          currency: row.currency === "MILES" ? "HKD" : row.currency,
+          accountId,
+          categoryId,
+          payee: row.label,
+          payeeZh: row.label,
+          note: row.label,
+          adhoc: true,
+          tripId: matched?.id,
+          tripManual: Boolean(matched?.id),
+        });
+        posted += 1;
+      }
     }
     if (matched && bookId && !matched.plannerId) {
       await updateTrip({ ...matched, plannerId: bookId, plannerTitle: tripName || matched.plannerTitle });
     }
-    toast(t.reports.proposalDone);
+    toast(posted ? t.reports.proposalPosted : t.reports.proposalDone);
+    setPostedCount(posted);
     const day = picked[0]?.date || "";
     const trip = matched || trips.find((row) => row.id === tripId);
     setBackUrl(trip && day ? plannerTripUrl(trip, { day }) : "");
@@ -223,7 +248,7 @@ export function TripProposal() {
       <div className="px-5 pb-8">
         {done ? (
           <>
-            <p className="text-sm leading-6">{t.reports.proposalDone}</p>
+            <p className="text-sm leading-6">{postedCount ? t.reports.proposalPosted : t.reports.proposalDone}</p>
             {backUrl ? (
               <a href={backUrl} target="trip-planner" className="mt-4 flex h-12 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-on-accent">
                 {t.reports.proposalBack}
