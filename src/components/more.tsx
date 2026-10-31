@@ -662,6 +662,7 @@ export function BackupPage() {
       <details className="mx-4 mt-8">
         <summary className="cursor-pointer text-xs font-medium text-muted">{t.backup.advanced}</summary>
         <div className="pt-3">
+      <p className="px-1 pb-2 text-[11px] leading-4 text-faint">{t.backup.advancedHint}</p>
       <Group>
         <Row
           title={t.backup.exportBaseline}

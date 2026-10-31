@@ -181,7 +181,12 @@ export function BudgetScreen() {
             </div>
             <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted">
               <span>
-                <span className="mr-1 inline-block size-1.5 rounded-full bg-income align-middle" />
+                <span
+                  className={cn(
+                    "mr-1 inline-block size-1.5 rounded-full align-middle",
+                    monthTone === "expense" ? "bg-expense" : monthTone === "watch" ? "bg-watch" : "bg-income",
+                  )}
+                />
                 {t.budget.barPosted}
               </span>
               <span>

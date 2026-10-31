@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Overlay, ScreenHeader } from "@/components/shared";
-import { compactHkd, money, monthGrid, monthTitle, todayISO, weekdayLabels } from "@/lib/format";
+import { compactHkd, money, monthGrid, monthTitle, shortDate, todayISO, weekdayLabels } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
 import { monthKeysBack, monthLabel } from "@/lib/derived";
 import { cashflowSide } from "@/lib/calc/ledger";
@@ -126,7 +126,7 @@ export function TrendsPage() {
         <Mini label={t.reports.avgSpendPerMonth} value={money(avg, "HKD")} />
         <Mini label={t.reports.lastMonthSpend} value={money(last, "HKD")} />
         <Mini label={t.reports.spendWindowChange} value={pctSigned(growth)} tone={growth <= 0 ? "income" : "expense"} />
-        <Mini label={t.reports.peakDay} value={peakDay ? peakDay.slice(8) : "—"} />
+        <Mini label={t.reports.peakDay} value={peakDay ? shortDate(peakDay, locale) : "—"} />
       </div>
       <div className="mt-4 h-64 px-1">
         <ResponsiveContainer width="100%" height="100%">
@@ -233,7 +233,7 @@ export function TrendsPage() {
       </div>
       {peakDay ? (
         <p className="px-5 pt-3 text-xs text-muted">
-          {t.reports.peakDay}: {peakDay} · {money(peakAmt, "HKD")}
+          {t.reports.peakDay}: {shortDate(peakDay, locale)} · {money(peakAmt, "HKD")}
         </p>
       ) : null}
       {openDay ? (

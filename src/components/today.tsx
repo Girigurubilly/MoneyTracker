@@ -109,7 +109,10 @@ function ActiveTripCard({ trip, day }: { trip: Trip; day: string }) {
     <section className="rt-enter mx-4 overflow-hidden rounded-2xl bg-elevated" aria-label={t.today.onTripToday.replace("{name}", name)}>
       <div className="flex items-start justify-between gap-2 pl-4 pr-2 pt-2">
         <div className="min-w-0 flex-1 pt-1.5">
-          <div className="truncate text-sm font-semibold">{t.today.onTripToday.replace("{name}", name)}</div>
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+            <span className="break-words text-sm font-semibold leading-snug">{name}</span>
+            <span className="shrink-0 rounded-full bg-accent-soft px-1.5 py-px text-[10px] font-medium text-accent">{t.today.tripActiveChip}</span>
+          </div>
           <div className="truncate text-xs text-muted">
             {dateRangeLabel(trip.start, trip.end, locale)} · {t.today.tripDayOf.replace("{day}", String(dayNo)).replace("{total}", String(dayTotal))}
           </div>
@@ -227,7 +230,7 @@ function TodayBody() {
     locale,
     regularLabel: t.budget.monthlyRegulars,
     adhocLabel: t.budget.adhoc,
-    plannedLabel: locale === "zh-HK" ? "計劃" : "Planned",
+    plannedLabel: t.today.scheduled,
   });
   const cells = monthGrid(selected, firstDay);
   const active = activityDates(transactions);
