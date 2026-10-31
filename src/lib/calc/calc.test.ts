@@ -144,6 +144,25 @@ describe("budget formulas", () => {
     assert.equal(row.avgDaily, 198 / 15);
   });
 
+  it("category budget rolls up sub-category spend", () => {
+    const budgets: Budget[] = [
+      { id: "b-food", categoryId: "food", label: "Food", labelZh: "飲食", monthly: 1000, spent: 0 },
+      { id: "b-cafe", categoryId: "cafe", label: "Cafe", labelZh: "咖啡", monthly: 200, spent: 0 },
+    ];
+    const cats: Category[] = [
+      { id: "food", name: "Food", nameZh: "飲食", theme: "living", kind: "expense", icon: "utensils" },
+      { id: "cafe", name: "Cafe", nameZh: "咖啡", theme: "living", kind: "expense", icon: "utensils", parentId: "food" },
+    ];
+    const txs: Transaction[] = [
+      tx({ id: "t1", type: "expense", amount: 300, date: "2026-08-05", categoryId: "food" }),
+      tx({ id: "t2", type: "expense", amount: 50, date: "2026-08-06", categoryId: "cafe" }),
+    ];
+    const [food, cafe] = budgetActuals(budgets, txs, "2026-08", [], cats, [], "2026-08-15", []);
+    assert.equal(food.spent, 350);
+    assert.equal(food.remaining, 650);
+    assert.equal(cafe.spent, 50);
+  });
+
   it("reserved helpers skip charged items", () => {
     const recurring: Recurring[] = [
       rec({ id: "r1", type: "expense", amount: 100, chargedDay: 1 }),

@@ -15,15 +15,32 @@ export function spentInMonth(
       ? opts.categories.filter((c) => c.theme === opts.theme && c.kind === "expense").map((c) => c.id)
       : [],
   );
+  const catIds = opts?.categoryId ? categoryWithDescendants(opts.categoryId, opts.categories ?? []) : null;
   let sum = 0;
   for (const tx of txs) {
     if (cashflowSide(tx) !== "expense") continue;
     if (!inMonth(tx.date, month)) continue;
-    if (opts?.categoryId && tx.categoryId !== opts.categoryId) continue;
+    if (catIds && (!tx.categoryId || !catIds.has(tx.categoryId))) continue;
     if (opts?.theme && tx.categoryId && !themeIds.has(tx.categoryId)) continue;
     sum += Math.abs(toHkd(tx.amount, tx.currency, rates, tx.fxToHkd));
   }
   return sum;
+}
+
+/** A category budget tracks its own spend plus every sub-category under it (same roll-up as the category picker rings). */
+export function categoryWithDescendants(categoryId: string, categories: Category[]): Set<string> {
+  const ids = new Set([categoryId]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const c of categories) {
+      if (c.parentId && c.parentId !== c.id && ids.has(c.parentId) && !ids.has(c.id)) {
+        ids.add(c.id);
+        grew = true;
+      }
+    }
+  }
+  return ids;
 }
 
 export function monthFlow(
