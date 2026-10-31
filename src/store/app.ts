@@ -51,7 +51,7 @@ import { applyHoldingBalances, assignHoldingBook, mergeHoldings, parseHoldingsFi
 import { extractPromoDeposits, migrateBalanceBasis } from "@/lib/calc/fc-baseline";
 import { clearHoldingMoveCache, fetchHoldingQuotes, inferredQuoteCurrency, quoteKey, quoteToCurrency } from "@/lib/quotes";
 import { chargedDayOf, chargedIso, inferLivingRegular, isExpenseRegular } from "@/lib/calc/budget";
-import { emptyYearlyPlan, linkedMonthSpendCap } from "@/lib/calc/deposits";
+import { emptyYearlyPlan, monthSpendCapOnOpen } from "@/lib/calc/deposits";
 import { isMortgageInterestCategory, isMortgagePrincipalCategory, missingMortgageLeaf, travelCategoryPatch, travelThemedIds } from "@/lib/categories";
 import { accountsInGroup, countCashInNetWorth, nextSortOrder } from "@/lib/accounts";
 import { applyTxRules } from "@/lib/tx-rules";
@@ -123,6 +123,7 @@ async function writeMeta(
     defaultCurrency: patch.defaultCurrency ?? prev?.defaultCurrency ?? fallback.defaultCurrency,
     lastFxSyncAt: "lastFxSyncAt" in patch ? patch.lastFxSyncAt : prev?.lastFxSyncAt,
     budgetTargetMode: patch.budgetTargetMode ?? prev?.budgetTargetMode ?? "all",
+    budgetCapMonth: "budgetCapMonth" in patch ? patch.budgetCapMonth : prev?.budgetCapMonth,
     depositCategoryId: "depositCategoryId" in patch ? patch.depositCategoryId : prev?.depositCategoryId,
     fcConfirmedFacts: "fcConfirmedFacts" in patch ? patch.fcConfirmedFacts : prev?.fcConfirmedFacts,
     fcOpenGaps: "fcOpenGaps" in patch ? patch.fcOpenGaps : prev?.fcOpenGaps,
@@ -873,6 +874,7 @@ async function writeLinkedMonthSpendCap(
     await idb().budgets.put(nextCap);
     await idb().yearlyPlans.put(nextPlan);
   });
+  await writeMeta({ budgetCapMonth: monthId }, { annualTravelBudget: 0, defaultCurrency: "HKD" });
   const s = get();
   set({
     budgets: s.budgets.some((x) => x.id === nextCap.id)
@@ -889,16 +891,24 @@ async function reconcileLinkedMonthSpendCap(data: {
   yearlyPlans: YearlyPlan[];
 }): Promise<{ budgets: Budget[]; yearlyPlans: YearlyPlan[] }> {
   const monthId = todayISO().slice(0, 7);
+  const meta = await idb().meta.get("settings");
+  const capMonth = meta?.budgetCapMonth ?? "";
   const cap = data.budgets.find((b) => b.id === MONTH_TOTAL_BUDGET_ID);
   const plan = data.yearlyPlans.find((p) => p.id === monthId);
-  const amount = linkedMonthSpendCap(cap?.monthly ?? 0, plan?.expense ?? 0);
-  if ((cap?.monthly ?? 0) === amount && (plan?.expense ?? 0) === amount) return data;
+  const amount = monthSpendCapOnOpen({
+    capMonth,
+    monthId,
+    budgetMonthly: cap?.monthly ?? 0,
+    planExpense: plan?.expense ?? 0,
+  });
+  if ((cap?.monthly ?? 0) === amount && (plan?.expense ?? 0) === amount && capMonth === monthId) return data;
   const nextCap: Budget = { ...(cap ?? MONTH_CAP_BUDGET), monthly: amount };
   const nextPlan: YearlyPlan = { ...(plan ?? emptyYearlyPlan(monthId)), expense: amount };
   await idb().transaction("rw", [idb().budgets, idb().yearlyPlans], async () => {
     await idb().budgets.put(nextCap);
     await idb().yearlyPlans.put(nextPlan);
   });
+  await writeMeta({ budgetCapMonth: monthId }, { annualTravelBudget: 0, defaultCurrency: "HKD" });
   return {
     budgets: data.budgets.some((x) => x.id === nextCap.id)
       ? data.budgets.map((x) => (x.id === nextCap.id ? nextCap : x))

@@ -326,7 +326,12 @@ export function YearlyPage() {
                       </>
                     ) : (
                       <>
-                        <NumCell value={row.expense} onChange={(n) => void setYearlyCell(viewYear, row.month0, "expense", n)} />
+                        <NumCell value={row.planExpense} onChange={(n) => void setYearlyCell(viewYear, row.month0, "expense", n)} />
+                        {row.planExpense <= 0 && row.expense > 0 ? (
+                          <p className="mt-1 text-[11px] leading-4 text-faint">
+                            {t.reports.planUnsetExpense.replace("{amt}", money(row.expense, "HKD"))}
+                          </p>
+                        ) : null}
                         {row.isCurrent ? <p className="mt-1 text-[11px] leading-4 text-faint">{t.reports.linkedMonthCap}</p> : null}
                       </>
                     )}
@@ -472,7 +477,9 @@ function LedgerNum({ value }: { value: number }) {
 
 function NumCell({ value, onChange }: { value: number; onChange: (n: number) => void }) {
   const [raw, setRaw] = useState(value > 0.005 ? String(Math.round(value * 100) / 100) : "");
+  const focused = useRef(false);
   useEffect(() => {
+    if (focused.current) return;
     setRaw(value > 0.005 ? String(Math.round(value * 100) / 100) : "");
   }, [value]);
   return (
@@ -484,12 +491,18 @@ function NumCell({ value, onChange }: { value: number; onChange: (n: number) => 
         className="h-9 w-full rounded-lg bg-background py-2 pl-9 pr-2 text-right tabular-nums"
         value={raw}
         placeholder="—"
+        onFocus={() => {
+          focused.current = true;
+        }}
         onChange={(e) => {
           const v = e.target.value.replace(/[^\d.]/g, "");
           setRaw(v);
           onChange(parseFloat(v) || 0);
         }}
-        onBlur={() => setRaw(value > 0.005 ? String(Math.round(value * 100) / 100) : "")}
+        onBlur={() => {
+          focused.current = false;
+          setRaw(value > 0.005 ? String(Math.round(value * 100) / 100) : "");
+        }}
       />
     </div>
   );

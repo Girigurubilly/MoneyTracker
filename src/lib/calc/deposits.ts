@@ -173,6 +173,22 @@ export function linkedMonthSpendCap(budgetMonthly: number, planExpense: number):
   return budgetMonthly > 0 ? budgetMonthly : planExpense || 0;
 }
 
+/**
+ * Opening a new calendar month must not keep last month's cap when this month
+ * already has a yearly expense plan. Within the same month the budget cap wins.
+ */
+export function monthSpendCapOnOpen(opts: {
+  capMonth: string;
+  monthId: string;
+  budgetMonthly: number;
+  planExpense: number;
+}): number {
+  const budget = opts.budgetMonthly > 0 ? opts.budgetMonthly : 0;
+  const plan = opts.planExpense > 0 ? opts.planExpense : 0;
+  if (opts.capMonth === opts.monthId) return linkedMonthSpendCap(budget, plan);
+  return plan > 0 ? plan : budget;
+}
+
 export function isSalaryCategory(cat: Category | undefined): boolean {
   if (!cat) return false;
   if (cat.id === "salary") return true;
@@ -247,6 +263,8 @@ export type YearlyMonthRow = {
   fromLedger: boolean;
   incomeLocked: boolean;
   otherLocked: boolean;
+  /** Stored yearly expense plan. 0 means the user has not set a limit. */
+  planExpense: number;
 };
 
 function regularIsSalary(r: Recurring, cat: Category | undefined): boolean {
@@ -445,7 +463,7 @@ export function yearlyProjection(
       month0 === month0Now
         ? linkedMonthSpendCap(currentMonthCap, planCap)
         : planCap > 0
-          ? Math.max(planCap, regularAndPlanned)
+          ? planCap
           : regularAndPlanned;
     const expense = fromLedger
       ? (actual?.expense ?? 0)
@@ -481,6 +499,7 @@ export function yearlyProjection(
       fromLedger,
       incomeLocked: useActivity,
       otherLocked: true,
+      planExpense: planCap,
     };
   });
   return { rows, yearIncome, yearExpense, yearSaving, asOfIncome, asOfExpense, asOfSaving };

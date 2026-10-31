@@ -33,6 +33,8 @@ export type MetaRow = {
   defaultCurrency?: Currency;
   lastFxSyncAt?: string;
   budgetTargetMode?: BudgetTargetMode;
+  /** YYYY-MM the monthly spending cap was last applied to. */
+  budgetCapMonth?: string;
   depositCategoryId?: string;
   /** User-edited FC baseline confirmed facts (replaces defaults when non-empty). */
   fcConfirmedFacts?: string[];

@@ -6,6 +6,7 @@ import {
   depositsOutsideBalances,
   getMonthlyDepositInterest,
   monthActualsFromTxs,
+  monthSpendCapOnOpen,
   suggestedInterest,
   summarizeDeposits,
   yearlyProjection,
@@ -281,6 +282,53 @@ describe("deposits", () => {
     assert.equal(y.rows[11].expense, 200);
     assert.equal(y.rows[10].salary, 500);
     assert.equal(y.rows[10].saving, 500 - 200);
+  });
+
+  it("keeps a typed future expense limit instead of raising it to regulars", () => {
+    const recurring: Recurring[] = [
+      {
+        id: "r-out",
+        type: "expense",
+        label: "Sub",
+        labelZh: "訂閱",
+        amount: 5000,
+        currency: "HKD",
+        accountId: "cash",
+        categoryId: "dining",
+        frequency: "monthly",
+        nextDate: "2026-11-05",
+        chargedDay: 5,
+      },
+    ];
+    const y = yearlyProjection(
+      [{ id: "2026-11", salary: 0, other: 0, expense: 1000 }],
+      [],
+      rates,
+      2026,
+      9,
+      [],
+      cats,
+      0,
+      recurring,
+      "2026-10-15",
+    );
+    assert.equal(y.rows[10].planExpense, 1000);
+    assert.equal(y.rows[10].expense, 1000);
+  });
+
+  it("opens a new month from that month's yearly expense, not last month's cap", () => {
+    assert.equal(
+      monthSpendCapOnOpen({ capMonth: "2026-10", monthId: "2026-11", budgetMonthly: 60000, planExpense: 48000 }),
+      48000,
+    );
+    assert.equal(
+      monthSpendCapOnOpen({ capMonth: "2026-11", monthId: "2026-11", budgetMonthly: 60000, planExpense: 48000 }),
+      60000,
+    );
+    assert.equal(
+      monthSpendCapOnOpen({ capMonth: "2026-10", monthId: "2026-11", budgetMonthly: 60000, planExpense: 0 }),
+      60000,
+    );
   });
 
   it("yearProjectionCompare stacks projection against last-year posted totals", () => {
