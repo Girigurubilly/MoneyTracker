@@ -14,6 +14,7 @@ import { AddFlow } from "@/components/add-sheet";
 import { SearchFlow } from "@/components/search-sheet";
 import { TxDetail } from "@/components/tx-detail";
 import { TripLinkCatcher, TripProposal } from "@/components/trip-proposal";
+import { stashTripHash } from "@/lib/trip-link";
 import { assetUrl } from "@/lib/base";
 import { isApplyingRemote, markLocalEdit, runDailyDriveSync, syncWithDrive } from "@/lib/drive-sync";
 import { runDailyOpen } from "@/lib/daily-open";
@@ -31,6 +32,10 @@ export function AppGate({ children }: { children: ReactNode }) {
   const replay = search?.replay === true || search?.replay === "1" || search?.replay === "true";
 
   useEffect(() => {
+    // Fixed name so TripPlanner reuses this tab (target="money-tracker") instead of opening another.
+    window.name = "money-tracker";
+    // Onboarding redirect drops the hash; keep a #proposal= / #link= for after it.
+    stashTripHash(window.location.hash);
     void (async () => {
       await hydrate();
       setOnboarded(readOnboarded());

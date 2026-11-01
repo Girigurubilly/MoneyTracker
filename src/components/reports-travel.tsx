@@ -446,15 +446,14 @@ function TripPlannerBar({ trip, compact }: { trip: Trip; compact?: boolean }) {
         </div>
         <a
           href={href}
-          target="_blank"
-          rel="noopener noreferrer"
+          target="trip-planner"
           className="tr-press flex h-9 shrink-0 items-center rounded-full bg-accent px-3 text-xs font-medium text-on-accent"
         >
           {label}
         </a>
       </div>
       {linked ? (
-        <a href={plannerTripUrl(trip, { pick: true })} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex text-xs font-medium text-accent">
+        <a href={plannerTripUrl(trip, { pick: true })} target="trip-planner" className="mt-2 inline-flex text-xs font-medium text-accent">
           {t.reports.plannerChange}
         </a>
       ) : null}
@@ -746,8 +745,7 @@ function TripEditor({
             {trip ? (
               <a
                 href={plannerTripUrl({ ...trip, plannerId: plannerId.trim() || trip.plannerId }, { pick: true })}
-                target="_blank"
-                rel="noopener noreferrer"
+                target="trip-planner"
                 className="tr-press mx-4 mb-3 flex h-11 items-center justify-center rounded-xl bg-elevated text-sm font-medium text-accent"
               >
                 {t.reports.plannerPick}

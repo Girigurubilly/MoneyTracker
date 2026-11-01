@@ -119,8 +119,7 @@ function ActiveTripCard({ trip, day }: { trip: Trip; day: string }) {
         </div>
         <a
           href={plannerTripUrl(trip, { day, pick: !linked })}
-          target="_blank"
-          rel="noopener noreferrer"
+          target="trip-planner"
           aria-label={t.today.tripPlannerAria.replace("{name}", name)}
           title={t.today.plannerLeave}
           className="tr-press inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full px-2.5 text-xs font-medium text-accent"

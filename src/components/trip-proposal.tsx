@@ -9,9 +9,24 @@ import { clockNow, dateRangeLabel, todayISO } from "@/lib/format";
 import { WhenField } from "@/components/when-picker";
 import { categoryPath, isTravelThemed, resolvedDefaultAccountId } from "@/lib/categories";
 import { pickName } from "@/lib/i18n";
-import { asMoneyCurrency, carriedTrip, categoryFromSpendHint, linkFromHash, plannerTripUrl, proposalFromHash, type TripSpendItem } from "@/lib/trip-link";
+import {
+  MONEY_CHANNEL,
+  asMoneyCurrency,
+  carriedTrip,
+  categoryFromSpendHint,
+  clearTripHash,
+  linkFromHash,
+  loggedPlannerKeys,
+  pendingTripHash,
+  plannerTripUrl,
+  proposalAction,
+  proposalFromHash,
+  publishLoggedKeys,
+  type TripSpendItem,
+} from "@/lib/trip-link";
 import { CURRENCIES, type Category, type MoneyUnit } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { getDb } from "@/lib/idb";
 import { newId, useApp } from "@/store/app";
 import { useT, useUi } from "@/store/ui";
 
@@ -22,6 +37,8 @@ type Draft = TripSpendItem & {
   categoryId: string;
   accountId: string;
   time: string;
+  /** Item key already exists on a ledger row. */
+  logged: boolean;
 };
 
 const ACCOUNT_KEY = "hk-life-money-pay-account";
@@ -52,12 +69,14 @@ export function TripProposal() {
   const categories = useApp((s) => s.categories);
   const trips = useApp((s) => s.trips);
   const rates = useApp((s) => s.fxRates);
+  const transactions = useApp((s) => s.transactions);
+  const adhocBudgets = useApp((s) => s.adhocBudgets);
   const locale = useUi((s) => s.locale);
   const [open, setOpen] = useState(false);
   const [pickCat, setPickCat] = useState("");
   const [pickAccount, setPickAccount] = useState("");
   const [done, setDone] = useState(false);
-  const [postedCount, setPostedCount] = useState(0);
+  const [doneMsg, setDoneMsg] = useState("");
   const [backUrl, setBackUrl] = useState("");
   const [tripName, setTripName] = useState("");
   const [tripId, setTripId] = useState("");
@@ -65,9 +84,16 @@ export function TripProposal() {
   const [tripPick, setTripPick] = useState<string | null>(null);
   const [rows, setRows] = useState<Draft[]>([]);
 
+  // Keep TripPlanner's ✓ 已記 in step with the ledger (see LOGGED_KEYS_STORAGE contract).
   useEffect(() => {
-    const parsed = proposalFromHash(window.location.hash);
+    publishLoggedKeys(loggedPlannerKeys([...transactions, ...adhocBudgets]));
+  }, [transactions, adhocBudgets]);
+
+  useEffect(() => {
+    const parsed = proposalFromHash(pendingTripHash());
     if (!parsed) return;
+    const state = useApp.getState();
+    const logged = new Set(loggedPlannerKeys([...state.transactions, ...state.adhocBudgets]));
     setTripName(parsed.trip);
     setTripId(parsed.tripId);
     setBookId(parsed.bookId || "");
@@ -80,7 +106,8 @@ export function TripProposal() {
         ...item,
         id: newId(),
         currency: asMoneyCurrency(item.currency),
-        on: true,
+        logged: Boolean(item.key && logged.has(item.key)),
+        on: !(item.key && logged.has(item.key)),
         categoryId: categoryFromSpendHint(item.category, categories, fallbackCategory) || fallbackCategory,
         accountId,
         time: item.time && /^\d{2}:\d{2}$/.test(item.time) ? item.time : clockNow(),
@@ -89,9 +116,7 @@ export function TripProposal() {
     setDone(false);
     setBackUrl("");
     setOpen(true);
-    const url = new URL(window.location.href);
-    url.hash = "";
-    window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+    clearTripHash("proposal", true);
   }, []);
 
   useEffect(() => {
@@ -125,6 +150,12 @@ export function TripProposal() {
     );
   }, [open, accounts, categories]);
 
+  // Forget the stashed proposal only once it is dismissed or saved (a remount mid-onboarding keeps it).
+  function closeSheet() {
+    clearTripHash("proposal");
+    setOpen(false);
+  }
+
   function patch(id: string, next: Partial<Draft>) {
     setRows((list) => list.map((row) => (row.id === id ? { ...row, ...next } : row)));
   }
@@ -145,8 +176,10 @@ export function TripProposal() {
 
   async function save() {
     const chosen = rows.filter((row) => row.on);
+    const skipped = rows.filter((row) => row.logged && !row.on).length;
     if (!chosen.length) {
-      setOpen(false);
+      if (skipped) toast(t.reports.proposalAllLogged);
+      closeSheet();
       return;
     }
     if (chosen.some((row) => !(row.amount > 0))) {
@@ -159,6 +192,7 @@ export function TripProposal() {
     const expenseCats = categories.filter((c) => c.kind === "expense");
     const today = todayISO();
     let posted = 0;
+    let scheduled = 0;
     for (const row of picked) {
       const categoryId = expenseCats.some((c) => c.id === row.categoryId) ? row.categoryId : undefined;
       const accountId = accounts.some((a) => a.id === row.accountId) ? row.accountId : "";
@@ -168,7 +202,9 @@ export function TripProposal() {
       }
       remember(ACCOUNT_KEY, accountId);
       if (categoryId) remember(CATEGORY_KEY, categoryId);
-      const postToday = row.date === today;
+      // Today or earlier → real expense on that date; later → scheduled one-off in that month.
+      const post = proposalAction(row.date, today) === "post";
+      const plannerKey = row.key && !row.logged ? row.key : undefined;
       await addAdhoc({
         id: newId(),
         label: row.label,
@@ -181,12 +217,14 @@ export function TripProposal() {
         categoryId,
         accountId,
         tripId: matched?.id,
-        ...(postToday ? { paidOn: today } : {}),
+        ...(plannerKey ? { plannerKey } : {}),
+        ...(post ? { paidOn: row.date } : {}),
       });
-      if (postToday) {
+      if (!post) scheduled += 1;
+      if (post) {
         await addTransaction({
           type: "expense",
-          date: today,
+          date: row.date,
           time: row.time,
           amount: row.amount,
           currency: row.currency === "MILES" ? "HKD" : row.currency,
@@ -198,6 +236,7 @@ export function TripProposal() {
           adhoc: true,
           tripId: matched?.id,
           tripManual: Boolean(matched?.id),
+          ...(plannerKey ? { plannerKey } : {}),
         });
         posted += 1;
       }
@@ -205,11 +244,14 @@ export function TripProposal() {
     if (matched && bookId && !matched.plannerId) {
       await updateTrip({ ...matched, plannerId: bookId, plannerTitle: tripName || matched.plannerTitle });
     }
-    toast(posted ? t.reports.proposalPosted : t.reports.proposalDone);
-    setPostedCount(posted);
+    const msg = posted && scheduled ? t.reports.proposalMixed : posted ? t.reports.proposalPosted : t.reports.proposalDone;
+    toast(msg);
+    if (skipped) toast(t.reports.proposalSkippedLogged.replace("{n}", String(skipped)));
+    setDoneMsg(msg);
     const day = picked[0]?.date || "";
     const trip = matched || trips.find((row) => row.id === tripId);
     setBackUrl(trip && day ? plannerTripUrl(trip, { day }) : "");
+    clearTripHash("proposal");
     setDone(true);
   }
 
@@ -244,17 +286,24 @@ export function TripProposal() {
   }
 
   return (
-    <Overlay open={open} onClose={() => setOpen(false)} title={t.reports.proposalTitle}>
+    <Overlay open={open} onClose={() => closeSheet()} title={t.reports.proposalTitle}>
       <div className="px-5 pb-8">
         {done ? (
           <>
-            <p className="text-sm leading-6">{postedCount ? t.reports.proposalPosted : t.reports.proposalDone}</p>
+            <p className="text-sm leading-6">{doneMsg}</p>
             {backUrl ? (
               <a href={backUrl} target="trip-planner" className="mt-4 flex h-12 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-on-accent">
                 {t.reports.proposalBack}
               </a>
             ) : null}
-            <button type="button" className="mt-2 h-11 w-full text-sm text-muted" onClick={() => setOpen(false)}>
+            <button type="button" className="mt-2 h-11 w-full text-sm text-muted" onClick={() => closeSheet()}>
+              {t.reports.proposalStay}
+            </button>
+          </>
+        ) : !accounts.length ? (
+          <>
+            <p className="text-sm leading-6">{t.reports.proposalNoLedger}</p>
+            <button type="button" className="mt-4 h-11 w-full rounded-xl bg-elevated text-sm font-medium" onClick={() => closeSheet()}>
               {t.reports.proposalStay}
             </button>
           </>
@@ -300,7 +349,19 @@ export function TripProposal() {
               <label className="flex items-start gap-2 px-4 pt-3">
                 <input type="checkbox" className="mt-1" checked={row.on} onChange={(e) => patch(row.id, { on: e.target.checked })} />
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-medium">{row.label}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{row.label}</span>
+                    {row.logged ? (
+                      <span className="shrink-0 rounded-full bg-background px-2 py-0.5 text-[11px] font-medium text-muted">✓ {t.reports.proposalLogged}</span>
+                    ) : null}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-muted">
+                    {row.logged && !row.on
+                      ? t.reports.proposalLoggedHint
+                      : proposalAction(row.date, todayISO()) === "post"
+                        ? t.reports.proposalRowPost
+                        : t.reports.proposalRowSchedule}
+                  </span>
                 </span>
               </label>
               <WhenField
@@ -364,7 +425,7 @@ export function TripProposal() {
         <button type="button" className="mt-4 h-12 w-full rounded-xl bg-accent text-sm font-semibold text-on-accent" onClick={() => void save()}>
           {t.reports.proposalSave}
         </button>
-        <button type="button" className="mt-2 h-11 w-full text-sm text-muted" onClick={() => setOpen(false)}>
+        <button type="button" className="mt-2 h-11 w-full text-sm text-muted" onClick={() => closeSheet()}>
           {t.reports.proposalSkip}
         </button>
           </>
@@ -378,19 +439,39 @@ export function TripLinkCatcher() {
   const t = useT();
   const trips = useApp((s) => s.trips);
   const update = useApp((s) => s.updateTrip);
+  const [tick, setTick] = useState(0);
   useEffect(() => {
-    const link = linkFromHash(window.location.hash);
+    const onHash = () => setTick((n) => n + 1);
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  // Another MoneyTracker tab linked a trip → reload trips here so the link shows without a refresh.
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const ch = new BroadcastChannel(MONEY_CHANNEL);
+    ch.onmessage = (event) => {
+      if ((event.data as { type?: string })?.type !== "trip") return;
+      const db = getDb();
+      if (db) void db.trips.toArray().then((rows) => useApp.setState({ trips: rows }));
+    };
+    return () => ch.close();
+  }, []);
+  useEffect(() => {
+    const link = linkFromHash(pendingTripHash());
     if (!link) return;
-    const url = new URL(window.location.href);
-    url.hash = "";
-    window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+    clearTripHash("link");
     const trip = trips.find((row) => row.id === link.tripId);
     if (!trip) {
-      toast(t.reports.plannerMissing);
+      toast(trips.length ? t.reports.plannerMissing : t.reports.plannerMissingEmpty);
       return;
     }
-    void update({ ...trip, plannerId: link.bookId, plannerTitle: link.title || trip.plannerTitle });
+    void update({ ...trip, plannerId: link.bookId, plannerTitle: link.title || trip.plannerTitle }).then(() => {
+      if (typeof BroadcastChannel === "undefined") return;
+      const ch = new BroadcastChannel(MONEY_CHANNEL);
+      ch.postMessage({ type: "trip", id: trip.id });
+      ch.close();
+    });
     toast(t.reports.plannerSaved);
-  }, [trips, update, t]);
+  }, [trips, update, t, tick]);
   return null;
 }
