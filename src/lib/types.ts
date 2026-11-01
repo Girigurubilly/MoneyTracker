@@ -398,6 +398,8 @@ export type Transaction = {
   tags?: string[];
   tripId?: string;
   tripManual?: boolean;
+  /** TripPlanner item key when this row came from a trip proposal. */
+  plannerKey?: string;
   milesType?: "earn" | "burn" | "adjust" | "expiry";
   planned?: boolean;
   recurringId?: string;
@@ -491,6 +493,8 @@ export type AdhocBudget = {
   categoryId?: string;
   accountId?: string;
   tripId?: string;
+  /** TripPlanner item key when this one-off came from a trip proposal. */
+  plannerKey?: string;
   priceCards?: WishCard[];
   valueCards?: WishCard[];
 };

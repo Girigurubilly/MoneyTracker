@@ -13,6 +13,8 @@ export type TripSpendItem = {
   category?: string;
   /** Optional HH:mm from the meal/event; sheet should not use wall-clock now. */
   time?: string;
+  /** Stable planner item key (bookId:dayId:kind:entry). Used to skip duplicates and show ✓ in the planner. */
+  key?: string;
 };
 
 export type TripSpendProposal = {
@@ -125,6 +127,7 @@ export function decodeProposal(token: string): TripSpendProposal | null {
       const category = String((row as { category?: string }).category || "").trim().slice(0, 24);
       const timeRaw = String((row as { time?: string }).time || "").trim();
       const time = /^\d{2}:\d{2}$/.test(timeRaw) ? timeRaw : "";
+      const key = cleanItemKey((row as { key?: string }).key);
       items.push({
         date,
         label,
@@ -132,6 +135,7 @@ export function decodeProposal(token: string): TripSpendProposal | null {
         currency,
         ...(category ? { category } : {}),
         ...(time ? { time } : {}),
+        ...(key ? { key } : {}),
       });
       if (items.length >= 20) break;
     }
@@ -168,6 +172,91 @@ export function linkFromHash(hash: string): TripPlanLink | null {
     return null;
   }
 }
+
+/**
+ * Today or earlier → a real expense charged to the account.
+ * Later → a scheduled one-off (hold) in that item's month.
+ */
+export function proposalAction(date: string, today: string): "post" | "schedule" {
+  return date <= today ? "post" : "schedule";
+}
+
+export function cleanItemKey(raw: unknown): string {
+  const key = String(raw ?? "").trim().slice(0, 160);
+  return /^[^\s]{3,160}$/.test(key) ? key : "";
+}
+
+/**
+ * Shared contract with TripPlanner (same origin: girigurubilly.github.io).
+ * MoneyTracker owns this key and rewrites it from its ledger (rows carrying `plannerKey`).
+ * Value: { v: 1, keys: string[], at: ISO }. TripPlanner only reads it to show ✓ 已記,
+ * and listens for the `storage` event to update live.
+ */
+export const LOGGED_KEYS_STORAGE = "money-trip-logged";
+
+export function loggedPlannerKeys(rows: { plannerKey?: string }[]): string[] {
+  const set = new Set<string>();
+  for (const row of rows) if (row.plannerKey) set.add(row.plannerKey);
+  return [...set].sort();
+}
+
+export function publishLoggedKeys(keys: string[]): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    const prev = JSON.parse(localStorage.getItem(LOGGED_KEYS_STORAGE) || "{}") as { keys?: string[] };
+    if (Array.isArray(prev.keys) && prev.keys.join("\n") === keys.join("\n")) return;
+    localStorage.setItem(LOGGED_KEYS_STORAGE, JSON.stringify({ v: 1, keys, at: new Date().toISOString() }));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Survives the onboarding redirect, which drops the URL hash. */
+const PENDING_HASH = "money-pending-trip-hash";
+
+export function isTripHash(hash: string): boolean {
+  return Boolean(hashParam(hash, "proposal") || hashParam(hash, "link"));
+}
+
+export function stashTripHash(hash: string): void {
+  if (!isTripHash(hash)) return;
+  try {
+    sessionStorage.setItem(PENDING_HASH, hash);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Live hash first, else the one stashed before onboarding. */
+export function pendingTripHash(): string {
+  if (typeof window === "undefined") return "";
+  if (isTripHash(window.location.hash)) return window.location.hash;
+  try {
+    return sessionStorage.getItem(PENDING_HASH) || "";
+  } catch {
+    return "";
+  }
+}
+
+/** Drop the live hash; `keepStash` leaves the session copy until the sheet is handled (survives remounts). */
+export function clearTripHash(kind: "proposal" | "link", keepStash = false): void {
+  if (!keepStash) {
+    try {
+      const stashed = sessionStorage.getItem(PENDING_HASH) || "";
+      if (hashParam(stashed, kind)) sessionStorage.removeItem(PENDING_HASH);
+    } catch {
+      /* ignore */
+    }
+  }
+  if (hashParam(window.location.hash, kind)) {
+    const url = new URL(window.location.href);
+    url.hash = "";
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}`);
+  }
+}
+
+/** Ping other MoneyTracker tabs (e.g. after a planner link) so they reload trips. */
+export const MONEY_CHANNEL = "money-tracker-sync";
 
 function hashParam(hash: string, key: string): string {
   const raw = hash.startsWith("#") ? hash.slice(1) : hash;

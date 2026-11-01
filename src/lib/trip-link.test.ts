@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { decodeProposal, encodeProposal, linkFromHash, plannerTripUrl, proposalFromHash, tripCovering, carriedTrip, categoryFromSpendHint } from "./trip-link.ts";
+import { decodeProposal, encodeProposal, linkFromHash, plannerTripUrl, proposalFromHash, tripCovering, carriedTrip, categoryFromSpendHint, proposalAction, cleanItemKey, loggedPlannerKeys, isTripHash } from "./trip-link.ts";
 import type { Trip } from "./types.ts";
 
 describe("trip link", () => {
@@ -82,5 +82,42 @@ describe("proposal category and time", () => {
     assert.equal(decoded?.items[0]?.time, "19:00");
     assert.equal(categoryFromSpendHint("meal", [{ id: "dining", kind: "expense", name: "Dining", nameZh: "飲食" }], "flights"), "dining");
     assert.equal(categoryFromSpendHint("ride", [{ id: "mtr", kind: "expense", name: "MTR", nameZh: "鐵路" }], "flights"), "mtr");
+  });
+});
+
+describe("proposal posting and duplicates", () => {
+  it("charges today or earlier, schedules later dates", () => {
+    assert.equal(proposalAction("2026-10-30", "2026-11-01"), "post");
+    assert.equal(proposalAction("2026-11-01", "2026-11-01"), "post");
+    assert.equal(proposalAction("2026-11-02", "2026-11-01"), "schedule");
+    assert.equal(proposalAction("2025-12-31", "2026-11-01"), "post");
+  });
+
+  it("keeps a stable planner item key through the hash", () => {
+    const token = encodeProposal({
+      v: 1,
+      trip: "大阪",
+      tripId: "m1",
+      bookId: "b1",
+      items: [
+        { date: "2026-04-02", label: "晚餐", amount: 1200, currency: "JPY", key: "b1:d1:meal:dec18-meal-1" },
+        { date: "2026-04-02", label: "壞", amount: 1, currency: "JPY", key: "has space" },
+      ],
+    });
+    const back = decodeProposal(token);
+    assert.equal(back?.items[0]?.key, "b1:d1:meal:dec18-meal-1");
+    assert.equal(back?.items[1]?.key, undefined);
+    assert.equal(cleanItemKey(""), "");
+  });
+
+  it("lists logged planner keys once", () => {
+    assert.deepEqual(loggedPlannerKeys([{ plannerKey: "b:d:x" }, {}, { plannerKey: "b:d:x" }, { plannerKey: "a:d:y" }]), ["a:d:y", "b:d:x"]);
+  });
+
+  it("recognises trip hashes for the onboarding stash", () => {
+    assert.equal(isTripHash("#proposal=abc"), true);
+    assert.equal(isTripHash("#link=abc"), true);
+    assert.equal(isTripHash("#access_token=1"), false);
+    assert.equal(isTripHash(""), false);
   });
 });
