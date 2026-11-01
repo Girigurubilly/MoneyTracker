@@ -600,6 +600,27 @@ export function TripDetailPage({ id }: { id: string }) {
                 <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(used.remaining, "HKD")}</div>
               </div>
             </div>
+            {active.plannerEstimate ? (
+              <div className="mt-2 flex items-center justify-between gap-3 rounded-xl bg-background px-3 py-2">
+                <span className="text-[11px] text-muted">{t.reports.plannerEstimate}</span>
+                <span
+                  className={`text-xs font-medium tabular-nums ${
+                    active.cashBudget > 0 && active.plannerEstimate.amount > active.cashBudget ? "text-expense" : "text-foreground"
+                  }`}
+                >
+                  {active.cashBudget > 0
+                    ? t.reports.plannerEstimateVs
+                        .replace("{planned}", money(active.plannerEstimate.amount, "HKD"))
+                        .replace(
+                          "{diff}",
+                          active.plannerEstimate.amount > active.cashBudget
+                            ? t.reports.estimateOver.replace("{amount}", money(active.plannerEstimate.amount - active.cashBudget, "HKD"))
+                            : t.reports.estimateUnder.replace("{amount}", money(active.cashBudget - active.plannerEstimate.amount, "HKD")),
+                        )
+                    : money(active.plannerEstimate.amount, "HKD")}
+                </span>
+              </div>
+            ) : null}
           </div>
         </Enter>
       </div>
@@ -688,6 +709,7 @@ function TripEditor({
       monthlyCash: Number(monthly) || 0,
       plannerId: plannerId.trim() || undefined,
       plannerTitle: plannerId.trim() && plannerId.trim() === (trip?.plannerId || "") ? trip?.plannerTitle : undefined,
+      ...(trip?.plannerEstimate ? { plannerEstimate: trip.plannerEstimate } : {}),
     };
     if (trip) await update(row);
     else await add(row);

@@ -14,6 +14,7 @@ import { AddFlow } from "@/components/add-sheet";
 import { SearchFlow } from "@/components/search-sheet";
 import { TxDetail } from "@/components/tx-detail";
 import { TripLinkCatcher, TripProposal } from "@/components/trip-proposal";
+import { TripEstimateSheet } from "@/components/trip-estimate";
 import { stashTripHash } from "@/lib/trip-link";
 import { assetUrl } from "@/lib/base";
 import { isApplyingRemote, markLocalEdit, runDailyDriveSync, syncWithDrive } from "@/lib/drive-sync";
@@ -85,6 +86,7 @@ export function AppGate({ children }: { children: ReactNode }) {
       <TxDetail />
       <TripProposal />
       <TripLinkCatcher />
+      <TripEstimateSheet />
       <InfoDialog />
       <LocalEditMark />
       <DailyDriveSync />

@@ -7,7 +7,7 @@ import { CategoryPicker } from "@/components/category-picker";
 import { AccountPicker } from "@/components/account-select";
 import { clockNow, dateRangeLabel, todayISO } from "@/lib/format";
 import { WhenField } from "@/components/when-picker";
-import { categoryPath, isTravelThemed, resolvedDefaultAccountId } from "@/lib/categories";
+import { categoryPath, resolvedDefaultAccountId } from "@/lib/categories";
 import { pickName } from "@/lib/i18n";
 import {
   MONEY_CHANNEL,
@@ -22,6 +22,8 @@ import {
   proposalAction,
   proposalFromHash,
   publishLoggedKeys,
+  spendCategoryMemoryKey,
+  travelFallbackCategory,
   type TripSpendItem,
 } from "@/lib/trip-link";
 import { CURRENCIES, type Category, type MoneyUnit } from "@/lib/types";
@@ -40,6 +42,15 @@ type Draft = TripSpendItem & {
   /** Item key already exists on a ledger row. */
   logged: boolean;
 };
+
+function hintCategory(item: TripSpendItem, categories: Category[], fallback: string): string {
+  return (
+    categoryFromSpendHint(item.category, categories, fallback, {
+      label: item.label,
+      remembered: remembered(spendCategoryMemoryKey(CATEGORY_KEY, item.category, item.label)),
+    }) || fallback
+  );
+}
 
 const ACCOUNT_KEY = "hk-life-money-pay-account";
 const CATEGORY_KEY = "hk-life-money-pay-category";
@@ -99,8 +110,7 @@ export function TripProposal() {
     setBookId(parsed.bookId || "");
     setTripPick(null);
     const accountId = remembered(ACCOUNT_KEY);
-    const fallbackCategory =
-      remembered(CATEGORY_KEY) || categories.find((c) => c.kind === "expense" && isTravelThemed(c, categories))?.id || "";
+    const fallbackCategory = travelFallbackCategory(categories, remembered(CATEGORY_KEY));
     setRows(
       parsed.items.map((item) => ({
         ...item,
@@ -108,7 +118,7 @@ export function TripProposal() {
         currency: asMoneyCurrency(item.currency),
         logged: Boolean(item.key && logged.has(item.key)),
         on: !(item.key && logged.has(item.key)),
-        categoryId: categoryFromSpendHint(item.category, categories, fallbackCategory) || fallbackCategory,
+        categoryId: hintCategory(item, categories, fallbackCategory),
         accountId,
         time: item.time && /^\d{2}:\d{2}$/.test(item.time) ? item.time : clockNow(),
       })),
@@ -135,16 +145,12 @@ export function TripProposal() {
       accounts.find((a) => a.type === "cash" || a.type === "current" || a.type === "savings")?.id ||
       accounts.find((a) => a.currency !== "MILES")?.id ||
       "";
-    const fallbackCategory =
-      remembered(CATEGORY_KEY) || categories.find((c) => c.kind === "expense" && isTravelThemed(c, categories))?.id || "";
+    const fallbackCategory = travelFallbackCategory(categories, remembered(CATEGORY_KEY));
     setRows((list) =>
       list.map((row) => ({
         ...row,
         accountId: row.accountId || accountId,
-        categoryId:
-          row.categoryId ||
-          categoryFromSpendHint(row.category, categories, fallbackCategory) ||
-          fallbackCategory,
+        categoryId: row.categoryId || hintCategory(row, categories, fallbackCategory),
         time: row.time && /^\d{2}:\d{2}$/.test(row.time) ? row.time : row.time || clockNow(),
       })),
     );
@@ -201,7 +207,10 @@ export function TripProposal() {
         return;
       }
       remember(ACCOUNT_KEY, accountId);
-      if (categoryId) remember(CATEGORY_KEY, categoryId);
+      if (categoryId) {
+        remember(CATEGORY_KEY, categoryId);
+        remember(spendCategoryMemoryKey(CATEGORY_KEY, row.category, row.label), categoryId);
+      }
       // Today or earlier → real expense on that date; later → scheduled one-off in that month.
       const post = proposalAction(row.date, today) === "post";
       const plannerKey = row.key && !row.logged ? row.key : undefined;
@@ -385,6 +394,11 @@ export function TripProposal() {
                   </div>
                 ) : null}
               </div>
+              {row.currencyGuess ? (
+                <p className="mx-4 mt-1 rounded-lg bg-watch-soft px-3 py-2 text-xs leading-5 text-watch" role="note">
+                  {t.reports.proposalCurrencyGuess.replace("{code}", row.currency)}
+                </p>
+              ) : null}
               <div className="flex gap-2 overflow-x-auto px-4 py-2">
                 {CURRENCIES.map((code) => (
                   <button
@@ -394,7 +408,7 @@ export function TripProposal() {
                       "h-8 shrink-0 rounded-full px-3 text-xs font-medium",
                       row.currency === code ? "bg-accent text-on-accent" : "bg-background",
                     )}
-                    onClick={() => patch(row.id, { currency: code })}
+                    onClick={() => patch(row.id, { currency: code, currencyGuess: undefined })}
                   >
                     {code}
                   </button>
