@@ -525,6 +525,8 @@ export type Trip = {
   /** TripPlanner book id, set from the trip’s link setup. */
   plannerId?: string;
   plannerTitle?: string;
+  /** Last estimate sent from TripPlanner's 費用 view, in HKD at the rates of that moment. */
+  plannerEstimate?: { amount: number; at: string; count: number };
 };
 
 export type WishItem = {

@@ -1,5 +1,6 @@
-import type { Currency, MoneyUnit, Trip } from "./types.ts";
+import type { Category, Currency, MoneyUnit, Trip } from "./types.ts";
 import { CURRENCIES } from "./types.ts";
+import { isTravelThemed } from "./categories.ts";
 
 export const PLANNER_URL = "https://girigurubilly.github.io/TripPlanner/";
 export const MONEY_URL = "https://girigurubilly.github.io/MoneyTracker/";
@@ -15,6 +16,8 @@ export type TripSpendItem = {
   time?: string;
   /** Stable planner item key (bookId:dayId:kind:entry). Used to skip duplicates and show ✓ in the planner. */
   key?: string;
+  /** Planner found no clear currency marker (or Money does not support the code) — ask the user to check. */
+  currencyGuess?: true;
 };
 
 export type TripSpendProposal = {
@@ -128,6 +131,7 @@ export function decodeProposal(token: string): TripSpendProposal | null {
       const timeRaw = String((row as { time?: string }).time || "").trim();
       const time = /^\d{2}:\d{2}$/.test(timeRaw) ? timeRaw : "";
       const key = cleanItemKey((row as { key?: string }).key);
+      const guess = (row as { currencyGuess?: unknown }).currencyGuess === true || !isMoneyCurrency(currency);
       items.push({
         date,
         label,
@@ -136,6 +140,7 @@ export function decodeProposal(token: string): TripSpendProposal | null {
         ...(category ? { category } : {}),
         ...(time ? { time } : {}),
         ...(key ? { key } : {}),
+        ...(guess ? { currencyGuess: true as const } : {}),
       });
       if (items.length >= 20) break;
     }
@@ -215,7 +220,7 @@ export function publishLoggedKeys(keys: string[]): void {
 const PENDING_HASH = "money-pending-trip-hash";
 
 export function isTripHash(hash: string): boolean {
-  return Boolean(hashParam(hash, "proposal") || hashParam(hash, "link"));
+  return Boolean(hashParam(hash, "proposal") || hashParam(hash, "link") || hashParam(hash, "estimate"));
 }
 
 export function stashTripHash(hash: string): void {
@@ -239,7 +244,7 @@ export function pendingTripHash(): string {
 }
 
 /** Drop the live hash; `keepStash` leaves the session copy until the sheet is handled (survives remounts). */
-export function clearTripHash(kind: "proposal" | "link", keepStash = false): void {
+export function clearTripHash(kind: "proposal" | "link" | "estimate", keepStash = false): void {
   if (!keepStash) {
     try {
       const stashed = sessionStorage.getItem(PENDING_HASH) || "";
@@ -271,27 +276,137 @@ function decodeToken(token: string): string {
 }
 
 
-/** Map planner spend hints to a Money expense category id when possible. */
-export function categoryFromSpendHint(hint: string | undefined, categories: { id: string; kind: string; name: string; nameZh: string; theme?: string }[], fallback = ""): string {
-  if (!hint) return fallback;
+export type SpendKind = "meal" | "ride" | "hotel" | "sight";
+
+const KIND_WORDS: Record<SpendKind, RegExp> = {
+  meal: /meal|dining|food|restaurant|cafe|\beat|餐|飲食|食|美食|咖啡/i,
+  ride: /transport|transit|train|rail|bus|taxi|metro|subway|\bride|\bcar\b|ferry|交通|車|鐵|巴士|的士|地鐵|船|機場/i,
+  hotel: /hotel|lodging|accommodation|\bstay|hostel|airbnb|住宿|酒店|旅館|民宿|旅店/i,
+  sight: /sight|attraction|ticket|admission|activit|tour|entertain|museum|景點|門票|觀光|活動|入場|娛樂|體驗|博物館/i,
+};
+
+export function spendKind(hint: string | undefined, label = ""): SpendKind | "" {
+  if (hint === "meal" || hint === "ride" || hint === "hotel" || hint === "sight") return hint;
+  const text = label.trim();
+  if (!text) return "";
+  for (const kind of ["hotel", "ride", "meal", "sight"] as SpendKind[]) if (KIND_WORDS[kind].test(text)) return kind;
+  return "";
+}
+
+/** Per-kind memory of the category the user last picked for a planner hint. */
+export function spendCategoryMemoryKey(base: string, hint: string | undefined, label = ""): string {
+  return `${base}:${spendKind(hint, label) || "other"}`;
+}
+
+/**
+ * Map a planner spend hint to a Money expense category id.
+ * Order: the user's last pick for this kind → a travel-themed category whose name fits the kind → `fallback`
+ * (callers pass a travel-themed default). Never reaches outside the travel life area on its own.
+ */
+export function categoryFromSpendHint(
+  hint: string | undefined,
+  categories: Pick<Category, "id" | "kind" | "name" | "nameZh" | "theme" | "parentId">[],
+  fallback = "",
+  opts: { label?: string; remembered?: string } = {},
+): string {
   const expense = categories.filter((c) => c.kind === "expense");
-  const byId = (id: string) => expense.find((c) => c.id === id)?.id || "";
-  const byRe = (...needles: RegExp[]) =>
-    expense.find((c) => needles.some((re) => re.test(`${c.name} ${c.nameZh} ${c.id}`)))?.id || "";
-  switch (hint) {
-    case "meal":
-      return byId("travel-meals") || byId("dining") || byRe(/旅途用餐|dining|飲食|就餐|餐飲|food/i) || fallback;
-    case "ride":
-      return byId("mtr") || byRe(/transit|交通|鐵路|地鐵|mtr|巴士|公車/i) || fallback;
-    case "hotel":
-      return byId("hotels") || byRe(/hotel|住宿|酒店/i) || fallback;
-    case "sight":
-      return byId("souvenirs") || byRe(/景點|門票|souvenir|觀光/i) || fallback;
-    default:
-      return fallback;
-  }
+  if (opts.remembered && expense.some((c) => c.id === opts.remembered)) return opts.remembered;
+  const kind = spendKind(hint, opts.label);
+  if (!kind) return fallback;
+  const all = categories as Category[];
+  const travel = expense.filter((c) => isTravelThemed(c as Category, all));
+  // Sub-categories first: "旅遊 › 酒店" beats the parent "旅遊".
+  const ordered = [...travel.filter((c) => c.parentId), ...travel.filter((c) => !c.parentId)];
+  const hit = ordered.find((c) => KIND_WORDS[kind].test(`${c.name} ${c.nameZh} ${c.id}`));
+  return hit?.id || fallback;
+}
+
+/** Default travel category for planner rows: a remembered travel pick, else the main travel category. */
+export function travelFallbackCategory(categories: Category[], remembered = ""): string {
+  const travel = categories.filter((c) => c.kind === "expense" && isTravelThemed(c, categories));
+  if (remembered && travel.some((c) => c.id === remembered)) return remembered;
+  return travel.find((c) => !c.parentId)?.id || travel[0]?.id || "";
+}
+
+export function isMoneyCurrency(code: string): boolean {
+  return (CURRENCIES as string[]).includes(code);
 }
 
 export function asMoneyCurrency(code: string): MoneyUnit {
-  return (CURRENCIES as string[]).includes(code) ? (code as Currency) : "HKD";
+  return isMoneyCurrency(code) ? (code as Currency) : "HKD";
+}
+
+/**
+ * `#estimate=` from TripPlanner's 費用 view: planned spend per type and currency.
+ * Money converts with its own FX rates and offers to set / compare the trip's cash budget.
+ */
+export type TripEstimateLine = { category: string; currency: string; amount: number };
+
+export type TripEstimate = {
+  v: 1;
+  trip: string;
+  tripId: string;
+  bookId: string;
+  start: string;
+  end: string;
+  count: number;
+  guess: number;
+  lines: TripEstimateLine[];
+};
+
+export function decodeEstimate(token: string): TripEstimate | null {
+  try {
+    const json = JSON.parse(decodeToken(token)) as Partial<TripEstimate>;
+    if (json.v !== 1 || !Array.isArray(json.lines)) return null;
+    const lines: TripEstimateLine[] = [];
+    for (const row of json.lines) {
+      if (!row || typeof row !== "object") continue;
+      const amount = Number(row.amount);
+      const currency = String(row.currency || "").toUpperCase().slice(0, 8);
+      if (!Number.isFinite(amount) || amount <= 0 || !/^[A-Z]{3}$/.test(currency)) continue;
+      lines.push({ category: String(row.category || "other").slice(0, 24), currency, amount });
+      if (lines.length >= 40) break;
+    }
+    if (!lines.length) return null;
+    const iso = (v: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || "")) ? String(v) : "");
+    return {
+      v: 1,
+      trip: String(json.trip || "").slice(0, 80),
+      tripId: String(json.tripId || "").slice(0, 80),
+      bookId: String(json.bookId || "").slice(0, 80),
+      start: iso(json.start),
+      end: iso(json.end),
+      count: Math.max(0, Math.round(Number(json.count) || 0)),
+      guess: Math.max(0, Math.round(Number(json.guess) || 0)),
+      lines,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function estimateFromHash(hash: string): TripEstimate | null {
+  const token = hashParam(hash, "estimate");
+  if (!token) return null;
+  return decodeEstimate(token);
+}
+
+/** Sum an estimate in HKD. Unsupported currencies are counted in `unknown` and left out of the total. */
+export function estimateInHkd(
+  estimate: TripEstimate,
+  toHkd: (amount: number, currency: Currency) => number,
+): { total: number; byCategory: Record<string, number>; unknown: string[] } {
+  const byCategory: Record<string, number> = {};
+  const unknown = new Set<string>();
+  let total = 0;
+  for (const line of estimate.lines) {
+    if (!isMoneyCurrency(line.currency)) {
+      unknown.add(line.currency);
+      continue;
+    }
+    const hkd = toHkd(line.amount, line.currency as Currency);
+    byCategory[line.category] = (byCategory[line.category] || 0) + hkd;
+    total += hkd;
+  }
+  return { total: Math.round(total), byCategory, unknown: [...unknown] };
 }

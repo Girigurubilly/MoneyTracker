@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { decodeProposal, encodeProposal, linkFromHash, plannerTripUrl, proposalFromHash, tripCovering, carriedTrip, categoryFromSpendHint, proposalAction, cleanItemKey, loggedPlannerKeys, isTripHash } from "./trip-link.ts";
+import { decodeEstimate, estimateFromHash, estimateInHkd, spendCategoryMemoryKey, travelFallbackCategory, decodeProposal, encodeProposal, linkFromHash, plannerTripUrl, proposalFromHash, tripCovering, carriedTrip, categoryFromSpendHint, proposalAction, cleanItemKey, loggedPlannerKeys, isTripHash } from "./trip-link.ts";
 import type { Trip } from "./types.ts";
 
 describe("trip link", () => {
@@ -80,8 +80,31 @@ describe("proposal category and time", () => {
     const decoded = decodeProposal(token);
     assert.equal(decoded?.items[0]?.category, "meal");
     assert.equal(decoded?.items[0]?.time, "19:00");
-    assert.equal(categoryFromSpendHint("meal", [{ id: "dining", kind: "expense", name: "Dining", nameZh: "飲食" }], "flights"), "dining");
-    assert.equal(categoryFromSpendHint("ride", [{ id: "mtr", kind: "expense", name: "MTR", nameZh: "鐵路" }], "flights"), "mtr");
+    const cats = [
+      { id: "dining", kind: "expense" as const, name: "Dining", nameZh: "飲食", theme: "living" as const },
+      { id: "mtr", kind: "expense" as const, name: "MTR", nameZh: "鐵路", theme: "living" as const },
+      { id: "trv", kind: "expense" as const, name: "Travel", nameZh: "旅遊", theme: "travel" as const },
+      { id: "trv-food", kind: "expense" as const, name: "Meals", nameZh: "旅途用餐", theme: "other" as const, parentId: "trv" },
+      { id: "trv-stay", kind: "expense" as const, name: "Hotels", nameZh: "酒店", theme: "other" as const, parentId: "trv" },
+      { id: "trv-go", kind: "expense" as const, name: "Local transport", nameZh: "當地交通", theme: "other" as const, parentId: "trv" },
+    ];
+    // Only travel-themed categories are picked on their own; never living ones like MTR / Dining.
+    assert.equal(categoryFromSpendHint("meal", cats, "trv"), "trv-food");
+    assert.equal(categoryFromSpendHint("ride", cats, "trv"), "trv-go");
+    assert.equal(categoryFromSpendHint("hotel", cats, "trv"), "trv-stay");
+    assert.equal(categoryFromSpendHint("sight", cats, "trv"), "trv");
+    assert.equal(categoryFromSpendHint("ride", cats.filter((c) => c.id !== "trv-go"), "trv"), "trv");
+    // The user's last pick for that kind wins, even outside travel.
+    assert.equal(categoryFromSpendHint("ride", cats, "trv", { remembered: "mtr" }), "mtr");
+    assert.equal(categoryFromSpendHint("ride", cats, "trv", { remembered: "gone" }), "trv-go");
+    // No hint: guess the kind from the label.
+    assert.equal(categoryFromSpendHint("other", cats, "trv", { label: "機場巴士" }), "trv-go");
+    assert.equal(spendCategoryMemoryKey("k", "ride"), "k:ride");
+    assert.equal(spendCategoryMemoryKey("k", "", "難波酒店"), "k:hotel");
+    assert.equal(spendCategoryMemoryKey("k", "", "x"), "k:other");
+    assert.equal(travelFallbackCategory(cats as never), "trv");
+    assert.equal(travelFallbackCategory(cats as never, "mtr"), "trv");
+    assert.equal(travelFallbackCategory(cats as never, "trv-food"), "trv-food");
   });
 });
 
@@ -119,5 +142,52 @@ describe("proposal posting and duplicates", () => {
     assert.equal(isTripHash("#link=abc"), true);
     assert.equal(isTripHash("#access_token=1"), false);
     assert.equal(isTripHash(""), false);
+  });
+
+  it("flags rows whose currency the planner was unsure of", () => {
+    const token = encodeProposal({
+      v: 1,
+      trip: "x",
+      tripId: "t",
+      items: [
+        { date: "2026-04-02", label: "a", amount: 1, currency: "JPY", currencyGuess: true },
+        { date: "2026-04-02", label: "b", amount: 1, currency: "VND" },
+        { date: "2026-04-02", label: "c", amount: 1, currency: "KRW" },
+      ],
+    });
+    const items = decodeProposal(token)?.items || [];
+    assert.deepEqual(items.map((item) => Boolean(item.currencyGuess)), [true, true, false]);
+  });
+});
+
+describe("trip estimate", () => {
+  it("decodes the planner estimate and sums it in HKD", () => {
+    const body = {
+      v: 1,
+      trip: "大阪",
+      tripId: "t1",
+      bookId: "b1",
+      start: "2026-04-02",
+      end: "2026-04-08",
+      count: 3,
+      guess: 1,
+      lines: [
+        { category: "hotel", currency: "JPY", amount: 10000 },
+        { category: "meal", currency: "JPY", amount: 2000 },
+        { category: "ride", currency: "HKD", amount: 50 },
+        { category: "sight", currency: "VND", amount: 9 },
+        { category: "meal", currency: "JPY", amount: -1 },
+      ],
+    };
+    const token = encodeProposal(body as never);
+    const decoded = decodeEstimate(token);
+    assert.equal(decoded?.lines.length, 4);
+    assert.equal(estimateFromHash(`#estimate=${token}`)?.tripId, "t1");
+    assert.equal(estimateFromHash("#proposal=abc"), null);
+    assert.equal(isTripHash(`#estimate=${token}`), true);
+    const sum = estimateInHkd(decoded!, (amount, currency) => (currency === "JPY" ? amount * 0.05 : amount));
+    assert.equal(sum.total, 650);
+    assert.equal(sum.byCategory.hotel, 500);
+    assert.deepEqual(sum.unknown, ["VND"]);
   });
 });
