@@ -1105,9 +1105,9 @@ function SleeveReturns({
       </button>
       {on ? (
         rows.length === 0 ? (
-          <div className="rt-fold border-t border-line"><p className="rt-fold-inner px-4 py-3 text-xs text-muted">{t.common.none}</p></div>
+          <div className="rt-fold rt-fold-open border-t border-line"><p className="rt-fold-inner px-4 py-3 text-xs text-muted">{t.common.none}</p></div>
         ) : (
-          <div className="rt-fold border-t border-line"><div className="rt-fold-inner">
+          <div className="rt-fold rt-fold-open border-t border-line"><div className="rt-fold-inner">
             {rows.map((s, i) => (
               <div key={s.id} className={s.included ? "" : "opacity-50"}>
                 {i > 0 ? <Hairline /> : null}

@@ -519,7 +519,7 @@ export function ConfigFold({ title, children, defaultOpen = false }: { title: st
 <ChevronDown className={cn("size-4 text-muted transition", on && "rotate-180")} />
       </button>
       {on ? (
-        <div className="rt-fold border-t border-line">
+        <div className="rt-fold rt-fold-open border-t border-line">
           <div className="rt-fold-inner">{children}</div>
         </div>
       ) : null}

@@ -184,7 +184,7 @@ export function FirePlanPage() {
           <ChevronDown className={cn("size-4 text-muted transition", showTags && "rotate-180")} />
         </button>
         {showTags ? (
-          <div className="rt-fold border-t border-line">
+          <div className="rt-fold rt-fold-open border-t border-line">
           <div className="rt-fold-inner">
           {rows.map((r) => (
           <div key={r.id} className="border-t border-line px-4 py-3 first:border-t-0">

@@ -239,7 +239,7 @@ export function OctopusImport({ onClose }: { onClose: () => void }) {
           {t.add.octopusPaste}
         </button>
         {showRaw ? (
-          <div className="rt-fold mt-2"><div className="rt-fold-inner">
+          <div className="rt-fold rt-fold-open mt-2"><div className="rt-fold-inner">
             <textarea
               value={rawText}
               onChange={(e) => setRawText(e.target.value)}
