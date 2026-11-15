@@ -876,8 +876,10 @@ export type LifePlanShared = {
 };
 
 /** Fill blank life-plan fields from the shared retirement profile. Spending follows that profile.
- *  Official stay-path job-end and retirement-start always follow the stated retire age
- *  from Settings; a stale stored date must not win. Switch-path dates are left as stored.
+ *  Official stay-path birthday, plan start, job-end and retirement-start always follow the
+ *  shared profile (Settings retire age and birthday, starting today). A stale stored
+ *  birthday or date must not win, or yearly ages will not match the stated retire age.
+ *  Switch-path dates are left as stored.
  */
 export function resolveLifePlan(plan: RetirementLifePlan, shared: LifePlanShared): RetirementLifePlan {
   const dob = shared.birthday || plan.personal.dateOfBirth;
@@ -908,8 +910,8 @@ export function resolveLifePlan(plan: RetirementLifePlan, shared: LifePlanShared
   const sharedMort = shared.mortgage;
   return mergeLifePlan(plan, {
     personal: {
-      dateOfBirth: plan.personal.dateOfBirth || shared.birthday || impliedBirthday(shared.today, shared.currentAge),
-      planStartDate: plan.personal.planStartDate || shared.today,
+      dateOfBirth: shared.birthday || plan.personal.dateOfBirth || impliedBirthday(shared.today, shared.currentAge),
+      planStartDate: shared.today,
       planEndAge: plan.personal.planEndAge ?? shared.deathAge,
       targetTerminalFinancialAssets: plan.personal.targetTerminalFinancialAssets,
     },

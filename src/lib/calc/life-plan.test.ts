@@ -855,4 +855,40 @@ describe("official retire age and birthday-accurate dates", () => {
     assert.ok(at46 && at46.phase !== "retired");
     assert.ok(at47 && at47.phase !== "retired");
   });
+
+  it("lets the stated birthday and retire age win over a stale stored birthday", () => {
+    // A stored plan birthday two years later would label retirement at 48 when Settings say 50.
+    const stored = filled();
+    stored.personal.dateOfBirth = "1986-04-01";
+    stored.personal.planStartDate = "2024-01-01";
+    stored.currentJob.endDate = "2032-04-01";
+    stored.retirement.startDate = "2032-04-01";
+    const resolved = resolveLifePlan(stored, {
+      birthday: "1984-04-01",
+      currentAge: 42,
+      retireAge: 50,
+      deathAge: 85,
+      inflation: 0.02,
+      preReturn: 0.05,
+      postReturn: 0.03,
+      monthlyIncomeNow: 80_000,
+      monthlySpendNow: 40_000,
+      targetMonthly: 25_000,
+      investable: 2_000_000,
+      property: 0,
+      mortgage: null,
+      today: "2026-11-15",
+    });
+    assert.equal(resolved.personal.dateOfBirth, "1984-04-01");
+    assert.equal(resolved.personal.planStartDate, "2026-11-15");
+    assert.equal(resolved.currentJob.endDate, "2034-04-01");
+    assert.equal(resolved.retirement.startDate, "2034-04-01");
+    const years = runLifePlan(resolved, "2026-11-15").stay!.years;
+    const firstRetired = years.find((y) => y.phase === "retired");
+    assert.ok(firstRetired);
+    assert.equal(firstRetired.age, 50);
+    assert.equal(firstRetired.calendarYear, 2034);
+    assert.ok(years.filter((y) => y.phase === "retired").every((y) => y.age >= 50));
+    assert.ok(years.filter((y) => y.age < 50).every((y) => y.phase !== "retired"));
+  });
 });
