@@ -50,7 +50,7 @@ export function ReportsHub() {
   const retireSub =
     head.story.kind === "setup"
       ? null
-      : `${head.story.kind === "enough" ? t.reports.verdictEnough : t.reports.verdictShort} · ${money(head.story.gap, "HKD", { sign: true })}`;
+      : `${head.story.kind === "enough" ? t.reports.verdictEnough : t.reports.verdictShort} · ${head.story.gap < 0 ? t.reports.fundingGapShort : t.reports.fundingGapExtra} ${money(Math.abs(head.story.gap), "HKD")}`;
   const items = [
     { to: "/reports/dashboard", title: t.reports.dashboard, icon: LayoutDashboard, modes: ["standard", "elderly"] },
     { to: "/reports/spending", title: t.reports.spending, icon: Receipt, modes: ["standard", "elderly", "kid"] },
@@ -281,7 +281,7 @@ export function DashboardPage() {
               <span className={cn("text-xs font-medium tabular-nums", head.story.kind === "enough" ? "text-income" : "text-expense")}>
                 {head.story.kind === "enough" ? t.reports.verdictEnough : t.reports.verdictShort}
                 {" · "}
-                {money(head.story.gap, "HKD", { sign: true })}
+                {head.story.gap < 0 ? t.reports.fundingGapShort : t.reports.fundingGapExtra} {money(Math.abs(head.story.gap), "HKD")}
               </span>
             ) : (
               <span className="text-xs font-medium text-muted">{t.reports.verdictSetup}</span>
@@ -290,7 +290,7 @@ export function DashboardPage() {
           {ledgerLive && head.story.kind !== "setup" ? (
             <div className="mt-4 grid grid-cols-2 gap-4">
               <Metric label={t.reports.spendRetired} value={money(head.base.targetMonthly, "HKD")} />
-              <Metric label={t.reports.surplus} value={money(head.story.gap, "HKD", { sign: true })} />
+              <Metric label={head.story.gap < 0 ? t.reports.fundingGapShort : t.reports.fundingGapExtra} value={money(Math.abs(head.story.gap), "HKD")} />
               <Metric label={t.reports.investableNow} value={money(head.investable, "HKD")} />
             </div>
           ) : (

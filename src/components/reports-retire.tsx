@@ -36,7 +36,7 @@ import {
   type RetirementInputs,
 } from "@/lib/calc/retirement";
 import { monthKey } from "@/lib/calc/ledger";
-import { emptyLifePlan, inheritanceAnnuityAccount, INHERIT_ANNUITY_ID, lifePlanMonthlyRoom, resolveLifePlan, runLifePlan } from "@/lib/calc/life-plan";
+import { emptyLifePlan, inheritanceAnnuityAccount, INHERIT_ANNUITY_ID, lifePlanFundingTarget, lifePlanMonthlyRoom, resolveLifePlan, runLifePlan } from "@/lib/calc/life-plan";
 import {
   accessBreakdown,
   corpusAgeLabels,
@@ -209,7 +209,7 @@ export function useLifePlanResult() {
   const plan = stored ?? emptyLifePlan();
   const retirementAccounts = useApp((s) => s.retirementAccounts);
   const allowances = useApp((s) => s.allowances);
-  const { base, pack, ctx, mortgage } = useRetirementModel();
+  const { base, pack, ctx, mortgage, incomeSource } = useRetirementModel();
   const resolved = useMemo(() => {
     const pay = mortgage ? monthlyPayment(mortgage.outstanding, effectiveRate(mortgage), mortgage.remainingMonths) : 0;
     const months = mortgage ? remainingFromStart(mortgage, todayISO())?.remainingMonths ?? mortgage.remainingMonths : 0;
@@ -220,9 +220,11 @@ export function useLifePlanResult() {
       retireAge: base.retireAge,
       deathAge: base.deathAge,
       inflation: base.inflation,
+      preReturn: base.preReturn,
       postReturn: base.postReturn,
       monthlyIncomeNow: base.monthlyIncomeNow,
       monthlySpendNow: base.monthlySpendNow,
+      incomeIsNet: incomeSource === "ledger",
       targetMonthly: base.targetMonthly,
       reverseMortgageLtv: base.reverseMortgageLtv,
       investable: ctx.investableNow,
@@ -232,7 +234,7 @@ export function useLifePlanResult() {
         : null,
       today: todayISO(),
     });
-  }, [plan, base, pack.property, ctx.investableNow, mortgage]);
+  }, [plan, base, pack.property, ctx.investableNow, mortgage, incomeSource]);
   const inflows = useMemo(
     () => ({
       accounts: retirementAccounts,
@@ -277,6 +279,7 @@ export function useRetirementHeadline() {
   const model = useRetirementModel();
   const life = useLifePlanResult();
   const room = useMemo(() => lifePlanMonthlyRoom(life.resolved, todayISO(), life.inflows), [life.resolved, life.inflows]);
+  const funding = useMemo(() => lifePlanFundingTarget(life.resolved, todayISO(), life.inflows), [life.resolved, life.inflows]);
   const planEndAge = life.result.stay?.years[life.result.stay.years.length - 1]?.age ?? model.base.deathAge;
   const story = enoughStory({
     ready: model.ready,
@@ -284,6 +287,7 @@ export function useRetirementHeadline() {
     depletes: Boolean(life.result.stay?.depletes),
     plannedMonthly: model.base.targetMonthly,
     surplusMonthly: room.surplus,
+    fundingGap: funding.ready ? funding.gap : undefined,
     planEndAge,
   });
   const yearsToRetire = Math.max(0, model.base.retireAge - model.base.currentAge);
@@ -297,6 +301,7 @@ export function useRetirementHeadline() {
     ...model,
     life,
     room,
+    funding,
     story,
     mort,
     planEndAge,
@@ -332,7 +337,7 @@ export function SharedRetirementStrip() {
               <span className={story.kind === "enough" ? "text-income" : "text-expense"}>{verdict}</span>
               {" · "}
               <span className={cn("tabular-nums", story.gap < 0 ? "text-expense" : "text-income")}>
-                {money(story.gap, "HKD", { sign: true })}
+                {story.gap < 0 ? t.reports.fundingGapShort : t.reports.fundingGapExtra} {money(Math.abs(story.gap), "HKD")}
               </span>
               {" · "}
               {t.reports.retireAge} {base.retireAge}
@@ -356,12 +361,12 @@ function SetupGuide({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState(0);
   const total = 4;
   const titles = [t.reports.guideWhen, t.reports.guideNow, t.reports.guideAfter, t.reports.guideRates];
-  const bodies = [t.reports.guideWhenBody, t.reports.guideNowBody, t.reports.guideAfterBody, t.reports.guideRatesBody];
+  const bodies = [t.reports.setupStepAge, t.reports.setupStepMoney, t.reports.setupStepSpend, t.reports.setupStepLater];
   const last = step >= total;
   return (
     <div className="mx-4 mb-3 rounded-2xl bg-elevated p-4">
       <div className="flex items-start justify-between gap-3">
-        <div className="text-sm font-medium">{last ? t.reports.guideDone : titles[step]}</div>
+        <div className="text-sm font-medium">{last ? t.reports.guideDone : step === 0 ? t.reports.setupStart : titles[step]}</div>
         <button type="button" className="shrink-0 text-xs font-medium text-accent" onClick={onClose}>
           {t.reports.guideHide}
         </button>
@@ -397,7 +402,7 @@ export function RetirementPage() {
   const t = useT();
   const locale = useUi((s) => s.locale);
   const head = useRetirementHeadline();
-  const { accounts, holdings, rates, base, ctx, pack, result, fire, persist, rmMonthly, mortgage, life, story, mort, planEndAge, investable } = head;
+  const { accounts, holdings, rates, base, ctx, pack, result, fire, persist, rmMonthly, mortgage, life, story, mort, planEndAge, investable, funding } = head;
   const years = life.result.stay?.years ?? [];
   const chartData = years.map((y) => ({ age: y.age, corpus: y.closingFinancial, kept: y.inheritKept }));
   const saleYear = years.find((y) => y.inheritKept > 0);
@@ -406,6 +411,7 @@ export function RetirementPage() {
   const [chartPoint, setChartPoint] = useState<{ age: number; corpus: number } | null>(null);
   const [showSetup, setShowSetup] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [guideDismissed, setGuideDismissed] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [draftAge, setDraftAge] = useState(base.retireAge);
   const [dragging, setDragging] = useState(false);
@@ -414,15 +420,23 @@ export function RetirementPage() {
   const swrLabel = `${((base.fireSwr ?? 0.04) * 100).toFixed(1)}%`;
   const verdict =
     story.kind === "enough" ? t.reports.verdictEnough : story.kind === "short" ? t.reports.verdictShort : t.reports.verdictSetup;
+  const needAmt = money(funding.need, "HKD");
+  const gapAmt = money(Math.abs(story.gap), "HKD");
   const sentence =
     story.kind === "enough"
-      ? t.reports.enoughLine.replace("{plan}", money(story.planned, "HKD")).replace("{age}", String(planEndAge))
+      ? t.reports.enoughLine
+          .replace("{plan}", money(story.planned, "HKD"))
+          .replace("{need}", needAmt)
+          .replace("{gap}", gapAmt)
+          .replace("{age}", String(planEndAge))
       : story.kind === "short"
         ? t.reports.shortLine
             .replace("{plan}", money(story.planned, "HKD"))
-            .replace("{gap}", money(Math.abs(story.gap), "HKD"))
+            .replace("{need}", needAmt)
+            .replace("{gap}", gapAmt)
             .replace("{age}", String(planEndAge))
         : t.reports.setupLine;
+  const fundingLabel = story.gap < 0 ? t.reports.fundingGapShort : t.reports.fundingGapExtra;
   const ages = corpusAgeLabels(draftAge);
   const yearsToRetire = Math.max(0, draftAge - base.currentAge);
   const spendThen = inflatedMonthly(base.targetMonthly, yearsToRetire, base.inflation);
@@ -433,6 +447,10 @@ export function RetirementPage() {
   useEffect(() => {
     if (!dragging && scenario == null) setDraftAge(base.retireAge);
   }, [base.retireAge, dragging, scenario]);
+
+  useEffect(() => {
+    if (story.kind === "setup" && !guideDismissed) setGuideOpen(true);
+  }, [story.kind, guideDismissed]);
 
   function buildExport(): string {
     const acctName = (id?: string) => {
@@ -462,9 +480,12 @@ export function RetirementPage() {
       "## Official result",
       `- Verdict: ${story.kind}`,
       `- Typed retirement spend (HKD / month): ${Math.round(base.targetMonthly)}`,
-      `- Retire spend gap (HKD / month, today’s dollars): ${Math.round(story.gap)}`,
-      `- Investable now (HKD): ${Math.round(investable)}`,
-      `- Property, not invested (HKD): ${Math.round(pack.property)}`,
+      `- Needed on retirement day (HKD, usable assets): ${story.kind === "setup" || !funding.ready ? "n/a" : Math.round(funding.need)}`,
+      `- Expected on retirement day (HKD, usable assets): ${story.kind === "setup" || !funding.ready ? "n/a" : Math.round(funding.have)}`,
+      `- Funding gap (HKD, have minus need): ${story.kind === "setup" || !funding.ready ? "n/a" : Math.round(funding.gap)}`,
+      `- Monthly room (HKD / month, today’s dollars): ${Math.round(story.surplusMonthly)}`,
+      `- Usable assets now (HKD): ${Math.round(investable)}`,
+      `- Home, not living costs (HKD): ${Math.round(pack.property)}`,
       `- Plan through age: ${planEndAge}`,
       `- Assets on the path at retire age (HKD): ${story.kind === "setup" ? "n/a" : Math.round(corpusAtRetire)}`,
       `- Depletes before plan end: ${life.result.stay?.depletes ? `yes${life.result.stay.depletionAge ? ` at ${life.result.stay.depletionAge}` : ""}` : story.kind === "setup" ? "n/a" : "no"}`,
@@ -563,6 +584,7 @@ export function RetirementPage() {
         gap={story.kind === "setup" ? 0 : story.gap}
         planEndAge={planEndAge}
         dragging={dragging}
+        gapLabel={story.kind === "setup" ? undefined : fundingLabel}
       />
       <Enter>
         <section className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
@@ -593,43 +615,69 @@ export function RetirementPage() {
             <ConfigNumRow label={t.reports.currentAge} value={base.currentAge} onCommit={(n) => persist({ currentAge: n })} />
           )}
           <Hairline />
+          <ConfigNumRow label={t.reports.retireAge} value={base.retireAge} onCommit={(n) => persist({ retireAge: n })} />
+          <Hairline />
           <ConfigNumRow label={t.reports.deathAge} value={base.deathAge} onCommit={(n) => persist({ deathAge: n })} />
+          <Hairline />
+          <ConfigNumRow
+            label={head.incomeSource === "ledger" ? t.reports.salaryTakeHome : t.reports.salaryNow}
+            value={base.monthlyIncomeNow}
+            money
+            blankZero
+            onCommit={(n) => persist({ monthlyIncomeNow: n })}
+          />
+          <p className="px-4 pb-2 text-[11px] leading-4 text-muted">
+            {head.incomeSource === "ledger" ? t.reports.salaryTakeHomeHint : t.reports.salaryGrossHint}
+          </p>
+          <Hairline />
+          <ConfigNumRow
+            label={t.reports.spendNow}
+            value={base.monthlySpendNow}
+            money
+            blankZero
+            onCommit={(n) => persist({ monthlySpendNow: n })}
+          />
+          <p className="px-4 pb-2 text-[11px] leading-4 text-muted">{t.reports.spendNowHint}</p>
           <Hairline />
           <ConfigNumRow label={t.reports.spendRetired} value={base.targetMonthly} money blankZero onCommit={(n) => persist({ targetMonthly: n })} />
           <p className="px-4 pb-1 text-[11px] leading-4 text-muted">{t.reports.goalsSpendHint}</p>
-          {story.kind !== "setup" && base.targetMonthly > 0 ? (
+          <StepPct label={t.reports.inflation} value={base.inflation} onCommit={(n) => persist({ inflation: n })} />
+          {base.targetMonthly > 0 ? (
             <p className="px-4 pb-3 text-[11px] leading-4 text-muted">
               {t.reports.spendThenMoney.replace("{amount}", money(spendThen, "HKD"))}
             </p>
           ) : (
             <div className="pb-2" />
           )}
-          <Hairline />
-          <div className="grid grid-cols-2 gap-2 p-3">
-            <button
-              type="button"
-              className={cn("h-11 rounded-xl text-xs font-medium", !base.payOffMortgageAtRetire ? "bg-accent text-on-accent" : "bg-background")}
-              onClick={() => persist({ payOffMortgageAtRetire: false })}
-            >
-              {t.reports.mortgageModePay}
-            </button>
-            <button
-              type="button"
-              className={cn("h-11 rounded-xl text-xs font-medium", base.payOffMortgageAtRetire ? "bg-accent text-on-accent" : "bg-background")}
-              onClick={() => persist({ payOffMortgageAtRetire: true })}
-            >
-              {t.reports.mortgageModeLump}
-            </button>
-          </div>
-          <p className="px-4 pb-3 text-[11px] leading-4 text-muted">
-            {mort.kind === "none"
-              ? t.reports.mortgageNone
-              : mort.kind === "clears-before"
-                ? t.reports.mortgageClears.replace("{amount}", money(mort.owingNow, "HKD"))
-                : mort.kind === "assumed-payoff"
-                  ? t.reports.mortgageAssume.replace("{amount}", money(mort.owingNow, "HKD"))
-                  : t.reports.mortgageOwing.replace("{amount}", money(mort.owingNow, "HKD"))}
-          </p>
+          {mort.kind !== "none" ? (
+            <>
+              <Hairline />
+              <div className="grid grid-cols-2 gap-2 p-3">
+                <button
+                  type="button"
+                  className={cn("h-11 rounded-xl text-xs font-medium", !base.payOffMortgageAtRetire ? "bg-accent text-on-accent" : "bg-background")}
+                  onClick={() => persist({ payOffMortgageAtRetire: false })}
+                >
+                  {t.reports.mortgageModePay}
+                </button>
+                <button
+                  type="button"
+                  className={cn("h-11 rounded-xl text-xs font-medium", base.payOffMortgageAtRetire ? "bg-accent text-on-accent" : "bg-background")}
+                  onClick={() => persist({ payOffMortgageAtRetire: true })}
+                >
+                  {t.reports.mortgageModeLump}
+                </button>
+              </div>
+              <p className="px-4 pb-2 text-[11px] leading-4 text-muted">
+                {mort.kind === "clears-before"
+                  ? t.reports.mortgageClears.replace("{amount}", money(mort.owingNow, "HKD"))
+                  : mort.kind === "assumed-payoff"
+                    ? t.reports.mortgageAssume.replace("{amount}", money(mort.owingNow, "HKD"))
+                    : t.reports.mortgageOwing.replace("{amount}", money(mort.owingNow, "HKD"))}
+              </p>
+              <p className="px-4 pb-3 text-[11px] leading-4 text-muted">{t.reports.mortgageOfficialNote}</p>
+            </>
+          ) : null}
         </section>
       </Enter>
       <SectionLabel>{t.reports.readinessByAge}</SectionLabel>
@@ -650,7 +698,7 @@ export function RetirementPage() {
         onCancel={cancelDraft}
       />
       {guideOpen ? (
-        <SetupGuide onClose={() => setGuideOpen(false)} />
+        <SetupGuide onClose={() => { setGuideOpen(false); setGuideDismissed(true); }} />
       ) : (
         <button type="button" className="mx-4 mb-3 flex h-11 w-[calc(100%-2rem)] items-center justify-center rounded-xl bg-elevated text-sm font-medium text-accent" onClick={() => setGuideOpen(true)}>
           {t.reports.guideOpen}
@@ -674,11 +722,29 @@ export function RetirementPage() {
           <p className="mt-2 text-sm leading-5">{sentence}</p>
           {story.kind === "setup" ? null : (
             <>
-              <div className="mt-3 text-[11px] text-muted">{t.reports.surplus}</div>
-              <div className={cn("text-2xl font-semibold tabular-nums", shownGap < 0 ? "text-expense" : "text-income")}>
-                {money(shownGap, "HKD", { sign: true })}
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="rounded-xl bg-background px-3 py-2">
+                  <div className="text-[11px] text-muted">{t.reports.fundingNeed}</div>
+                  <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(funding.need, "HKD")}</div>
+                </div>
+                <div className="rounded-xl bg-background px-3 py-2">
+                  <div className="text-[11px] text-muted">{t.reports.fundingHave}</div>
+                  <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(funding.have, "HKD")}</div>
+                </div>
               </div>
-              <p className="mt-1 text-[11px] leading-4 text-muted">{story.gap < 0 ? t.reports.surplusHintNeg : t.reports.surplusHintPos}</p>
+              <div className="mt-3 text-[11px] text-muted">{fundingLabel}</div>
+              <div className={cn("text-2xl font-semibold tabular-nums", shownGap < 0 ? "text-expense" : "text-income")}>
+                {money(Math.abs(shownGap), "HKD")}
+              </div>
+              <p className="mt-1 text-[11px] leading-4 text-muted">{shownGap < 0 ? t.reports.fundingHintShort : t.reports.fundingHintExtra}</p>
+              <p className="mt-3 text-[11px] leading-4 text-muted">
+                {t.reports.monthlyRoom}{" "}
+                <span className={cn("font-medium tabular-nums", story.surplusMonthly < 0 ? "text-expense" : "text-income")}>
+                  {money(story.surplusMonthly, "HKD", { sign: true })}
+                </span>
+                /{locale === "zh-HK" ? "月" : "mo"}
+              </p>
+              <p className="mt-1 text-[11px] leading-4 text-muted">{story.surplusMonthly < 0 ? t.reports.surplusHintNeg : t.reports.surplusHintPos}</p>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <div className="rounded-xl bg-background px-3 py-2">
                   <div className="text-[11px] text-muted">{t.reports.spendRetired}</div>
@@ -690,6 +756,20 @@ export function RetirementPage() {
                 </div>
               </div>
               <p className="mt-2 text-[11px] leading-4 text-muted">{t.reports.investableHint}</p>
+              {base.targetMonthly > 0 ? (
+                <p className="mt-2 text-[11px] leading-4 text-muted">
+                  {t.reports.spendThenMoney.replace("{amount}", money(spendThen, "HKD"))}
+                </p>
+              ) : null}
+              <SleeveCard
+                cash={pack.cash}
+                invest={pack.invest}
+                locked={(life.inflows.accounts ?? []).filter((a) => a.includeInRetirementProjection && a.status !== "closed").reduce((s, a) => s + (a.currentBalance || 0), 0)}
+                property={pack.property}
+                preReturn={base.preReturn}
+                postReturn={base.postReturn}
+                propertyGrowth={life.resolved.assets.selfOccupiedPropertyGrowthRate}
+              />
               <div className="mt-2 text-[11px] text-muted">
                 {t.reports.corpusAtRetireAge
                   .replace("{end}", String(ages.endWorkingAge))
@@ -697,11 +777,6 @@ export function RetirementPage() {
                 : {money(corpusAtRetire, "HKD")}
               </div>
               <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.corpusOnPathHintChart}</p>
-              {pack.property > 0 ? (
-                <div className="mt-2 text-[11px] text-muted">
-                  {t.reports.propertyAside}: {money(pack.property, "HKD")}
-                </div>
-              ) : null}
               {chartData.length ? (
                 <div className="rt-chart-draw mt-3 h-40 overflow-hidden rounded-xl bg-background pt-2">
                   <ResponsiveContainer width="100%" height="100%">
@@ -828,29 +903,22 @@ export function RetirementPage() {
       </button>
       {showSetup ? (
         <>
-          <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
-            <ConfigNumRow label={t.reports.salaryNow} value={base.monthlyIncomeNow} money onCommit={(n) => persist({ monthlyIncomeNow: n })} />
-            <Hairline />
-            <SpendSlider
-              label={t.reports.spendNow}
-              value={base.monthlySpendNow}
-              onCommit={(n) => persist({ monthlySpendNow: n })}
-            />
-            <p className="px-4 pb-3 text-[11px] leading-4 text-muted">
-              {t.reports.saveBasis
-                .replace("{amount}", money(head.saveMonthly, "HKD"))
-                .replace("{basis}", head.saveSource === "manual" ? t.reports.basisManual : t.reports.basisLedger)}
-            </p>
-          </div>
-          <p className="px-5 pb-2 text-[11px] leading-4 text-muted">{t.reports.setupEnough}</p>
+          <p className="px-5 pb-2 text-[11px] leading-4 text-muted">
+            {t.reports.saveBasis
+              .replace("{amount}", money(head.saveMonthly, "HKD"))
+              .replace("{basis}", head.saveSource === "manual" ? t.reports.basisManual : t.reports.basisLedger)}
+          </p>
 
-          <ConfigFold title={t.reports.assumptions}>
-            <StepPct label={t.reports.inflation} value={base.inflation} onCommit={(n) => persist({ inflation: n })} />
-            <Hairline />
+          <ConfigFold title={t.reports.assumptions} defaultOpen>
             <StepPct label={t.reports.preReturn} value={base.preReturn} onCommit={(n) => persist({ preReturn: n })} />
             <Hairline />
             <StepPct label={t.reports.postReturn} value={base.postReturn} onCommit={(n) => persist({ postReturn: n })} />
             <p className="px-4 pb-3 text-[11px] leading-4 text-muted">{t.reports.leaveDefaultsHint}</p>
+            <p className="px-4 pb-3 text-[11px] leading-4 text-muted">
+              {t.reports.sleeveOfficialRates
+                .replace("{pre}", `${(base.preReturn * 100).toFixed(1)}%`)
+                .replace("{post}", `${(base.postReturn * 100).toFixed(1)}%`)}
+            </p>
           </ConfigFold>
 
           <ConfigFold title={t.reports.retireAdvanced}>
@@ -869,7 +937,9 @@ export function RetirementPage() {
             <ConfigNumRow label={t.reports.laterLifeAge} value={base.laterLifeAge ?? 75} onCommit={(n) => persist({ laterLifeAge: n })} />
           </ConfigFold>
 
-          <LifePlanSetup />
+          <ConfigFold title={t.reports.advancedPlan}>
+            <LifePlanSetup />
+          </ConfigFold>
 
       <SectionLabel>{t.reports.setupAccounts}</SectionLabel>
       <p className="px-5 pb-2 text-[11px] leading-4 text-muted">{t.reports.setupAccountsHint}</p>
@@ -1084,6 +1154,57 @@ function StepPct({ label, value, onCommit }: { label: string; value: number; onC
 }
 
 
+
+function SleeveCard({
+  cash,
+  invest,
+  locked,
+  property,
+  preReturn,
+  postReturn,
+  propertyGrowth,
+}: {
+  cash: number;
+  invest: number;
+  locked: number;
+  property: number;
+  preReturn: number;
+  postReturn: number;
+  propertyGrowth: number | null;
+}) {
+  const t = useT();
+  const rows: { label: string; amount: number; note: string }[] = [
+    { label: t.reports.sleeveCash, amount: cash, note: t.reports.sleeveOfficialRates.replace("{pre}", `${(preReturn * 100).toFixed(1)}%`).replace("{post}", `${(postReturn * 100).toFixed(1)}%`) },
+    { label: t.reports.sleeveInvest, amount: invest, note: t.reports.sleeveOfficialRates.replace("{pre}", `${(preReturn * 100).toFixed(1)}%`).replace("{post}", `${(postReturn * 100).toFixed(1)}%`) },
+    { label: t.reports.sleeveLocked, amount: locked, note: t.reports.sleeveLockedGrowth },
+    {
+      label: t.reports.sleeveProperty,
+      amount: property,
+      note:
+        propertyGrowth != null
+          ? t.reports.sleeveGrowth.replace("{rate}", `${(propertyGrowth * 100).toFixed(1)}%`)
+          : t.reports.sleevePropertyGrowthNone,
+    },
+  ];
+  return (
+    <div className="mt-3 rounded-xl bg-background px-3 py-2">
+      {rows.map((r, i) => (
+        <div key={r.label} className={i ? "mt-2 border-t border-line pt-2" : undefined}>
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-[11px] text-muted">{r.label}</span>
+            <span className="text-sm font-semibold tabular-nums">{money(r.amount, "HKD")}</span>
+          </div>
+          {i > 1 ? <p className="mt-0.5 text-[11px] leading-4 text-muted">{r.note}</p> : null}
+        </div>
+      ))}
+      <p className="mt-2 text-[11px] leading-4 text-muted">
+        {t.reports.sleeveOfficialRates.replace("{pre}", `${(preReturn * 100).toFixed(1)}%`).replace("{post}", `${(postReturn * 100).toFixed(1)}%`)}
+      </p>
+      <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.sleevePropertyNote}</p>
+    </div>
+  );
+}
+
 function SleeveReturns({
   title,
   rows,
@@ -1105,9 +1226,9 @@ function SleeveReturns({
       </button>
       {on ? (
         rows.length === 0 ? (
-          <div className="rt-fold rt-fold-open border-t border-line"><p className="rt-fold-inner px-4 py-3 text-xs text-muted">{t.common.none}</p></div>
+          <div className="rt-fold border-t border-line"><p className="rt-fold-inner px-4 py-3 text-xs text-muted">{t.common.none}</p></div>
         ) : (
-          <div className="rt-fold rt-fold-open border-t border-line"><div className="rt-fold-inner">
+          <div className="rt-fold border-t border-line"><div className="rt-fold-inner">
             {rows.map((s, i) => (
               <div key={s.id} className={s.included ? "" : "opacity-50"}>
                 {i > 0 ? <Hairline /> : null}

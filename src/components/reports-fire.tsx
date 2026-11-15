@@ -150,10 +150,15 @@ export function FirePlanPage() {
         </div>
         <p className="mt-2 text-sm leading-5">
           {head.story.kind === "enough"
-            ? t.reports.enoughLine.replace("{plan}", money(head.story.planned, "HKD")).replace("{age}", String(head.planEndAge))
+            ? t.reports.enoughLine
+                .replace("{plan}", money(head.story.planned, "HKD"))
+                .replace("{need}", money(head.funding.need, "HKD"))
+                .replace("{gap}", money(Math.abs(head.story.gap), "HKD"))
+                .replace("{age}", String(head.planEndAge))
             : head.story.kind === "short"
               ? t.reports.shortLine
                   .replace("{plan}", money(head.story.planned, "HKD"))
+                  .replace("{need}", money(head.funding.need, "HKD"))
                   .replace("{gap}", money(Math.abs(head.story.gap), "HKD"))
                   .replace("{age}", String(head.planEndAge))
               : t.reports.setupLine}
@@ -161,7 +166,7 @@ export function FirePlanPage() {
         {head.story.kind === "setup" ? null : (
           <div className="mt-3 grid grid-cols-2 gap-2">
             <MiniStat label={t.reports.spendRetired} value={base.targetMonthly} accent />
-            <MiniStat label={t.reports.surplus} value={head.story.gap} danger={head.story.gap < 0} />
+            <MiniStat label={head.story.gap < 0 ? t.reports.fundingGapShort : t.reports.fundingGapExtra} value={Math.abs(head.story.gap)} danger={head.story.gap < 0} />
             <MiniStat label={t.reports.investableNow} value={investable} />
           </div>
         )}
@@ -184,7 +189,7 @@ export function FirePlanPage() {
           <ChevronDown className={cn("size-4 text-muted transition", showTags && "rotate-180")} />
         </button>
         {showTags ? (
-          <div className="rt-fold rt-fold-open border-t border-line">
+          <div className="rt-fold border-t border-line">
           <div className="rt-fold-inner">
           {rows.map((r) => (
           <div key={r.id} className="border-t border-line px-4 py-3 first:border-t-0">
