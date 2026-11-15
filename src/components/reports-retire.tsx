@@ -286,7 +286,7 @@ type VelocityCopy = {
 
 export function earliestStoryKind(row: EarliestRetire | null | undefined, ready: boolean): "enough" | "short" | "setup" {
   if (!ready || !row || row.kind === "unknown") return "setup";
-  if (row.kind === "never" || row.vsPlanned === "later") return "short";
+  if (row.kind === "never") return "short";
   return "enough";
 }
 
@@ -370,15 +370,17 @@ export function useRetirementHeadline() {
   const model = useRetirementModel();
   const life = useLifePlanResult();
   const room = useMemo(() => lifePlanMonthlyRoom(life.resolved, todayISO(), life.inflows), [life.resolved, life.inflows]);
-  const funding = useMemo(() => lifePlanFundingTarget(life.resolved, todayISO(), life.inflows), [life.resolved, life.inflows]);
+  const plannedFunding = useMemo(() => lifePlanFundingTarget(life.resolved, todayISO(), life.inflows), [life.resolved, life.inflows]);
+  const funding = life.earliest.funding?.ready ? life.earliest.funding : plannedFunding;
+  const officialFunding = life.earliest.kind === "never" || life.earliest.kind === "unknown" ? null : life.earliest.funding?.ready ? life.earliest.funding : null;
   const planEndAge = life.result.stay?.years[life.result.stay.years.length - 1]?.age ?? model.base.deathAge;
   const story = enoughStory({
     ready: model.ready,
     hasPath: Boolean(life.result.stay),
-    depletes: Boolean(life.result.stay?.depletes),
+    depletes: life.earliest.kind === "never",
     plannedMonthly: model.base.targetMonthly,
     surplusMonthly: room.surplus,
-    fundingGap: funding.ready ? funding.gap : undefined,
+    fundingGap: (officialFunding ?? funding).ready ? (officialFunding ?? funding).gap : undefined,
     planEndAge,
   });
   const yearsToRetire = Math.max(0, model.base.retireAge - model.base.currentAge);
@@ -389,9 +391,9 @@ export function useRetirementHeadline() {
     payOffAtRetire: Boolean(model.base.payOffMortgageAtRetire),
   });
   const timeToTarget = useMemo(() => {
-    if (!funding.ready || !model.ready) return null;
+    if (!plannedFunding.ready || !model.ready) return null;
     return lifePlanTimeToTarget({
-      need: funding.need,
+      need: plannedFunding.need,
       investableNow: model.ctx.investableNow,
       monthlyIncome: model.base.monthlyIncomeNow,
       monthlySpend: model.base.monthlySpendNow,
@@ -402,12 +404,14 @@ export function useRetirementHeadline() {
       asOf: todayISO(),
       birthday: model.base.birthday,
     });
-  }, [funding, model.ready, model.ctx.investableNow, model.base, planEndAge]);
+  }, [plannedFunding, model.ready, model.ctx.investableNow, model.base, planEndAge]);
   return {
     ...model,
     life,
     room,
     funding,
+    plannedFunding,
+    officialFunding,
     story,
     mort,
     planEndAge,
@@ -508,7 +512,8 @@ export function OfficialAnswerCard({
   const ageKind = earliest ? earliestStoryKind(earliest, true) : verdictKind;
   const vs = earliestVsText(t.reports, earliest);
   const end = String(earliest?.planEndAge ?? "");
-  const planned = String(earliest?.plannedAge ?? "");
+  const officialAge = earliest?.age;
+  const showOfficialFunding = Boolean(earliest && officialAge != null && fundingReady);
   return (
     <section className={cn(compact ? "p-3 pt-1" : "mx-4 mb-3 rounded-2xl bg-elevated p-4")}>
       {earliest ? (
@@ -547,9 +552,10 @@ export function OfficialAnswerCard({
           </span>
         </div>
       )}
+      {earliest && !showOfficialFunding ? null : (
       <div className={cn(earliest ? "mt-4 border-t border-line pt-3" : "mt-3")}>
-        {earliest ? (
-          <div className="mb-3 text-[11px] font-medium text-muted">{t.reports.plannedPathHint.replace("{retire}", planned)}</div>
+        {officialAge != null ? (
+          <div className="mb-3 text-[11px] font-medium text-muted">{t.reports.officialPathHint.replace("{retire}", String(officialAge))}</div>
         ) : null}
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-xl bg-background px-3 py-2">
@@ -572,6 +578,7 @@ export function OfficialAnswerCard({
         {earliest ? null : <p className="mt-2 text-[11px] leading-4 text-muted">{t.reports.velocityPaceHint}</p>}
         {pathHaveLine ? <p className="mt-2 text-[11px] leading-4 text-muted">{pathHaveLine}</p> : null}
       </div>
+      )}
     </section>
   );
 }

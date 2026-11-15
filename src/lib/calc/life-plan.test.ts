@@ -975,10 +975,25 @@ describe("earliestSustainableRetireAge", () => {
     assert.equal(row.age, 42);
   });
 
-  it("treats a later-than-planned earliest age as a late remaining gap", () => {
-    assert.equal(earliestRetireTone(800_000, { kind: "found", age: 52, plannedAge: 50, planEndAge: 85, vsPlanned: "later" }), "late");
+  it("treats a remaining amount toward the should-retire day as accumulating, even if later than the typed plan", () => {
+    assert.equal(earliestRetireTone(800_000, { kind: "found", age: 52, plannedAge: 50, planEndAge: 85, vsPlanned: "later" }), "accumulating");
     assert.equal(earliestRetireTone(800_000, { kind: "found", age: 47, plannedAge: 50, planEndAge: 85, vsPlanned: "earlier" }), "accumulating");
     assert.equal(earliestRetireTone(0, { kind: "never", age: null, plannedAge: 50, planEndAge: 85, vsPlanned: "none" }), "over");
     assert.equal(earliestRetireTone(800_000, { kind: "never", age: null, plannedAge: 50, planEndAge: 85, vsPlanned: "none" }), "late");
+  });
+
+  it("hooks need and gap to the should-retire age, not the typed planned age", () => {
+    const at50 = earliestSustainableRetireAge(emptyLifePlan(), sharedBase);
+    const at65 = earliestSustainableRetireAge(emptyLifePlan(), { ...sharedBase, retireAge: 65 });
+    assert.ok(at50.kind === "found" || at50.kind === "already", at50.kind);
+    assert.equal(at50.kind, at65.kind);
+    assert.equal(at50.age, at65.age);
+    assert.ok(at50.funding?.ready);
+    assert.ok(at65.funding?.ready);
+    assert.equal(at50.funding?.retireAge, at50.age);
+    assert.equal(at65.funding?.retireAge, at65.age);
+    assert.equal(at50.funding?.need, at65.funding?.need);
+    assert.equal(at50.funding?.have, at65.funding?.have);
+    assert.ok((at50.funding?.gap ?? -1) >= -1);
   });
 });

@@ -699,12 +699,14 @@ export type EarliestRetire = {
   plannedAge: number;
   planEndAge: number;
   vsPlanned: EarliestVsPlanned;
+  /** Need / have / gap on the should-retire day. Null when no such age exists. */
+  funding?: LifePlanFundingTarget | null;
 };
 
-/** Colour for today's remaining amount when the official earliest-retire age is known. */
+/** Colour for today's remaining amount toward the should-retire-day need. Being later than the typed plan is not a miss. */
 export function earliestRetireTone(nowGap: number, row: EarliestRetire | null | undefined): NowGapTone {
   if (nowGap <= 0) return "over";
-  if (!row || row.kind === "never" || row.kind === "unknown" || row.vsPlanned === "later") return "late";
+  if (!row || row.kind === "never" || row.kind === "unknown") return "late";
   return "accumulating";
 }
 
@@ -735,6 +737,7 @@ export function earliestSustainableRetireAge(
     plannedAge,
     planEndAge: Number.isFinite(planEndAge) ? planEndAge : 0,
     vsPlanned: "none",
+    funding: null,
   });
   if (!Number.isFinite(plannedAge) || !Number.isFinite(planEndAge)) return blank("unknown");
   const startAge = Math.max(0, Math.floor(shared.currentAge));
@@ -746,7 +749,8 @@ export function earliestSustainableRetireAge(
     const kind: EarliestRetireKind = age <= startAge ? "already" : "found";
     const vsPlanned: EarliestVsPlanned =
       age < plannedAge ? "earlier" : age === plannedAge ? "same" : "later";
-    return { kind, age, plannedAge, planEndAge, vsPlanned };
+    const funding = lifePlanFundingTarget(resolved, asOf, trialInflows);
+    return { kind, age, plannedAge, planEndAge, vsPlanned, funding };
   }
   return blank("never");
 }
