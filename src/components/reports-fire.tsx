@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Check, ChevronDown, TriangleAlert, X } from "lucide-react";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { ScreenHeader, SectionLabel } from "@/components/shared";
-import { ConfigNumRow, Enter } from "@/components/retire-ux";
+import { ConfigNumRow } from "@/components/retire-ux";
 import { SharedRetirementStrip, useRetirementHeadline } from "@/components/reports-retire";
 import { money, pct, todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
@@ -137,41 +137,9 @@ export function FirePlanPage() {
 
   return (
     <div className="pb-10">
-      <ScreenHeader title={t.reports.firePlan} backTo="/reports/retirement" />
+      <ScreenHeader title={t.reports.firePlanRefTitle} backTo="/reports/retirement" />
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.officialOnly}</p>
       <SharedRetirementStrip />
-      <Enter>
-      <section className="mx-4 mb-3 rounded-2xl bg-elevated p-4">
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-sm font-medium">{t.reports.resultTitle}</div>
-          <span className="text-xs font-medium text-muted">
-            {head.story.kind === "enough" ? t.reports.verdictEnough : head.story.kind === "short" ? t.reports.verdictShort : t.reports.verdictSetup}
-          </span>
-        </div>
-        <p className="mt-2 text-sm leading-5">
-          {head.story.kind === "enough"
-            ? t.reports.enoughLine
-                .replace("{plan}", money(head.story.planned, "HKD"))
-                .replace("{need}", money(head.funding.need, "HKD"))
-                .replace("{gap}", money(Math.abs(head.story.gap), "HKD"))
-                .replace("{age}", String(head.planEndAge))
-            : head.story.kind === "short"
-              ? t.reports.shortLine
-                  .replace("{plan}", money(head.story.planned, "HKD"))
-                  .replace("{need}", money(head.funding.need, "HKD"))
-                  .replace("{gap}", money(Math.abs(head.story.gap), "HKD"))
-                  .replace("{age}", String(head.planEndAge))
-              : t.reports.setupLine}
-        </p>
-        {head.story.kind === "setup" ? null : (
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <MiniStat label={t.reports.spendRetired} value={base.targetMonthly} accent />
-            <MiniStat label={head.story.gap < 0 ? t.reports.fundingGapShort : t.reports.fundingGapExtra} value={Math.abs(head.story.gap)} danger={head.story.gap < 0} />
-            <MiniStat label={t.reports.investableNow} value={investable} />
-          </div>
-        )}
-      </section>
-      </Enter>
       <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.tagsAllocate.replace("{amount}", money(base.targetMonthly, "HKD"))}</p>
 
       <SectionLabel>{t.reports.fireSpendEngine}</SectionLabel>

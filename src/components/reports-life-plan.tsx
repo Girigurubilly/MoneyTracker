@@ -1,12 +1,12 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { Disclaimer, ScreenHeader, SectionLabel } from "@/components/shared";
-import { Enter } from "@/components/retire-ux";
+import { Enter, RetireAgeSlider, ScenarioChips, type ScenarioId } from "@/components/retire-ux";
 import { LifePlanJobs } from "@/components/life-plan-setup";
-import { SharedRetirementStrip, useLifePlanResult } from "@/components/reports-retire";
-import { money } from "@/lib/format";
-import { emptyLifePlan, type LifePathId, type LifePathResult } from "@/lib/calc/life-plan";
+import { OfficialAnswerCard, SharedRetirementStrip, timeToTargetLine, useRetirementHeadline } from "@/components/reports-retire";
+import { money, todayISO } from "@/lib/format";
+import { emptyLifePlan, lifePlanSwitchSavingsPace, lifePlanTimeToTarget, type LifePathId, type LifePathResult } from "@/lib/calc/life-plan";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { useT } from "@/store/ui";
@@ -15,30 +15,133 @@ export function EarlyRetirementPlanPage() {
   const t = useT();
   const stored = useApp((s) => s.lifePlan);
   const plan = stored ?? emptyLifePlan();
-  const { result } = useLifePlanResult();
+  const head = useRetirementHeadline();
+  const { result } = head.life;
+  const { base, persist, funding, investable, story, planEndAge, timeToTarget } = head;
   const [path, setPath] = useState<LifePathId>("stay");
+  const [draftAge, setDraftAge] = useState(base.retireAge);
+  const [dragging, setDragging] = useState(false);
+  const [scenario, setScenario] = useState<ScenarioId | null>(null);
   const chart = mergeSeries(result.stay, result.switch);
+  const partTimeReady = (base.postRetireJobMonthly ?? 0) > 0;
+  const nowGap = funding.ready ? funding.need - investable : 0;
+  const nowGapLabel = nowGap > 0 ? t.reports.nowGapShort : t.reports.nowGapOver;
+  const fundingLabel = funding.gap < 0 ? t.reports.fundingGapShort : t.reports.fundingGapExtra;
+  const pathHaveLine = t.reports.pathHaveLine
+    .replace("{have}", money(funding.have, "HKD"))
+    .replace("{gapLabel}", fundingLabel)
+    .replace("{gap}", money(Math.abs(funding.gap), "HKD"));
+
+  const switchPace = useMemo(() => lifePlanSwitchSavingsPace(plan), [plan]);
+  const switchTimeToTarget = useMemo(() => {
+    if (!funding.ready || story.kind === "setup") return null;
+    return lifePlanTimeToTarget({
+      need: funding.need,
+      investableNow: investable,
+      monthlyIncome: switchPace.monthlyIncome,
+      monthlySpend: switchPace.monthlySpend,
+      preReturn: base.preReturn,
+      currentAge: base.currentAge,
+      retireAge: result.switch?.retireAge ?? base.retireAge,
+      planEndAge,
+      asOf: todayISO(),
+    });
+  }, [funding, story.kind, investable, switchPace, base.preReturn, base.currentAge, base.retireAge, result.switch?.retireAge, planEndAge]);
+
+  useEffect(() => {
+    if (!dragging && scenario == null) setDraftAge(base.retireAge);
+  }, [base.retireAge, dragging, scenario]);
+
+  function applyDraftAge() {
+    persist({ retireAge: draftAge });
+    setScenario(null);
+  }
+
+  function cancelDraft() {
+    setDraftAge(base.retireAge);
+    setScenario(null);
+  }
+
+  function pickScenario(id: ScenarioId) {
+    setScenario(id);
+    if (id === "keep65") setDraftAge(65);
+    else if (id === "retire55") setDraftAge(55);
+    else if (id === "part60") setDraftAge(60);
+  }
+
+  function applyScenario() {
+    if (scenario === "part60" && !partTimeReady) return;
+    persist({ retireAge: draftAge });
+    setScenario(null);
+  }
 
   return (
     <div className="pb-10">
       <ScreenHeader title={t.reports.lpTitle} backTo="/reports/retirement" />
-      <p className="px-5 pb-1 text-xs leading-5 text-muted">{t.reports.lpStartNote}</p>
-      <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.lpHint}</p>
+      <p className="px-5 pb-1 text-xs leading-5 text-muted">{t.reports.lpHint}</p>
+      <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.lpStartNote}</p>
       <SharedRetirementStrip />
       <LifePlanJobs />
-      <Link to="/reports/retirement" className="tr-press mx-4 mb-3 flex min-h-11 items-center rounded-2xl bg-elevated px-4 text-sm">
+      <Link to="/reports/retirement/setup" className="tr-press mx-4 mb-3 flex min-h-11 items-center rounded-2xl bg-elevated px-4 text-sm">
         {t.reports.assumptionsOne}
       </Link>
+
+      <SectionLabel>{t.reports.previewAge}</SectionLabel>
+      <p className="px-5 pb-2 text-[11px] leading-4 text-muted">{t.reports.ageSliderHint}</p>
+      <RetireAgeSlider
+        value={draftAge}
+        committed={base.retireAge}
+        onDraft={setDraftAge}
+        onDragChange={setDragging}
+        onApply={applyDraftAge}
+        onCancel={cancelDraft}
+      />
+      <ScenarioChips
+        active={scenario}
+        partTimeReady={partTimeReady}
+        onPick={pickScenario}
+        onApply={applyScenario}
+        onCancel={cancelDraft}
+      />
 
       {result.ready ? (
         <>
           <Enter>
-          <div className="mx-4 mb-3 grid grid-cols-1 gap-2">
-            {result.stay ? <PathCard title={t.reports.lpStay} row={result.stay} target={plan.personal.targetTerminalFinancialAssets} t={t} /> : null}
-            {result.switch ? <PathCard title={t.reports.lpSwitch} row={result.switch} target={plan.personal.targetTerminalFinancialAssets} t={t} /> : null}
-          </div>
+            <div className="mx-4 mb-3 grid grid-cols-1 gap-2">
+              {result.stay ? (
+                <PathOfficial
+                  title={t.reports.lpStay}
+                  row={result.stay}
+                  fundingReady={funding.ready}
+                  need={funding.need}
+                  investable={investable}
+                  nowGap={nowGap}
+                  nowGapLabel={nowGapLabel}
+                  velocityLine={timeToTargetLine(t.reports, timeToTarget, base.retireAge, planEndAge)}
+                  pathHaveLine={pathHaveLine}
+                  planEndAge={planEndAge}
+                  t={t}
+                />
+              ) : null}
+              {result.switch ? (
+                <PathOfficial
+                  title={t.reports.lpSwitch}
+                  row={result.switch}
+                  fundingReady={funding.ready}
+                  need={funding.need}
+                  investable={investable}
+                  nowGap={nowGap}
+                  nowGapLabel={nowGapLabel}
+                  velocityLine={timeToTargetLine(t.reports, switchTimeToTarget, result.switch.retireAge ?? base.retireAge, planEndAge)}
+                  pathHaveLine={pathHaveLine}
+                  planEndAge={planEndAge}
+                  t={t}
+                />
+              ) : null}
+            </div>
           </Enter>
           <SectionLabel>{t.reports.lpChart}</SectionLabel>
+          <p className="px-5 pb-2 text-[11px] leading-4 text-muted">{t.reports.whatIfSecondary}</p>
           <div className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated pt-2">
             <div className="h-44">
               <ResponsiveContainer width="100%" height="100%">
@@ -65,6 +168,11 @@ export function EarlyRetirementPlanPage() {
               </button>
             </div>
           ) : null}
+          <div className="mx-4 mb-3 grid grid-cols-1 gap-2">
+            {result.stay && path === "stay" ? <PathDetails title={t.reports.lpStay} row={result.stay} target={plan.personal.targetTerminalFinancialAssets} t={t} /> : null}
+            {result.switch && path === "switch" ? <PathDetails title={t.reports.lpSwitch} row={result.switch} target={plan.personal.targetTerminalFinancialAssets} t={t} /> : null}
+            {result.switch == null && result.stay ? <PathDetails title={t.reports.lpStay} row={result.stay} target={plan.personal.targetTerminalFinancialAssets} t={t} /> : null}
+          </div>
           <p className="px-5 pb-2 text-xs leading-5 text-muted">{t.reports.oneYearList}</p>
           <Link to="/reports/retirement/projection" className="tr-press mx-4 mb-3 flex min-h-11 items-center rounded-2xl bg-elevated px-4 text-sm">
             {t.reports.scenarioYears}
@@ -79,7 +187,55 @@ export function EarlyRetirementPlanPage() {
   );
 }
 
-function PathCard({
+function PathOfficial({
+  title,
+  row,
+  fundingReady,
+  need,
+  investable,
+  nowGap,
+  nowGapLabel,
+  velocityLine,
+  pathHaveLine,
+  planEndAge,
+  t,
+}: {
+  title: string;
+  row: LifePathResult;
+  fundingReady: boolean;
+  need: number;
+  investable: number;
+  nowGap: number;
+  nowGapLabel: string;
+  velocityLine?: string;
+  pathHaveLine?: string;
+  planEndAge: number;
+  t: ReturnType<typeof useT>;
+}) {
+  const endAge = row.years[row.years.length - 1]?.age ?? planEndAge;
+  const verdict = row.depletes
+    ? t.reports.verdictShortUntil.replace("{age}", String(endAge))
+    : t.reports.verdictEnoughUntil.replace("{age}", String(endAge));
+  return (
+    <div className="rounded-2xl bg-elevated p-1">
+      <div className="px-3 pt-3 text-sm font-medium">{title}</div>
+      <OfficialAnswerCard
+        fundingReady={fundingReady}
+        need={need}
+        investable={investable}
+        nowGap={nowGap}
+        nowGapLabel={nowGapLabel}
+        verdict={verdict}
+        verdictKind={row.depletes ? "short" : "enough"}
+        velocityLine={velocityLine}
+        pathHaveLine={pathHaveLine}
+        compact
+      />
+    </div>
+  );
+}
+
+function PathDetails({
   title,
   row,
   target,
@@ -94,6 +250,7 @@ function PathCard({
   return (
     <div className="rounded-2xl bg-elevated p-4">
       <div className="text-sm font-medium">{title}</div>
+      <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.whatIfSecondary}</p>
       <div className="mt-2 grid grid-cols-2 gap-2">
         <Mini k={t.reports.lpRetireAge} v={row.retireAge == null ? "—" : String(row.retireAge)} />
         <Mini k={t.reports.lpAtRetire} v={money(row.assetsAtRetire, "HKD")} />
