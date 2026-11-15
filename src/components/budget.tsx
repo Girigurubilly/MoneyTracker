@@ -20,7 +20,7 @@ import {
   SelectLine,
   TextLine,
 } from "@/components/txn-composer";
-import { asOfForMonth, adhocTotal, budgetActuals, chargedDayOf, chargedIso, forecastTone, monthlyRegularsNetHkd, regularSettledInMonth, spentInMonth } from "@/lib/calc/budget";
+import { asOfForMonth, adhocSettled, adhocTotal, budgetActuals, chargedDayOf, chargedIso, forecastTone, monthlyRegularsNetHkd, regularSettledInMonth, scheduledBudgetSplit, spentInMonth } from "@/lib/calc/budget";
 import { WhenField } from "@/components/when-picker";
 import { effectiveAnnualTravelBudget, travelSpendYtd, isTripActive } from "@/lib/calc/trips";
 import { monthKey } from "@/lib/calc/ledger";
@@ -57,7 +57,6 @@ export function BudgetScreen() {
   const monthSpent = storedTotal?.spent ?? 0;
   const reserved = storedTotal?.reserved ?? 0;
   const reservedA = storedTotal?.reservedAdhoc ?? 0;
-  const realized = storedTotal?.realized ?? 0;
   const projected = storedTotal?.projected ?? 0;
   const projectedRemain = storedTotal?.projectedRemain ?? 0;
   const avgDaily = storedTotal?.avgDaily ?? 0;
@@ -68,6 +67,7 @@ export function BudgetScreen() {
   const monthRemain = storedTotal?.remaining ?? monthCap - monthSpent - reserved - (targetMode === "regular" ? 0 : reservedA);
   const monthTone = forecastTone(monthCap > 0 ? monthUsed / monthCap : 0);
   const heldInBar = reserved + (targetMode === "regular" ? 0 : reservedA);
+  const scheduled = scheduledBudgetSplit(recurring, adhocRows, txs, month, rates);
   const categoryActuals = actuals.filter((b) => b.id !== MONTH_TOTAL_BUDGET_ID);
   const travelIds = travelThemedIds(categories);
   const spent = travelSpendYtd(txs, Number(month.slice(0, 4)), travelIds, rates);
@@ -195,8 +195,8 @@ export function BudgetScreen() {
         </button>
         {showBreakdown ? (
           <div className="rt-enter mt-1 space-y-1.5 text-xs text-muted">
-            <BreakRow label={t.today.reservedRegulars} value={reserved + reservedA} />
-            <BreakRow label={t.budget.dueNotPostedBoth} value={Math.max(0, realized - monthSpent)} />
+            <BreakRow label={t.budget.schedRealized} value={scheduled.realized} />
+            <BreakRow label={t.budget.schedOpen} value={scheduled.open} />
             <BreakRow label={`${t.budget.projected} · ${t.budget.atPace}`} value={projected} />
             {monthCap > 0 ? <BreakRow label={t.budget.avgDaily} value={avgDaily} /> : null}
           </div>
@@ -804,6 +804,7 @@ function AdhocBlock({
   const accounts = useApp((s) => s.accounts);
   const delAdhoc = useApp((s) => s.deleteAdhocBudget);
   const addWish = useApp((s) => s.addWishItem);
+  const txs = useApp((s) => s.transactions);
   const today = todayISO();
   const [posting, setPosting] = useState<AdhocBudget | null>(null);
   const rows = useApp((s) => s.adhocBudgets)
@@ -843,7 +844,7 @@ function AdhocBlock({
       ) : (
         <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
           {rows.map((a) => {
-            const paid = Boolean(a.paidOn);
+            const paid = adhocSettled(a, txs, month);
             const upcoming = !paid && a.date > today;
             const dueUnpaid = !paid && a.date <= today;
             return (
@@ -852,7 +853,7 @@ function AdhocBlock({
                 <div className="min-w-0 flex-1">
                   <div className="break-words text-sm font-medium">{pickName(locale, a.label, a.labelZh)}</div>
                   <div className="mt-0.5 text-xs text-muted">
-                    {dayPart(paid ? (a.paidOn ?? today) : a.date, locale)}
+                    {dayPart(a.paidOn ?? a.date, locale)}
                     {(() => {
                       const acc = accounts.find((x) => x.id === a.accountId);
                       return acc ? ` · ${pickName(locale, acc.name, acc.nameZh)}` : "";

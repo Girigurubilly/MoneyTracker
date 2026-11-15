@@ -256,10 +256,11 @@ export function adhocTotal(rows: AdhocBudget[], month: string, rates: FxRate[]):
   return sum;
 }
 
-export function reservedAdhoc(rows: AdhocBudget[], month: string, rates: FxRate[], asOfIso: string): number {
+export function reservedAdhoc(rows: AdhocBudget[], month: string, rates: FxRate[], asOfIso: string, txs: Transaction[] = []): number {
   let sum = 0;
   for (const a of adhocForMonth(rows, month)) {
     if (adhocChargedBy(a, asOfIso)) continue;
+    if (adhocSettled(a, txs, month)) continue;
     sum += Math.abs(toHkd(a.amount, a.currency, rates));
   }
   return sum;
@@ -273,6 +274,43 @@ export function realizedAdhoc(rows: AdhocBudget[], month: string, rates: FxRate[
     sum += Math.abs(toHkd(a.amount, a.currency, rates));
   }
   return sum;
+}
+
+/** A one-off is already realized when it is marked paid, or a posted expense matches it. */
+export function adhocSettled(a: AdhocBudget, txs: Transaction[], month: string): boolean {
+  if (a.paidOn) return true;
+  return txs.some(
+    (t) =>
+      !t.planned &&
+      t.adhoc &&
+      t.date.startsWith(month) &&
+      Math.abs(t.amount - a.amount) < 0.01 &&
+      (t.payee === a.label || t.payeeZh === a.labelZh),
+  );
+}
+
+/** Posted vs still-open scheduled spend for this month (regulars + one-offs). */
+export function scheduledBudgetSplit(
+  recurring: Recurring[],
+  adhoc: AdhocBudget[],
+  txs: Transaction[],
+  month: string,
+  rates: FxRate[],
+): { realized: number; open: number } {
+  let realized = 0;
+  let open = 0;
+  for (const r of monthlyExpenseRegulars(recurring)) {
+    const iso = chargedIso(month, chargedDayOf(r));
+    const hkd = hkdOfRegular(r, rates);
+    if (regularSettledInMonth(r, txs, month, iso)) realized += hkd;
+    else open += hkd;
+  }
+  for (const a of adhocForMonth(adhoc, month)) {
+    const hkd = Math.abs(toHkd(a.amount, a.currency, rates));
+    if (adhocSettled(a, txs, month)) realized += hkd;
+    else open += hkd;
+  }
+  return { realized, open };
 }
 
 /** 已實現非定期 = 本月已花費 − 已實現每月定期 − 本月臨時 */
@@ -417,10 +455,13 @@ export function monthCashflowForecast(
 
   let schedExpense = 0;
   if (current) {
-    schedExpense = reservedRegulars(recurring, rates, asOf) + reservedAdhoc(adhoc, month, rates, asOf);
+    schedExpense = reservedRegulars(recurring, rates, asOf) + reservedAdhoc(adhoc, month, rates, asOf, txs);
   } else if (future) {
     for (const r of monthlyExpenseRegulars(recurring)) schedExpense += hkdOfRegular(r, rates);
-    schedExpense += adhocTotal(adhoc, month, rates);
+    for (const a of adhocForMonth(adhoc, month)) {
+      if (adhocSettled(a, txs, month)) continue;
+      schedExpense += Math.abs(toHkd(a.amount, a.currency, rates));
+    }
   }
 
   const income = posted.income + schedIncome;
@@ -430,7 +471,7 @@ export function monthCashflowForecast(
 
 /**
  * Cap card formulas (calendar day only — no txn matching):
- *   reserved (已預留) = monthly expense regulars + this-month ad-hoc whose charged/hold day is still after today
+ *   reserved (已預留) = monthly expense regulars + this-month ad-hoc still ahead, excluding ones already posted
  *   realized (已入帳) = regulars and unpaid ad-hoc whose day has arrived, plus ad-hoc expenses already posted
  *   avgDaily          = (spent − realized) / day of month
  *   dailyAllowed      = (cap − spent − reserved) / days after today
@@ -465,7 +506,7 @@ export function budgetActuals(
 })[] {
   const asOf = asOfIso ?? monthEndIso(month);
   const reservedReg = reservedRegulars(recurring, rates, asOf);
-  const reservedAAll = reservedAdhoc(adhocRows, month, rates, asOf);
+  const reservedAAll = reservedAdhoc(adhocRows, month, rates, asOf, txs);
   const realizedA = realizedAdhoc(adhocRows, month, rates, asOf);
   const realizedR = realizedRegulars(recurring, rates, asOf);
   const realizedCalendar = realizedR + realizedA;

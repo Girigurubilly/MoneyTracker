@@ -6,6 +6,7 @@ import { AmountWithHkd } from "@/components/currency-field";
 import { ScreenHeader } from "@/components/shared";
 import { ReportAiButton, ReportAiSheet } from "@/components/report-ai-sheet";
 import { renderAdhocBriefMarkdown } from "@/lib/calc/adhoc-brief";
+import { adhocSettled } from "@/lib/calc/budget";
 import { categoryPath } from "@/lib/categories";
 import { todayISO } from "@/lib/format";
 import { pickName } from "@/lib/i18n";
@@ -252,11 +253,12 @@ function MonthRows({
   onWish: (a: AdhocBudget) => void;
 }) {
   const t = useT();
+  const txs = useApp((s) => s.transactions);
   if (!rows.length) return <p className="px-5 py-2 text-sm text-muted">{empty}</p>;
   return (
     <div className="mx-4 overflow-hidden rounded-xl bg-elevated">
       {rows.map((a) => {
-        const paid = Boolean(a.paidOn);
+        const paid = adhocSettled(a, txs, a.month || a.date.slice(0, 7));
         const upcoming = !paid && a.date > today;
         return (
           <div key={a.id} className="border-t border-line px-4 py-3 first:border-0">
@@ -264,7 +266,7 @@ function MonthRows({
               <button type="button" className="min-w-0 flex-1 text-left" onClick={() => onEdit(a)}>
                 <div className="break-words text-sm font-medium">{pickName(locale, a.label, a.labelZh)}</div>
                 <div className="mt-0.5 break-words text-xs text-muted">
-                  {paid ? `${a.paidOn} · ${t.budget.paidToday}` : a.date}
+                  {paid ? `${a.paidOn ?? a.date} · ${t.budget.paidToday}` : a.date}
                   {(() => {
                     const cat = categories.find((c) => c.id === a.categoryId);
                     const acc = accounts.find((x) => x.id === a.accountId);

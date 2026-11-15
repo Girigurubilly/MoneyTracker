@@ -6,7 +6,7 @@ import { pickName } from "@/lib/i18n";
 import { Link } from "@tanstack/react-router";
 import { activityDates, plannedIso, monthStats } from "@/lib/derived";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
-import { chargedDayOf, chargedIso, forecastTone, regularSettledInMonth } from "@/lib/calc/budget";
+import { adhocSettled, chargedDayOf, chargedIso, forecastTone, regularSettledInMonth } from "@/lib/calc/budget";
 import { toHkd } from "@/lib/calc/fx";
 import { cashflowSide } from "@/lib/calc/ledger";
 import type { AdhocBudget, Locale, MoneyUnit, Recurring, Transaction } from "@/lib/types";
@@ -490,6 +490,16 @@ function monthSchedule(opts: {
         t.payee === tx.payee,
     );
     if (already) continue;
+    const coveredByAdhoc =
+      tx.adhoc &&
+      opts.adhoc.some(
+        (a) =>
+          !adhocSettled(a, opts.posted, opts.monthKey) &&
+          (a.date === tx.date || a.month === tx.date.slice(0, 7)) &&
+          Math.abs(a.amount - tx.amount) < 0.01 &&
+          (a.label === tx.payee || a.labelZh === tx.payeeZh),
+      );
+    if (coveredByAdhoc) continue;
     const day = Number(tx.date.slice(8, 10)) || 1;
     const spend = tx.type === "expense" || Boolean(tx.countsAsExpense);
     const transfer = tx.type === "transfer" && !tx.countsAsExpense;

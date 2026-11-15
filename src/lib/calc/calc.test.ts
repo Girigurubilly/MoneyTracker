@@ -14,6 +14,7 @@ import {
   avgDailyNonRegular,
   regularSettledInMonth,
   committedOutflows,
+  scheduledBudgetSplit,
 } from "./budget.ts";
 import { convertAmount, parseErApi, parseFrankfurter } from "./fx.ts";
 import { MONTH_TOTAL_BUDGET_ID } from "../types.ts";
@@ -177,6 +178,34 @@ describe("budget formulas", () => {
     assert.equal(reservedRegulars(recurring, [], "2026-08-15"), 300);
     assert.equal(adhocTotal(adhoc, "2026-08", []), 50);
     assert.equal(reservedAdhoc(adhoc, "2026-08", [], "2026-08-15"), 40);
+  });
+
+  it("splits scheduled spend into posted and still open", () => {
+    const recurring: Recurring[] = [
+      rec({ id: "rent", type: "expense", amount: 8000, chargedDay: 1 }),
+      rec({ id: "phone", type: "expense", amount: 200, chargedDay: 25 }),
+    ];
+    const adhoc: AdhocBudget[] = [
+      hold({ id: "lunch", amount: 80, date: "2026-08-02", paidOn: "2026-08-02" }),
+      hold({ id: "dinner", amount: 120, date: "2026-08-20" }),
+    ];
+    const txs: Transaction[] = [
+      tx({ id: "t-rent", type: "expense", amount: 8000, date: "2026-08-01", recurringId: "rent" }),
+    ];
+    const split = scheduledBudgetSplit(recurring, adhoc, txs, "2026-08", []);
+    assert.equal(split.realized, 8080);
+    assert.equal(split.open, 320);
+  });
+
+  it("does not reserve a one-off that is already posted", () => {
+    const adhoc: AdhocBudget[] = [hold({ id: "lunch", amount: 80, date: "2026-08-20" })];
+    const txs: Transaction[] = [
+      tx({ id: "t-lunch", type: "expense", amount: 80, date: "2026-08-20", adhoc: true, payee: "lunch", payeeZh: "lunch" }),
+    ];
+    assert.equal(reservedAdhoc(adhoc, "2026-08", [], "2026-08-15", txs), 0);
+    const split = scheduledBudgetSplit([], adhoc, txs, "2026-08", []);
+    assert.equal(split.realized, 80);
+    assert.equal(split.open, 0);
   });
 
   it("monthly regulars net totals income minus expense", () => {
