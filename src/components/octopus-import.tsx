@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { Overlay } from "@/components/shared";
 import { AccountSelect } from "@/components/account-select";
 import { moneyAccountsForPicker } from "@/lib/accounts";
+import { cn } from "@/lib/utils";
 import { pickName } from "@/lib/i18n";
 import {
   mergeOctopusDrafts,
@@ -238,8 +239,8 @@ export function OctopusImport({ onClose }: { onClose: () => void }) {
         <button type="button" className="tr-press mt-2 text-xs text-accent" onClick={() => setShowRaw((v) => !v)}>
           {t.add.octopusPaste}
         </button>
-        {showRaw ? (
-          <div className="rt-fold rt-fold-open mt-2"><div className="rt-fold-inner">
+        <div className={cn("rt-fold mt-2", showRaw && "rt-fold-open")}>
+          <div className="rt-fold-inner">
             <textarea
               value={rawText}
               onChange={(e) => setRawText(e.target.value)}
@@ -254,8 +255,8 @@ export function OctopusImport({ onClose }: { onClose: () => void }) {
             >
               {t.add.octopusParse}
             </button>
-          </div></div>
-        ) : null}
+          </div>
+        </div>
       </div>
       <div className="rt-enter-delay px-4 pb-10">
         {rows.length === 0 ? (

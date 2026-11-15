@@ -18,7 +18,7 @@ export function LifePlanSetup() {
   function patch(p: Partial<RetirementLifePlan>) {
     persist(mergeLifePlan(plan, p));
   }
-  return <Setup plan={plan} patch={patch} persist={persist} />;
+  return <Setup plan={plan} patch={patch} />;
 }
 
 export function LifePlanJobs() {
@@ -39,46 +39,58 @@ export function LifePlanJobs() {
   );
 }
 
+export function LifePlanSpendingStages() {
+  const stored = useApp((s) => s.lifePlan);
+  const update = useApp((s) => s.updateLifePlan);
+  const plan = stored ?? emptyLifePlan();
+  const t = useT();
+  const stages = plan.spendingStages.filter((s) => !isPlaceholderStage(s));
+  function persist(next: RetirementLifePlan) {
+    void update({ ...next, id: "base", version: 1 });
+  }
+  return (
+    <section className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
+      <div className="px-4 pb-1 pt-3 text-[12px] font-medium text-muted">{t.reports.settingsStagesQ}</div>
+      <p className="px-4 pb-2 text-[11px] leading-4 text-muted">{t.reports.settingsStagesHint}</p>
+      {stages.map((s, i) => (
+        <div key={s.id} className="border-t border-line">
+          <div className="flex min-h-11 items-center justify-between px-4">
+            <span className="text-xs text-muted">{i + 1}</span>
+            <button type="button" className="tr-press grid size-11 place-items-center text-muted" onClick={() => persist({ ...plan, spendingStages: plan.spendingStages.filter((x) => x.id !== s.id) })}>
+              <Trash2 className="size-4" />
+            </button>
+          </div>
+          <TextRow label={t.reports.lpStageLabel} value={s.label} onChange={(label) => persist({ ...plan, spendingStages: plan.spendingStages.map((x) => (x.id === s.id ? { ...x, label } : x)) })} />
+          <ConfigNullNum label={t.reports.lpStageStart} value={s.startAge} onCommit={(n) => persist({ ...plan, spendingStages: plan.spendingStages.map((x) => (x.id === s.id ? { ...x, startAge: n } : x)) })} />
+          <ConfigNullNum label={t.reports.lpStageEnd} value={s.endAge} onCommit={(n) => persist({ ...plan, spendingStages: plan.spendingStages.map((x) => (x.id === s.id ? { ...x, endAge: n } : x)) })} />
+          <ConfigNullNum label={t.reports.lpStageCost} value={s.monthlyLivingCostInTodayMoney} money onCommit={(n) => persist({ ...plan, spendingStages: plan.spendingStages.map((x) => (x.id === s.id ? { ...x, monthlyLivingCostInTodayMoney: n } : x)) })} />
+          <Toggle label={t.reports.lpStageInflation} on={s.followsInflation} onChange={(on) => persist({ ...plan, spendingStages: plan.spendingStages.map((x) => (x.id === s.id ? { ...x, followsInflation: on } : x)) })} />
+        </div>
+      ))}
+      <button
+        type="button"
+        className="tr-press m-4 flex h-11 w-[calc(100%-2rem)] items-center justify-center gap-1 rounded-xl bg-background text-sm font-medium"
+        onClick={() => persist({ ...plan, spendingStages: [...plan.spendingStages.filter((s) => !isPlaceholderStage(s)), blankStage()] })}
+      >
+        <Plus className="size-4" />
+        {t.reports.lpAddStage}
+      </button>
+    </section>
+  );
+}
+
 function Setup({
   plan,
   patch,
-  persist,
 }: {
   plan: RetirementLifePlan;
   patch: (p: Partial<RetirementLifePlan>) => void;
-  persist: (p: RetirementLifePlan) => void;
 }) {
   const t = useT();
-  const stages = plan.spendingStages.filter((s) => !isPlaceholderStage(s));
   return (
     <div className="mt-3 space-y-2">
       <Fold title={t.reports.lpPersonal} hint={t.reports.lpHintPersonal}>
         <ConfigNullNum label={t.reports.lpDwz} value={plan.personal.targetTerminalFinancialAssets} money onCommit={(n) => patch({ personal: { ...plan.personal, targetTerminalFinancialAssets: n } })} />
-      </Fold>
-      <Fold title={t.reports.lpStages}>
-        <p className="px-4 pb-2 text-[11px] leading-4 text-muted">{t.reports.lpStageHint}</p>
-        {stages.map((s, i) => (
-          <div key={s.id} className="border-t border-line">
-            <div className="flex min-h-11 items-center justify-between px-4">
-              <span className="text-xs text-muted">{i + 1}</span>
-              <button type="button" className="tr-press grid size-11 place-items-center text-muted" onClick={() => persist({ ...plan, spendingStages: plan.spendingStages.filter((x) => x.id !== s.id) })}>
-                <Trash2 className="size-4" />
-              </button>
-            </div>
-            <TextRow label={t.reports.lpStageLabel} value={s.label} onChange={(label) => persist({ ...plan, spendingStages: plan.spendingStages.map((x) => (x.id === s.id ? { ...x, label } : x)) })} />
-            <ConfigNullNum label={t.reports.lpStageStart} value={s.startAge} onCommit={(n) => persist({ ...plan, spendingStages: plan.spendingStages.map((x) => (x.id === s.id ? { ...x, startAge: n } : x)) })} />
-            <ConfigNullNum label={t.reports.lpStageEnd} value={s.endAge} onCommit={(n) => persist({ ...plan, spendingStages: plan.spendingStages.map((x) => (x.id === s.id ? { ...x, endAge: n } : x)) })} />
-            <ConfigNullNum label={t.reports.lpStageCost} value={s.monthlyLivingCostInTodayMoney} money onCommit={(n) => persist({ ...plan, spendingStages: plan.spendingStages.map((x) => (x.id === s.id ? { ...x, monthlyLivingCostInTodayMoney: n } : x)) })} />
-          </div>
-        ))}
-        <button
-          type="button"
-          className="tr-press m-4 flex h-11 w-[calc(100%-2rem)] items-center justify-center gap-1 rounded-xl bg-background text-sm font-medium"
-          onClick={() => persist({ ...plan, spendingStages: [...plan.spendingStages.filter((s) => !isPlaceholderStage(s)), blankStage()] })}
-        >
-          <Plus className="size-4" />
-          {t.reports.lpAddStage}
-        </button>
       </Fold>
       <Fold title={t.reports.lpMortgage} hint={t.reports.lpHintMortgage}>
         <Toggle label={t.reports.lpEnabled} on={plan.mortgage.enabled} onChange={(on) => patch({ mortgage: { ...plan.mortgage, enabled: on } })} />
@@ -148,7 +160,6 @@ function JobFolds({
       <Fold title={t.reports.lpCurrentJob} open>
         <p className="px-4 pb-2 text-[11px] leading-4 text-muted">{t.reports.lpJobEndBlank}</p>
         <Toggle label={t.reports.lpEnabled} on={plan.currentJob.enabled} onChange={(on) => patch({ currentJob: { ...plan.currentJob, enabled: on } })} />
-        <DateRow label={t.reports.lpJobEnd} value={plan.currentJob.endDate} onChange={(v) => patch({ currentJob: { ...plan.currentJob, endDate: v } })} />
       </Fold>
       <Fold title={t.reports.lpLowerJob} open>
         <Toggle label={t.reports.lpEnabled} on={plan.lowerStressJob.enabled} onChange={(on) => patch({ lowerStressJob: { ...plan.lowerStressJob, enabled: on } })} />
@@ -181,11 +192,9 @@ function Fold({ title, hint, children, open = false }: { title: string; hint?: s
         </span>
         <ChevronDown className={cn("size-4 shrink-0 text-muted transition", on && "rotate-180")} />
       </button>
-      {on ? (
-        <div className="rt-fold border-t border-line">
-          <div className="rt-fold-inner">{children}</div>
-        </div>
-      ) : null}
+      <div className={cn("rt-fold border-t border-line", on && "rt-fold-open")}>
+        <div className="rt-fold-inner">{children}</div>
+      </div>
     </div>
   );
 }

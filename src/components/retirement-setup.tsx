@@ -3,7 +3,7 @@ import { ChevronDown } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Hairline, ScreenHeader, SectionLabel } from "@/components/shared";
 import { DateField } from "@/components/txn-composer";
-import { LifePlanSetup } from "@/components/life-plan-setup";
+import { LifePlanSetup, LifePlanSpendingStages } from "@/components/life-plan-setup";
 import { ConfigFold, ConfigNumRow, Enter } from "@/components/retire-ux";
 import { useRetirementHeadline } from "@/components/reports-retire";
 import { money, todayISO } from "@/lib/format";
@@ -102,6 +102,10 @@ export function RetirementSetupPage() {
             <div className="pb-1" />
           )}
         </section>
+      </Enter>
+
+      <Enter delay>
+        <LifePlanSpendingStages />
       </Enter>
 
       <Link
@@ -329,12 +333,12 @@ function SleeveReturns({
         <span className="text-sm font-medium">{title}</span>
         <ChevronDown className={cn("size-4 text-muted transition", on && "rotate-180")} />
       </button>
-      {on ? (
-        rows.length === 0 ? (
-          <div className="rt-fold border-t border-line"><p className="rt-fold-inner px-4 py-3 text-xs text-muted">{t.common.none}</p></div>
-        ) : (
-          <div className="rt-fold border-t border-line"><div className="rt-fold-inner">
-            {rows.map((s, i) => (
+      <div className={cn("rt-fold border-t border-line", on && "rt-fold-open")}>
+        <div className="rt-fold-inner">
+          {rows.length === 0 ? (
+            <p className="px-4 py-3 text-xs text-muted">{t.common.none}</p>
+          ) : (
+            rows.map((s, i) => (
               <div key={s.id} className={s.included ? "" : "opacity-50"}>
                 {i > 0 ? <Hairline /> : null}
                 <div className="px-4 py-2">
@@ -355,10 +359,10 @@ function SleeveReturns({
                   />
                 </div>
               </div>
-            ))}
-          </div></div>
-        )
-      ) : null}
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }
