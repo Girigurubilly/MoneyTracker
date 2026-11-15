@@ -48,6 +48,7 @@ import { Route as ReportsRetirementIndexRouteImport } from './routes/reports.ret
 import { Route as ReportsRetirementEarlyRetirementRouteImport } from './routes/reports.retirement.early-retirement'
 import { Route as ReportsRetirementPlanRouteImport } from './routes/reports.retirement.plan'
 import { Route as ReportsRetirementProjectionRouteImport } from './routes/reports.retirement.projection'
+import { Route as ReportsRetirementSetupRouteImport } from './routes/reports.retirement.setup'
 import { Route as ReportsTravelIndexRouteImport } from './routes/reports.travel.index'
 import { Route as ReportsTravelIdRouteImport } from './routes/reports.travel.$id'
 
@@ -248,6 +249,11 @@ const ReportsRetirementProjectionRoute =
     path: '/projection',
     getParentRoute: () => ReportsRetirementRoute,
   } as any)
+const ReportsRetirementSetupRoute = ReportsRetirementSetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
+  getParentRoute: () => ReportsRetirementRoute,
+} as any)
 const ReportsTravelIndexRoute = ReportsTravelIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -298,6 +304,7 @@ export interface FileRoutesByFullPath {
   '/reports/retirement/early-retirement': typeof ReportsRetirementEarlyRetirementRoute
   '/reports/retirement/plan': typeof ReportsRetirementPlanRoute
   '/reports/retirement/projection': typeof ReportsRetirementProjectionRoute
+  '/reports/retirement/setup': typeof ReportsRetirementSetupRoute
   '/reports/travel/$id': typeof ReportsTravelIdRoute
   '/reports/retirement/': typeof ReportsRetirementIndexRoute
   '/reports/travel/': typeof ReportsTravelIndexRoute
@@ -337,6 +344,7 @@ export interface FileRoutesByTo {
   '/reports/retirement/early-retirement': typeof ReportsRetirementEarlyRetirementRoute
   '/reports/retirement/plan': typeof ReportsRetirementPlanRoute
   '/reports/retirement/projection': typeof ReportsRetirementProjectionRoute
+  '/reports/retirement/setup': typeof ReportsRetirementSetupRoute
   '/reports/travel/$id': typeof ReportsTravelIdRoute
   '/reports/retirement': typeof ReportsRetirementIndexRoute
   '/reports/travel': typeof ReportsTravelIndexRoute
@@ -381,6 +389,7 @@ export interface FileRoutesById {
   '/reports/retirement/early-retirement': typeof ReportsRetirementEarlyRetirementRoute
   '/reports/retirement/plan': typeof ReportsRetirementPlanRoute
   '/reports/retirement/projection': typeof ReportsRetirementProjectionRoute
+  '/reports/retirement/setup': typeof ReportsRetirementSetupRoute
   '/reports/travel/$id': typeof ReportsTravelIdRoute
   '/reports/retirement/': typeof ReportsRetirementIndexRoute
   '/reports/travel/': typeof ReportsTravelIndexRoute
@@ -426,6 +435,7 @@ export interface FileRouteTypes {
     | '/reports/retirement/early-retirement'
     | '/reports/retirement/plan'
     | '/reports/retirement/projection'
+    | '/reports/retirement/setup'
     | '/reports/travel/$id'
     | '/reports/retirement/'
     | '/reports/travel/'
@@ -465,6 +475,7 @@ export interface FileRouteTypes {
     | '/reports/retirement/early-retirement'
     | '/reports/retirement/plan'
     | '/reports/retirement/projection'
+    | '/reports/retirement/setup'
     | '/reports/travel/$id'
     | '/reports/retirement'
     | '/reports/travel'
@@ -508,6 +519,7 @@ export interface FileRouteTypes {
     | '/reports/retirement/early-retirement'
     | '/reports/retirement/plan'
     | '/reports/retirement/projection'
+    | '/reports/retirement/setup'
     | '/reports/travel/$id'
     | '/reports/retirement/'
     | '/reports/travel/'
@@ -797,6 +809,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReportsRetirementProjectionRouteImport
       parentRoute: typeof ReportsRetirementRoute
     }
+    '/reports/retirement/setup': {
+      id: '/reports/retirement/setup'
+      path: '/setup'
+      fullPath: '/reports/retirement/setup'
+      preLoaderRoute: typeof ReportsRetirementSetupRouteImport
+      parentRoute: typeof ReportsRetirementRoute
+    }
     '/reports/travel/': {
       id: '/reports/travel/'
       path: '/'
@@ -856,6 +875,7 @@ interface ReportsRetirementRouteChildren {
   ReportsRetirementEarlyRetirementRoute: typeof ReportsRetirementEarlyRetirementRoute
   ReportsRetirementPlanRoute: typeof ReportsRetirementPlanRoute
   ReportsRetirementProjectionRoute: typeof ReportsRetirementProjectionRoute
+  ReportsRetirementSetupRoute: typeof ReportsRetirementSetupRoute
   ReportsRetirementIndexRoute: typeof ReportsRetirementIndexRoute
 }
 
@@ -863,6 +883,7 @@ const ReportsRetirementRouteChildren: ReportsRetirementRouteChildren = {
   ReportsRetirementEarlyRetirementRoute: ReportsRetirementEarlyRetirementRoute,
   ReportsRetirementPlanRoute: ReportsRetirementPlanRoute,
   ReportsRetirementProjectionRoute: ReportsRetirementProjectionRoute,
+  ReportsRetirementSetupRoute: ReportsRetirementSetupRoute,
   ReportsRetirementIndexRoute: ReportsRetirementIndexRoute,
 }
 
