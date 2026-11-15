@@ -1,5 +1,5 @@
 /* HK Life Money — offline fallback. Network first so a new version is what you see. */
-const CACHE = "hk-life-money-shell-v30";
+const CACHE = "hk-life-money-shell-v31";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();

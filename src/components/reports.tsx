@@ -28,7 +28,7 @@ import { effectiveAnnualTravelBudget, nextTrip, travelSpendYtd, tripCashSpent } 
 import { effectiveRate } from "@/lib/calc/mortgage";
 import { housingStatus, monthlyHousingCost } from "@/lib/calc/housing";
 import { netWorthNow } from "@/lib/calc/networth";
-import { timeToTargetSticky, useRetirementHeadline } from "@/components/reports-retire";
+import { earliestStickyText, earliestVsText, useRetirementHeadline } from "@/components/reports-retire";
 import { periodCashflowPoints, periodRange, type PeriodPreset } from "@/lib/calc/period";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
 import { monthKey, netCashMovementHkd } from "@/lib/calc/ledger";
@@ -47,20 +47,12 @@ export function ReportsHub() {
   const t = useT();
   const access = useUi((s) => s.accessMode);
   const head = useRetirementHeadline();
-  const nowGap = head.funding.ready ? head.funding.need - head.investable : 0;
-  const etaText = timeToTargetSticky(t.reports, head.timeToTarget);
+  const etaText = earliestStickyText(t.reports, head.earliest);
+  const vsText = earliestVsText(t.reports, head.earliest);
   const retireSub =
     head.story.kind === "setup"
       ? null
-      : [
-          head.story.kind === "enough"
-            ? t.reports.verdictEnoughUntil.replace("{age}", String(head.planEndAge))
-            : t.reports.verdictShortUntil.replace("{age}", String(head.planEndAge)),
-          `${nowGap > 0 ? t.reports.nowGapShort : t.reports.nowGapOver} ${money(Math.abs(nowGap), "HKD")}`,
-          etaText,
-        ]
-          .filter(Boolean)
-          .join(" · ");
+      : [etaText, vsText].filter(Boolean).join(" · ");
   const items = [
     { to: "/reports/dashboard", title: t.reports.dashboard, icon: LayoutDashboard, modes: ["standard", "elderly"] },
     { to: "/reports/spending", title: t.reports.spending, icon: Receipt, modes: ["standard", "elderly", "kid"] },
@@ -122,7 +114,7 @@ export function DashboardPage() {
   const trips = useApp((s) => s.trips);
   const annual = useApp((s) => s.annualTravelBudget);
   const head = useRetirementHeadline();
-  const etaText = timeToTargetSticky(t.reports, head.timeToTarget);
+  const etaText = earliestStickyText(t.reports, head.earliest);
   const [explain, setExplain] = useState<null | "available" | "saveMonth" | "saveYtd" | "travel">(null);
   const today = todayISO();
   const cost = monthlyHousingCost(txs, rec, cats, rates, today);

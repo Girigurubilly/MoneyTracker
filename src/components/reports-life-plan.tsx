@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { Disclaimer, ScreenHeader, SectionLabel } from "@/components/shared";
 import { Enter, RetireAgeSlider, ScenarioChips, type ScenarioId } from "@/components/retire-ux";
 import { LifePlanJobs } from "@/components/life-plan-setup";
-import { OfficialAnswerCard, SharedRetirementStrip, timeToTargetLine, useRetirementHeadline } from "@/components/reports-retire";
-import { money, todayISO } from "@/lib/format";
-import { emptyLifePlan, lifePlanSwitchSavingsPace, lifePlanTimeToTarget, nowGapTone, type LifePathId, type LifePathResult, type NowGapTone } from "@/lib/calc/life-plan";
+import { OfficialAnswerCard, SharedRetirementStrip, useRetirementHeadline } from "@/components/reports-retire";
+import { money } from "@/lib/format";
+import { earliestRetireTone, emptyLifePlan, type EarliestRetire, type LifePathId, type LifePathResult, type NowGapTone } from "@/lib/calc/life-plan";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { useT } from "@/store/ui";
@@ -17,7 +17,7 @@ export function EarlyRetirementPlanPage() {
   const plan = stored ?? emptyLifePlan();
   const head = useRetirementHeadline();
   const { result } = head.life;
-  const { base, persist, funding, investable, story, planEndAge, timeToTarget } = head;
+  const { base, persist, funding, investable, story, planEndAge, earliest } = head;
   const [path, setPath] = useState<LifePathId>("stay");
   const [draftAge, setDraftAge] = useState(base.retireAge);
   const [dragging, setDragging] = useState(false);
@@ -31,23 +31,6 @@ export function EarlyRetirementPlanPage() {
     .replace("{have}", money(funding.have, "HKD"))
     .replace("{gapLabel}", fundingLabel)
     .replace("{gap}", money(Math.abs(funding.gap), "HKD"));
-
-  const switchPace = useMemo(() => lifePlanSwitchSavingsPace(plan), [plan]);
-  const switchTimeToTarget = useMemo(() => {
-    if (!funding.ready || story.kind === "setup") return null;
-    return lifePlanTimeToTarget({
-      need: funding.need,
-      investableNow: investable,
-      monthlyIncome: switchPace.monthlyIncome,
-      monthlySpend: switchPace.monthlySpend,
-      preReturn: base.preReturn,
-      currentAge: base.currentAge,
-      retireAge: result.switch?.retireAge ?? base.retireAge,
-      planEndAge,
-      asOf: todayISO(),
-      birthday: base.birthday,
-    });
-  }, [funding, story.kind, investable, switchPace, base.preReturn, base.currentAge, base.birthday, base.retireAge, result.switch?.retireAge, planEndAge]);
 
   useEffect(() => {
     if (!dragging && scenario == null) setDraftAge(base.retireAge);
@@ -118,9 +101,9 @@ export function EarlyRetirementPlanPage() {
                   investable={investable}
                   nowGap={nowGap}
                   nowGapLabel={nowGapLabel}
-                  gapTone={nowGapTone(nowGap, timeToTarget?.kind)}
-                  velocityLine={timeToTargetLine(t.reports, timeToTarget, base.retireAge, planEndAge)}
+                  gapTone={earliestRetireTone(nowGap, earliest)}
                   pathHaveLine={pathHaveLine}
+                  earliest={earliest}
                   planEndAge={planEndAge}
                   t={t}
                 />
@@ -134,8 +117,7 @@ export function EarlyRetirementPlanPage() {
                   investable={investable}
                   nowGap={nowGap}
                   nowGapLabel={nowGapLabel}
-                  gapTone={nowGapTone(nowGap, switchTimeToTarget?.kind)}
-                  velocityLine={timeToTargetLine(t.reports, switchTimeToTarget, result.switch.retireAge ?? base.retireAge, planEndAge)}
+                  gapTone={earliestRetireTone(nowGap, earliest)}
                   pathHaveLine={pathHaveLine}
                   planEndAge={planEndAge}
                   t={t}
@@ -199,8 +181,8 @@ function PathOfficial({
   nowGap,
   nowGapLabel,
   gapTone,
-  velocityLine,
   pathHaveLine,
+  earliest,
   planEndAge,
   t,
 }: {
@@ -212,8 +194,8 @@ function PathOfficial({
   nowGap: number;
   nowGapLabel: string;
   gapTone: NowGapTone;
-  velocityLine?: string;
   pathHaveLine?: string;
+  earliest?: EarliestRetire | null;
   planEndAge: number;
   t: ReturnType<typeof useT>;
 }) {
@@ -233,8 +215,8 @@ function PathOfficial({
         gapTone={gapTone}
         verdict={verdict}
         verdictKind={row.depletes ? "short" : "enough"}
-        velocityLine={velocityLine}
         pathHaveLine={pathHaveLine}
+        earliest={earliest}
         compact
       />
     </div>

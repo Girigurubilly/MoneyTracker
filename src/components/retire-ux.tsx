@@ -109,15 +109,19 @@ export function StickyConclusionBar({
           >
             {verdict}
           </div>
-          {kind === "setup" || nowGap == null ? null : (
+          {kind === "setup" ? null : nowGap == null && !etaText ? null : (
             <div className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[12px] leading-4">
-              {nowGapLabel ? <span className="text-muted">{nowGapLabel}</span> : null}
-              <span className={cn("font-semibold tabular-nums", amountClass)}>
-                {money(Math.abs(shownGap), "HKD")}
-              </span>
+              {nowGap == null ? null : (
+                <>
+                  {nowGapLabel ? <span className="text-muted">{nowGapLabel}</span> : null}
+                  <span className={cn("font-semibold tabular-nums", amountClass)}>
+                    {money(Math.abs(shownGap), "HKD")}
+                  </span>
+                </>
+              )}
               {etaText ? (
                 <>
-                  <span className="text-muted">·</span>
+                  {nowGap == null ? null : <span className="text-muted">·</span>}
                   <span className="tabular-nums text-muted">{etaText}</span>
                 </>
               ) : null}
