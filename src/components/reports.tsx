@@ -28,7 +28,7 @@ import { effectiveAnnualTravelBudget, nextTrip, travelSpendYtd, tripCashSpent } 
 import { effectiveRate } from "@/lib/calc/mortgage";
 import { housingStatus, monthlyHousingCost } from "@/lib/calc/housing";
 import { netWorthNow } from "@/lib/calc/networth";
-import { useRetirementHeadline } from "@/components/reports-retire";
+import { timeToTargetSticky, useRetirementHeadline } from "@/components/reports-retire";
 import { periodCashflowPoints, periodRange, type PeriodPreset } from "@/lib/calc/period";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
 import { monthKey, netCashMovementHkd } from "@/lib/calc/ledger";
@@ -47,10 +47,20 @@ export function ReportsHub() {
   const t = useT();
   const access = useUi((s) => s.accessMode);
   const head = useRetirementHeadline();
+  const nowGap = head.funding.ready ? head.funding.need - head.investable : 0;
+  const etaText = timeToTargetSticky(t.reports, head.timeToTarget);
   const retireSub =
     head.story.kind === "setup"
       ? null
-      : `${head.story.kind === "enough" ? t.reports.verdictEnough : t.reports.verdictShort} · ${head.story.gap < 0 ? t.reports.fundingGapShort : t.reports.fundingGapExtra} ${money(Math.abs(head.story.gap), "HKD")}`;
+      : [
+          head.story.kind === "enough"
+            ? t.reports.verdictEnoughUntil.replace("{age}", String(head.planEndAge))
+            : t.reports.verdictShortUntil.replace("{age}", String(head.planEndAge)),
+          `${nowGap > 0 ? t.reports.nowGapShort : t.reports.nowGapOver} ${money(Math.abs(nowGap), "HKD")}`,
+          etaText,
+        ]
+          .filter(Boolean)
+          .join(" · ");
   const items = [
     { to: "/reports/dashboard", title: t.reports.dashboard, icon: LayoutDashboard, modes: ["standard", "elderly"] },
     { to: "/reports/spending", title: t.reports.spending, icon: Receipt, modes: ["standard", "elderly", "kid"] },
@@ -112,6 +122,7 @@ export function DashboardPage() {
   const trips = useApp((s) => s.trips);
   const annual = useApp((s) => s.annualTravelBudget);
   const head = useRetirementHeadline();
+  const etaText = timeToTargetSticky(t.reports, head.timeToTarget);
   const [explain, setExplain] = useState<null | "available" | "saveMonth" | "saveYtd" | "travel">(null);
   const today = todayISO();
   const cost = monthlyHousingCost(txs, rec, cats, rates, today);
@@ -279,20 +290,27 @@ export function DashboardPage() {
             <h2 className="text-base font-semibold">{t.reports.retirement}</h2>
             {ledgerLive && head.story.kind !== "setup" ? (
               <span className={cn("text-xs font-medium tabular-nums", head.story.kind === "enough" ? "text-income" : "text-expense")}>
-                {head.story.kind === "enough" ? t.reports.verdictEnough : t.reports.verdictShort}
-                {" · "}
-                {head.story.gap < 0 ? t.reports.fundingGapShort : t.reports.fundingGapExtra} {money(Math.abs(head.story.gap), "HKD")}
+                {head.story.kind === "enough"
+                  ? t.reports.verdictEnoughUntil.replace("{age}", String(head.planEndAge))
+                  : t.reports.verdictShortUntil.replace("{age}", String(head.planEndAge))}
               </span>
             ) : (
               <span className="text-xs font-medium text-muted">{t.reports.verdictSetup}</span>
             )}
           </div>
-          {ledgerLive && head.story.kind !== "setup" ? (
-            <div className="mt-4 grid grid-cols-2 gap-4">
-              <Metric label={t.reports.spendRetired} value={money(head.base.targetMonthly, "HKD")} />
-              <Metric label={head.story.gap < 0 ? t.reports.fundingGapShort : t.reports.fundingGapExtra} value={money(Math.abs(head.story.gap), "HKD")} />
-              <Metric label={t.reports.investableNow} value={money(head.investable, "HKD")} />
-            </div>
+          {ledgerLive && head.story.kind !== "setup" && head.funding.ready ? (
+            <>
+              <div className="mt-4 grid grid-cols-2 gap-4">
+                <Metric label={t.reports.fundingNeed} value={money(head.funding.need, "HKD")} />
+                <Metric label={t.reports.nowHave} value={money(head.investable, "HKD")} />
+                <Metric
+                  label={head.funding.need - head.investable > 0 ? t.reports.nowGapShort : t.reports.nowGapOver}
+                  value={money(Math.abs(head.funding.need - head.investable), "HKD")}
+                />
+                <Metric label={t.reports.spendRetired} value={money(head.base.targetMonthly, "HKD")} />
+              </div>
+              {etaText ? <p className="mt-3 text-[11px] leading-4 text-muted">{etaText}</p> : null}
+            </>
           ) : (
             <p className="mt-3 text-sm text-muted">{t.reports.setupLine}</p>
           )}

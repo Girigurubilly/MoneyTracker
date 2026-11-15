@@ -36,7 +36,7 @@ import {
   type RetirementInputs,
 } from "@/lib/calc/retirement";
 import { monthKey } from "@/lib/calc/ledger";
-import { emptyLifePlan, inheritanceAnnuityAccount, INHERIT_ANNUITY_ID, lifePlanFundingTarget, lifePlanMonthlyRoom, resolveLifePlan, runLifePlan } from "@/lib/calc/life-plan";
+import { emptyLifePlan, inheritanceAnnuityAccount, INHERIT_ANNUITY_ID, lifePlanFundingTarget, lifePlanMonthlyRoom, lifePlanTimeToTarget, resolveLifePlan, runLifePlan, type TimeToTarget } from "@/lib/calc/life-plan";
 import {
   accessBreakdown,
   corpusAgeLabels,
@@ -275,6 +275,66 @@ export function useLifePlanResult() {
   return { plan, resolved, result, inflows };
 }
 
+
+type VelocityCopy = {
+  velocityAlready: string;
+  velocityNeedIncome: string;
+  velocityOnTrack: string;
+  velocityAtRetire: string;
+  velocityAfterRetire: string;
+  velocityNegative: string;
+  velocityNever: string;
+  stickyEtaYears: string;
+  stickyEtaLate: string;
+  stickyEtaAlready: string;
+  stickyEtaShort: string;
+};
+
+export function timeToTargetSticky(copy: VelocityCopy, eta: TimeToTarget | null | undefined): string | undefined {
+  if (!eta) return undefined;
+  if (eta.kind === "already") return copy.stickyEtaAlready;
+  if (eta.kind === "on-track" && eta.years != null && eta.age != null) {
+    return copy.stickyEtaYears.replace("{years}", String(eta.years)).replace("{age}", String(Math.round(eta.age)));
+  }
+  if (eta.kind === "after-retire" && eta.years != null && eta.age != null) {
+    return copy.stickyEtaLate.replace("{years}", String(eta.years)).replace("{age}", String(Math.round(eta.age)));
+  }
+  if (eta.kind === "negative" || eta.kind === "never") return copy.stickyEtaShort;
+  return undefined;
+}
+
+export function timeToTargetLine(
+  copy: VelocityCopy,
+  eta: TimeToTarget | null | undefined,
+  retireAge: number,
+  planEndAge: number,
+): string | undefined {
+  if (!eta) return undefined;
+  const save = money(Math.abs(eta.monthlySave), "HKD");
+  if (eta.kind === "already") return copy.velocityAlready;
+  if (eta.kind === "unknown-velocity") return copy.velocityNeedIncome;
+  if (eta.kind === "on-track" && eta.years != null && eta.age != null) {
+    if (Math.round(eta.age) === retireAge) {
+      return copy.velocityAtRetire.replace("{save}", save).replace("{retire}", String(retireAge));
+    }
+    return copy.velocityOnTrack
+      .replace("{save}", save)
+      .replace("{years}", String(eta.years))
+      .replace("{age}", String(Math.round(eta.age)))
+      .replace("{retire}", String(retireAge));
+  }
+  if (eta.kind === "after-retire" && eta.years != null && eta.age != null) {
+    return copy.velocityAfterRetire
+      .replace("{save}", save)
+      .replace("{years}", String(eta.years))
+      .replace("{age}", String(Math.round(eta.age)))
+      .replace("{retire}", String(retireAge));
+  }
+  if (eta.kind === "negative") return copy.velocityNegative;
+  if (eta.kind === "never") return copy.velocityNever.replace("{save}", save).replace("{end}", String(planEndAge));
+  return undefined;
+}
+
 export function useRetirementHeadline() {
   const model = useRetirementModel();
   const life = useLifePlanResult();
@@ -297,6 +357,20 @@ export function useRetirementHeadline() {
     yearsToRetire,
     payOffAtRetire: Boolean(model.base.payOffMortgageAtRetire),
   });
+  const timeToTarget = useMemo(() => {
+    if (!funding.ready || !model.ready) return null;
+    return lifePlanTimeToTarget({
+      need: funding.need,
+      investableNow: model.ctx.investableNow,
+      monthlyIncome: model.base.monthlyIncomeNow,
+      monthlySpend: model.base.monthlySpendNow,
+      preReturn: model.base.preReturn,
+      currentAge: model.base.currentAge,
+      retireAge: model.base.retireAge,
+      planEndAge,
+      asOf: todayISO(),
+    });
+  }, [funding, model.ready, model.ctx.investableNow, model.base, planEndAge]);
   return {
     ...model,
     life,
@@ -305,6 +379,7 @@ export function useRetirementHeadline() {
     story,
     mort,
     planEndAge,
+    timeToTarget,
     corpusAtRetire: life.result.stay?.assetsAtRetire ?? null,
     investable: model.ctx.investableNow,
     access: accessBreakdown(model.result.plan.corpusAtRetire, model.result.plan.lockedAtRetire),
@@ -320,9 +395,15 @@ function addMonths(iso: string, months: number): string {
 export function SharedRetirementStrip() {
   const t = useT();
   const head = useRetirementHeadline();
-  const { base, story } = head;
+  const { base, story, funding, investable, timeToTarget, planEndAge } = head;
+  const nowGap = funding.ready ? funding.need - investable : 0;
+  const etaText = timeToTargetSticky(t.reports, timeToTarget);
   const verdict =
-    story.kind === "enough" ? t.reports.verdictEnough : story.kind === "short" ? t.reports.verdictShort : t.reports.verdictSetup;
+    story.kind === "enough"
+      ? t.reports.verdictEnoughUntil.replace("{age}", String(planEndAge))
+      : story.kind === "short"
+        ? t.reports.verdictShortUntil.replace("{age}", String(planEndAge))
+        : t.reports.verdictSetup;
   return (
     <Link to="/reports/retirement" className="mx-4 mb-3 flex items-center gap-3 rounded-2xl bg-elevated p-3">
       <div className="min-w-0 flex-1">
@@ -336,11 +417,15 @@ export function SharedRetirementStrip() {
             <>
               <span className={story.kind === "enough" ? "text-income" : "text-expense"}>{verdict}</span>
               {" · "}
-              <span className={cn("tabular-nums", story.gap < 0 ? "text-expense" : "text-income")}>
-                {story.gap < 0 ? t.reports.fundingGapShort : t.reports.fundingGapExtra} {money(Math.abs(story.gap), "HKD")}
+              <span className={cn("tabular-nums", nowGap > 0 ? "text-expense" : "text-income")}>
+                {nowGap > 0 ? t.reports.nowGapShort : t.reports.nowGapOver} {money(Math.abs(nowGap), "HKD")}
               </span>
-              {" · "}
-              {t.reports.retireAge} {base.retireAge}
+              {etaText ? (
+                <>
+                  {" · "}
+                  {etaText}
+                </>
+              ) : null}
             </>
           )}
         </div>
@@ -359,9 +444,9 @@ export function SharedRetirementStrip() {
 function SetupGuide({ onClose }: { onClose: () => void }) {
   const t = useT();
   const [step, setStep] = useState(0);
-  const total = 4;
-  const titles = [t.reports.guideWhen, t.reports.guideNow, t.reports.guideAfter, t.reports.guideRates];
-  const bodies = [t.reports.setupStepAge, t.reports.setupStepMoney, t.reports.setupStepSpend, t.reports.setupStepLater];
+  const total = 3;
+  const titles = [t.reports.settingsSpendQ, t.reports.settingsWhenQ, t.reports.settingsNowQ];
+  const bodies = [t.reports.setupStepSpend, t.reports.setupStepAge, t.reports.setupStepMoney];
   const last = step >= total;
   return (
     <div className="mx-4 mb-3 rounded-2xl bg-elevated p-4">
@@ -402,7 +487,7 @@ export function RetirementPage() {
   const t = useT();
   const locale = useUi((s) => s.locale);
   const head = useRetirementHeadline();
-  const { accounts, holdings, rates, base, ctx, pack, result, fire, persist, rmMonthly, mortgage, life, story, mort, planEndAge, investable, funding } = head;
+  const { accounts, holdings, rates, base, ctx, pack, result, fire, persist, rmMonthly, mortgage, life, story, mort, planEndAge, investable, funding, timeToTarget } = head;
   const years = life.result.stay?.years ?? [];
   const chartData = years.map((y) => ({ age: y.age, corpus: y.closingFinancial, kept: y.inheritKept }));
   const saleYear = years.find((y) => y.inheritKept > 0);
@@ -418,31 +503,30 @@ export function RetirementPage() {
   const [scenario, setScenario] = useState<ScenarioId | null>(null);
   const [exportMd, setExportMd] = useState<string | null>(null);
   const swrLabel = `${((base.fireSwr ?? 0.04) * 100).toFixed(1)}%`;
-  const verdict =
-    story.kind === "enough" ? t.reports.verdictEnough : story.kind === "short" ? t.reports.verdictShort : t.reports.verdictSetup;
-  const needAmt = money(funding.need, "HKD");
-  const gapAmt = money(Math.abs(story.gap), "HKD");
-  const sentence =
+  const planVerdict =
     story.kind === "enough"
-      ? t.reports.enoughLine
-          .replace("{plan}", money(story.planned, "HKD"))
-          .replace("{need}", needAmt)
-          .replace("{gap}", gapAmt)
-          .replace("{age}", String(planEndAge))
+      ? t.reports.verdictEnoughUntil.replace("{age}", String(planEndAge))
       : story.kind === "short"
-        ? t.reports.shortLine
-            .replace("{plan}", money(story.planned, "HKD"))
-            .replace("{need}", needAmt)
-            .replace("{gap}", gapAmt)
-            .replace("{age}", String(planEndAge))
-        : t.reports.setupLine;
-  const fundingLabel = story.gap < 0 ? t.reports.fundingGapShort : t.reports.fundingGapExtra;
+        ? t.reports.verdictShortUntil.replace("{age}", String(planEndAge))
+        : t.reports.verdictSetup;
+  const fundingLabel = funding.gap < 0 ? t.reports.fundingGapShort : t.reports.fundingGapExtra;
   const ages = corpusAgeLabels(draftAge);
   const yearsToRetire = Math.max(0, draftAge - base.currentAge);
   const spendThen = inflatedMonthly(base.targetMonthly, yearsToRetire, base.inflation);
   const monthsLeft = Math.max(1, 12 - Number(todayISO().slice(5, 7)) + 1);
   const partTimeReady = (base.postRetireJobMonthly ?? 0) > 0;
-  const shownGap = useCountUp(story.gap, dragging, 320);
+  const nowGap = funding.ready ? funding.need - investable : 0;
+  const nowGapLabel = nowGap > 0 ? t.reports.nowGapShort : t.reports.nowGapOver;
+  const shownNowGap = useCountUp(nowGap, dragging, 320);
+  const etaText = timeToTargetSticky(t.reports, timeToTarget);
+  const velocityLine = timeToTargetLine(t.reports, timeToTarget, base.retireAge, planEndAge);
+  const lockedNow = (life.inflows.accounts ?? [])
+    .filter((a) => a.includeInRetirementProjection && a.status !== "closed")
+    .reduce((s, a) => s + (a.currentBalance || 0), 0);
+  const pathHaveLine = t.reports.pathHaveLine
+    .replace("{have}", money(funding.have, "HKD"))
+    .replace("{gapLabel}", fundingLabel)
+    .replace("{gap}", money(Math.abs(funding.gap), "HKD"));
 
   useEffect(() => {
     if (!dragging && scenario == null) setDraftAge(base.retireAge);
@@ -485,6 +569,8 @@ export function RetirementPage() {
       `- Funding gap (HKD, have minus need): ${story.kind === "setup" || !funding.ready ? "n/a" : Math.round(funding.gap)}`,
       `- Monthly room (HKD / month, today’s dollars): ${Math.round(story.surplusMonthly)}`,
       `- Usable assets now (HKD): ${Math.round(investable)}`,
+      `- Gap from today vs retirement-day need (HKD): ${story.kind === "setup" || !funding.ready ? "n/a" : Math.round(funding.need - investable)}`,
+      `- Time to target: ${timeToTarget ? `${timeToTarget.kind}${timeToTarget.years != null ? ` in ${timeToTarget.years} years (age ${timeToTarget.age})` : ""}` : "n/a"}`,
       `- Home, not living costs (HKD): ${Math.round(pack.property)}`,
       `- Plan through age: ${planEndAge}`,
       `- Assets on the path at retire age (HKD): ${story.kind === "setup" ? "n/a" : Math.round(corpusAtRetire)}`,
@@ -579,16 +665,117 @@ export function RetirementPage() {
       />
       <StickyConclusionBar
         kind={story.kind}
-        verdict={verdict}
-        retireAge={draftAge}
-        gap={story.kind === "setup" ? 0 : story.gap}
-        planEndAge={planEndAge}
+        verdict={planVerdict}
+        nowGap={story.kind === "setup" || !funding.ready ? undefined : nowGap}
+        nowGapLabel={story.kind === "setup" || !funding.ready ? undefined : nowGapLabel}
+        etaText={story.kind === "setup" ? undefined : etaText}
         dragging={dragging}
-        gapLabel={story.kind === "setup" ? undefined : fundingLabel}
       />
+      <p className="mx-4 mb-3 text-[12px] leading-5 text-muted">{t.reports.pagePurpose}</p>
+      {guideOpen ? (
+        <SetupGuide
+          onClose={() => {
+            setGuideOpen(false);
+            setGuideDismissed(true);
+          }}
+        />
+      ) : story.kind === "setup" ? (
+        <button
+          type="button"
+          className="mx-4 mb-3 flex h-11 w-[calc(100%-2rem)] items-center justify-center rounded-xl bg-elevated text-sm font-medium text-accent"
+          onClick={() => setGuideOpen(true)}
+        >
+          {t.reports.guideOpen}
+        </button>
+      ) : null}
+
+      {story.kind !== "setup" && funding.ready ? (
+        <Enter>
+          <section className="mx-4 mb-3 rounded-2xl bg-elevated p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm font-medium">{t.reports.statusTitle}</div>
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-xs font-medium",
+                  story.kind === "enough" && "bg-success-soft text-income",
+                  story.kind === "short" && "bg-expense-soft text-expense",
+                )}
+              >
+                {planVerdict}
+              </span>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="rounded-xl bg-background px-3 py-2">
+                <div className="text-[11px] text-muted">{t.reports.fundingNeed}</div>
+                <div className="mt-0.5 text-xl font-semibold tabular-nums">{money(funding.need, "HKD")}</div>
+              </div>
+              <div className="rounded-xl bg-background px-3 py-2">
+                <div className="text-[11px] text-muted">{t.reports.nowHave}</div>
+                <div className="mt-0.5 text-xl font-semibold tabular-nums">{money(investable, "HKD")}</div>
+              </div>
+            </div>
+            <div className="mt-3">
+              <div className="text-[11px] text-muted">{t.reports.nowGapLabel}</div>
+              <div className={cn("text-2xl font-semibold tabular-nums", shownNowGap > 0 ? "text-expense" : "text-income")}>
+                {nowGapLabel} {money(Math.abs(shownNowGap), "HKD")}
+              </div>
+              <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.nowGapHint}</p>
+            </div>
+            {velocityLine ? <p className="mt-3 text-sm leading-5">{velocityLine}</p> : null}
+            <p className="mt-3 text-[11px] leading-4 text-muted">{pathHaveLine}</p>
+            <p className="mt-1 text-[11px] leading-4 text-muted">
+              {t.reports.monthlyRoom}{" "}
+              <span className={cn("font-medium tabular-nums", story.surplusMonthly < 0 ? "text-expense" : "text-income")}>
+                {money(story.surplusMonthly, "HKD", { sign: true })}
+              </span>
+              /{locale === "zh-HK" ? "月" : "mo"}
+              {" · "}
+              {story.surplusMonthly < 0 ? t.reports.surplusHintNeg : t.reports.surplusHintPos}
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="rounded-xl bg-background px-3 py-2">
+                <div className="text-[11px] text-muted">{t.reports.sleeveCash}</div>
+                <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(pack.cash, "HKD")}</div>
+              </div>
+              <div className="rounded-xl bg-background px-3 py-2">
+                <div className="text-[11px] text-muted">{t.reports.sleeveInvest}</div>
+                <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(pack.invest, "HKD")}</div>
+              </div>
+              <div className="rounded-xl bg-background px-3 py-2">
+                <div className="text-[11px] text-muted">{t.reports.sleeveLocked}</div>
+                <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(lockedNow, "HKD")}</div>
+              </div>
+              <div className="rounded-xl bg-background px-3 py-2">
+                <div className="text-[11px] text-muted">{t.reports.sleeveProperty}</div>
+                <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(pack.property, "HKD")}</div>
+              </div>
+            </div>
+            <p className="mt-2 text-[11px] leading-4 text-muted">{t.reports.sleevePropertyNote}</p>
+            {lockedNow >= 50_000 ? (
+              <p className="mt-1 text-[11px] leading-4 text-muted">
+                {t.reports.lockedCallout.replace("{amount}", money(lockedNow, "HKD"))}
+              </p>
+            ) : null}
+          </section>
+        </Enter>
+      ) : null}
+
       <Enter>
         <section className="mx-4 mb-3 overflow-hidden rounded-2xl bg-elevated">
-          <div className="px-4 pt-3 text-sm font-medium">{t.reports.goalsTitle}</div>
+          <div className="px-4 pt-3 text-sm font-medium">{t.reports.settingsTitle}</div>
+          <div className="px-4 pb-1 pt-3 text-[12px] font-medium text-muted">{t.reports.settingsSpendQ}</div>
+          <ConfigNumRow label={t.reports.spendRetired} value={base.targetMonthly} money blankZero onCommit={(n) => persist({ targetMonthly: n })} />
+          <p className="px-4 pb-1 text-[11px] leading-4 text-muted">{t.reports.goalsSpendHint}</p>
+          <StepPct label={t.reports.inflation} value={base.inflation} onCommit={(n) => persist({ inflation: n })} />
+          {base.targetMonthly > 0 ? (
+            <p className="px-4 pb-3 text-[11px] leading-4 text-muted">
+              {t.reports.spendThenMoney.replace("{amount}", money(spendThen, "HKD"))}
+            </p>
+          ) : (
+            <div className="pb-2" />
+          )}
+          <Hairline />
+          <div className="px-4 pb-1 pt-3 text-[12px] font-medium text-muted">{t.reports.settingsWhenQ}</div>
           <label className="flex min-h-11 items-center justify-between gap-3 px-4">
             <span className="text-sm">{t.reports.birthday}</span>
             <DateField
@@ -605,7 +792,6 @@ export function RetirementPage() {
               {t.reports.birthdayYearEndHint.replace("{n}", String(monthsLeft))}
             </p>
           ) : null}
-          <Hairline />
           {base.birthday ? (
             <div className="flex min-h-11 items-center justify-between px-4">
               <span className="text-sm">{t.reports.currentAge}</span>
@@ -614,11 +800,10 @@ export function RetirementPage() {
           ) : (
             <ConfigNumRow label={t.reports.currentAge} value={base.currentAge} onCommit={(n) => persist({ currentAge: n })} />
           )}
-          <Hairline />
           <ConfigNumRow label={t.reports.retireAge} value={base.retireAge} onCommit={(n) => persist({ retireAge: n })} />
-          <Hairline />
           <ConfigNumRow label={t.reports.deathAge} value={base.deathAge} onCommit={(n) => persist({ deathAge: n })} />
           <Hairline />
+          <div className="px-4 pb-1 pt-3 text-[12px] font-medium text-muted">{t.reports.settingsNowQ}</div>
           <ConfigNumRow
             label={head.incomeSource === "ledger" ? t.reports.salaryTakeHome : t.reports.salaryNow}
             value={base.monthlyIncomeNow}
@@ -629,7 +814,6 @@ export function RetirementPage() {
           <p className="px-4 pb-2 text-[11px] leading-4 text-muted">
             {head.incomeSource === "ledger" ? t.reports.salaryTakeHomeHint : t.reports.salaryGrossHint}
           </p>
-          <Hairline />
           <ConfigNumRow
             label={t.reports.spendNow}
             value={base.monthlySpendNow}
@@ -638,16 +822,14 @@ export function RetirementPage() {
             onCommit={(n) => persist({ monthlySpendNow: n })}
           />
           <p className="px-4 pb-2 text-[11px] leading-4 text-muted">{t.reports.spendNowHint}</p>
-          <Hairline />
-          <ConfigNumRow label={t.reports.spendRetired} value={base.targetMonthly} money blankZero onCommit={(n) => persist({ targetMonthly: n })} />
-          <p className="px-4 pb-1 text-[11px] leading-4 text-muted">{t.reports.goalsSpendHint}</p>
-          <StepPct label={t.reports.inflation} value={base.inflation} onCommit={(n) => persist({ inflation: n })} />
-          {base.targetMonthly > 0 ? (
+          {base.monthlyIncomeNow > 0 || base.monthlySpendNow > 0 ? (
             <p className="px-4 pb-3 text-[11px] leading-4 text-muted">
-              {t.reports.spendThenMoney.replace("{amount}", money(spendThen, "HKD"))}
+              {t.reports.saveBasis
+                .replace("{amount}", money(head.saveMonthly, "HKD"))
+                .replace("{basis}", head.saveSource === "manual" ? t.reports.basisManual : t.reports.basisLedger)}
             </p>
           ) : (
-            <div className="pb-2" />
+            <div className="pb-1" />
           )}
           {mort.kind !== "none" ? (
             <>
@@ -678,9 +860,14 @@ export function RetirementPage() {
               <p className="px-4 pb-3 text-[11px] leading-4 text-muted">{t.reports.mortgageOfficialNote}</p>
             </>
           ) : null}
+          {guideOpen || story.kind === "setup" ? null : (
+            <button type="button" className="flex h-11 w-full items-center justify-center text-xs font-medium text-accent" onClick={() => setGuideOpen(true)}>
+              {t.reports.guideOpen}
+            </button>
+          )}
         </section>
       </Enter>
-      <SectionLabel>{t.reports.readinessByAge}</SectionLabel>
+      <SectionLabel>{t.reports.previewAge}</SectionLabel>
       <p className="px-5 pb-2 text-[11px] leading-4 text-muted">{t.reports.ageSliderHint}</p>
       <RetireAgeSlider
         value={draftAge}
@@ -697,143 +884,6 @@ export function RetirementPage() {
         onApply={applyScenario}
         onCancel={cancelDraft}
       />
-      {guideOpen ? (
-        <SetupGuide onClose={() => { setGuideOpen(false); setGuideDismissed(true); }} />
-      ) : (
-        <button type="button" className="mx-4 mb-3 flex h-11 w-[calc(100%-2rem)] items-center justify-center rounded-xl bg-elevated text-sm font-medium text-accent" onClick={() => setGuideOpen(true)}>
-          {t.reports.guideOpen}
-        </button>
-      )}
-      <Enter delay>
-        <section className="mx-4 mb-3 rounded-2xl bg-elevated p-4">
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-sm font-medium">{t.reports.resultTitle}</div>
-            <span
-              className={cn(
-                "rounded-full px-2 py-0.5 text-xs font-medium",
-                story.kind === "enough" && "bg-success-soft text-income",
-                story.kind === "short" && "bg-expense-soft text-expense",
-                story.kind === "setup" && "bg-background text-muted",
-              )}
-            >
-              {verdict}
-            </span>
-          </div>
-          <p className="mt-2 text-sm leading-5">{sentence}</p>
-          {story.kind === "setup" ? null : (
-            <>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <div className="rounded-xl bg-background px-3 py-2">
-                  <div className="text-[11px] text-muted">{t.reports.fundingNeed}</div>
-                  <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(funding.need, "HKD")}</div>
-                </div>
-                <div className="rounded-xl bg-background px-3 py-2">
-                  <div className="text-[11px] text-muted">{t.reports.fundingHave}</div>
-                  <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(funding.have, "HKD")}</div>
-                </div>
-              </div>
-              <div className="mt-3 text-[11px] text-muted">{fundingLabel}</div>
-              <div className={cn("text-2xl font-semibold tabular-nums", shownGap < 0 ? "text-expense" : "text-income")}>
-                {money(Math.abs(shownGap), "HKD")}
-              </div>
-              <p className="mt-1 text-[11px] leading-4 text-muted">{shownGap < 0 ? t.reports.fundingHintShort : t.reports.fundingHintExtra}</p>
-              <p className="mt-3 text-[11px] leading-4 text-muted">
-                {t.reports.monthlyRoom}{" "}
-                <span className={cn("font-medium tabular-nums", story.surplusMonthly < 0 ? "text-expense" : "text-income")}>
-                  {money(story.surplusMonthly, "HKD", { sign: true })}
-                </span>
-                /{locale === "zh-HK" ? "月" : "mo"}
-              </p>
-              <p className="mt-1 text-[11px] leading-4 text-muted">{story.surplusMonthly < 0 ? t.reports.surplusHintNeg : t.reports.surplusHintPos}</p>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <div className="rounded-xl bg-background px-3 py-2">
-                  <div className="text-[11px] text-muted">{t.reports.spendRetired}</div>
-                  <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(base.targetMonthly, "HKD")}</div>
-                </div>
-                <div className="rounded-xl bg-background px-3 py-2">
-                  <div className="text-[11px] text-muted">{t.reports.investableNow}</div>
-                  <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(investable, "HKD")}</div>
-                </div>
-              </div>
-              <p className="mt-2 text-[11px] leading-4 text-muted">{t.reports.investableHint}</p>
-              {base.targetMonthly > 0 ? (
-                <p className="mt-2 text-[11px] leading-4 text-muted">
-                  {t.reports.spendThenMoney.replace("{amount}", money(spendThen, "HKD"))}
-                </p>
-              ) : null}
-              <SleeveCard
-                cash={pack.cash}
-                invest={pack.invest}
-                locked={(life.inflows.accounts ?? []).filter((a) => a.includeInRetirementProjection && a.status !== "closed").reduce((s, a) => s + (a.currentBalance || 0), 0)}
-                property={pack.property}
-                preReturn={base.preReturn}
-                postReturn={base.postReturn}
-                propertyGrowth={life.resolved.assets.selfOccupiedPropertyGrowthRate}
-              />
-              <div className="mt-2 text-[11px] text-muted">
-                {t.reports.corpusAtRetireAge
-                  .replace("{end}", String(ages.endWorkingAge))
-                  .replace("{start}", String(ages.startRetireAge))}
-                : {money(corpusAtRetire, "HKD")}
-              </div>
-              <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.corpusOnPathHintChart}</p>
-              {chartData.length ? (
-                <div className="rt-chart-draw mt-3 h-40 overflow-hidden rounded-xl bg-background pt-2">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart
-                      data={chartData}
-                      margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-                      onMouseMove={(state) => {
-                        const p = state?.activePayload?.[0]?.payload as { age?: number; corpus?: number } | undefined;
-                        if (p && typeof p.age === "number") setChartPoint({ age: p.age, corpus: p.corpus ?? 0 });
-                      }}
-                      onMouseLeave={() => setChartPoint(null)}
-                    >
-                      <XAxis
-                        dataKey="age"
-                        tick={{ fontSize: 10, fill: "var(--color-muted)" }}
-                        axisLine={false}
-                        tickLine={false}
-                        interval="preserveStartEnd"
-                        minTickGap={28}
-                      />
-                      <YAxis
-                        width={36}
-                        tick={{ fontSize: 9, fill: "var(--color-muted)" }}
-                        axisLine={false}
-                        tickLine={false}
-                        tickFormatter={(v) => formatAxisWan(Number(v), locale)}
-                      />
-                      <ReferenceLine
-                        x={draftAge}
-                        stroke="var(--color-accent)"
-                        strokeDasharray="4 3"
-                        className="rt-ref-line"
-                      />
-                      {saleYear ? <ReferenceDot x={saleYear.age} y={saleYear.closingFinancial} r={3} fill="var(--color-accent)" stroke="none" /> : null}
-                      <Tooltip content={() => null} cursor={{ stroke: "var(--color-accent)", strokeWidth: 1 }} />
-                      <Area type="monotone" dataKey="corpus" stroke="var(--color-accent)" fill="var(--color-accent-soft)" strokeWidth={2} dot={false} isAnimationActive animationDuration={500} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : null}
-              <p className="mt-1 text-center text-[11px] text-muted">
-                {scrubLabel ?? t.reports.chartTapHint}
-              </p>
-              <div className="mt-3 rounded-xl bg-background px-3 py-2">
-                <div className="text-[11px] text-muted">{t.reports.fireReference.replace("{swr}", swrLabel)}</div>
-                <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(fire.fireNumber, "HKD")}</div>
-                <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.fireReferenceHint}</p>
-                {(base.travelInRetirement || 0) > 0 ? (
-                  <p className="mt-1 text-[11px] leading-4 text-muted">
-                    {t.reports.fireReferenceTravel.replace("{travel}", money(base.travelInRetirement, "HKD"))}
-                  </p>
-                ) : null}
-              </div>
-            </>
-          )}
-        </section>
-      </Enter>
       <SectionLabel>{t.reports.scenarios}</SectionLabel>
       <div className="mx-4 mb-3 grid grid-cols-1 gap-2">
         <Link to="/reports/retirement/plan" className="tr-press rounded-2xl bg-elevated px-4 py-3 text-sm">
@@ -863,6 +913,32 @@ export function RetirementPage() {
       </button>
       {detailsOpen ? (
         <>
+          <section className="mx-4 mb-3 rounded-2xl bg-elevated p-4">
+            <div className="text-[11px] text-muted">{t.reports.fireReference.replace("{swr}", swrLabel)}</div>
+            <div className="mt-0.5 text-sm font-semibold tabular-nums">{money(fire.fireNumber, "HKD")}</div>
+            <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.fireReferenceHint}</p>
+            {(base.travelInRetirement || 0) > 0 ? (
+              <p className="mt-1 text-[11px] leading-4 text-muted">
+                {t.reports.fireReferenceTravel.replace("{travel}", money(base.travelInRetirement, "HKD"))}
+              </p>
+            ) : null}
+            <div className="mt-3 text-[11px] text-muted">
+              {t.reports.corpusAtRetireAge
+                .replace("{end}", String(ages.endWorkingAge))
+                .replace("{start}", String(ages.startRetireAge))}
+              : {money(corpusAtRetire, "HKD")}
+            </div>
+            <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.corpusOnPathHintChart}</p>
+            <SleeveCard
+              cash={pack.cash}
+              invest={pack.invest}
+              locked={lockedNow}
+              property={pack.property}
+              preReturn={base.preReturn}
+              postReturn={base.postReturn}
+              propertyGrowth={life.resolved.assets.selfOccupiedPropertyGrowthRate}
+            />
+          </section>
           <SectionLabel>{t.reports.assetsByAge}</SectionLabel>
           <div className="mx-4 mb-1 overflow-hidden rounded-2xl bg-elevated pt-2">
             <div className="rt-chart-draw h-52">

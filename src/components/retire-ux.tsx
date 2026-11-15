@@ -71,54 +71,48 @@ export function EnoughRing({ kind, size = 28 }: { kind: EnoughKind; size?: numbe
 export function StickyConclusionBar({
   kind,
   verdict,
-  retireAge,
-  gap,
-  planEndAge,
+  nowGap,
+  nowGapLabel,
+  etaText,
   dragging,
-  gapLabel,
 }: {
   kind: EnoughKind;
   verdict: string;
-  retireAge: number;
-  gap: number;
-  planEndAge: number;
+  nowGap?: number;
+  nowGapLabel?: string;
+  etaText?: string;
   dragging: boolean;
-  gapLabel?: string;
 }) {
-  const t = useT();
-  const shownGap = useCountUp(gap, dragging, 320);
+  const shownGap = useCountUp(nowGap ?? 0, dragging, 320);
   return (
     <div className="sticky top-0 z-30 border-b border-line bg-background/95 px-4 py-2 backdrop-blur-md supports-[backdrop-filter]:bg-background/80">
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-start gap-2.5">
         <EnoughRing kind={kind} />
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
-            <span
-              className={cn(
-                "font-semibold",
-                kind === "enough" && "text-income",
-                kind === "short" && "text-expense",
-                kind === "setup" && "text-muted",
-              )}
-            >
-              {verdict}
-            </span>
-            <span className="text-muted">·</span>
-            <span className="tabular-nums text-muted">
-              {t.reports.retireAge} {retireAge}
-            </span>
-            {kind === "setup" ? null : (
-              <>
-                <span className="text-muted">·</span>
-                {gapLabel ? <span className="text-muted">{gapLabel}</span> : null}
-                <span className={cn("font-medium tabular-nums", shownGap < 0 ? "text-expense" : "text-income")}>
-                  {money(Math.abs(shownGap), "HKD")}
-                </span>
-                <span className="text-muted">·</span>
-                <span className="tabular-nums text-muted">{t.reports.lastsUntil.replace("{age}", String(planEndAge))}</span>
-              </>
+          <div
+            className={cn(
+              "text-sm font-semibold leading-5",
+              kind === "enough" && "text-income",
+              kind === "short" && "text-expense",
+              kind === "setup" && "text-muted",
             )}
+          >
+            {verdict}
           </div>
+          {kind === "setup" || nowGap == null ? null : (
+            <div className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[12px] leading-4">
+              {nowGapLabel ? <span className="text-muted">{nowGapLabel}</span> : null}
+              <span className={cn("font-semibold tabular-nums", shownGap > 0 ? "text-expense" : "text-income")}>
+                {money(Math.abs(shownGap), "HKD")}
+              </span>
+              {etaText ? (
+                <>
+                  <span className="text-muted">·</span>
+                  <span className="tabular-nums text-muted">{etaText}</span>
+                </>
+              ) : null}
+            </div>
+          )}
         </div>
       </div>
     </div>
