@@ -6,6 +6,7 @@ import { money } from "@/lib/format";
 import { resolveSignedAmountInput } from "@/lib/money-expr";
 import { cn } from "@/lib/utils";
 import type { EnoughKind } from "@/lib/calc/retire-view";
+import type { NowGapTone } from "@/lib/calc/life-plan";
 import { useT } from "@/store/ui";
 
 export function prefersReducedMotion(): boolean {
@@ -68,11 +69,18 @@ export function EnoughRing({ kind, size = 28 }: { kind: EnoughKind; size?: numbe
   );
 }
 
+function gapToneClass(tone: NowGapTone): string {
+  if (tone === "over") return "text-income";
+  if (tone === "late") return "text-expense";
+  return "text-muted";
+}
+
 export function StickyConclusionBar({
   kind,
   verdict,
   nowGap,
   nowGapLabel,
+  gapTone,
   etaText,
   dragging,
 }: {
@@ -80,10 +88,12 @@ export function StickyConclusionBar({
   verdict: string;
   nowGap?: number;
   nowGapLabel?: string;
+  gapTone?: NowGapTone;
   etaText?: string;
   dragging: boolean;
 }) {
   const shownGap = useCountUp(nowGap ?? 0, dragging, 320);
+  const amountClass = gapTone ? gapToneClass(gapTone) : shownGap > 0 ? "text-expense" : "text-income";
   return (
     <div className="sticky top-0 z-30 border-b border-line bg-background/95 px-4 py-2 backdrop-blur-md supports-[backdrop-filter]:bg-background/80">
       <div className="flex items-start gap-2.5">
@@ -102,7 +112,7 @@ export function StickyConclusionBar({
           {kind === "setup" || nowGap == null ? null : (
             <div className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[12px] leading-4">
               {nowGapLabel ? <span className="text-muted">{nowGapLabel}</span> : null}
-              <span className={cn("font-semibold tabular-nums", shownGap > 0 ? "text-expense" : "text-income")}>
+              <span className={cn("font-semibold tabular-nums", amountClass)}>
                 {money(Math.abs(shownGap), "HKD")}
               </span>
               {etaText ? (
@@ -515,11 +525,9 @@ export function ConfigFold({ title, children, defaultOpen = false }: { title: st
         <span className="text-sm font-medium">{title}</span>
 <ChevronDown className={cn("size-4 text-muted transition", on && "rotate-180")} />
       </button>
-      {on ? (
-        <div className="rt-fold border-t border-line">
-          <div className="rt-fold-inner">{children}</div>
-        </div>
-      ) : null}
+      <div className={cn("rt-fold border-t border-line", on && "rt-fold-open")}>
+        <div className="rt-fold-inner">{children}</div>
+      </div>
     </div>
   );
 }

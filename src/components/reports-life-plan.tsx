@@ -6,7 +6,7 @@ import { Enter, RetireAgeSlider, ScenarioChips, type ScenarioId } from "@/compon
 import { LifePlanJobs } from "@/components/life-plan-setup";
 import { OfficialAnswerCard, SharedRetirementStrip, timeToTargetLine, useRetirementHeadline } from "@/components/reports-retire";
 import { money, todayISO } from "@/lib/format";
-import { emptyLifePlan, lifePlanSwitchSavingsPace, lifePlanTimeToTarget, type LifePathId, type LifePathResult } from "@/lib/calc/life-plan";
+import { emptyLifePlan, lifePlanSwitchSavingsPace, lifePlanTimeToTarget, nowGapTone, type LifePathId, type LifePathResult, type NowGapTone } from "@/lib/calc/life-plan";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app";
 import { useT } from "@/store/ui";
@@ -45,8 +45,9 @@ export function EarlyRetirementPlanPage() {
       retireAge: result.switch?.retireAge ?? base.retireAge,
       planEndAge,
       asOf: todayISO(),
+      birthday: base.birthday,
     });
-  }, [funding, story.kind, investable, switchPace, base.preReturn, base.currentAge, base.retireAge, result.switch?.retireAge, planEndAge]);
+  }, [funding, story.kind, investable, switchPace, base.preReturn, base.currentAge, base.birthday, base.retireAge, result.switch?.retireAge, planEndAge]);
 
   useEffect(() => {
     if (!dragging && scenario == null) setDraftAge(base.retireAge);
@@ -117,6 +118,7 @@ export function EarlyRetirementPlanPage() {
                   investable={investable}
                   nowGap={nowGap}
                   nowGapLabel={nowGapLabel}
+                  gapTone={nowGapTone(nowGap, timeToTarget?.kind)}
                   velocityLine={timeToTargetLine(t.reports, timeToTarget, base.retireAge, planEndAge)}
                   pathHaveLine={pathHaveLine}
                   planEndAge={planEndAge}
@@ -132,6 +134,7 @@ export function EarlyRetirementPlanPage() {
                   investable={investable}
                   nowGap={nowGap}
                   nowGapLabel={nowGapLabel}
+                  gapTone={nowGapTone(nowGap, switchTimeToTarget?.kind)}
                   velocityLine={timeToTargetLine(t.reports, switchTimeToTarget, result.switch.retireAge ?? base.retireAge, planEndAge)}
                   pathHaveLine={pathHaveLine}
                   planEndAge={planEndAge}
@@ -195,6 +198,7 @@ function PathOfficial({
   investable,
   nowGap,
   nowGapLabel,
+  gapTone,
   velocityLine,
   pathHaveLine,
   planEndAge,
@@ -207,6 +211,7 @@ function PathOfficial({
   investable: number;
   nowGap: number;
   nowGapLabel: string;
+  gapTone: NowGapTone;
   velocityLine?: string;
   pathHaveLine?: string;
   planEndAge: number;
@@ -225,6 +230,7 @@ function PathOfficial({
         investable={investable}
         nowGap={nowGap}
         nowGapLabel={nowGapLabel}
+        gapTone={gapTone}
         verdict={verdict}
         verdictKind={row.depletes ? "short" : "enough"}
         velocityLine={velocityLine}

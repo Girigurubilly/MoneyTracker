@@ -26,7 +26,7 @@ import {
   type RetirementInputs,
 } from "@/lib/calc/retirement";
 import { monthKey } from "@/lib/calc/ledger";
-import { emptyLifePlan, inheritanceAnnuityAccount, INHERIT_ANNUITY_ID, lifePlanFundingTarget, lifePlanMonthlyRoom, lifePlanTimeToTarget, resolveLifePlan, runLifePlan, type TimeToTarget } from "@/lib/calc/life-plan";
+import { emptyLifePlan, inheritanceAnnuityAccount, INHERIT_ANNUITY_ID, lifePlanFundingTarget, lifePlanMonthlyRoom, lifePlanTimeToTarget, nowGapTone, resolveLifePlan, runLifePlan, type NowGapTone, type TimeToTarget } from "@/lib/calc/life-plan";
 import {
   accessBreakdown,
   enoughStory,
@@ -278,14 +278,25 @@ type VelocityCopy = {
   stickyEtaShort: string;
 };
 
+export function formatEtaYears(years: number): string {
+  const r = Math.round(years * 10) / 10;
+  return Number.isInteger(r) ? String(r) : r.toFixed(1);
+}
+
+export function gapToneClass(tone: NowGapTone): string {
+  if (tone === "over") return "text-income";
+  if (tone === "late") return "text-expense";
+  return "text-muted";
+}
+
 export function timeToTargetSticky(copy: VelocityCopy, eta: TimeToTarget | null | undefined): string | undefined {
   if (!eta) return undefined;
   if (eta.kind === "already") return copy.stickyEtaAlready;
   if (eta.kind === "on-track" && eta.years != null && eta.age != null) {
-    return copy.stickyEtaYears.replace("{years}", String(eta.years)).replace("{age}", String(Math.round(eta.age)));
+    return copy.stickyEtaYears.replace("{years}", formatEtaYears(eta.years)).replace("{age}", String(Math.round(eta.age)));
   }
   if (eta.kind === "after-retire" && eta.years != null && eta.age != null) {
-    return copy.stickyEtaLate.replace("{years}", String(eta.years)).replace("{age}", String(Math.round(eta.age)));
+    return copy.stickyEtaLate.replace("{years}", formatEtaYears(eta.years)).replace("{age}", String(Math.round(eta.age)));
   }
   if (eta.kind === "negative" || eta.kind === "never") return copy.stickyEtaShort;
   return undefined;
@@ -307,14 +318,14 @@ export function timeToTargetLine(
     }
     return copy.velocityOnTrack
       .replace("{save}", save)
-      .replace("{years}", String(eta.years))
+      .replace("{years}", formatEtaYears(eta.years))
       .replace("{age}", String(Math.round(eta.age)))
       .replace("{retire}", String(retireAge));
   }
   if (eta.kind === "after-retire" && eta.years != null && eta.age != null) {
     return copy.velocityAfterRetire
       .replace("{save}", save)
-      .replace("{years}", String(eta.years))
+      .replace("{years}", formatEtaYears(eta.years))
       .replace("{age}", String(Math.round(eta.age)))
       .replace("{retire}", String(retireAge));
   }
@@ -357,6 +368,7 @@ export function useRetirementHeadline() {
       retireAge: model.base.retireAge,
       planEndAge,
       asOf: todayISO(),
+      birthday: model.base.birthday,
     });
   }, [funding, model.ready, model.ctx.investableNow, model.base, planEndAge]);
   return {
@@ -385,6 +397,7 @@ export function SharedRetirementStrip() {
   const head = useRetirementHeadline();
   const { base, story, funding, investable, timeToTarget, planEndAge } = head;
   const nowGap = funding.ready ? funding.need - investable : 0;
+  const gapTone = nowGapTone(nowGap, timeToTarget?.kind);
   const etaText = timeToTargetSticky(t.reports, timeToTarget);
   const verdict =
     story.kind === "enough"
@@ -405,7 +418,7 @@ export function SharedRetirementStrip() {
             <>
               <span className={story.kind === "enough" ? "text-income" : "text-expense"}>{verdict}</span>
               {" · "}
-              <span className={cn("tabular-nums", nowGap > 0 ? "text-expense" : "text-income")}>
+              <span className={cn("tabular-nums", gapToneClass(gapTone))}>
                 {nowGap > 0 ? t.reports.nowGapShort : t.reports.nowGapOver} {money(Math.abs(nowGap), "HKD")}
               </span>
               {etaText ? (
@@ -435,6 +448,7 @@ export function OfficialAnswerCard({
   investable,
   nowGap,
   nowGapLabel,
+  gapTone,
   verdict,
   verdictKind,
   velocityLine,
@@ -447,6 +461,7 @@ export function OfficialAnswerCard({
   investable: number;
   nowGap: number;
   nowGapLabel: string;
+  gapTone: NowGapTone;
   verdict: string;
   verdictKind: "enough" | "short" | "setup";
   velocityLine?: string;
@@ -483,7 +498,7 @@ export function OfficialAnswerCard({
       </div>
       <div className="mt-3">
         <div className="text-[11px] text-muted">{t.reports.nowGapLabel}</div>
-        <div className={cn("font-semibold tabular-nums", shownNowGap > 0 ? "text-expense" : "text-income", compact ? "text-xl" : "text-2xl")}>
+        <div className={cn("font-semibold tabular-nums", gapToneClass(gapTone), compact ? "text-xl" : "text-2xl")}>
           {nowGapLabel} {money(Math.abs(shownNowGap), "HKD")}
         </div>
         <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.nowGapHint}</p>
@@ -511,6 +526,7 @@ export function RetirementPage() {
   const fundingLabel = funding.gap < 0 ? t.reports.fundingGapShort : t.reports.fundingGapExtra;
   const nowGap = funding.ready ? funding.need - investable : 0;
   const nowGapLabel = nowGap > 0 ? t.reports.nowGapShort : t.reports.nowGapOver;
+  const gapTone = nowGapTone(nowGap, timeToTarget?.kind);
   const etaText = timeToTargetSticky(t.reports, timeToTarget);
   const velocityLine = timeToTargetLine(t.reports, timeToTarget, base.retireAge, planEndAge);
   const pathHaveLine = t.reports.pathHaveLine
@@ -618,6 +634,7 @@ export function RetirementPage() {
           verdict={planVerdict}
           nowGap={!funding.ready ? undefined : nowGap}
           nowGapLabel={!funding.ready ? undefined : nowGapLabel}
+          gapTone={gapTone}
           etaText={etaText}
           dragging={false}
         />
@@ -646,6 +663,7 @@ export function RetirementPage() {
               investable={investable}
               nowGap={nowGap}
               nowGapLabel={nowGapLabel}
+              gapTone={gapTone}
               verdict={planVerdict}
               verdictKind={story.kind}
               velocityLine={velocityLine}
@@ -693,8 +711,9 @@ function QuietLink({ to, label }: { to: "/reports/retirement/setup" | "/reports/
 
 export function RetirementProjectionPage() {
   const t = useT();
-  const { result } = useLifePlanResult();
-  const { base } = useRetirementModel();
+  const head = useRetirementHeadline();
+  const { result } = head.life;
+  const { base, timeToTarget } = head;
   const years = result.stay?.years ?? [];
   const sale = years.find((y) => y.inheritProceeds > 0);
   return (
@@ -722,7 +741,7 @@ export function RetirementProjectionPage() {
       ) : null}
       {result.ready && years.length ? (
         <Enter delay>
-        <LifeYearList years={years} focusAge={base.retireAge} />
+        <LifeYearList years={years} focusAge={base.retireAge} reachedTargetYear={timeToTarget?.calendarYear ?? null} />
         </Enter>
       ) : (
         <p className="mx-4 rounded-2xl bg-elevated px-4 py-3 text-sm text-muted">{t.reports.lpNeedData}</p>

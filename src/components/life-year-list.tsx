@@ -4,7 +4,7 @@ import { money } from "@/lib/format";
 import type { LifeYearRow } from "@/lib/calc/life-plan";
 import { useT } from "@/store/ui";
 
-export function LifeYearList({ years, focusAge, highlightAge }: { years: LifeYearRow[]; focusAge?: number; highlightAge?: number | null }) {
+export function LifeYearList({ years, focusAge, highlightAge, reachedTargetYear }: { years: LifeYearRow[]; focusAge?: number; highlightAge?: number | null; reachedTargetYear?: number | null }) {
   const t = useT();
   const [open, setOpen] = useState<number | null>(null);
   const [all, setAll] = useState(false);
@@ -26,6 +26,7 @@ export function LifeYearList({ years, focusAge, highlightAge }: { years: LifeYea
                 </div>
                 <div className="text-[11px] text-muted">
                   {phaseLabel(y.phase, t)}
+                  {y.phase !== "retired" && reachedTargetYear === y.calendarYear ? ` · ${t.reports.lpPhaseReachedTarget}` : ""}
                   {y.months < 12 ? ` · ${t.reports.lpMonthsLeft.replace("{n}", String(y.months))}` : ""}
                   {y.inheritedHeld > 0 ? ` · ${t.reports.lpInheritHeld}` : ""}
                   {y.inheritKept > 0 ? ` · ${t.reports.lpInheritKept} ${money(y.inheritKept, "HKD")}` : ""}
