@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { emptyLifePlan, estimateHkNetMonthly, inheritanceAnnuityAccount, lifePlanMissing, lifePlanMonthlyRoom, resolveLifePlan, runLifePlan } from "./life-plan.ts";
+import { emptyLifePlan, estimateHkNetMonthly, inheritanceAnnuityAccount, lifePlanFundingTarget, lifePlanMissing, lifePlanMonthlyRoom, resolveLifePlan, runLifePlan } from "./life-plan.ts";
 import { applyAnnuityTerms, blankRetirementAccount } from "./mpf.ts";
 import type { Allowance, RetirementLifePlan } from "../types.ts";
 
@@ -312,6 +312,7 @@ describe("two-path simulation", () => {
       retireAge: 50,
       deathAge: 85,
       inflation: 0.025,
+      preReturn: 0.05,
       postReturn: 0.03,
       monthlyIncomeNow: 70_000,
       monthlySpendNow: 35_000,
@@ -332,6 +333,8 @@ describe("two-path simulation", () => {
     assert.equal(resolved.assets.financialAssets, 3_000_000);
     assert.equal(resolved.mortgage.monthlyPayment, 12_000);
     assert.equal(resolved.retirement.annualInflationRate, 0.025);
+    assert.equal(resolved.retirement.annualInvestmentReturn, 0.03);
+    assert.equal(resolved.retirement.annualInvestmentReturnPre, 0.05);
     assert.equal(lifePlanMissing(resolved).length, 0);
   });
 
@@ -341,6 +344,7 @@ describe("two-path simulation", () => {
       retireAge: 65,
       deathAge: 90,
       inflation: 0.025,
+      preReturn: 0.05,
       postReturn: 0.035,
       monthlyIncomeNow: 72_000,
       monthlySpendNow: 28_000,
@@ -368,6 +372,7 @@ describe("two-path simulation", () => {
       retireAge: 45,
       deathAge: 90,
       inflation: 0.025,
+      preReturn: 0.05,
       postReturn: 0.035,
       monthlyIncomeNow: 72_000,
       monthlySpendNow: 28_000,
@@ -418,6 +423,7 @@ describe("two-path simulation", () => {
       retireAge: 47,
       deathAge: 90,
       inflation: 0,
+      preReturn: 0.05,
       postReturn: 0.03,
       monthlyIncomeNow: 80_000,
       monthlySpendNow: 40_000,
@@ -462,5 +468,143 @@ describe("two-path simulation", () => {
     assert.equal(y70.allowanceIncome, 1_620 * 12);
     assert.ok(y70.pensionIncome >= 5_000 * 12);
     assert.ok(y70.closingFinancial > y70plain.closingFinancial);
+  });
+});
+
+function simplePlan(): RetirementLifePlan {
+  const p = emptyLifePlan();
+  p.personal.dateOfBirth = "1980-01-01";
+  p.personal.planStartDate = "2026-01-01";
+  p.personal.planEndAge = 85;
+  p.currentJob.endDate = "2045-12-31";
+  p.currentJob.grossMonthlyIncome = 40_000;
+  p.currentJob.actualMonthlySpending = 30_000;
+  p.currentJob.incomeIsNet = true;
+  p.currentJob.monthlySavingsOverride = 10_000;
+  p.lowerStressJob.enabled = false;
+  p.retirement.startDate = "2045-12-31";
+  p.retirement.annualInvestmentReturn = 0.035;
+  p.retirement.annualInvestmentReturnPre = 0.05;
+  p.retirement.annualInflationRate = 0.025;
+  p.retirement.returnMode = "nominal";
+  p.assets.financialAssets = 2_000_000;
+  p.spendingStages = [
+    {
+      id: "retire",
+      label: "Retirement",
+      startAge: 65,
+      endAge: 120,
+      monthlyLivingCostInTodayMoney: 25_000,
+      followsInflation: true,
+      isEssential: true,
+      notes: "",
+    },
+  ];
+  return p;
+}
+
+describe("lifePlanFundingTarget", () => {
+  it("returns need, have and gap in usable assets at retirement", () => {
+    const row = lifePlanFundingTarget(simplePlan(), "2026-01-01");
+    assert.equal(row.ready, true);
+    assert.ok(row.need > 0);
+    assert.ok(row.have > 0);
+    assert.equal(row.gap, row.have - row.need);
+    assert.equal(row.retireAge, 65);
+    assert.equal(row.planEndAge, 85);
+  });
+
+  it("raises need when inflation is higher", () => {
+    const base = simplePlan();
+    const low = lifePlanFundingTarget(base, "2026-01-01");
+    const high = simplePlan();
+    high.retirement.annualInflationRate = 0.05;
+    const up = lifePlanFundingTarget(high, "2026-01-01");
+    assert.ok(up.need > low.need);
+  });
+
+  it("raises need when the plan runs longer", () => {
+    const shorter = simplePlan();
+    shorter.personal.planEndAge = 80;
+    shorter.spendingStages[0].endAge = 80;
+    const longer = simplePlan();
+    longer.personal.planEndAge = 95;
+    longer.spendingStages[0].endAge = 95;
+    const a = lifePlanFundingTarget(shorter, "2026-01-01");
+    const b = lifePlanFundingTarget(longer, "2026-01-01");
+    assert.ok(b.need > a.need);
+  });
+
+  it("does not include self-occupied property in need or have", () => {
+    const plain = lifePlanFundingTarget(simplePlan(), "2026-01-01");
+    const withHome = simplePlan();
+    withHome.assets.selfOccupiedPropertyValue = 50_000_000;
+    withHome.assets.selfOccupiedPropertyGrowthRate = 0.025;
+    const row = lifePlanFundingTarget(withHome, "2026-01-01");
+    assert.ok(Math.abs(row.have - plain.have) < 2);
+    assert.ok(Math.abs(row.need - plain.need) < 2);
+    assert.ok(row.have < 50_000_000);
+    assert.ok(row.need < 50_000_000);
+  });
+});
+
+describe("pre- and post-retirement returns", () => {
+  it("uses the pre-retirement rate while working and the post rate after", () => {
+    const p = emptyLifePlan();
+    p.personal.dateOfBirth = "1980-01-01";
+    p.personal.planStartDate = "2026-01-01";
+    p.personal.planEndAge = 70;
+    p.currentJob.endDate = "2028-12-31";
+    p.currentJob.grossMonthlyIncome = 20_000;
+    p.currentJob.actualMonthlySpending = 20_000;
+    p.currentJob.incomeIsNet = true;
+    p.currentJob.monthlySavingsOverride = 0;
+    p.lowerStressJob.enabled = false;
+    p.retirement.startDate = "2028-12-31";
+    p.retirement.annualInvestmentReturn = 0;
+    p.retirement.annualInvestmentReturnPre = 0.1;
+    p.retirement.annualInflationRate = 0;
+    p.assets.financialAssets = 1_000_000;
+    p.spendingStages = [
+      {
+        id: "r",
+        label: "",
+        startAge: 48,
+        endAge: 120,
+        monthlyLivingCostInTodayMoney: 0,
+        followsInflation: false,
+        isEssential: true,
+        notes: "",
+      },
+    ];
+    const r = runLifePlan(p, "2026-01-01");
+    assert.ok(r.stay);
+    const work = r.stay.years.filter((y) => y.phase === "current");
+    const retired = r.stay.years.filter((y) => y.phase === "retired");
+    assert.ok(work.length >= 1);
+    assert.ok(retired.length >= 1);
+    for (const y of work) {
+      if (y.openingFinancial > 0 && y.months === 12) {
+        assert.ok(Math.abs(y.investmentReturn / y.openingFinancial - 0.1) < 0.0001);
+      }
+    }
+    for (const y of retired) {
+      if (y.months === 12) {
+        assert.ok(Math.abs(y.investmentReturn) < 1);
+      }
+    }
+  });
+});
+
+describe("ledger take-home is not taxed twice", () => {
+  it("keeps a net income figure as-is", () => {
+    const p = filled();
+    p.currentJob.grossMonthlyIncome = 80_000;
+    p.currentJob.incomeIsNet = true;
+    p.currentJob.annualIncomeGrowthRate = 0;
+    const r = runLifePlan(p, "2026-01-01");
+    const year = r.stay!.years.find((y) => y.phase === "current" && y.months === 12);
+    assert.ok(year);
+    assert.equal(year.income, 80_000 * 12);
   });
 });

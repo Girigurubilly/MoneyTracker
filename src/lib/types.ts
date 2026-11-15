@@ -739,6 +739,8 @@ export type RetirementLifePlan = {
     actualMonthlySpending: number | null;
     monthlySavingsOverride: number | null;
     annualIncomeGrowthRate: number | null;
+    /** True when the income figure is already take-home (e.g. a ledger average). */
+    incomeIsNet?: boolean;
   };
   lowerStressJob: {
     enabled: boolean;
@@ -753,6 +755,8 @@ export type RetirementLifePlan = {
   retirement: {
     startDate: string | null;
     annualInvestmentReturn: number | null;
+    /** Return used while still working. Falls back to annualInvestmentReturn. */
+    annualInvestmentReturnPre?: number | null;
     annualInflationRate: number | null;
     returnMode: LifePlanReturnMode;
     cashReserveMonths: number | null;

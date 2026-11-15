@@ -60,15 +60,19 @@ export function enoughStory(opts: {
   plannedMonthly: number;
   surplusMonthly: number;
   planEndAge: number;
-}): { kind: EnoughKind; gap: number; planEndAge: number; planned: number } {
+  /** Usable-asset gap at retirement (have − need). When set, this is the official gap. */
+  fundingGap?: number;
+}): { kind: EnoughKind; gap: number; surplusMonthly: number; planEndAge: number; planned: number } {
   const planned = opts.plannedMonthly > 0 ? opts.plannedMonthly : 0;
+  const surplusMonthly = Number.isFinite(opts.surplusMonthly) ? opts.surplusMonthly : 0;
   if (!opts.ready || !opts.hasPath || planned <= 0) {
-    return { kind: "setup", gap: 0, planEndAge: opts.planEndAge, planned };
+    return { kind: "setup", gap: 0, surplusMonthly: 0, planEndAge: opts.planEndAge, planned };
   }
-  if (opts.depletes || opts.surplusMonthly < 0) {
-    return { kind: "short", gap: opts.surplusMonthly, planEndAge: opts.planEndAge, planned };
+  const official = opts.fundingGap != null && Number.isFinite(opts.fundingGap) ? opts.fundingGap : surplusMonthly;
+  if (opts.depletes || official < 0) {
+    return { kind: "short", gap: official, surplusMonthly, planEndAge: opts.planEndAge, planned };
   }
-  return { kind: "enough", gap: opts.surplusMonthly, planEndAge: opts.planEndAge, planned };
+  return { kind: "enough", gap: official, surplusMonthly, planEndAge: opts.planEndAge, planned };
 }
 
 export type MortgageStoryKind = "none" | "owing" | "clears-before" | "assumed-payoff";

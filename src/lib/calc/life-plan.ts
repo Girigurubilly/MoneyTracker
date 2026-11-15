@@ -72,6 +72,7 @@ export function emptyLifePlan(): RetirementLifePlan {
       actualMonthlySpending: null,
       monthlySavingsOverride: null,
       annualIncomeGrowthRate: null,
+      incomeIsNet: false,
     },
     lowerStressJob: {
       enabled: true,
@@ -86,6 +87,7 @@ export function emptyLifePlan(): RetirementLifePlan {
     retirement: {
       startDate: null,
       annualInvestmentReturn: null,
+      annualInvestmentReturnPre: null,
       annualInflationRate: null,
       returnMode: "nominal",
       cashReserveMonths: null,
@@ -274,8 +276,9 @@ function phaseFor(path: LifePathId, plan: RetirementLifePlan, yearEnd: string): 
 }
 
 function netCurrent(plan: RetirementLifePlan, yearsFromStart: number): number {
-  const gross = n(plan.currentJob.grossMonthlyIncome) * (1 + n(plan.currentJob.annualIncomeGrowthRate)) ** yearsFromStart;
-  return estimateHkNetMonthly(gross);
+  const grown = n(plan.currentJob.grossMonthlyIncome) * (1 + n(plan.currentJob.annualIncomeGrowthRate)) ** yearsFromStart;
+  if (plan.currentJob.incomeIsNet) return grown;
+  return estimateHkNetMonthly(grown);
 }
 
 function netLower(plan: RetirementLifePlan, yearsFromStart: number): number {
@@ -301,7 +304,10 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
   const startAge = ageFromBirthday(dob, `${startYear}-12-31`);
   const endAge = plan.personal.planEndAge!;
   const inf = n(plan.retirement.annualInflationRate);
-  const ret = n(plan.retirement.annualInvestmentReturn);
+  const retPost = n(plan.retirement.annualInvestmentReturn);
+  const retPre = plan.retirement.annualInvestmentReturnPre != null
+    ? n(plan.retirement.annualInvestmentReturnPre)
+    : retPost;
   const mode = plan.retirement.returnMode;
   let financial = n(plan.assets.financialAssets);
   const support = inflows?.parentSupport;
@@ -319,6 +325,7 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
   let assetsAtRetire = financial;
   let retireAge: number | null = null;
   let shocked = false;
+  let retireOverride = false;
   const target = plan.personal.targetTerminalFinancialAssets;
   const accounts = (inflows?.accounts ?? []).filter((a) => a.includeInRetirementProjection && a.status !== "closed");
   const balances = new Map(accounts.map((a) => [a.id, n(a.currentBalance)]));
@@ -331,6 +338,10 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
     const yearEnd = `${calendarYear}-12-31`;
     const i = age - startAge;
     const phase = phaseFor(path, plan, yearEnd);
+    if (shock?.financialAtRetire != null && !retireOverride && phase === "retired") {
+      financial = Math.max(0, shock.financialAtRetire);
+      retireOverride = true;
+    }
     if (shock?.shockAtRetire && !shocked && phase === "retired") {
       financial *= 1 + shock.shockAtRetire;
       shocked = true;
@@ -479,7 +490,8 @@ function simulatePath(plan: RetirementLifePlan, path: LifePathId, asOf: string, 
       reverseMortgage *= part;
     }
 
-    const investmentReturn = Math.max(0, financial) * ret * part;
+    const rate = phase === "retired" ? retPost : retPre;
+    const investmentReturn = Math.max(0, financial) * rate * part;
     const inheritKept = Math.max(0, inheritProceeds - annuityBuy);
     financial = financial + investmentReturn + income + inheritKept + annuityIncome + pensionIncome + allowanceIncome + reverseMortgage - living - mortgagePay;
     if (financial < minFinancial) minFinancial = financial;
@@ -542,6 +554,8 @@ export type LifePlanShock = {
   inflation?: number;
   endAge?: number;
   shockAtRetire?: number;
+  /** Replace opening usable assets on the first retired year (for funding-target search). */
+  financialAtRetire?: number;
 };
 
 export function runLifePlan(
@@ -606,6 +620,56 @@ export function lifePlanMonthlyRoom(
   return { planned, sustainable: Math.max(0, Math.round(planned + surplus)), surplus };
 }
 
+
+export type LifePlanFundingTarget = {
+  ready: boolean;
+  need: number;
+  have: number;
+  gap: number;
+  retireAge: number | null;
+  planEndAge: number;
+};
+
+/**
+ * Usable (investable) assets required on retirement day so inflated spending
+ * lasts through the plan-through age, with any end-of-plan buffer.
+ * Property is not part of need or have.
+ */
+export function lifePlanFundingTarget(
+  plan: RetirementLifePlan,
+  asOf = new Date().toISOString().slice(0, 10),
+  inflows?: LifePlanInflows,
+): LifePlanFundingTarget {
+  const planEndAge = n(plan.personal.planEndAge);
+  const stay = runLifePlan(plan, asOf, inflows).stay;
+  if (!stay || stay.retireAge == null) {
+    return { ready: false, need: 0, have: 0, gap: 0, retireAge: null, planEndAge };
+  }
+  const have = Math.max(0, Math.round(stay.assetsAtRetire));
+  const buffer = n(plan.personal.targetTerminalFinancialAssets);
+  const meets = (amount: number) => {
+    const trial = runLifePlan(plan, asOf, inflows, { financialAtRetire: Math.max(0, amount) }).stay;
+    if (!trial || trial.depletes) return false;
+    return trial.terminalAssets + 1 >= buffer;
+  };
+  const need = Math.round(searchNeedAtRetire(meets, buffer, n(plan.assets.financialAssets)));
+  return { ready: true, need, have, gap: have - need, retireAge: stay.retireAge, planEndAge };
+}
+
+function searchNeedAtRetire(meets: (amount: number) => boolean, buffer: number, seed: number): number {
+  if (meets(0)) return 0;
+  let lo = 0;
+  let hi = Math.max(1_000_000, buffer * 2, seed * 2, 10_000);
+  for (let i = 0; i < 16 && !meets(hi) && hi < 5_000_000_000; i++) hi *= 2;
+  if (!meets(hi)) return hi;
+  for (let i = 0; i < 36; i++) {
+    const mid = (lo + hi) / 2;
+    if (meets(mid)) hi = mid;
+    else lo = mid;
+  }
+  return hi;
+}
+
 function shiftRetirementSpend(plan: RetirementLifePlan, retireAge: number, delta: number): RetirementLifePlan {
   const stages = plan.spendingStages.flatMap((s) => {
     if (s.monthlyLivingCostInTodayMoney == null || s.startAge == null || s.endAge == null) return [s];
@@ -630,6 +694,10 @@ function applyLifeShock(plan: RetirementLifePlan, shock: LifePlanShock): Retirem
       ...plan.retirement,
       annualInvestmentReturn:
         shock.returnDelta != null ? Math.max(0, n(plan.retirement.annualInvestmentReturn) + shock.returnDelta) : plan.retirement.annualInvestmentReturn,
+      annualInvestmentReturnPre:
+        shock.returnDelta != null
+          ? Math.max(0, n(plan.retirement.annualInvestmentReturnPre ?? plan.retirement.annualInvestmentReturn) + shock.returnDelta)
+          : plan.retirement.annualInvestmentReturnPre,
       annualInflationRate: shock.inflation ?? plan.retirement.annualInflationRate,
     },
   };
@@ -652,9 +720,11 @@ export type LifePlanShared = {
   retireAge: number;
   deathAge: number;
   inflation: number;
+  preReturn: number;
   postReturn: number;
   monthlyIncomeNow: number;
   monthlySpendNow: number;
+  incomeIsNet?: boolean;
   targetMonthly: number;
   reverseMortgageLtv?: number;
   investable: number;
@@ -708,11 +778,13 @@ export function resolveLifePlan(plan: RetirementLifePlan, shared: LifePlanShared
       grossMonthlyIncome: plan.currentJob.grossMonthlyIncome ?? (shared.monthlyIncomeNow || null),
       actualMonthlySpending: spendNow,
       monthlySavingsOverride: null,
+      incomeIsNet: shared.incomeIsNet ?? plan.currentJob.incomeIsNet ?? false,
     },
     retirement: {
       ...plan.retirement,
       startDate: plan.retirement.startDate || retireDate,
       annualInvestmentReturn: plan.retirement.annualInvestmentReturn ?? shared.postReturn,
+      annualInvestmentReturnPre: plan.retirement.annualInvestmentReturnPre ?? shared.preReturn,
       annualInflationRate: plan.retirement.annualInflationRate ?? shared.inflation,
     },
     spendingStages: stages,
