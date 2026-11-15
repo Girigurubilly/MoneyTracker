@@ -75,6 +75,7 @@ export function StickyConclusionBar({
   gap,
   planEndAge,
   dragging,
+  gapLabel,
 }: {
   kind: EnoughKind;
   verdict: string;
@@ -82,6 +83,7 @@ export function StickyConclusionBar({
   gap: number;
   planEndAge: number;
   dragging: boolean;
+  gapLabel?: string;
 }) {
   const t = useT();
   const shownGap = useCountUp(gap, dragging, 320);
@@ -108,8 +110,9 @@ export function StickyConclusionBar({
             {kind === "setup" ? null : (
               <>
                 <span className="text-muted">·</span>
+                {gapLabel ? <span className="text-muted">{gapLabel}</span> : null}
                 <span className={cn("font-medium tabular-nums", shownGap < 0 ? "text-expense" : "text-income")}>
-                  {money(shownGap, "HKD", { sign: true })}
+                  {money(Math.abs(shownGap), "HKD")}
                 </span>
                 <span className="text-muted">·</span>
                 <span className="tabular-nums text-muted">{t.reports.lastsUntil.replace("{age}", String(planEndAge))}</span>
@@ -519,7 +522,7 @@ export function ConfigFold({ title, children, defaultOpen = false }: { title: st
 <ChevronDown className={cn("size-4 text-muted transition", on && "rotate-180")} />
       </button>
       {on ? (
-        <div className="rt-fold rt-fold-open border-t border-line">
+        <div className="rt-fold border-t border-line">
           <div className="rt-fold-inner">{children}</div>
         </div>
       ) : null}

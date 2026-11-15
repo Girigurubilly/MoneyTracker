@@ -78,6 +78,21 @@ describe("enough story is one ruler", () => {
     assert.equal(goalsReady({ currentAge: 42, targetMonthly: 25_000 }), true);
     assert.equal(goalsReady({ birthday: "1984-01-01", currentAge: 0, targetMonthly: 25_000 }), true);
   });
+
+  it("uses the lump funding gap when provided, and keeps monthly room on the side", () => {
+    const story = enoughStory({
+      ready: true,
+      hasPath: true,
+      depletes: false,
+      plannedMonthly: 25_000,
+      surplusMonthly: 2_000,
+      fundingGap: -800_000,
+      planEndAge: 90,
+    });
+    assert.equal(story.kind, "short");
+    assert.equal(story.gap, -800_000);
+    assert.equal(story.surplusMonthly, 2_000);
+  });
 });
 
 describe("mortgage label honesty", () => {

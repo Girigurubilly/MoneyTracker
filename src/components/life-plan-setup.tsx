@@ -98,19 +98,19 @@ function Setup({
         {plan.inheritedProperty.buyAnnuity ? (
           <>
             <p className="px-4 pb-2 text-[11px] leading-4 text-muted">{t.reports.lpNoteAnnuity}</p>
-            <NullNum
+            <ConfigNullNum
               label={t.reports.lpAnnuityCap}
               value={plan.inheritedProperty.annuityPremium ?? null}
               money
               onCommit={(n) => patch({ inheritedProperty: { ...plan.inheritedProperty, annuityPremium: n == null ? null : Math.min(3_000_000, Math.max(0, n)) } })}
             />
-            <NullNum
+            <ConfigNullNum
               label={t.reports.lpAnnuityPay}
               value={plan.inheritedProperty.annuityMonthly ?? null}
               money
               onCommit={(n) => patch({ inheritedProperty: { ...plan.inheritedProperty, annuityMonthly: n } })}
             />
-            <NullNum
+            <ConfigNullNum
               label={t.reports.lpAnnuityStart}
               value={plan.inheritedProperty.annuityStartAge ?? null}
               onCommit={(n) => patch({ inheritedProperty: { ...plan.inheritedProperty, annuityStartAge: n } })}
@@ -182,7 +182,7 @@ function Fold({ title, hint, children, open = false }: { title: string; hint?: s
         <ChevronDown className={cn("size-4 shrink-0 text-muted transition", on && "rotate-180")} />
       </button>
       {on ? (
-        <div className="rt-fold rt-fold-open border-t border-line">
+        <div className="rt-fold border-t border-line">
           <div className="rt-fold-inner">{children}</div>
         </div>
       ) : null}
