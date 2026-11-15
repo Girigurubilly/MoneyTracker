@@ -57,6 +57,7 @@ import { accountsInGroup, countCashInNetWorth, nextSortOrder } from "@/lib/accou
 import { applyTxRules } from "@/lib/tx-rules";
 import { applyDeltas, balanceDeltas, monthKey } from "@/lib/calc/ledger";
 import { todayISO, plannedIsDue } from "@/lib/format";
+import { adhocFromTx, findPairedAdhoc, findPairedTx, isOneOffTx, txFromAdhoc } from "@/lib/adhoc-link";
 import { MONTH_TOTAL_BUDGET_ID } from "@/lib/types";
 
 export type AppSnapshot = {
@@ -172,7 +173,7 @@ type Dispatchers = {
   deleteAllowance: (id: string) => Promise<void>;
   addAdhocBudget: (a: AdhocBudget) => Promise<void>;
   updateAdhocBudget: (a: AdhocBudget) => Promise<void>;
-  deleteAdhocBudget: (id: string) => Promise<void>;
+  deleteAdhocBudget: (id: string, opts?: { keepPosted?: boolean }) => Promise<void>;
   addDeposit: (partial: Omit<TimeSaving, "id"> & { id?: string }) => Promise<TimeSaving>;
   updateDeposit: (row: TimeSaving) => Promise<void>;
   deleteDeposit: (id: string) => Promise<void>;
@@ -927,6 +928,96 @@ function travelCategoryIds(get: () => AppState): Set<string> {
   return new Set(travelThemedIds(get().categories));
 }
 
+let pairingAdhoc = false;
+
+async function writeAdhocRow(row: AdhocBudget, get: () => AppState, set: (partial: Partial<AppState>) => void) {
+  const prev = get().adhocBudgets.find((x) => x.id === row.id);
+  const merged: AdhocBudget = {
+    ...prev,
+    ...row,
+    txId: row.txId ?? prev?.txId,
+    priceCards: row.priceCards ?? prev?.priceCards,
+    valueCards: row.valueCards ?? prev?.valueCards,
+  };
+  await idb().adhocBudgets.put(merged);
+  const list = get().adhocBudgets;
+  set({
+    adhocBudgets: list.some((x) => x.id === merged.id) ? list.map((x) => (x.id === merged.id ? merged : x)) : [...list, merged],
+  });
+  return merged;
+}
+
+async function removeAdhocRow(id: string, get: () => AppState, set: (partial: Partial<AppState>) => void) {
+  await idb().adhocBudgets.delete(id);
+  set({ adhocBudgets: get().adhocBudgets.filter((x) => x.id !== id) });
+}
+
+async function putTxLink(tx: Transaction, get: () => AppState, set: (partial: Partial<AppState>) => void) {
+  await idb().transactions.put(tx);
+  set({ transactions: get().transactions.map((t) => (t.id === tx.id ? tx : t)) });
+}
+
+function sameLinkedTx(a: Transaction, b: Transaction): boolean {
+  return (
+    a.payee === b.payee &&
+    a.payeeZh === b.payeeZh &&
+    a.amount === b.amount &&
+    a.currency === b.currency &&
+    a.date === b.date &&
+    a.time === b.time &&
+    a.categoryId === b.categoryId &&
+    a.accountId === b.accountId &&
+    a.tripId === b.tripId &&
+    a.planned === b.planned &&
+    a.adhoc === b.adhoc &&
+    a.adhocId === b.adhocId
+  );
+}
+
+/** Keep the budget one-off in step with its expense, and the other way around. */
+async function pairAdhocFromTx(tx: Transaction, prev: Transaction | undefined, get: () => AppState, set: (partial: Partial<AppState>) => void) {
+  if (pairingAdhoc) return tx;
+  pairingAdhoc = true;
+  try {
+    if (!isOneOffTx(tx)) {
+      if (prev?.adhoc || prev?.adhocId || tx.adhocId) {
+        const linked = findPairedAdhoc(get().adhocBudgets, tx, prev);
+        if (linked) await removeAdhocRow(linked.id, get, set);
+      }
+      if (tx.adhocId) {
+        const cleared = { ...tx, adhocId: undefined };
+        await putTxLink(cleared, get, set);
+        return cleared;
+      }
+      return tx;
+    }
+    const existing = findPairedAdhoc(get().adhocBudgets, tx, prev);
+    const saved = await writeAdhocRow(adhocFromTx(tx, existing, todayISO()), get, set);
+    if (tx.adhocId === saved.id) return tx;
+    const linked = { ...tx, adhocId: saved.id };
+    await putTxLink(linked, get, set);
+    return linked;
+  } finally {
+    pairingAdhoc = false;
+  }
+}
+
+async function pairTxFromAdhoc(row: AdhocBudget, prev: AdhocBudget | undefined, get: () => AppState, set: (partial: Partial<AppState>) => void) {
+  if (pairingAdhoc) return;
+  const tx = findPairedTx(get().transactions, row, prev);
+  if (!tx) return;
+  const next = txFromAdhoc(tx, row);
+  pairingAdhoc = true;
+  try {
+    if (!sameLinkedTx(tx, next)) await get().updateTransaction(next, tx);
+    else if (tx.adhocId !== row.id) await putTxLink({ ...tx, adhoc: true, adhocId: row.id }, get, set);
+    const current = get().adhocBudgets.find((a) => a.id === row.id);
+    if (current && current.txId !== tx.id) await writeAdhocRow({ ...current, txId: tx.id }, get, set);
+  } finally {
+    pairingAdhoc = false;
+  }
+}
+
 export const useApp = create<AppState>((set, get) => ({
   ready: false,
   accounts: [],
@@ -1082,7 +1173,7 @@ export const useApp = create<AppState>((set, get) => ({
         set({ recurring: get().recurring.map((r) => (r.id === patched.id ? patched : r)) });
       }
     }
-    return tx;
+    return pairAdhocFromTx(tx, undefined, get, set);
   },
 
   undoLastTransaction: async () => {
@@ -1129,6 +1220,7 @@ export const useApp = create<AppState>((set, get) => ({
         set({ recurring: get().recurring.map((r) => (r.id === patched.id ? patched : r)) });
       }
     }
+    await pairAdhocFromTx(next, prev, get, set);
   },
 
   deleteTransaction: async (id) => {
@@ -1142,6 +1234,17 @@ export const useApp = create<AppState>((set, get) => ({
       if (mortgage) await idb().mortgage.put(mortgage);
     });
     set({ transactions: get().transactions.filter((t) => t.id !== id), accounts, mortgage });
+    if (!pairingAdhoc) {
+      const linked = findPairedAdhoc(get().adhocBudgets, prev);
+      if (linked) {
+        pairingAdhoc = true;
+        try {
+          await removeAdhocRow(linked.id, get, set);
+        } finally {
+          pairingAdhoc = false;
+        }
+      }
+    }
     return prev;
   },
 
@@ -1401,19 +1504,34 @@ export const useApp = create<AppState>((set, get) => ({
     set({ allowances: get().allowances.filter((x) => x.id !== id) });
   },
   addAdhocBudget: async (a) => {
-    await idb().adhocBudgets.put(a);
-    set({
-      adhocBudgets: get().adhocBudgets.some((x) => x.id === a.id)
-        ? get().adhocBudgets.map((x) => (x.id === a.id ? a : x))
-        : [...get().adhocBudgets, a],
-    });
+    const prev = get().adhocBudgets.find((x) => x.id === a.id);
+    const saved = await writeAdhocRow(a, get, set);
+    if (!pairingAdhoc) await pairTxFromAdhoc(saved, prev, get, set);
   },
   updateAdhocBudget: async (a) => {
     await get().addAdhocBudget(a);
   },
-  deleteAdhocBudget: async (id) => {
-    await idb().adhocBudgets.delete(id);
-    set({ adhocBudgets: get().adhocBudgets.filter((x) => x.id !== id) });
+  deleteAdhocBudget: async (id, opts) => {
+    const row = get().adhocBudgets.find((a) => a.id === id);
+    await removeAdhocRow(id, get, set);
+    if (pairingAdhoc || !row) return;
+    const tx = findPairedTx(get().transactions, row);
+    if (!tx) return;
+    if (opts?.keepPosted && !tx.planned) {
+      pairingAdhoc = true;
+      try {
+        await get().updateTransaction({ ...tx, adhoc: false, adhocId: undefined }, tx);
+      } finally {
+        pairingAdhoc = false;
+      }
+      return;
+    }
+    pairingAdhoc = true;
+    try {
+      await get().deleteTransaction(tx.id);
+    } finally {
+      pairingAdhoc = false;
+    }
   },
   addDeposit: async (partial) => {
     const row: TimeSaving = { ...partial, id: partial.id ?? nid() };

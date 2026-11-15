@@ -103,7 +103,6 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
   const rates = useApp((s) => s.fxRates);
   const defaultCurrency = useApp((s) => s.defaultCurrency);
   const addTransaction = useApp((s) => s.addTransaction);
-  const addAdhoc = useApp((s) => s.addAdhocBudget);
   const transactions = useApp((s) => s.transactions);
   const moneyAccounts = moneyAccountsForPicker(accounts, { kid });
   const presetAccount = useUi((s) => s.addAccountId);
@@ -233,24 +232,6 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
       return;
     }
     const planned = !paid;
-    const today = todayISO();
-    async function linkAdhoc(row: { amount: number; payee: string; categoryId?: string; accountId: string; tripId?: string }) {
-      if (!adhoc || type !== "expense" || row.amount <= 0) return;
-      await addAdhoc({
-        id: newId(),
-        label: row.payee,
-        labelZh: row.payee,
-        amount: row.amount,
-        currency,
-        month: date.slice(0, 7),
-        date,
-        time,
-        categoryId: row.categoryId,
-        accountId: row.accountId,
-        tripId: row.tripId,
-        ...(date <= today ? { paidOn: date } : {}),
-      });
-    }
     const pCat = categories.find((c) => mortgageEntryKind(c, categories) === "principal");
     const iCat = categories.find((c) => mortgageEntryKind(c, categories) === "interest");
     const ccy: MoneyUnit = type === "miles" ? "MILES" : currency;
@@ -286,13 +267,6 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
             ctx,
           ),
         );
-        await linkAdhoc({
-          amount: p,
-          payee: payee || t.add.principal,
-          categoryId: pCat?.id,
-          accountId,
-          tripId: tripId || undefined,
-        });
       }
       if (i > 0) {
         await addTransaction(
@@ -315,13 +289,6 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
             ctx,
           ),
         );
-        await linkAdhoc({
-          amount: i,
-          payee: payee || t.add.interest,
-          categoryId: iCat?.id ?? (categoryId || undefined),
-          accountId,
-          tripId: tripId || undefined,
-        });
       }
     } else {
       await addTransaction(
@@ -350,13 +317,6 @@ function AddBody({ initialType, onClose }: { initialType: TxType; onClose: () =>
           ctx,
         ),
       );
-      await linkAdhoc({
-        amount: amt,
-        payee: payee || t.add[type],
-        categoryId: categoryId || undefined,
-        accountId: type === "miles" ? (accounts.find((a) => a.currency === "MILES")?.id ?? accountId) : accountId,
-        tripId: type === "expense" && tripId ? tripId : undefined,
-      });
     }
     onClose();
   }

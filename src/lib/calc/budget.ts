@@ -276,9 +276,10 @@ export function realizedAdhoc(rows: AdhocBudget[], month: string, rates: FxRate[
   return sum;
 }
 
-/** A one-off is already realized when it is marked paid, or a posted expense matches it. */
+/** A one-off is already realized when it is marked paid, or its paired expense is posted. */
 export function adhocSettled(a: AdhocBudget, txs: Transaction[], month: string): boolean {
   if (a.paidOn) return true;
+  if (txs.some((t) => !t.planned && (t.id === a.txId || t.adhocId === a.id))) return true;
   return txs.some(
     (t) =>
       !t.planned &&

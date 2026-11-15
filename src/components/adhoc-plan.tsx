@@ -113,7 +113,7 @@ export function AdhocPlanPage() {
             onPost={setPosting}
             onWish={async (a) => {
               await addWish(wishFromAdhoc(a, locale));
-              await delAdhoc(a.id);
+              await delAdhoc(a.id, { keepPosted: true });
               toast(t.budget.toWishlistDone);
             }}
           />
@@ -162,7 +162,7 @@ export function AdhocPlanPage() {
           onPost={setPosting}
           onWish={async (a) => {
             await addWish(wishFromAdhoc(a, locale));
-            await delAdhoc(a.id);
+            await delAdhoc(a.id, { keepPosted: true });
             toast(t.budget.toWishlistDone);
           }}
         />

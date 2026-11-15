@@ -409,6 +409,8 @@ export type Transaction = {
   countsAsExpense?: boolean;
   housing?: boolean;
   adhoc?: boolean;
+  /** Budget one-off paired with this expense. */
+  adhocId?: string;
   fxToHkd?: number;
   /** When this row was entered on a device. Missing on older records. */
   createdAt?: string;
@@ -493,6 +495,8 @@ export type AdhocBudget = {
   categoryId?: string;
   accountId?: string;
   tripId?: string;
+  /** Ledger expense this one-off is paired with. */
+  txId?: string;
   /** TripPlanner item key when this one-off came from a trip proposal. */
   plannerKey?: string;
   priceCards?: WishCard[];

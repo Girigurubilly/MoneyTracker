@@ -884,7 +884,7 @@ function AdhocBlock({
                     className="inline-flex h-11 items-center rounded-full bg-background px-4 text-xs font-medium"
                     onClick={async () => {
                       await addWish(wishFromAdhoc(a, locale));
-                      await delAdhoc(a.id);
+                      await delAdhoc(a.id, { keepPosted: true });
                       toast(t.budget.toWishlistDone);
                     }}
                   >
@@ -948,10 +948,11 @@ function PostAdhocBody({ item, onClose }: { item: AdhocBudget; onClose: () => vo
       payeeZh: item.labelZh,
       note: item.label,
       adhoc: true,
+      adhocId: item.id,
       tripId: item.tripId,
       tripManual: Boolean(item.tripId),
     });
-    await update({ ...item, amount: amt, currency, accountId, paidOn: today });
+    await update({ ...item, amount: amt, currency, accountId, date: today, month: today.slice(0, 7), paidOn: today });
     onClose();
   }
 
@@ -1122,6 +1123,7 @@ function AdhocEditorBody({
         payeeZh: n,
         note: n,
         adhoc: true,
+        adhocId: row.id,
         tripId: row.tripId,
         tripManual: Boolean(row.tripId),
       });
@@ -1251,7 +1253,7 @@ function AdhocEditorBody({
               className="px-4 py-3 text-sm font-medium text-accent"
               onClick={async () => {
                 await addWish(wishFromAdhoc(initial, locale));
-                await del(initial.id);
+                await del(initial.id, { keepPosted: true });
                 toast(t.budget.toWishlistDone);
                 onClose();
               }}
