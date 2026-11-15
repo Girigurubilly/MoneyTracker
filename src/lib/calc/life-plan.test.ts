@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { emptyLifePlan, estimateHkNetMonthly, inheritanceAnnuityAccount, lifePlanFundingTarget, lifePlanMissing, lifePlanMonthlyRoom, lifePlanSwitchSavingsPace, lifePlanTimeToTarget, resolveLifePlan, runLifePlan } from "./life-plan.ts";
+import { dateAtAge, emptyLifePlan, estimateHkNetMonthly, inheritanceAnnuityAccount, lifePlanFundingTarget, lifePlanMissing, lifePlanMonthlyRoom, lifePlanSwitchSavingsPace, lifePlanTimeToTarget, nowGapTone, resolveLifePlan, runLifePlan } from "./life-plan.ts";
 import { applyAnnuityTerms, blankRetirementAccount } from "./mpf.ts";
 import type { Allowance, RetirementLifePlan } from "../types.ts";
 
@@ -686,6 +686,78 @@ describe("lifePlanTimeToTarget", () => {
     assert.equal(row.kind, "never");
     assert.equal(row.years, null);
   });
+
+  it("uses a short first year when the birthday is mid-year", () => {
+    const mid = lifePlanTimeToTarget({
+      ...base,
+      need: 1_000_000 + 15_000 * 3,
+      investableNow: 1_000_000,
+      preReturn: 0,
+      currentAge: 40,
+      retireAge: 48,
+      birthday: "1986-06-15",
+      asOf: "2026-03-15",
+    });
+    // 3 months until the next birthday: that short year is enough, so not a full 12 months.
+    assert.equal(mid.kind, "on-track");
+    assert.ok(mid.years != null && mid.years < 0.5);
+    assert.ok(mid.age != null && mid.age < 41);
+    assert.equal(mid.calendarYear, 2026);
+
+    const fullYear = lifePlanTimeToTarget({
+      ...base,
+      need: 1_000_000 + 15_000 * 3,
+      investableNow: 1_000_000,
+      preReturn: 0,
+      currentAge: 40,
+      retireAge: 48,
+      asOf: "2026-03-15",
+    });
+    // No birthday: the first step is still a full 12 months of saving.
+    assert.equal(fullYear.kind, "on-track");
+    assert.equal(fullYear.years, 1);
+    assert.equal(fullYear.age, 41);
+  });
+
+  it("compares on-track vs after-retire against the stated retire age", () => {
+    const onTrack = lifePlanTimeToTarget({
+      ...base,
+      need: 1_000_000 + 15_000 * 12 * 6,
+      investableNow: 1_000_000,
+      preReturn: 0,
+      currentAge: 40,
+      retireAge: 48,
+      asOf: "2026-01-01",
+    });
+    assert.equal(onTrack.kind, "on-track");
+    assert.equal(onTrack.years, 6);
+    assert.equal(onTrack.age, 46);
+    assert.ok(onTrack.age! <= 48);
+
+    const late = lifePlanTimeToTarget({
+      ...base,
+      need: 1_000_000 + 15_000 * 12 * 10,
+      investableNow: 1_000_000,
+      preReturn: 0,
+      currentAge: 40,
+      retireAge: 48,
+      asOf: "2026-01-01",
+    });
+    assert.equal(late.kind, "after-retire");
+    assert.equal(late.years, 10);
+    assert.equal(late.age, 50);
+    assert.ok(late.age! > 48);
+  });
+
+  it("treats an on-track remaining amount as accumulating, not a late miss", () => {
+    assert.equal(nowGapTone(800_000, "on-track"), "accumulating");
+    assert.equal(nowGapTone(0, "on-track"), "over");
+    assert.equal(nowGapTone(-10, "already"), "over");
+    assert.equal(nowGapTone(800_000, "after-retire"), "late");
+    assert.equal(nowGapTone(800_000, "never"), "late");
+    assert.equal(nowGapTone(800_000, "negative"), "late");
+    assert.equal(nowGapTone(800_000, "unknown-velocity"), "accumulating");
+  });
 });
 
 
@@ -732,5 +804,55 @@ describe("lifePlanSwitchSavingsPace", () => {
     assert.equal(row.kind, "unknown-velocity");
     assert.equal(row.years, null);
     assert.equal(row.age, null);
+  });
+});
+
+
+describe("official retire age and birthday-accurate dates", () => {
+  const shared = {
+    birthday: "1980-06-15",
+    currentAge: 46,
+    retireAge: 48,
+    deathAge: 90,
+    inflation: 0.02,
+    preReturn: 0.05,
+    postReturn: 0.03,
+    monthlyIncomeNow: 80_000,
+    monthlySpendNow: 40_000,
+    targetMonthly: 25_000,
+    investable: 2_000_000,
+    property: 0,
+    mortgage: null as null,
+    today: "2026-11-15",
+  };
+
+  it("returns the birthday they turn that age, not year-end", () => {
+    assert.equal(dateAtAge("1980-06-15", 48, "2026-11-15", 46), "2028-06-15");
+    assert.equal(dateAtAge("1984-01-01", 50, "2026-01-01", 42), "2034-01-01");
+    assert.equal(dateAtAge(undefined, 65, "2026-09-16", 40), "2051-01-01");
+  });
+
+  it("lets the stated retire age win over a stale earlier job-end date", () => {
+    const stored = filled();
+    stored.personal.dateOfBirth = "1980-06-15";
+    stored.currentJob.endDate = "2026-12-31"; // would mark retired at 46
+    stored.retirement.startDate = "2026-12-31";
+    stored.lowerStressJob.startDate = "2027-01-01";
+    stored.lowerStressJob.endDate = "2028-06-15";
+    const resolved = resolveLifePlan(stored, shared);
+    assert.equal(resolved.currentJob.endDate, "2028-06-15");
+    assert.equal(resolved.retirement.startDate, "2028-06-15");
+    // Switch-path dates stay on the switch path only.
+    assert.equal(resolved.lowerStressJob.startDate, "2027-01-01");
+    assert.equal(resolved.lowerStressJob.endDate, "2028-06-15");
+    const years = runLifePlan(resolved, shared.today).stay!.years;
+    const firstRetired = years.find((y) => y.phase === "retired");
+    assert.ok(firstRetired);
+    assert.equal(firstRetired.age, 48);
+    assert.ok(years.filter((y) => y.phase === "retired").every((y) => y.age >= 48));
+    const at46 = years.find((y) => y.age === 46);
+    const at47 = years.find((y) => y.age === 47);
+    assert.ok(at46 && at46.phase !== "retired");
+    assert.ok(at47 && at47.phase !== "retired");
   });
 });

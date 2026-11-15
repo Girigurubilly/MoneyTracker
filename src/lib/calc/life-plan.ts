@@ -681,6 +681,21 @@ export type TimeToTarget = {
   calendarYear: number | null;
 };
 
+export type NowGapTone = "over" | "accumulating" | "late";
+
+/** Colour for today's remaining amount. On-track remaining is not a failure. */
+export function nowGapTone(nowGap: number, kind: TimeToTargetKind | null | undefined): NowGapTone {
+  if (nowGap <= 0) return "over";
+  if (kind === "after-retire" || kind === "never" || kind === "negative") return "late";
+  return "accumulating";
+}
+
+function addMonthsIso(iso: string, months: number): string {
+  const d = new Date(`${iso.slice(0, 10)}T12:00:00`);
+  d.setMonth(d.getMonth() + Math.max(0, Math.round(months)));
+  return d.toISOString().slice(0, 10);
+}
+
 /**
  * When today's usable assets, grown at the official pre-retire return and
  * topped up by current monthly saving (take-home minus spending now), first
@@ -691,8 +706,9 @@ export type TimeToTarget = {
  * simple nominal growth of today's pot — a prompt for "how long at this
  * pace", not a second full life-plan path.
  *
- * If income and spending now are both zero, velocity is unknown and no date
- * is invented.
+ * If a birthday is set, the current incomplete year only counts the months
+ * until the next birthday. If income and spending now are both zero,
+ * velocity is unknown and no date is invented.
  */
 export function lifePlanTimeToTarget(opts: {
   need: number;
@@ -704,6 +720,7 @@ export function lifePlanTimeToTarget(opts: {
   retireAge: number;
   planEndAge: number;
   asOf?: string;
+  birthday?: string;
 }): TimeToTarget {
   const need = Math.max(0, Number.isFinite(opts.need) ? opts.need : 0);
   const pot0 = Math.max(0, Number.isFinite(opts.investableNow) ? opts.investableNow : 0);
@@ -726,17 +743,27 @@ export function lifePlanTimeToTarget(opts: {
   }
 
   const r = Number.isFinite(opts.preReturn) ? Math.max(0, opts.preReturn) : 0;
-  const annualSave = monthlySave * 12;
-  const cap = Math.max(0, Math.round(planEndAge - currentAge));
+  const capYears = Math.max(0, planEndAge - currentAge);
+  const capMonths = Math.max(0, Math.round(capYears * 12));
+  const birthday = opts.birthday?.slice(0, 10);
+  const firstMonths = birthday && /^\d{4}-\d{2}-\d{2}$/.test(birthday) ? monthsUntilNextBirthday(birthday, asOf) : 12;
+
+  const grow = (pot: number, months: number) => pot * (1 + r) ** (months / 12) + monthlySave * months;
+
   let pot = pot0;
-  let years = 0;
-  while (pot + 1 < need && years < cap) {
-    pot = pot * (1 + r) + annualSave;
-    years += 1;
+  let monthsTotal = 0;
+  const stepOnce = (months: number) => {
+    pot = grow(pot, months);
+    monthsTotal += months;
     if (!Number.isFinite(pot)) {
-      years = cap;
-      break;
+      pot = Number.POSITIVE_INFINITY;
+      monthsTotal = capMonths;
     }
+  };
+
+  if (firstMonths > 0 && capMonths > 0) stepOnce(Math.min(firstMonths, capMonths));
+  while (pot + 1 < need && monthsTotal < capMonths) {
+    stepOnce(Math.min(12, capMonths - monthsTotal));
   }
   const reached = pot + 1 >= need;
   if (!reached) {
@@ -748,9 +775,12 @@ export function lifePlanTimeToTarget(opts: {
       calendarYear: null,
     };
   }
+  const years = monthsTotal / 12;
   const age = currentAge + years;
   const kind: TimeToTargetKind = age <= retireAge ? "on-track" : "after-retire";
-  return { kind, monthlySave, years, age, calendarYear: year0 + years };
+  const endDate = addMonthsIso(asOf, monthsTotal);
+  const calendarYear = Number(endDate.slice(0, 4));
+  return { kind, monthlySave, years, age, calendarYear: Number.isFinite(calendarYear) ? calendarYear : year0 };
 }
 
 /**
@@ -807,10 +837,13 @@ function applyLifeShock(plan: RetirementLifePlan, shock: LifePlanShock): Retirem
   };
 }
 
+/** Calendar date they turn `age`: the birthday in that year, or 1 Jan when no birthday is set. */
 export function dateAtAge(dob: string | null | undefined, age: number, today: string, currentAge: number): string {
-  if (dob && /^\d{4}/.test(dob)) return `${Number(dob.slice(0, 4)) + age}-12-31`;
-  const y = Number(today.slice(0, 4)) + (age - currentAge);
-  return `${y}-12-31`;
+  const nAge = Number.isFinite(age) ? Math.round(age) : 0;
+  const iso = dob?.slice(0, 10) ?? "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return `${Number(iso.slice(0, 4)) + nAge}-${iso.slice(5, 10)}`;
+  const y = Number(today.slice(0, 4)) + (nAge - currentAge);
+  return `${Number.isFinite(y) ? y : Number(today.slice(0, 4))}-01-01`;
 }
 
 function impliedBirthday(today: string, currentAge: number): string {
@@ -842,9 +875,13 @@ export type LifePlanShared = {
   today: string;
 };
 
-/** Fill blank life-plan fields from the shared retirement profile. Spending follows that profile. */
+/** Fill blank life-plan fields from the shared retirement profile. Spending follows that profile.
+ *  Official stay-path job-end and retirement-start always follow the stated retire age
+ *  from Settings; a stale stored date must not win. Switch-path dates are left as stored.
+ */
 export function resolveLifePlan(plan: RetirementLifePlan, shared: LifePlanShared): RetirementLifePlan {
-  const retireDate = dateAtAge(shared.birthday, shared.retireAge, shared.today, shared.currentAge);
+  const dob = shared.birthday || plan.personal.dateOfBirth;
+  const retireDate = dateAtAge(dob, shared.retireAge, shared.today, shared.currentAge);
   const spendNow = shared.monthlySpendNow || plan.currentJob.actualMonthlySpending;
   const retireSpend = shared.targetMonthly || null;
   const specific = plan.spendingStages.filter(
@@ -878,7 +915,7 @@ export function resolveLifePlan(plan: RetirementLifePlan, shared: LifePlanShared
     },
     currentJob: {
       ...plan.currentJob,
-      endDate: plan.currentJob.endDate || retireDate,
+      endDate: retireDate,
       grossMonthlyIncome: plan.currentJob.grossMonthlyIncome ?? (shared.monthlyIncomeNow || null),
       actualMonthlySpending: spendNow,
       monthlySavingsOverride: null,
@@ -886,7 +923,7 @@ export function resolveLifePlan(plan: RetirementLifePlan, shared: LifePlanShared
     },
     retirement: {
       ...plan.retirement,
-      startDate: plan.retirement.startDate || retireDate,
+      startDate: retireDate,
       annualInvestmentReturn: plan.retirement.annualInvestmentReturn ?? shared.postReturn,
       annualInvestmentReturnPre: plan.retirement.annualInvestmentReturnPre ?? shared.preReturn,
       annualInflationRate: plan.retirement.annualInflationRate ?? shared.inflation,
