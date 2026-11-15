@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { emptyLifePlan, estimateHkNetMonthly, inheritanceAnnuityAccount, lifePlanFundingTarget, lifePlanMissing, lifePlanMonthlyRoom, resolveLifePlan, runLifePlan } from "./life-plan.ts";
+import { emptyLifePlan, estimateHkNetMonthly, inheritanceAnnuityAccount, lifePlanFundingTarget, lifePlanMissing, lifePlanMonthlyRoom, lifePlanTimeToTarget, resolveLifePlan, runLifePlan } from "./life-plan.ts";
 import { applyAnnuityTerms, blankRetirementAccount } from "./mpf.ts";
 import type { Allowance, RetirementLifePlan } from "../types.ts";
 
@@ -606,5 +606,84 @@ describe("ledger take-home is not taxed twice", () => {
     const year = r.stay!.years.find((y) => y.phase === "current" && y.months === 12);
     assert.ok(year);
     assert.equal(year.income, 80_000 * 12);
+  });
+});
+
+describe("lifePlanTimeToTarget", () => {
+  const base = {
+    need: 3_000_000,
+    investableNow: 1_000_000,
+    monthlyIncome: 40_000,
+    monthlySpend: 25_000,
+    preReturn: 0.05,
+    currentAge: 40,
+    retireAge: 65,
+    planEndAge: 90,
+    asOf: "2026-01-01",
+  };
+
+  it("reaches the target before planned retirement with positive savings", () => {
+    const row = lifePlanTimeToTarget(base);
+    assert.equal(row.kind, "on-track");
+    assert.equal(row.monthlySave, 15_000);
+    assert.ok(row.years != null && row.years > 0);
+    assert.ok(row.age != null && row.age <= 65);
+    assert.equal(row.age, 40 + row.years!);
+    assert.equal(row.calendarYear, 2026 + row.years!);
+    // Sanity: 1M growing at 5% plus 180k/year should beat 3M well before 25 years.
+    assert.ok(row.years! < 25);
+  });
+
+  it("reports insufficient velocity when saving is zero or negative and growth cannot catch up", () => {
+    const zero = lifePlanTimeToTarget({ ...base, monthlyIncome: 20_000, monthlySpend: 20_000, preReturn: 0 });
+    assert.equal(zero.kind, "negative");
+    assert.equal(zero.monthlySave, 0);
+    assert.equal(zero.years, null);
+    const neg = lifePlanTimeToTarget({ ...base, monthlyIncome: 10_000, monthlySpend: 25_000, preReturn: 0 });
+    assert.equal(neg.kind, "negative");
+    assert.ok(neg.monthlySave < 0);
+  });
+
+  it("is already funded when today's usable assets meet the need", () => {
+    const row = lifePlanTimeToTarget({ ...base, investableNow: 3_000_000 });
+    assert.equal(row.kind, "already");
+    assert.equal(row.years, 0);
+    assert.equal(row.age, 40);
+    assert.equal(row.calendarYear, 2026);
+  });
+
+  it("reaches the target after the planned retire age when savings are thin", () => {
+    const row = lifePlanTimeToTarget({
+      ...base,
+      need: 3_000_000,
+      investableNow: 500_000,
+      monthlyIncome: 32_000,
+      monthlySpend: 30_000,
+      preReturn: 0.03,
+    });
+    assert.equal(row.kind, "after-retire");
+    assert.ok(row.age != null && row.age > 65);
+    assert.ok(row.age! <= 90);
+  });
+
+  it("does not invent a date when income and spending are both missing", () => {
+    const row = lifePlanTimeToTarget({ ...base, monthlyIncome: 0, monthlySpend: 0 });
+    assert.equal(row.kind, "unknown-velocity");
+    assert.equal(row.years, null);
+    assert.equal(row.age, null);
+  });
+
+  it("says the target is never reached inside the plan if savings cannot catch up", () => {
+    const row = lifePlanTimeToTarget({
+      ...base,
+      need: 20_000_000,
+      investableNow: 100_000,
+      monthlyIncome: 21_000,
+      monthlySpend: 20_000,
+      preReturn: 0.01,
+      planEndAge: 70,
+    });
+    assert.equal(row.kind, "never");
+    assert.equal(row.years, null);
   });
 });

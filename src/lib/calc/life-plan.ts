@@ -670,6 +670,89 @@ function searchNeedAtRetire(meets: (amount: number) => boolean, buffer: number, 
   return hi;
 }
 
+
+export type TimeToTargetKind = "already" | "unknown-velocity" | "on-track" | "after-retire" | "never" | "negative";
+
+export type TimeToTarget = {
+  kind: TimeToTargetKind;
+  monthlySave: number;
+  years: number | null;
+  age: number | null;
+  calendarYear: number | null;
+};
+
+/**
+ * When today's usable assets, grown at the official pre-retire return and
+ * topped up by current monthly saving (take-home minus spending now), first
+ * reach the official retirement-day funding need.
+ *
+ * `need` is treated as a fixed then-money target (the amount required on
+ * retirement day, with inflation already baked in). The projection is a
+ * simple nominal growth of today's pot — a prompt for "how long at this
+ * pace", not a second full life-plan path.
+ *
+ * If income and spending now are both zero, velocity is unknown and no date
+ * is invented.
+ */
+export function lifePlanTimeToTarget(opts: {
+  need: number;
+  investableNow: number;
+  monthlyIncome: number;
+  monthlySpend: number;
+  preReturn: number;
+  currentAge: number;
+  retireAge: number;
+  planEndAge: number;
+  asOf?: string;
+}): TimeToTarget {
+  const need = Math.max(0, Number.isFinite(opts.need) ? opts.need : 0);
+  const pot0 = Math.max(0, Number.isFinite(opts.investableNow) ? opts.investableNow : 0);
+  const income = Number.isFinite(opts.monthlyIncome) ? opts.monthlyIncome : 0;
+  const spend = Number.isFinite(opts.monthlySpend) ? opts.monthlySpend : 0;
+  const monthlySave = income - spend;
+  const currentAge = Number.isFinite(opts.currentAge) ? opts.currentAge : 0;
+  const retireAge = Number.isFinite(opts.retireAge) ? opts.retireAge : currentAge;
+  const planEndAge = Number.isFinite(opts.planEndAge) && opts.planEndAge > currentAge ? opts.planEndAge : currentAge;
+  const asOf = opts.asOf ?? new Date().toISOString().slice(0, 10);
+  const startYear = Number(asOf.slice(0, 4));
+  const year0 = Number.isFinite(startYear) ? startYear : 2026;
+
+  const empty: TimeToTarget = { kind: "already", monthlySave, years: 0, age: currentAge, calendarYear: year0 };
+  if (need <= 0 || pot0 + 1 >= need) return empty;
+
+  const velocityKnown = income > 0 || spend > 0;
+  if (!velocityKnown) {
+    return { kind: "unknown-velocity", monthlySave, years: null, age: null, calendarYear: null };
+  }
+
+  const r = Number.isFinite(opts.preReturn) ? Math.max(0, opts.preReturn) : 0;
+  const annualSave = monthlySave * 12;
+  const cap = Math.max(0, Math.round(planEndAge - currentAge));
+  let pot = pot0;
+  let years = 0;
+  while (pot + 1 < need && years < cap) {
+    pot = pot * (1 + r) + annualSave;
+    years += 1;
+    if (!Number.isFinite(pot)) {
+      years = cap;
+      break;
+    }
+  }
+  const reached = pot + 1 >= need;
+  if (!reached) {
+    return {
+      kind: monthlySave <= 0 ? "negative" : "never",
+      monthlySave,
+      years: null,
+      age: null,
+      calendarYear: null,
+    };
+  }
+  const age = currentAge + years;
+  const kind: TimeToTargetKind = age <= retireAge ? "on-track" : "after-retire";
+  return { kind, monthlySave, years, age, calendarYear: year0 + years };
+}
+
 function shiftRetirementSpend(plan: RetirementLifePlan, retireAge: number, delta: number): RetirementLifePlan {
   const stages = plan.spendingStages.flatMap((s) => {
     if (s.monthlyLivingCostInTodayMoney == null || s.startAge == null || s.endAge == null) return [s];
