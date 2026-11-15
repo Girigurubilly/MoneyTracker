@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { dateAtAge, emptyLifePlan, estimateHkNetMonthly, inheritanceAnnuityAccount, lifePlanFundingTarget, lifePlanMissing, lifePlanMonthlyRoom, lifePlanSwitchSavingsPace, lifePlanTimeToTarget, nowGapTone, resolveLifePlan, runLifePlan } from "./life-plan.ts";
+import { dateAtAge, earliestRetireTone, earliestSustainableRetireAge, emptyLifePlan, estimateHkNetMonthly, inheritanceAnnuityAccount, lifePlanFundingTarget, lifePlanMissing, lifePlanMonthlyRoom, lifePlanSwitchSavingsPace, lifePlanTimeToTarget, nowGapTone, resolveLifePlan, runLifePlan } from "./life-plan.ts";
 import { applyAnnuityTerms, blankRetirementAccount } from "./mpf.ts";
 import type { Allowance, RetirementLifePlan } from "../types.ts";
 
@@ -890,5 +890,95 @@ describe("official retire age and birthday-accurate dates", () => {
     assert.equal(firstRetired.calendarYear, 2034);
     assert.ok(years.filter((y) => y.phase === "retired").every((y) => y.age >= 50));
     assert.ok(years.filter((y) => y.age < 50).every((y) => y.phase !== "retired"));
+  });
+});
+
+
+describe("earliestSustainableRetireAge", () => {
+  const sharedBase = {
+    birthday: "1984-01-01",
+    currentAge: 42,
+    retireAge: 50,
+    deathAge: 85,
+    inflation: 0.02,
+    preReturn: 0.04,
+    postReturn: 0.03,
+    monthlyIncomeNow: 80_000,
+    monthlySpendNow: 40_000,
+    targetMonthly: 30_000,
+    investable: 2_000_000,
+    property: 0,
+    mortgage: null as null,
+    today: "2026-01-01",
+  };
+
+  it("says they can already retire when today's pot lasts through the plan-through age", () => {
+    const row = earliestSustainableRetireAge(emptyLifePlan(), {
+      ...sharedBase,
+      investable: 80_000_000,
+      monthlySpendNow: 10_000,
+      targetMonthly: 10_000,
+    });
+    assert.equal(row.kind, "already");
+    assert.equal(row.age, 42);
+    assert.equal(row.vsPlanned, "earlier");
+  });
+
+  it("returns never when even retiring at the plan-through age would not last", () => {
+    const row = earliestSustainableRetireAge(emptyLifePlan(), {
+      ...sharedBase,
+      investable: 5_000,
+      monthlyIncomeNow: 20_000,
+      monthlySpendNow: 19_500,
+      targetMonthly: 80_000,
+      preReturn: 0,
+      postReturn: 0,
+    });
+    assert.equal(row.kind, "never");
+    assert.equal(row.age, null);
+    assert.equal(row.vsPlanned, "none");
+  });
+
+  it("is the first age whose official path lasts, and the year before does not", () => {
+    const row = earliestSustainableRetireAge(emptyLifePlan(), sharedBase);
+    assert.ok(row.kind === "found" || row.kind === "already", row.kind);
+    assert.ok(row.age != null);
+    const atAge = resolveLifePlan(emptyLifePlan(), { ...sharedBase, retireAge: row.age! });
+    const stay = runLifePlan(atAge, sharedBase.today).stay;
+    assert.ok(stay && !stay.depletes);
+    assert.ok(stay.terminalAssets + 1 >= 0);
+    if (row.age! > sharedBase.currentAge) {
+      const before = resolveLifePlan(emptyLifePlan(), { ...sharedBase, retireAge: row.age! - 1 });
+      const early = runLifePlan(before, sharedBase.today).stay;
+      assert.ok(early);
+      assert.equal(early.depletes, true);
+    }
+    if (row.age! < sharedBase.retireAge) assert.equal(row.vsPlanned, "earlier");
+    if (row.age! === sharedBase.retireAge) assert.equal(row.vsPlanned, "same");
+    if (row.age! > sharedBase.retireAge) assert.equal(row.vsPlanned, "later");
+  });
+
+  it("uses Settings birthday so a stale stored date cannot move the age", () => {
+    const stored = emptyLifePlan();
+    stored.personal.dateOfBirth = "1986-04-01";
+    stored.currentJob.endDate = "2032-04-01";
+    const rich = {
+      ...sharedBase,
+      birthday: "1984-04-01",
+      currentAge: 42,
+      today: "2026-11-15",
+      investable: 80_000_000,
+      targetMonthly: 10_000,
+    };
+    const row = earliestSustainableRetireAge(stored, rich, rich.today);
+    assert.equal(row.kind, "already");
+    assert.equal(row.age, 42);
+  });
+
+  it("treats a later-than-planned earliest age as a late remaining gap", () => {
+    assert.equal(earliestRetireTone(800_000, { kind: "found", age: 52, plannedAge: 50, planEndAge: 85, vsPlanned: "later" }), "late");
+    assert.equal(earliestRetireTone(800_000, { kind: "found", age: 47, plannedAge: 50, planEndAge: 85, vsPlanned: "earlier" }), "accumulating");
+    assert.equal(earliestRetireTone(0, { kind: "never", age: null, plannedAge: 50, planEndAge: 85, vsPlanned: "none" }), "over");
+    assert.equal(earliestRetireTone(800_000, { kind: "never", age: null, plannedAge: 50, planEndAge: 85, vsPlanned: "none" }), "late");
   });
 });

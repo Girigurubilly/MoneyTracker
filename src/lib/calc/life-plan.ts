@@ -690,6 +690,67 @@ export function nowGapTone(nowGap: number, kind: TimeToTargetKind | null | undef
   return "accumulating";
 }
 
+export type EarliestRetireKind = "already" | "found" | "never" | "unknown";
+export type EarliestVsPlanned = "earlier" | "same" | "later" | "none";
+
+export type EarliestRetire = {
+  kind: EarliestRetireKind;
+  age: number | null;
+  plannedAge: number;
+  planEndAge: number;
+  vsPlanned: EarliestVsPlanned;
+};
+
+/** Colour for today's remaining amount when the official earliest-retire age is known. */
+export function earliestRetireTone(nowGap: number, row: EarliestRetire | null | undefined): NowGapTone {
+  if (nowGap <= 0) return "over";
+  if (!row || row.kind === "never" || row.kind === "unknown" || row.vsPlanned === "later") return "late";
+  return "accumulating";
+}
+
+function pathLastsThrough(plan: RetirementLifePlan, asOf: string, inflows?: LifePlanInflows): boolean {
+  const stay = runLifePlan(plan, asOf, inflows).stay;
+  if (!stay) return false;
+  const buffer = n(plan.personal.targetTerminalFinancialAssets);
+  return !stay.depletes && stay.terminalAssets + 1 >= buffer;
+}
+
+/**
+ * Earliest age at which retiring (and then spending the official living costs)
+ * still lasts through the plan-through age, using the same year-by-year path
+ * as the official need / have / lasts-to answer. The stated retire age in
+ * Settings is only the comparison, not an input that changes this age.
+ */
+export function earliestSustainableRetireAge(
+  plan: RetirementLifePlan,
+  shared: LifePlanShared,
+  asOf = shared.today,
+  inflows?: LifePlanInflows,
+): EarliestRetire {
+  const plannedAge = Number.isFinite(shared.retireAge) ? Math.round(shared.retireAge) : 0;
+  const planEndAge = plan.personal.planEndAge ?? shared.deathAge;
+  const blank = (kind: EarliestRetireKind): EarliestRetire => ({
+    kind,
+    age: null,
+    plannedAge,
+    planEndAge: Number.isFinite(planEndAge) ? planEndAge : 0,
+    vsPlanned: "none",
+  });
+  if (!Number.isFinite(plannedAge) || !Number.isFinite(planEndAge)) return blank("unknown");
+  const startAge = Math.max(0, Math.floor(shared.currentAge));
+  const lastAge = Math.max(startAge, Math.floor(planEndAge));
+  for (let age = startAge; age <= lastAge; age++) {
+    const resolved = resolveLifePlan(plan, { ...shared, retireAge: age });
+    const trialInflows = inflows ? { ...inflows, retireAge: age } : { retireAge: age };
+    if (!pathLastsThrough(resolved, asOf, trialInflows)) continue;
+    const kind: EarliestRetireKind = age <= startAge ? "already" : "found";
+    const vsPlanned: EarliestVsPlanned =
+      age < plannedAge ? "earlier" : age === plannedAge ? "same" : "later";
+    return { kind, age, plannedAge, planEndAge, vsPlanned };
+  }
+  return blank("never");
+}
+
 function addMonthsIso(iso: string, months: number): string {
   const d = new Date(`${iso.slice(0, 10)}T12:00:00`);
   d.setMonth(d.getMonth() + Math.max(0, Math.round(months)));

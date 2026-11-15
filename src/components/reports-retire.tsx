@@ -26,7 +26,7 @@ import {
   type RetirementInputs,
 } from "@/lib/calc/retirement";
 import { monthKey } from "@/lib/calc/ledger";
-import { emptyLifePlan, inheritanceAnnuityAccount, INHERIT_ANNUITY_ID, lifePlanFundingTarget, lifePlanMonthlyRoom, lifePlanTimeToTarget, nowGapTone, resolveLifePlan, runLifePlan, type NowGapTone, type TimeToTarget } from "@/lib/calc/life-plan";
+import { earliestRetireTone, earliestSustainableRetireAge, emptyLifePlan, inheritanceAnnuityAccount, INHERIT_ANNUITY_ID, lifePlanFundingTarget, lifePlanMonthlyRoom, lifePlanTimeToTarget, resolveLifePlan, runLifePlan, type EarliestRetire, type NowGapTone, type TimeToTarget } from "@/lib/calc/life-plan";
 import {
   accessBreakdown,
   enoughStory,
@@ -198,11 +198,11 @@ export function useLifePlanResult() {
   const retirementAccounts = useApp((s) => s.retirementAccounts);
   const allowances = useApp((s) => s.allowances);
   const { base, pack, ctx, mortgage, incomeSource } = useRetirementModel();
-  const resolved = useMemo(() => {
+  const shared = useMemo(() => {
     const pay = mortgage ? monthlyPayment(mortgage.outstanding, effectiveRate(mortgage), mortgage.remainingMonths) : 0;
     const months = mortgage ? remainingFromStart(mortgage, todayISO())?.remainingMonths ?? mortgage.remainingMonths : 0;
     const end = mortgage ? addMonths(todayISO(), months) : "";
-    return resolveLifePlan(plan, {
+    return {
       birthday: base.birthday,
       currentAge: base.currentAge,
       retireAge: base.retireAge,
@@ -221,8 +221,9 @@ export function useLifePlanResult() {
         ? { outstanding: mortgage.outstanding, monthlyPayment: mortgage.paymentOverride ?? pay, endDate: end, rate: effectiveRate(mortgage) }
         : null,
       today: todayISO(),
-    });
-  }, [plan, base, pack.property, ctx.investableNow, mortgage, incomeSource]);
+    };
+  }, [base, pack.property, ctx.investableNow, mortgage, incomeSource]);
+  const resolved = useMemo(() => resolveLifePlan(plan, shared), [plan, shared]);
   const inflows = useMemo(
     () => ({
       accounts: retirementAccounts,
@@ -260,7 +261,11 @@ export function useLifePlanResult() {
       void upsertAccount(want);
     }
   }, [resolved, retirementAccounts, upsertAccount, deleteAccount]);
-  return { plan, resolved, result, inflows };
+  const earliest = useMemo(
+    () => earliestSustainableRetireAge(plan, shared, todayISO(), inflows),
+    [plan, shared, inflows],
+  );
+  return { plan, resolved, result, inflows, earliest };
 }
 
 
@@ -277,6 +282,33 @@ type VelocityCopy = {
   stickyEtaAlready: string;
   stickyEtaShort: string;
 };
+
+
+export function earliestStoryKind(row: EarliestRetire | null | undefined, ready: boolean): "enough" | "short" | "setup" {
+  if (!ready || !row || row.kind === "unknown") return "setup";
+  if (row.kind === "never" || row.vsPlanned === "later") return "short";
+  return "enough";
+}
+
+export function earliestStickyText(
+  copy: { stickyEarliest: string; stickyEarliestAlready: string; stickyEarliestNever: string },
+  row: EarliestRetire | null | undefined,
+): string | undefined {
+  if (!row || row.kind === "unknown") return undefined;
+  if (row.kind === "already") return copy.stickyEarliestAlready;
+  if (row.kind === "never") return copy.stickyEarliestNever.replace("{end}", String(row.planEndAge));
+  if (row.age != null) return copy.stickyEarliest.replace("{age}", String(row.age));
+  return undefined;
+}
+
+export function earliestVsText(
+  copy: { earliestVsEarlier: string; earliestVsSame: string; earliestVsLater: string },
+  row: EarliestRetire | null | undefined,
+): string | undefined {
+  if (!row || row.vsPlanned === "none") return undefined;
+  const template = row.vsPlanned === "earlier" ? copy.earliestVsEarlier : row.vsPlanned === "same" ? copy.earliestVsSame : copy.earliestVsLater;
+  return template.replace("{retire}", String(row.plannedAge));
+}
 
 export function formatEtaYears(years: number): string {
   const r = Math.round(years * 10) / 10;
@@ -380,6 +412,7 @@ export function useRetirementHeadline() {
     mort,
     planEndAge,
     timeToTarget,
+    earliest: life.earliest,
     corpusAtRetire: life.result.stay?.assetsAtRetire ?? null,
     investable: model.ctx.investableNow,
     access: accessBreakdown(model.result.plan.corpusAtRetire, model.result.plan.lockedAtRetire),
@@ -395,16 +428,18 @@ function addMonths(iso: string, months: number): string {
 export function SharedRetirementStrip() {
   const t = useT();
   const head = useRetirementHeadline();
-  const { base, story, funding, investable, timeToTarget, planEndAge } = head;
+  const { base, story, funding, investable, earliest, planEndAge } = head;
   const nowGap = funding.ready ? funding.need - investable : 0;
-  const gapTone = nowGapTone(nowGap, timeToTarget?.kind);
-  const etaText = timeToTargetSticky(t.reports, timeToTarget);
+  const gapTone = earliestRetireTone(nowGap, earliest);
+  const etaText = earliestVsText(t.reports, earliest);
   const verdict =
-    story.kind === "enough"
+    earliestStickyText(t.reports, earliest)
+    ?? (story.kind === "enough"
       ? t.reports.verdictEnoughUntil.replace("{age}", String(planEndAge))
       : story.kind === "short"
         ? t.reports.verdictShortUntil.replace("{age}", String(planEndAge))
-        : t.reports.verdictSetup;
+        : t.reports.verdictSetup);
+  const stripKind = earliestStoryKind(earliest, story.kind !== "setup" && funding.ready);
   return (
     <Link to="/reports/retirement" className="mx-4 mb-3 flex items-center gap-3 rounded-2xl bg-elevated p-3">
       <div className="min-w-0 flex-1">
@@ -416,11 +451,7 @@ export function SharedRetirementStrip() {
             </>
           ) : (
             <>
-              <span className={story.kind === "enough" ? "text-income" : "text-expense"}>{verdict}</span>
-              {" · "}
-              <span className={cn("tabular-nums", gapToneClass(gapTone))}>
-                {nowGap > 0 ? t.reports.nowGapShort : t.reports.nowGapOver} {money(Math.abs(nowGap), "HKD")}
-              </span>
+              <span className={stripKind === "enough" ? "text-income" : "text-expense"}>{verdict}</span>
               {etaText ? (
                 <>
                   {" · "}
@@ -453,6 +484,7 @@ export function OfficialAnswerCard({
   verdictKind,
   velocityLine,
   pathHaveLine,
+  earliest,
   dragging = false,
   compact = false,
 }: {
@@ -466,46 +498,80 @@ export function OfficialAnswerCard({
   verdictKind: "enough" | "short" | "setup";
   velocityLine?: string;
   pathHaveLine?: string;
+  earliest?: EarliestRetire | null;
   dragging?: boolean;
   compact?: boolean;
 }) {
   const t = useT();
   const shownNowGap = useCountUp(fundingReady ? nowGap : 0, dragging, 320);
   if (!fundingReady || verdictKind === "setup") return null;
+  const ageKind = earliest ? earliestStoryKind(earliest, true) : verdictKind;
+  const vs = earliestVsText(t.reports, earliest);
+  const end = String(earliest?.planEndAge ?? "");
+  const planned = String(earliest?.plannedAge ?? "");
   return (
     <section className={cn(compact ? "p-3 pt-1" : "mx-4 mb-3 rounded-2xl bg-elevated p-4")}>
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-sm font-medium">{t.reports.statusTitle}</div>
-        <span
-          className={cn(
-            "rounded-full px-2 py-0.5 text-xs font-medium",
-            verdictKind === "enough" && "bg-success-soft text-income",
-            verdictKind === "short" && "bg-expense-soft text-expense",
+      {earliest ? (
+        <div>
+          <div className="text-sm font-medium">{t.reports.earliestRetireLabel}</div>
+          {earliest.kind === "never" || earliest.kind === "unknown" ? (
+            <p className={cn("mt-2 font-semibold leading-6 text-expense", compact ? "text-base" : "text-lg")}>
+              {t.reports.earliestRetireNever.replace("{end}", end)}
+            </p>
+          ) : earliest.kind === "already" ? (
+            <>
+              <div className={cn("mt-1 font-semibold tabular-nums text-income", compact ? "text-4xl" : "text-5xl")}>{earliest.age}</div>
+              <p className="mt-2 text-sm leading-5">{t.reports.earliestRetireAlready.replace("{end}", end)}</p>
+            </>
+          ) : (
+            <>
+              <div className={cn("mt-1 font-semibold tabular-nums", ageKind === "short" ? "text-expense" : "text-income", compact ? "text-4xl" : "text-5xl")}>
+                {earliest.age}
+              </div>
+              <p className="mt-2 text-sm leading-5 text-muted">{t.reports.earliestRetireSub.replace("{end}", end)}</p>
+            </>
           )}
-        >
-          {verdict}
-        </span>
-      </div>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <div className="rounded-xl bg-background px-3 py-2">
-          <div className="text-[11px] text-muted">{t.reports.fundingNeed}</div>
-          <div className={cn("mt-0.5 font-semibold tabular-nums", compact ? "text-lg" : "text-xl")}>{money(need, "HKD")}</div>
+          {vs ? <p className="mt-1 text-sm leading-5">{vs}</p> : null}
         </div>
-        <div className="rounded-xl bg-background px-3 py-2">
-          <div className="text-[11px] text-muted">{t.reports.nowHave}</div>
-          <div className={cn("mt-0.5 font-semibold tabular-nums", compact ? "text-lg" : "text-xl")}>{money(investable, "HKD")}</div>
+      ) : (
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-sm font-medium">{t.reports.statusTitle}</div>
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 text-xs font-medium",
+              verdictKind === "enough" && "bg-success-soft text-income",
+              verdictKind === "short" && "bg-expense-soft text-expense",
+            )}
+          >
+            {verdict}
+          </span>
         </div>
-      </div>
-      <div className="mt-3">
-        <div className="text-[11px] text-muted">{t.reports.nowGapLabel}</div>
-        <div className={cn("font-semibold tabular-nums", gapToneClass(gapTone), compact ? "text-xl" : "text-2xl")}>
-          {nowGapLabel} {money(Math.abs(shownNowGap), "HKD")}
+      )}
+      <div className={cn(earliest ? "mt-4 border-t border-line pt-3" : "mt-3")}>
+        {earliest ? (
+          <div className="mb-3 text-[11px] font-medium text-muted">{t.reports.plannedPathHint.replace("{retire}", planned)}</div>
+        ) : null}
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-xl bg-background px-3 py-2">
+            <div className="text-[11px] text-muted">{t.reports.fundingNeed}</div>
+            <div className={cn("mt-0.5 font-semibold tabular-nums", compact ? "text-lg" : "text-xl")}>{money(need, "HKD")}</div>
+          </div>
+          <div className="rounded-xl bg-background px-3 py-2">
+            <div className="text-[11px] text-muted">{t.reports.nowHave}</div>
+            <div className={cn("mt-0.5 font-semibold tabular-nums", compact ? "text-lg" : "text-xl")}>{money(investable, "HKD")}</div>
+          </div>
         </div>
-        <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.nowGapHint}</p>
+        <div className="mt-3">
+          <div className="text-[11px] text-muted">{t.reports.nowGapLabel}</div>
+          <div className={cn("font-semibold tabular-nums", gapToneClass(gapTone), compact ? "text-xl" : "text-2xl")}>
+            {nowGapLabel} {money(Math.abs(shownNowGap), "HKD")}
+          </div>
+          <p className="mt-1 text-[11px] leading-4 text-muted">{t.reports.nowGapHint}</p>
+        </div>
+        {earliest ? null : velocityLine ? <p className="mt-3 text-sm leading-5">{velocityLine}</p> : null}
+        {earliest ? null : <p className="mt-2 text-[11px] leading-4 text-muted">{t.reports.velocityPaceHint}</p>}
+        {pathHaveLine ? <p className="mt-2 text-[11px] leading-4 text-muted">{pathHaveLine}</p> : null}
       </div>
-      {velocityLine ? <p className="mt-3 text-sm leading-5">{velocityLine}</p> : null}
-      <p className="mt-2 text-[11px] leading-4 text-muted">{t.reports.velocityPaceHint}</p>
-      {pathHaveLine ? <p className="mt-2 text-[11px] leading-4 text-muted">{pathHaveLine}</p> : null}
     </section>
   );
 }
@@ -514,7 +580,7 @@ export function RetirementPage() {
   const t = useT();
   const locale = useUi((s) => s.locale);
   const head = useRetirementHeadline();
-  const { accounts, holdings, rates, base, pack, fire, story, planEndAge, investable, funding, timeToTarget } = head;
+  const { accounts, holdings, rates, base, pack, fire, story, planEndAge, investable, funding, earliest } = head;
   const [exportMd, setExportMd] = useState<string | null>(null);
   const swrLabel = `${((base.fireSwr ?? 0.04) * 100).toFixed(1)}%`;
   const planVerdict =
@@ -526,9 +592,10 @@ export function RetirementPage() {
   const fundingLabel = funding.gap < 0 ? t.reports.fundingGapShort : t.reports.fundingGapExtra;
   const nowGap = funding.ready ? funding.need - investable : 0;
   const nowGapLabel = nowGap > 0 ? t.reports.nowGapShort : t.reports.nowGapOver;
-  const gapTone = nowGapTone(nowGap, timeToTarget?.kind);
-  const etaText = timeToTargetSticky(t.reports, timeToTarget);
-  const velocityLine = timeToTargetLine(t.reports, timeToTarget, base.retireAge, planEndAge);
+  const gapTone = earliestRetireTone(nowGap, earliest);
+  const etaText = earliestVsText(t.reports, earliest);
+  const ageKind = earliestStoryKind(earliest, story.kind !== "setup" && funding.ready);
+  const ageVerdict = earliestStickyText(t.reports, earliest) ?? planVerdict;
   const pathHaveLine = t.reports.pathHaveLine
     .replace("{have}", money(funding.have, "HKD"))
     .replace("{gapLabel}", fundingLabel)
@@ -570,7 +637,7 @@ export function RetirementPage() {
       `- Monthly room (HKD / month, today’s dollars): ${Math.round(story.surplusMonthly)}`,
       `- Usable assets now (HKD): ${Math.round(investable)}`,
       `- Gap from today vs retirement-day need (HKD): ${story.kind === "setup" || !funding.ready ? "n/a" : Math.round(funding.need - investable)}`,
-      `- Time to target: ${timeToTarget ? `${timeToTarget.kind}${timeToTarget.years != null ? ` in ${timeToTarget.years} years (age ${timeToTarget.age})` : ""}` : "n/a"}`,
+      `- Earliest sustainable retire age: ${earliest ? `${earliest.kind}${earliest.age != null ? ` at ${earliest.age} (planned ${earliest.plannedAge}, vs ${earliest.vsPlanned})` : ""}` : "n/a"}`,
       `- Home, not living costs (HKD): ${Math.round(pack.property)}`,
       `- Plan through age: ${planEndAge}`,
       `- Assets on the path at retire age (HKD): ${story.kind === "setup" ? "n/a" : Math.round(corpusAtRetire)}`,
@@ -630,10 +697,8 @@ export function RetirementPage() {
       />
       {story.kind === "setup" ? null : (
         <StickyConclusionBar
-          kind={story.kind}
-          verdict={planVerdict}
-          nowGap={!funding.ready ? undefined : nowGap}
-          nowGapLabel={!funding.ready ? undefined : nowGapLabel}
+          kind={ageKind}
+          verdict={ageVerdict}
           gapTone={gapTone}
           etaText={etaText}
           dragging={false}
@@ -666,8 +731,8 @@ export function RetirementPage() {
               gapTone={gapTone}
               verdict={planVerdict}
               verdictKind={story.kind}
-              velocityLine={velocityLine}
               pathHaveLine={pathHaveLine}
+              earliest={earliest}
             />
           </Enter>
           <Link
@@ -713,13 +778,15 @@ export function RetirementProjectionPage() {
   const t = useT();
   const head = useRetirementHeadline();
   const { result } = head.life;
-  const { base, timeToTarget } = head;
+  const { base } = head;
   const years = result.stay?.years ?? [];
   const sale = years.find((y) => y.inheritProceeds > 0);
   return (
     <div className="pb-10">
       <ScreenHeader title={t.reports.annualProjection} backTo="/reports/retirement" />
-      <p className="px-5 pb-3 text-xs leading-5 text-muted">{t.reports.lpProjectionHint}</p>
+      <p className="px-5 pb-3 text-xs leading-5 text-muted">
+        {t.reports.plannedPathHint.replace("{retire}", String(base.retireAge))}。{t.reports.lpProjectionHint}
+      </p>
       {sale ? (
         <Enter>
         <div className="mx-4 mb-3 rounded-2xl bg-elevated p-4 text-sm">
@@ -741,7 +808,7 @@ export function RetirementProjectionPage() {
       ) : null}
       {result.ready && years.length ? (
         <Enter delay>
-        <LifeYearList years={years} focusAge={base.retireAge} reachedTargetYear={timeToTarget?.calendarYear ?? null} />
+        <LifeYearList years={years} focusAge={base.retireAge} />
         </Enter>
       ) : (
         <p className="mx-4 rounded-2xl bg-elevated px-4 py-3 text-sm text-muted">{t.reports.lpNeedData}</p>
