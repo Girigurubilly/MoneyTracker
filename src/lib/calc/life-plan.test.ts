@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { emptyLifePlan, estimateHkNetMonthly, inheritanceAnnuityAccount, lifePlanFundingTarget, lifePlanMissing, lifePlanMonthlyRoom, lifePlanTimeToTarget, resolveLifePlan, runLifePlan } from "./life-plan.ts";
+import { emptyLifePlan, estimateHkNetMonthly, inheritanceAnnuityAccount, lifePlanFundingTarget, lifePlanMissing, lifePlanMonthlyRoom, lifePlanSwitchSavingsPace, lifePlanTimeToTarget, resolveLifePlan, runLifePlan } from "./life-plan.ts";
 import { applyAnnuityTerms, blankRetirementAccount } from "./mpf.ts";
 import type { Allowance, RetirementLifePlan } from "../types.ts";
 
@@ -685,5 +685,52 @@ describe("lifePlanTimeToTarget", () => {
     });
     assert.equal(row.kind, "never");
     assert.equal(row.years, null);
+  });
+});
+
+
+describe("lifePlanSwitchSavingsPace", () => {
+  const base = {
+    need: 3_000_000,
+    investableNow: 1_000_000,
+    preReturn: 0.05,
+    currentAge: 40,
+    retireAge: 65,
+    planEndAge: 90,
+    asOf: "2026-01-01",
+  };
+
+  it("uses net override and living cost as the switch-path savings pace", () => {
+    const plan = emptyLifePlan();
+    plan.lowerStressJob.estimatedNetMonthlyIncomeOverride = 30_000;
+    plan.lowerStressJob.monthlyLivingCost = 22_000;
+    const pace = lifePlanSwitchSavingsPace(plan);
+    assert.equal(pace.monthlyIncome, 30_000);
+    assert.equal(pace.monthlySpend, 22_000);
+    const row = lifePlanTimeToTarget({ ...base, ...pace });
+    assert.equal(row.monthlySave, 8_000);
+    assert.equal(row.kind, "on-track");
+    assert.ok(row.years != null && row.years > 0);
+  });
+
+  it("estimates take-home from gross when no net override is set", () => {
+    const plan = emptyLifePlan();
+    plan.lowerStressJob.grossMonthlyIncome = 50_000;
+    plan.lowerStressJob.monthlyLivingCost = 20_000;
+    const pace = lifePlanSwitchSavingsPace(plan);
+    assert.equal(pace.monthlyIncome, estimateHkNetMonthly(50_000));
+    assert.ok(pace.monthlyIncome > 0 && pace.monthlyIncome < 50_000);
+    assert.equal(pace.monthlySpend, 20_000);
+  });
+
+  it("does not invent a date when switch income and spend are both missing", () => {
+    const plan = emptyLifePlan();
+    const pace = lifePlanSwitchSavingsPace(plan);
+    assert.equal(pace.monthlyIncome, 0);
+    assert.equal(pace.monthlySpend, 0);
+    const row = lifePlanTimeToTarget({ ...base, ...pace });
+    assert.equal(row.kind, "unknown-velocity");
+    assert.equal(row.years, null);
+    assert.equal(row.age, null);
   });
 });

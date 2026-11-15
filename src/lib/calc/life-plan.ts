@@ -753,6 +753,27 @@ export function lifePlanTimeToTarget(opts: {
   return { kind, monthlySave, years, age, calendarYear: year0 + years };
 }
 
+/**
+ * Take-home and spending used for a job-switch time-to-target check.
+ * Same 實收 − 開支 idea as the official stay path: net override if set,
+ * otherwise an estimated take-home from gross; living cost if set.
+ * Both missing/zero means velocity is unknown (no invented date).
+ */
+export function lifePlanSwitchSavingsPace(plan: RetirementLifePlan): {
+  monthlyIncome: number;
+  monthlySpend: number;
+} {
+  const job = plan.lowerStressJob;
+  const monthlyIncome =
+    job.estimatedNetMonthlyIncomeOverride != null
+      ? n(job.estimatedNetMonthlyIncomeOverride)
+      : job.grossMonthlyIncome != null && job.grossMonthlyIncome > 0
+        ? estimateHkNetMonthly(job.grossMonthlyIncome)
+        : 0;
+  const monthlySpend = job.monthlyLivingCost != null ? n(job.monthlyLivingCost) : 0;
+  return { monthlyIncome, monthlySpend };
+}
+
 function shiftRetirementSpend(plan: RetirementLifePlan, retireAge: number, delta: number): RetirementLifePlan {
   const stages = plan.spendingStages.flatMap((s) => {
     if (s.monthlyLivingCostInTodayMoney == null || s.startAge == null || s.endAge == null) return [s];
