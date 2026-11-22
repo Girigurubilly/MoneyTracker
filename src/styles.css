@@ -800,10 +800,10 @@ html[data-duo="book"] .app-shell.app-today {
   padding-bottom: calc(3.5rem + 1.4rem + env(safe-area-inset-bottom));
 }
 html[data-duo="book"] .app-tabbar {
-  display: none;
+  display: none !important;
 }
 html[data-duo="book"] .app-side {
-  display: flex;
+  display: flex !important;
   width: calc(50% - 1.5rem);
   padding-left: max(1rem, env(safe-area-inset-left));
   padding-bottom: max(1rem, env(safe-area-inset-bottom));
@@ -880,4 +880,37 @@ html[data-access="elderly"][data-duo="strip"] .app-fab {
 html[data-duo="strip"] .app-main header {
   padding-top: max(0.35rem, env(safe-area-inset-top));
   padding-bottom: 0;
+}
+
+/* Same split from the viewport alone. Opened-wide Safari is ~951×543.
+   This still applies if the pose script has not run yet. */
+@media (pointer: coarse) and (orientation: landscape) and (min-width: 880px) and (max-width: 1020px) and (min-height: 480px) {
+  .app-shell {
+    max-width: none;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  .app-shell.app-today {
+    padding-bottom: calc(3.5rem + 1.4rem + env(safe-area-inset-bottom));
+  }
+  .app-tabbar {
+    display: none !important;
+  }
+  .app-side {
+    display: flex !important;
+    width: calc(50% - 1.5rem);
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  .app-main {
+    margin-left: calc(50% + 1.5rem);
+    padding-right: max(0px, env(safe-area-inset-right));
+  }
+  .app-fab {
+    bottom: max(1rem, env(safe-area-inset-bottom)) !important;
+    right: max(1rem, env(safe-area-inset-right)) !important;
+  }
+  .app-side a {
+    min-height: 2.75rem;
+    font-size: 1rem;
+  }
 }

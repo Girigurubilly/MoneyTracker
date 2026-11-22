@@ -37,20 +37,25 @@ export function AppGate({ children }: { children: ReactNode }) {
       const w = window.innerWidth;
       const h = window.innerHeight;
       const coarse = window.matchMedia("(pointer: coarse)").matches;
+      const prev = document.documentElement.dataset.duo;
       let pose = "phone";
       if (!coarse) {
         pose = "desk";
+      } else if (w > h && w >= 880 && w <= 1020 && (h >= 480 || prev === "book")) {
+        // Opened flat and wide: about 951×543. A Pro Max sideways is as wide
+        // but shorter than 480, so it stays a phone. The keyboard only
+        // shrinks the height, so keep the split once it is on.
+        pose = "book";
+      } else if (h > w && w >= 630 && w <= 720 && h >= 740) {
+        pose = "open";
       } else {
         const sw = window.screen?.width || 0;
         const sh = window.screen?.height || 0;
         const long = Math.max(sw, sh);
         const short = Math.min(sw, sh);
-        // Inner glass is ~951×669pt. Outer cover is ~466×678pt.
-        // Pro / Pro Max / Air do not match either pair.
-        const inner = long >= 930 && long <= 980 && short >= 640 && short <= 700;
-        const outer = long >= 650 && long <= 710 && short >= 450 && short <= 490;
-        if (inner) pose = w > h ? "book" : "open";
-        else if (outer) pose = w > h ? "strip" : "cover";
+        const outer = short >= 440 && short <= 520 && long >= 640 && long <= 740;
+        if (outer && w > h) pose = "strip";
+        else if (outer && h > w && w <= 430) pose = "cover";
       }
       document.documentElement.dataset.duo = pose;
     };
