@@ -38,20 +38,37 @@ export function AppGate({ children }: { children: ReactNode }) {
       const h = window.innerHeight;
       const coarse = window.matchMedia("(pointer: coarse)").matches;
       let pose = "phone";
-      if (!coarse) pose = "desk";
-      else if (w >= 880 && w <= 1050 && w > h) pose = "book";
-      else if (w <= 420 && h <= 700) pose = "cover";
-      else if (h <= 430) pose = "flat";
+      if (!coarse) {
+        pose = "desk";
+      } else {
+        const sw = window.screen?.width || 0;
+        const sh = window.screen?.height || 0;
+        const long = Math.max(sw, sh);
+        const short = Math.min(sw, sh);
+        // Inner glass is ~951×669pt. Outer cover is ~466×678pt.
+        // Pro / Pro Max / Air do not match either pair.
+        const inner = long >= 930 && long <= 980 && short >= 640 && short <= 700;
+        const outer = long >= 650 && long <= 710 && short >= 450 && short <= 490;
+        if (inner) pose = w > h ? "book" : "open";
+        else if (outer) pose = w > h ? "strip" : "cover";
+      }
       document.documentElement.dataset.duo = pose;
     };
     apply();
     window.addEventListener("resize", apply);
     window.addEventListener("orientationchange", apply);
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", apply);
     return () => {
       window.removeEventListener("resize", apply);
       window.removeEventListener("orientationchange", apply);
+      vv?.removeEventListener("resize", apply);
     };
   }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.access = access;
+  }, [access]);
 
   useEffect(() => {
     // Fixed name so TripPlanner reuses this tab (target="money-tracker") instead of opening another.

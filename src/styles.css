@@ -786,8 +786,12 @@ html[data-motion="off"] .rt-fold {
   }
 }
 
-/* iPhone Duo. Pro (about 402×874) stays on the phone layout.
-   Cover: folded outer screen, short. Book: inner screen held open, split on the fold. */
+/* iPhone Duo only. Pose comes from the physical screen, so iPhone Pro,
+   Pro Max and Air keep the normal phone layout in every orientation.
+   cover: folded portrait — short, with Safari's column on the right
+   strip: folded landscape — very short
+   book:  unfolded landscape — menu left of the hinge, page on the right
+   open:  unfolded portrait — one wide column, bottom tabs stay */
 html[data-duo="book"] .app-shell {
   max-width: none;
   padding-bottom: max(1rem, env(safe-area-inset-bottom));
@@ -800,11 +804,12 @@ html[data-duo="book"] .app-tabbar {
 }
 html[data-duo="book"] .app-side {
   display: flex;
-  width: calc(50% - 0.75rem);
+  width: calc(50% - 1.5rem);
   padding-left: max(1rem, env(safe-area-inset-left));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
 }
 html[data-duo="book"] .app-main {
-  margin-left: calc(50% + 0.75rem);
+  margin-left: calc(50% + 1.5rem);
   padding-right: max(0px, env(safe-area-inset-right));
 }
 html[data-duo="book"] .app-fab {
@@ -816,10 +821,8 @@ html[data-duo="book"] .app-side a {
   font-size: 1rem;
 }
 
-@media (min-width: 600px) and (max-width: 879px) and (pointer: coarse) {
-  .app-shell {
-    max-width: none;
-  }
+html[data-duo="open"] .app-shell {
+  max-width: none;
 }
 
 html[data-duo="cover"] .app-shell::after {
@@ -833,17 +836,48 @@ html[data-duo="cover"] .app-shell::after {
   background: var(--color-background);
   pointer-events: none;
 }
+
+html[data-duo="cover"] .app-shell,
+html[data-duo="strip"] .app-shell {
+  padding-bottom: calc(3.25rem + 1rem + env(safe-area-inset-bottom));
+}
+html[data-duo="cover"] .app-shell.app-today,
+html[data-duo="strip"] .app-shell.app-today {
+  padding-bottom: calc(3.25rem + 3.5rem + 0.7rem + env(safe-area-inset-bottom));
+}
+html[data-access="elderly"][data-duo="cover"] .app-shell,
+html[data-access="elderly"][data-duo="strip"] .app-shell {
+  padding-bottom: calc(4.5rem + 1rem + env(safe-area-inset-bottom));
+}
+html[data-access="elderly"][data-duo="cover"] .app-shell.app-today,
+html[data-access="elderly"][data-duo="strip"] .app-shell.app-today {
+  padding-bottom: calc(4.5rem + 3.5rem + 0.7rem + env(safe-area-inset-bottom));
+}
+
 html[data-duo="cover"] h1.text-3xl,
-html[data-duo="flat"] h1.text-3xl {
+html[data-duo="strip"] h1.text-3xl {
   font-size: 1.5rem;
   line-height: 1.2;
 }
 html[data-duo="cover"] .td-day,
-html[data-duo="flat"] .td-day {
-  width: 2.75rem;
-  height: 2.75rem;
+html[data-duo="strip"] .td-day {
+  width: 2.5rem;
+  height: 2.5rem;
 }
 html[data-duo="cover"] .app-tab-link:not(.app-tab-elderly),
-html[data-duo="flat"] .app-tab-link:not(.app-tab-elderly) {
+html[data-duo="strip"] .app-tab-link:not(.app-tab-elderly) {
   height: 3.25rem;
+}
+html[data-duo="cover"] .app-fab,
+html[data-duo="strip"] .app-fab {
+  bottom: calc(3.25rem + 0.7rem + env(safe-area-inset-bottom)) !important;
+}
+html[data-access="elderly"][data-duo="cover"] .app-fab,
+html[data-access="elderly"][data-duo="strip"] .app-fab {
+  bottom: calc(4.5rem + 0.7rem + env(safe-area-inset-bottom)) !important;
+}
+
+html[data-duo="strip"] .app-main header {
+  padding-top: max(0.35rem, env(safe-area-inset-top));
+  padding-bottom: 0;
 }
