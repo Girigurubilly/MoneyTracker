@@ -785,3 +785,65 @@ html[data-motion="off"] .rt-fold {
     animation: none !important;
   }
 }
+
+/* iPhone Duo. Pro (about 402×874) stays on the phone layout.
+   Cover: folded outer screen, short. Book: inner screen held open, split on the fold. */
+html[data-duo="book"] .app-shell {
+  max-width: none;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+html[data-duo="book"] .app-shell.app-today {
+  padding-bottom: calc(3.5rem + 1.4rem + env(safe-area-inset-bottom));
+}
+html[data-duo="book"] .app-tabbar {
+  display: none;
+}
+html[data-duo="book"] .app-side {
+  display: flex;
+  width: calc(50% - 0.75rem);
+  padding-left: max(1rem, env(safe-area-inset-left));
+}
+html[data-duo="book"] .app-main {
+  margin-left: calc(50% + 0.75rem);
+  padding-right: max(0px, env(safe-area-inset-right));
+}
+html[data-duo="book"] .app-fab {
+  bottom: max(1rem, env(safe-area-inset-bottom)) !important;
+  right: max(1rem, env(safe-area-inset-right)) !important;
+}
+html[data-duo="book"] .app-side a {
+  min-height: 2.75rem;
+  font-size: 1rem;
+}
+
+@media (min-width: 600px) and (max-width: 879px) and (pointer: coarse) {
+  .app-shell {
+    max-width: none;
+  }
+}
+
+html[data-duo="cover"] .app-shell::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  z-index: 50;
+  width: 1px;
+  background: var(--color-background);
+  pointer-events: none;
+}
+html[data-duo="cover"] h1.text-3xl,
+html[data-duo="flat"] h1.text-3xl {
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+html[data-duo="cover"] .td-day,
+html[data-duo="flat"] .td-day {
+  width: 2.75rem;
+  height: 2.75rem;
+}
+html[data-duo="cover"] .app-tab-link:not(.app-tab-elderly),
+html[data-duo="flat"] .app-tab-link:not(.app-tab-elderly) {
+  height: 3.25rem;
+}

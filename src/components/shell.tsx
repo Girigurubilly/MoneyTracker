@@ -33,6 +33,27 @@ export function AppGate({ children }: { children: ReactNode }) {
   const replay = search?.replay === true || search?.replay === "1" || search?.replay === "true";
 
   useEffect(() => {
+    const apply = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const coarse = window.matchMedia("(pointer: coarse)").matches;
+      let pose = "phone";
+      if (!coarse) pose = "desk";
+      else if (w >= 880 && w <= 1050 && w > h) pose = "book";
+      else if (w <= 420 && h <= 700) pose = "cover";
+      else if (h <= 430) pose = "flat";
+      document.documentElement.dataset.duo = pose;
+    };
+    apply();
+    window.addEventListener("resize", apply);
+    window.addEventListener("orientationchange", apply);
+    return () => {
+      window.removeEventListener("resize", apply);
+      window.removeEventListener("orientationchange", apply);
+    };
+  }, []);
+
+  useEffect(() => {
     // Fixed name so TripPlanner reuses this tab (target="money-tracker") instead of opening another.
     window.name = "money-tracker";
     // Onboarding redirect drops the hash; keep a #proposal= / #link= for after it.
@@ -69,6 +90,7 @@ export function AppGate({ children }: { children: ReactNode }) {
     <div
       className={cn(
         "app-shell relative mx-auto min-h-dvh max-w-lg bg-background lg:max-w-none lg:pb-0",
+        onToday && "app-today",
         onToday
           ? access === "elderly"
             ? "pb-[calc(4.5rem+2.25rem+env(safe-area-inset-bottom))]"
@@ -202,7 +224,7 @@ function AddFab() {
       aria-label={t.add.title}
       onClick={() => openAdd("expense")}
       style={{ bottom: `calc(${bar} + 0.7rem + env(safe-area-inset-bottom))` }}
-      className="fixed right-4 z-30 grid size-14 place-items-center rounded-full bg-accent text-on-accent shadow-lg lg:hidden"
+      className="app-fab fixed right-[max(1rem,env(safe-area-inset-right))] z-30 grid size-14 place-items-center rounded-full bg-accent text-on-accent shadow-lg lg:hidden"
     >
       <Plus className="size-7" strokeWidth={1.8} />
     </button>
@@ -228,20 +250,20 @@ function Nav() {
   const cols = items.length === 4 ? "grid-cols-4" : items.length === 3 ? "grid-cols-3" : "grid-cols-5";
   return (
     <>
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-elevated pb-[env(safe-area-inset-bottom)] lg:hidden">
+      <nav className="app-tabbar fixed inset-x-0 bottom-0 z-40 border-t border-line bg-elevated pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] lg:hidden">
         <div className={cn("mx-auto grid max-w-lg", cols)}>
           {items.map((it) => (
-            <Link key={it.to} to={it.to} className={cn("flex h-16 flex-col items-center justify-center gap-0.5 text-xs", access === "elderly" && "h-[4.5rem] text-sm", it.match(path) ? "text-accent" : "text-muted")}>
+            <Link key={it.to} to={it.to} className={cn("app-tab-link flex h-16 flex-col items-center justify-center gap-0.5 text-xs", access === "elderly" && "app-tab-elderly h-[4.5rem] text-sm", it.match(path) ? "text-accent" : "text-muted")}>
               <CategoryIcon name={iconFor(it.slot)} className={access === "elderly" ? "size-6" : "size-5"} />
               {it.label}
             </Link>
           ))}
         </div>
       </nav>
-      <aside className="fixed bottom-0 left-0 top-0 hidden w-56 border-r border-line bg-elevated p-4 lg:block">
-        <div className="mb-6 text-lg font-semibold">{t.app}</div>
+      <aside className="app-side fixed bottom-0 left-0 top-0 z-40 hidden w-56 flex-col gap-1 overflow-y-auto border-r border-line bg-elevated p-4 pt-[max(1rem,env(safe-area-inset-top))] lg:flex">
+        <div className="mb-6 px-3 text-lg font-semibold">{t.app}</div>
         {items.map((it) => (
-          <Link key={it.to} to={it.to} className={cn("flex items-center gap-2 rounded-lg px-3 py-2 text-sm", it.match(path) ? "bg-accent-soft text-accent" : "text-muted")}>
+          <Link key={it.to} to={it.to} className={cn("flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm", it.match(path) ? "bg-accent-soft text-accent" : "text-muted")}>
             <CategoryIcon name={iconFor(it.slot)} className="size-4" />
             {it.label}
           </Link>
