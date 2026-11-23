@@ -793,7 +793,7 @@ html[data-motion="off"] .rt-fold {
    book:  unfolded landscape — menu left of the hinge, page on the right
    open:  unfolded portrait — one wide column, bottom tabs stay */
 html[data-duo="book"] .app-shell {
-  max-width: none;
+  max-width: none !important;
   padding-bottom: max(1rem, env(safe-area-inset-bottom));
 }
 html[data-duo="book"] .app-shell.app-today {
@@ -809,7 +809,7 @@ html[data-duo="book"] .app-side {
   padding-bottom: max(1rem, env(safe-area-inset-bottom));
 }
 html[data-duo="book"] .app-main {
-  margin-left: calc(50% + 1.5rem);
+  margin-left: calc(50% + 1.5rem) !important;
   padding-right: max(0px, env(safe-area-inset-right));
 }
 html[data-duo="book"] .app-fab {
@@ -882,11 +882,13 @@ html[data-duo="strip"] .app-main header {
   padding-bottom: 0;
 }
 
-/* Same split from the viewport alone. Opened-wide Safari is ~951×543.
-   This still applies if the pose script has not run yet. */
-@media (pointer: coarse) and (orientation: landscape) and (min-width: 880px) and (max-width: 1020px) and (min-height: 480px) {
+/* Opened flat and wide: Safari gives the page about 951×585 when this app
+   is the only window. Do not require a coarse pointer — the inner screen
+   matches like an iPad, so the old query never fired. A Pro sideways is
+   shorter than 500px, so it stays a single column. */
+@media (min-width: 860px) and (max-width: 1100px) and (min-height: 500px) and (max-height: 780px) {
   .app-shell {
-    max-width: none;
+    max-width: none !important;
     padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
   .app-shell.app-today {
@@ -902,7 +904,7 @@ html[data-duo="strip"] .app-main header {
     padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
   .app-main {
-    margin-left: calc(50% + 1.5rem);
+    margin-left: calc(50% + 1.5rem) !important;
     padding-right: max(0px, env(safe-area-inset-right));
   }
   .app-fab {

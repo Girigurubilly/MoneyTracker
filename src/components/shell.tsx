@@ -34,18 +34,19 @@ export function AppGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const apply = () => {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
+      const w = Math.round(Math.max(window.innerWidth, window.visualViewport?.width || 0));
+      const h = Math.round(Math.max(window.innerHeight, window.visualViewport?.height || 0));
       const coarse = window.matchMedia("(pointer: coarse)").matches;
       const prev = document.documentElement.dataset.duo;
       let pose = "phone";
-      if (!coarse) {
-        pose = "desk";
-      } else if (w > h && w >= 880 && w <= 1020 && (h >= 480 || prev === "book")) {
-        // Opened flat and wide: about 951×543. A Pro Max sideways is as wide
-        // but shorter than 480, so it stays a phone. The keyboard only
-        // shrinks the height, so keep the split once it is on.
+      // Opened flat and wide is about 951×585. The inner screen reports like an
+      // iPad, so this must not depend on a coarse pointer. A Pro turned
+      // sideways is shorter than 500. Keep the split while the keyboard is up.
+      const wide = w > h && w >= 860 && w <= 1100 && (prev === "book" || (h >= 500 && h <= 780));
+      if (wide) {
         pose = "book";
+      } else if (!coarse) {
+        pose = "desk";
       } else if (h > w && w >= 630 && w <= 720 && h >= 740) {
         pose = "open";
       } else {
