@@ -804,12 +804,12 @@ html[data-duo="book"] .app-tabbar {
 }
 html[data-duo="book"] .app-side {
   display: flex !important;
-  width: calc(50% - 1.5rem);
+  width: 13rem;
   padding-left: max(1rem, env(safe-area-inset-left));
   padding-bottom: max(1rem, env(safe-area-inset-bottom));
 }
 html[data-duo="book"] .app-main {
-  margin-left: calc(50% + 1.5rem) !important;
+  margin-left: 13rem !important;
   padding-right: max(0px, env(safe-area-inset-right));
 }
 html[data-duo="book"] .app-fab {
@@ -899,12 +899,12 @@ html[data-duo="strip"] .app-main header {
   }
   .app-side {
     display: flex !important;
-    width: calc(50% - 1.5rem);
+    width: 13rem;
     padding-left: max(1rem, env(safe-area-inset-left));
     padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
   .app-main {
-    margin-left: calc(50% + 1.5rem) !important;
+    margin-left: 13rem !important;
     padding-right: max(0px, env(safe-area-inset-right));
   }
   .app-fab {
